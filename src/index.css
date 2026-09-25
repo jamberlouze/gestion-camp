@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-foret-50: #effaf3;
+  --color-foret-100: #d1e7dd;
+  --color-foret-600: #19774a;
+  --color-foret-700: #0f5132;
+  --color-foret-800: #0b3d26;
+
+  --color-pierre-50: #f8f8f6;
+  --color-pierre-100: #f0efeb;
+  --color-pierre-200: #e2e0da;
+  --color-pierre-300: #cbc8bf;
+  --color-pierre-500: #7a766b;
+  --color-pierre-700: #4a473f;
+  --color-pierre-800: #33312b;
+  --color-pierre-900: #1f1e1a;
+}
+
+body {
+  @apply bg-pierre-50 text-pierre-900 antialiased;
+}

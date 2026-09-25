@@ -1,0 +1,158 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { messageErreur } from '@/lib/donnees'
+import { supabase } from '@/lib/supabase'
+import type { AccesModule, ModuleId, Niveau, Profil, Role } from '@/lib/types'
+import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
+import { MODULES } from '@/shell/modules'
+
+const ROLES: { id: Role; libelle: string }[] = [
+  { id: 'admin', libelle: 'Administrateur' },
+  { id: 'direction', libelle: 'Direction (tous les modules)' },
+  { id: 'coordo', libelle: 'Coordonnateur (modules choisis)' },
+]
+
+/** Gestion des rôles et des accès. Réservé aux administrateurs. */
+export function Utilisateurs() {
+  const { profil: moi } = useAuth()
+  const client = useQueryClient()
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  const { data } = useQuery({
+    queryKey: ['utilisateurs'],
+    queryFn: async () => {
+      const [profils, acces] = await Promise.all([
+        supabase.schema('core').from('profils').select('*').order('courriel'),
+        supabase.schema('core').from('acces_modules').select('*'),
+      ])
+      if (profils.error) throw profils.error
+      if (acces.error) throw acces.error
+      return { profils: profils.data as Profil[], acces: acces.data as AccesModule[] }
+    },
+  })
+
+  const rafraichir = () => {
+    setErreur(null)
+    client.invalidateQueries({ queryKey: ['utilisateurs'] })
+    client.invalidateQueries({ queryKey: ['droits'] })
+  }
+  const surErreur = (e: unknown) => setErreur(messageErreur(e))
+
+  const majProfil = useMutation({
+    mutationFn: async ({ id, ...valeurs }: Partial<Profil> & { id: string }) => {
+      const { error } = await supabase.schema('core').from('profils').update(valeurs).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: rafraichir,
+    onError: surErreur,
+  })
+
+  const majAcces = useMutation({
+    mutationFn: async ({ user_id, module, niveau }: { user_id: string; module: ModuleId; niveau: Niveau | '' }) => {
+      const table = supabase.schema('core').from('acces_modules')
+      const { error } = niveau
+        ? await table.upsert({ user_id, module, niveau })
+        : await table.delete().eq('user_id', user_id).eq('module', module)
+      if (error) throw error
+    },
+    onSuccess: rafraichir,
+    onError: surErreur,
+  })
+
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+      <div className="mt-3 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+        <strong>Inviter quelqu'un :</strong> Supabase → Authentication → Users → <em>Invite user</em>. La
+        personne apparaît ici dès l'invitation, avec le rôle Direction.
+      </div>
+      {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
+
+      <div className={`${ui.carte} mt-5 overflow-x-auto`}>
+        <table className="w-full text-sm">
+          <thead className="border-b border-pierre-200 bg-pierre-50 text-left text-pierre-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Courriel</th>
+              <th className="px-3 py-2 font-medium">Nom</th>
+              <th className="px-3 py-2 font-medium">Rôle</th>
+              <th className="px-3 py-2 font-medium">Accès (coordonnateurs)</th>
+              <th className="px-3 py-2 font-medium">Actif</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-pierre-100">
+            {data?.profils.map((p) => {
+              const soiMeme = p.id === moi?.id
+              return (
+                <tr key={p.id}>
+                  <td className="px-3 py-2">{p.courriel}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      className={`${ui.champ} min-w-36`}
+                      defaultValue={p.nom ?? ''}
+                      onBlur={(e) => {
+                        const nom = e.target.value.trim() || null
+                        if (nom !== p.nom) majProfil.mutate({ id: p.id, nom })
+                      }}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      className={ui.champ}
+                      value={p.role}
+                      disabled={soiMeme}
+                      title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
+                      onChange={(e) => majProfil.mutate({ id: p.id, role: e.target.value as Role })}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    {p.role === 'coordo' ? (
+                      <div className="flex flex-wrap gap-2">
+                        {MODULES.map((m) => {
+                          const a = data.acces.find((x) => x.user_id === p.id && x.module === m.id)
+                          return (
+                            <label key={m.id} className="flex items-center gap-1 whitespace-nowrap">
+                              {m.icone}
+                              <select
+                                className="rounded border border-pierre-300 px-1 py-0.5 text-xs"
+                                value={a?.niveau ?? ''}
+                                onChange={(e) =>
+                                  majAcces.mutate({ user_id: p.id, module: m.id, niveau: e.target.value as Niveau | '' })
+                                }
+                              >
+                                <option value="">Aucun</option>
+                                <option value="lecture">Lecture</option>
+                                <option value="ecriture">Écriture</option>
+                              </select>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-pierre-500">Tous les modules</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-foret-700"
+                      checked={p.actif}
+                      disabled={soiMeme}
+                      onChange={(e) => majProfil.mutate({ id: p.id, actif: e.target.checked })}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
