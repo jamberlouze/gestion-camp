@@ -11,7 +11,9 @@ connexion, menu, référentiel partagé.
 | 🗓️ Horaire : groupes et animateurs | En développement | Ordinateur |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
-temps réel), Cloudflare Pages (site), Cloudflare Worker (waker).
+temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
+
+**Adresse** : https://gestion-camp.maxime-0f5.workers.dev
 
 ## Architecture
 
@@ -25,7 +27,9 @@ supabase/
   migrations/   schéma SQL versionné (un schéma Postgres par module)
   templates/    courriels d'invitation et de code de connexion
   config.toml   réglages Supabase (connexion, courriels, schémas exposés)
-worker/         waker Supabase (cron 4×/jour)
+worker/         code du Worker : waker Supabase (cron 4×/jour) + /_ping
+wrangler.jsonc  configuration du Worker (site + cron)
+.env.production valeurs Supabase publiques utilisées au build
 scripts/migration/  import unique des anciens projets
 ```
 
@@ -57,7 +61,7 @@ Postgres (et pas seulement dans l'interface) :
 | `npm run db:types` | Régénère les types TypeScript à partir de la base |
 | `npm run import:essai` | Lit les anciennes bases et affiche les décomptes (n'écrit rien) |
 | `npm run import` | Importe les anciennes données dans la nouvelle base |
-| `npm run waker:deploy` | Déploie le waker sur Cloudflare |
+| `npm run deploy` | Déploiement manuel (normalement automatique à chaque push) |
 
 ---
 
@@ -102,48 +106,37 @@ reçoivent automatiquement le rôle `direction`.
 
 ### 4. Test en local
 
-Copiez `.env.example` vers `.env.local` et remplissez les deux valeurs
-(Supabase → **Project Settings → API Keys** : l'URL du projet et la clé
-*publishable*). Lancez ensuite `npm run dev`.
+`.env.production` (versionné) contient déjà les valeurs publiques du projet.
+Pour travailler en local, copiez-le vers `.env.local`, puis lancez `npm run dev`.
 
 ### 5. GitHub
 
-Sur [github.com/new](https://github.com/new) : nom `gestion-camp`, **Private**,
-sans README ni .gitignore. Suivez ensuite les commandes « …or push an existing
-repository » affichées par GitHub.
+Dépôt privé `jamberlouze/gestion-camp`. Le jeton GitHub du Mac doit avoir la
+permission `workflow` pour pousser les fichiers de `.github/workflows/`.
 
-### 6. Cloudflare Pages (le site)
+### 6. Cloudflare (site + waker)
 
-1. Tableau de bord Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → dépôt `gestion-camp`.
-2. Build command : `npm run build`. Build output directory : `dist`.
-3. **Environment variables** : `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY`.
-4. Chaque `git push` sur `main` redéploie ensuite le site automatiquement.
+Worker `gestion-camp` connecté au dépôt GitHub (Workers & Pages → le Worker →
+Settings → Build) :
 
-### 7. Sous-domaine gestion.camptremblant.com (GoDaddy)
+- Build command : `npm run build`
+- Deploy command : `npx wrangler deploy`
 
-Le DNS reste chez GoDaddy. Le courriel Google et le site Squarespace ne sont pas touchés.
+Chaque `git push` sur `main` construit et redéploie le site et le cron du waker.
+Aucune variable n'est à définir dans Cloudflare : tout est dans `wrangler.jsonc`
+et `.env.production`.
 
-1. Cloudflare → projet Pages → **Custom domains → Set up a custom domain** → `gestion.camptremblant.com`.
-2. GoDaddy → **Mes produits → camptremblant.com → DNS → Ajouter un enregistrement** :
-   - Type : **CNAME**
-   - Nom : `gestion`
-   - Valeur : `gestion-camp.pages.dev` (l'adresse exacte est affichée par Cloudflare à l'étape 1)
-   - TTL : 1 heure
-3. Revenez dans Cloudflare : le domaine passe à *Active* en quelques minutes, ou jusqu'à quelques heures, et le certificat HTTPS est automatique.
+Vérification du waker : https://gestion-camp.maxime-0f5.workers.dev/_ping.
+Le waker de secours (GitHub Actions) lit lui aussi `.env.production` : rien à
+configurer.
 
-### 8. Waker
+### 7. Import des anciennes données (fait le 2026-09-25)
 
-1. Dans `worker/wrangler.jsonc`, remplacez les deux valeurs `A-REMPLACER` (mêmes valeurs qu'à l'étape 4).
-2. Lancez `npx wrangler login`, puis `npm run waker:deploy`.
-3. Vérifiez sur `https://gestion-camp-waker.<compte>.workers.dev/_ping`.
-4. Waker de secours (GitHub Actions) : sur GitHub, allez dans le dépôt → **Settings → Secrets and variables → Actions → Variables** et ajoutez `SUPABASE_URL` et `SUPABASE_PUBLISHABLE_KEY`.
-
-### 9. Import des anciennes données
-
-1. Copiez `.env.migration.example` vers `.env.migration` et remplissez-le avec
+1. `npm run import:sauvegarder` copie les anciennes bases dans `scripts/migration/sauvegarde/`.
+2. Copiez `.env.migration.example` vers `.env.migration` et remplissez-le avec
    l'URL et une clé **secrète** (Project Settings → API Keys → Secret keys).
-2. Lancez `npm run import:essai` (lecture seule), puis `npm run import`.
-3. Supprimez `.env.migration` une fois l'import terminé.
+3. Lancez `npm run import:essai` (lecture seule), puis `npm run import`.
+4. Supprimez `.env.migration` une fois l'import terminé.
 
 Les anciennes apps restent en service jusqu'au portage de leur module. On
 éteint ensuite leurs projets Supabase et leurs wakers.

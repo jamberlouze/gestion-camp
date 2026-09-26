@@ -13,8 +13,8 @@
     "db:types": "supabase gen types typescript --linked --schema core,embarcations,commande,horaire > src/lib/database.types.ts",
     "import:essai": "node scripts/migration/importer.mjs --essai",
     "import": "node scripts/migration/importer.mjs",
-    "waker:deploy": "wrangler deploy --config worker/wrangler.jsonc",
-    "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder"
+    "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",

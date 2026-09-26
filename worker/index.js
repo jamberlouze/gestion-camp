@@ -1,4 +1,5 @@
-// Waker Supabase de la gestion du camp.
+// Worker de la gestion du camp : sert l'application (fichiers statiques de
+// dist/, voir wrangler.jsonc) et garde Supabase éveillé.
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -42,6 +43,6 @@ export default {
         return texte(`Échec : ${err.message}`, 502);
       }
     }
-    return texte("Waker Supabase — gestion du camp. Vérification : /_ping", 404);
+    return texte("Page introuvable.", 404);
   },
 };

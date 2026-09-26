@@ -1,0 +1,26 @@
+// Cloudflare Worker unique : sert l'application (fichiers de dist/) et garde
+// Supabase éveillé (cron). Déployé automatiquement par Cloudflare (Workers
+// Builds) à chaque push sur main : build `npm run build`, puis `npx wrangler deploy`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gestion-camp",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Toute adresse inconnue renvoie index.html : le routeur React s'en charge.
+    "not_found_handling": "single-page-application",
+    // Seule l'adresse de vérification du waker passe par le code du Worker.
+    "run_worker_first": ["/_ping"]
+  },
+  "triggers": {
+    // Quatre fois par jour (Supabase veut « quelques requêtes chaque jour »).
+    "crons": ["0 2,8,14,20 * * *"]
+  },
+  // Valeurs publiques (les mêmes que dans .env.production).
+  "vars": {
+    "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x8nstxT1q6UT9ZAm2N6zTA_woykXT1y"
+  },
+  "observability": { "enabled": true }
+}
