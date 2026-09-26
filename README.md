@@ -8,7 +8,7 @@ connexion, menu, référentiel partagé.
 |---|---|---|
 | 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
-| 🗓️ Horaire : groupes et animateurs | En développement | Ordinateur |
+| 🗓️ Horaire : groupes et animateurs | En service | Ordinateur |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.

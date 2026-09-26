@@ -1,0 +1,557 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ui } from '@/lib/ui'
+import { useSemaine } from './contexte'
+import { useAjouterAnimateurs } from './donnees'
+import { activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe } from './logique'
+import { Reglages } from './Reglages'
+import { CONGES, META_TAG, type CodeConge, type GroupeHoraire, type Tag } from './types'
+
+/** Une case de la grille (coordonnées utiles à la sélection rectangulaire). */
+interface InfoCase {
+  k: string
+  gi: number
+  ri: number
+  pi: number
+  jour: string
+  span: number
+}
+
+export function Construire() {
+  const { etat, reglages, modifier, ecriture } = useSemaine()
+  const [reglagesOuverts, setReglagesOuverts] = useState(false)
+  const [selection, setSelection] = useState<Set<string>>(new Set())
+  const ancre = useRef<InfoCase | null>(null)
+  const glisse = useRef<{ depart: InfoCase; actif: boolean } | null>(null)
+
+  const { marques } = useMemo(() => conflitsGrille(etat, reglages), [etat, reglages])
+  const tags = useMemo(
+    () => ({ escalade: activitesTag(reglages, 'escalade'), transport: activitesTag(reglages, 'transport'), sauveteur: activitesTag(reglages, 'sauveteur') }),
+    [reglages],
+  )
+  // Mémorisé sur le contenu : chaque modification copie tout l'état, donc
+  // l'identité des objets change à chaque frappe.
+  const cleFusions = JSON.stringify(etat.fusions)
+  const cleStructure = JSON.stringify([etat.jours, etat.periodes, etat.groupes.map((g) => g.id)])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { couverture, etendue } = useMemo(() => cartesFusion(etat), [cleFusions])
+
+  // Toutes les cases affichées (les périodes couvertes par une fusion n'en sont pas).
+  const cases = useMemo(() => {
+    const liste: InfoCase[] = []
+    etat.jours.forEach((jour, di) =>
+      etat.periodes.forEach((p, pi) =>
+        etat.groupes.forEach((g, gi) => {
+          const mc = `${g.id}|${jour}|${pi}`
+          const debut = couverture[mc]
+          if (debut !== undefined && debut !== pi) return
+          liste.push({ k: cle(g.id, jour, p), gi, ri: di * etat.periodes.length + pi, pi, jour, span: etendue[mc] ?? 1 })
+        }),
+      ),
+    )
+    return liste
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleStructure, couverture, etendue])
+  const parCle = useMemo(() => new Map(cases.map((c) => [c.k, c])), [cases])
+
+  // ---------------- Sélection ----------------
+  const selectionnerRectangle = useCallback(
+    (a: InfoCase, b: InfoCase) => {
+      const [gmin, gmax] = [Math.min(a.gi, b.gi), Math.max(a.gi, b.gi)]
+      const [rmin, rmax] = [Math.min(a.ri, b.ri), Math.max(a.ri, b.ri)]
+      setSelection(new Set(cases.filter((t) => t.gi >= gmin && t.gi <= gmax && t.ri <= rmax && t.ri + t.span - 1 >= rmin).map((t) => t.k)))
+    },
+    [cases],
+  )
+
+  const surAppui = useCallback(
+    (k: string, e: React.MouseEvent) => {
+      const info = parCle.get(k)
+      if (!info) return
+      if (e.shiftKey) {
+        e.preventDefault()
+        selectionnerRectangle(ancre.current ?? info, info)
+        return
+      }
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault()
+        setSelection((s) => {
+          const n = new Set(s)
+          if (n.has(k)) n.delete(k)
+          else n.add(k)
+          return n
+        })
+        ancre.current = info
+        return
+      }
+      // Clic simple : point d'ancrage ; le champ prend le focus pour taper.
+      ancre.current = info
+      glisse.current = { depart: info, actif: false }
+      setSelection((s) => (s.size ? new Set() : s))
+    },
+    [parCle, selectionnerRectangle],
+  )
+
+  const surSurvol = useCallback(
+    (k: string, e: React.MouseEvent) => {
+      const g = glisse.current
+      if (!g || !(e.buttons & 1)) return
+      const info = parCle.get(k)
+      if (!info || (info.k === g.depart.k && !g.actif)) return
+      if (!g.actif) {
+        g.actif = true
+        ;(document.activeElement as HTMLElement | null)?.blur()
+        document.body.classList.add('select-none')
+      }
+      selectionnerRectangle(g.depart, info)
+    },
+    [parCle, selectionnerRectangle],
+  )
+
+  useEffect(() => {
+    const relache = () => {
+      glisse.current = null
+      document.body.classList.remove('select-none')
+    }
+    document.addEventListener('mouseup', relache)
+    return () => document.removeEventListener('mouseup', relache)
+  }, [])
+
+  const selectionInfos = [...selection].map((k) => parCle.get(k)).filter((x): x is InfoCase => !!x)
+  const fusionnable = (() => {
+    if (selectionInfos.length < 2) return null
+    const { gi, jour } = selectionInfos[0]
+    if (!selectionInfos.every((t) => t.gi === gi && t.jour === jour) || selectionInfos.some((t) => t.span > 1)) return null
+    const pis = selectionInfos.map((t) => t.pi).sort((a, b) => a - b)
+    if (pis.some((p, i) => i > 0 && p !== pis[i - 1] + 1)) return null
+    return { gid: etat.groupes[gi].id, jour, debut: pis[0], span: pis.length }
+  })()
+  const contientFusion = selectionInfos.some((t) => t.span > 1)
+
+  const effacerSelection = useCallback(() => {
+    const cles = [...selection]
+    modifier((e) => cles.forEach((k) => delete e.cellules[k]))
+    setSelection(new Set())
+  }, [selection, modifier])
+
+  function fusionner() {
+    const f = fusionnable
+    if (!f) return
+    // On garde la valeur de la 1re période, les autres sont effacées.
+    modifier((e) => {
+      for (let j = 1; j < f.span; j++) delete e.cellules[cle(f.gid, f.jour, e.periodes[f.debut + j])]
+      e.fusions[`${f.gid}|${f.jour}|${f.debut}`] = f.span
+    })
+    setSelection(new Set())
+  }
+
+  function defusionner() {
+    const departs = selectionInfos.filter((t) => t.span > 1).map((t) => `${etat.groupes[t.gi].id}|${t.jour}|${t.pi}`)
+    modifier((e) => departs.forEach((k) => delete e.fusions[k]))
+    setSelection(new Set())
+  }
+
+  useEffect(() => {
+    const touche = (e: KeyboardEvent) => {
+      const dansChamp = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT'
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selection.size && !dansChamp && ecriture) {
+        e.preventDefault()
+        effacerSelection()
+      } else if (e.key === 'Escape' && selection.size) setSelection(new Set())
+    }
+    document.addEventListener('keydown', touche)
+    return () => document.removeEventListener('keydown', touche)
+  }, [selection, effacerSelection, ecriture])
+
+  // ---------------- Actions ----------------
+  const defusionnerCase = useCallback((mc: string) => modifier((e) => delete e.fusions[mc]), [modifier])
+
+  const majCase = useCallback(
+    (k: string, valeur: string) =>
+      modifier((e) => {
+        if (valeur.trim()) e.cellules[k] = valeur
+        else delete e.cellules[k]
+      }),
+    [modifier],
+  )
+
+  function remplir(jour: string, periodes: string[], libelle: string) {
+    const v = prompt(`Activité pour tous les groupes — ${libelle} :`, 'Parc aquatique / Journée commune')
+    if (v == null) return
+    modifier((e) =>
+      e.groupes.forEach((g) =>
+        periodes.forEach((p) => {
+          const k = cle(g.id, jour, p)
+          if (v.trim()) e.cellules[k] = v
+          else delete e.cellules[k]
+        }),
+      ),
+    )
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 print:hidden">
+        <p className="flex-1 text-sm text-pierre-500">
+          Cliquez une case et tapez ou choisissez l'activité. Glissez (ou Maj+clic) pour sélectionner plusieurs cases, puis les
+          effacer ou les fusionner (périodes doubles ou triples). Escalade, transport et sauveteur se colorent seuls.
+        </p>
+        {ecriture && (
+          <button className={ui.boutonSecondaire} onClick={() => setReglagesOuverts(true)}>
+            Réglages
+          </button>
+        )}
+        <button className={ui.boutonSecondaire} onClick={() => window.print()}>
+          Imprimer
+        </button>
+      </div>
+      <Legende />
+
+      <datalist id="liste-activites">
+        {reglages.activites.map((a) => (
+          <option key={a.name} value={a.name} />
+        ))}
+      </datalist>
+
+      <div className={`${ui.carte} max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible`}>
+        <table className="border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-20 bg-white">
+            <tr>
+              <th className="sticky left-0 z-30 w-24 min-w-24 border-b border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500">
+                Jour
+              </th>
+              <th className="sticky left-24 z-30 w-28 min-w-28 border-b border-r border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500">
+                Période
+              </th>
+              {etat.groupes.map((g, gi) => (
+                <EnteteGroupe key={g.id} groupe={g} gi={gi} />
+              ))}
+              {ecriture && (
+                <th className="border-b border-pierre-200 px-2 py-2 print:hidden">
+                  <button
+                    className={ui.boutonSecondaire}
+                    onClick={() => modifier((e) => e.groupes.push(nouveauGroupe(prochainIdGroupe(e), { num: String(e.groupes.length + 1) })))}
+                  >
+                    + Groupe
+                  </button>
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {etat.jours.map((jour) =>
+              etat.periodes.map((p, pi) => (
+                <tr key={`${jour}|${p}`}>
+                  {pi === 0 && (
+                    <td
+                      rowSpan={etat.periodes.length}
+                      className="sticky left-0 z-10 border-b-2 border-pierre-200 bg-white px-2 py-1.5 align-top font-semibold"
+                    >
+                      {jour}
+                      {ecriture && (
+                        <button
+                          className="mt-1 block text-xs font-normal text-foret-700 hover:underline print:hidden"
+                          title="Remplir toute la journée (journée commune)"
+                          onClick={() => remplir(jour, etat.periodes, `toute la journée ${jour}`)}
+                        >
+                          ↦ jour
+                        </button>
+                      )}
+                    </td>
+                  )}
+                  <td
+                    className={`sticky left-24 z-10 border-r border-pierre-200 bg-white px-2 py-1.5 align-top text-xs text-pierre-700 ${
+                      pi === etat.periodes.length - 1 ? 'border-b-2' : 'border-b'
+                    } border-b-pierre-200`}
+                  >
+                    {p}
+                    {ecriture && (
+                      <button
+                        className="block text-foret-700 hover:underline print:hidden"
+                        title="Même activité pour tous les groupes à cette période"
+                        onClick={() => remplir(jour, [p], `${jour} ${p}`)}
+                      >
+                        ↦ ligne
+                      </button>
+                    )}
+                  </td>
+                  {etat.groupes.map((g) => {
+                    const mc = `${g.id}|${jour}|${pi}`
+                    const debut = couverture[mc]
+                    if (debut !== undefined && debut !== pi) return null
+                    const span = etendue[mc] ?? 1
+                    const k = cle(g.id, jour, p)
+                    const valeur = etat.cellules[k] ?? ''
+                    const n = norm(valeur)
+                    const tag: Tag | undefined = n
+                      ? tags.escalade.has(n)
+                        ? 'escalade'
+                        : tags.transport.has(n)
+                          ? 'transport'
+                          : tags.sauveteur.has(n)
+                            ? 'sauveteur'
+                            : undefined
+                      : undefined
+                    const derniere = pi + span - 1 === etat.periodes.length - 1
+                    return (
+                      <Case
+                        key={g.id}
+                        k={k}
+                        mc={mc}
+                        valeur={valeur}
+                        span={span}
+                        tag={tag}
+                        marque={marques[k]}
+                        selectionnee={selection.has(k)}
+                        remplacant={joursConge(g.conge).includes(jour) ? g.remp || '(remplaçant à assigner)' : null}
+                        animateur={g.anim}
+                        derniere={derniere}
+                        ecriture={ecriture}
+                        majCase={majCase}
+                        surAppui={surAppui}
+                        surSurvol={surSurvol}
+                        defusionner={defusionnerCase}
+                      />
+                    )
+                  })}
+                  {ecriture && <td className="border-b border-pierre-100 print:hidden" />}
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selection.size > 0 && ecriture && (
+        <div className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit items-center gap-2 rounded-full border border-pierre-200 bg-white px-4 py-2 shadow-lg print:hidden">
+          <span className="text-sm">
+            <b>{selection.size}</b> case(s) sélectionnée(s)
+          </span>
+          <button className={ui.boutonDanger} onClick={effacerSelection}>
+            Effacer
+          </button>
+          {fusionnable && (
+            <button className={ui.boutonSecondaire} onClick={fusionner}>
+              Fusionner
+            </button>
+          )}
+          {contientFusion && (
+            <button className={ui.boutonSecondaire} onClick={defusionner}>
+              Défusionner
+            </button>
+          )}
+          <button aria-label="Annuler la sélection" className="px-2 text-pierre-500" onClick={() => setSelection(new Set())}>
+            ✕
+          </button>
+        </div>
+      )}
+      {reglagesOuverts && <Reglages fermer={() => setReglagesOuverts(false)} />}
+    </div>
+  )
+}
+
+function Legende() {
+  return (
+    <div className="mb-3 flex flex-wrap gap-3 text-xs text-pierre-700 print:hidden">
+      {(Object.keys(META_TAG) as Tag[]).map((t) => (
+        <span key={t} className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-sm border-l-4" style={{ background: META_TAG[t].clair, borderColor: META_TAG[t].couleur }} />
+          {META_TAG[t].libelle}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-3 rounded-sm ring-2 ring-[#d03b3b]" /> Conflit bloquant
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-3 rounded-sm ring-2 ring-amber-500" /> Au-delà du seuil
+      </span>
+      <span className="inline-flex items-center gap-1.5">↺ Animé par le remplaçant (congé)</span>
+    </div>
+  )
+}
+
+const Case = memo(function Case({
+  k,
+  mc,
+  valeur,
+  span,
+  tag,
+  marque,
+  selectionnee,
+  remplacant,
+  animateur,
+  derniere,
+  ecriture,
+  majCase,
+  surAppui,
+  surSurvol,
+  defusionner,
+}: {
+  k: string
+  /** Coordonnée de fusion « gid|jour|indice ». */
+  mc: string
+  valeur: string
+  span: number
+  tag?: Tag
+  marque?: 'conflict' | 'warnsoft'
+  selectionnee: boolean
+  remplacant: string | null
+  animateur: string
+  derniere: boolean
+  ecriture: boolean
+  majCase: (k: string, v: string) => void
+  surAppui: (k: string, e: React.MouseEvent) => void
+  surSurvol: (k: string, e: React.MouseEvent) => void
+  defusionner: (mc: string) => void
+}) {
+  const meta = tag ? META_TAG[tag] : null
+  const anneau = marque === 'conflict' ? 'ring-2 ring-inset ring-[#d03b3b]' : marque === 'warnsoft' ? 'ring-2 ring-inset ring-amber-500' : ''
+  return (
+    <td
+      rowSpan={span > 1 ? span : undefined}
+      onMouseDown={(e) => surAppui(k, e)}
+      onMouseEnter={(e) => surSurvol(k, e)}
+      title={remplacant ? `Congé de ${animateur} — groupe animé par ${remplacant}` : undefined}
+      className={`relative min-w-32 border-b border-r border-pierre-100 p-0 ${derniere ? 'border-b-2 border-b-pierre-200' : ''} ${anneau} ${
+        selectionnee ? 'bg-sky-100' : ''
+      }`}
+      style={!selectionnee && meta ? { background: meta.clair } : undefined}
+    >
+      {/* Barre de couleur à part : l'anneau de conflit utilise déjà box-shadow. */}
+      {meta && <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1" style={{ background: meta.couleur }} />}
+      {remplacant && <span className="pointer-events-none absolute right-1 top-0.5 text-xs text-foret-700">↺</span>}
+      {span > 1 && ecriture && (
+        <button
+          title={`Défusionner ces ${span} périodes`}
+          className="absolute bottom-0.5 right-1 text-xs text-pierre-500 hover:text-pierre-900 print:hidden"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => defusionner(mc)}
+        >
+          ✂
+        </button>
+      )}
+      <input
+        list="liste-activites"
+        aria-label="Activité"
+        readOnly={!ecriture}
+        className="h-full min-h-9 w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:bg-white/70 focus:ring-2 focus:ring-inset focus:ring-foret-600"
+        value={valeur}
+        onChange={(e) => majCase(k, e.target.value)}
+      />
+    </td>
+  )
+})
+
+// ------------------------------------------------------------------
+// En-tête de groupe : numéro, animateur, congé, remplaçant
+// ------------------------------------------------------------------
+
+function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) {
+  const { modifier, ecriture, animateurs } = useSemaine()
+  const ajouterAnimateurs = useAjouterAnimateurs()
+  const maj = (champs: Partial<GroupeHoraire>) => modifier((e) => Object.assign(e.groupes[gi], champs))
+
+  function choisirAnimateur(champ: 'anim' | 'remp', valeur: string) {
+    if (valeur !== '__nouveau__') return maj({ [champ]: valeur })
+    const nom = prompt(champ === 'anim' ? 'Nom du nouvel animateur :' : 'Nom du nouveau remplaçant :')?.trim()
+    if (!nom) return
+    // Ajouté au référentiel commun des employés (si on en a le droit).
+    if (!animateurs.includes(nom)) ajouterAnimateurs.mutate([nom])
+    maj({ [champ]: nom })
+  }
+
+  const choix = 'w-full rounded border border-pierre-200 bg-white px-1 py-0.5 text-xs'
+  return (
+    <th className="min-w-32 border-b border-r border-pierre-200 bg-pierre-50 p-1.5 text-left align-top font-normal">
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-pierre-500">Gr.</span>
+        <input
+          aria-label="Numéro du groupe"
+          readOnly={!ecriture}
+          className="w-12 rounded border border-pierre-200 bg-white px-1 py-0.5 text-sm font-semibold"
+          value={g.num}
+          placeholder="#"
+          onChange={(e) => maj({ num: e.target.value })}
+        />
+        {ecriture && (
+          <button
+            aria-label={`Retirer le groupe ${g.num}`}
+            className="ml-auto rounded px-1 text-red-700 hover:bg-red-50 print:hidden"
+            onClick={() => {
+              if (!confirm('Retirer ce groupe et ses activités ?')) return
+              modifier((e) => {
+                const id = e.groupes[gi].id
+                e.groupes.splice(gi, 1)
+                for (const k of Object.keys(e.cellules)) if (k.startsWith(`${id}|`)) delete e.cellules[k]
+                for (const k of Object.keys(e.fusions)) if (k.startsWith(`${id}|`)) delete e.fusions[k]
+              })
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      <ChoixAnimateur
+        aria-label="Animateur"
+        className={`${choix} mt-1`}
+        valeur={g.anim}
+        animateurs={animateurs}
+        disabled={!ecriture}
+        onChange={(v) => choisirAnimateur('anim', v)}
+      />
+      <div className="mt-1 flex gap-1 print:hidden">
+        <select
+          aria-label="Jours de congé de l'animateur"
+          title="Jours de congé de l'animateur"
+          disabled={!ecriture}
+          className={choix}
+          value={g.conge}
+          onChange={(e) => maj({ conge: e.target.value as CodeConge })}
+        >
+          <option value="">Congé</option>
+          {(Object.keys(CONGES) as (keyof typeof CONGES)[]).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <ChoixAnimateur
+          aria-label="Remplaçant pendant le congé"
+          title="Remplaçant pendant le congé"
+          className={choix}
+          valeur={g.remp}
+          animateurs={animateurs}
+          vide="Rempl."
+          disabled={!ecriture}
+          onChange={(v) => choisirAnimateur('remp', v)}
+        />
+      </div>
+    </th>
+  )
+}
+
+/** Menu des animateurs du référentiel ; une valeur hors liste reste visible. */
+export function ChoixAnimateur({
+  valeur,
+  animateurs,
+  onChange,
+  vide = '—',
+  ...props
+}: {
+  valeur: string
+  animateurs: string[]
+  onChange: (v: string) => void
+  vide?: string
+} & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'>) {
+  return (
+    <select {...props} value={valeur} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{vide}</option>
+      {valeur && !animateurs.includes(valeur) && <option value={valeur}>{valeur} (hors liste)</option>}
+      {animateurs.map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
+      ))}
+      <option value="__nouveau__">＋ Ajouter…</option>
+    </select>
+  )
+}

@@ -9,5 +9,7 @@
 - `gcTime` des requêtes : `Infinity` — jamais une durée > 24,8 jours (débordement de `setTimeout` : le cache restauré serait effacé aussitôt).
 - Canaux temps réel : toujours un nom unique (`${nom}-${crypto.randomUUID()}`), sinon « cannot add postgres_changes callbacks after subscribe() » au remontage.
 - Dans un module monté sur `<nom>/*`, les liens d'onglets sont absolus (`/embarcations/tableau`) : un lien relatif se résout depuis l'adresse courante.
+- Horaire : une semaine = un document (`horaire.horaires.etat`, mêmes clés que l'ancien créateur : cellules « gid|jour|période », fusions « gid|jour|indice »), édité via `useSemaine().modifier(fn)` (copie mutée puis enregistrement automatique après 600 ms). Réglages communs dans `horaire.parametres` (clé `reglages`). Animateurs = `core.employes` actifs. Toute la logique métier est dans `logique.ts` (fonctions pures, équivalence vérifiée avec l'ancien créateur).
+- Commande : calcul de la commande dans `modules/commande/calcul.ts` (fonction pure, équivalence vérifiée avec l'ancien calculateur).
 - Styles : Tailwind v4, classes partagées dans `src/lib/ui.ts`, couleurs `foret-*` / `pierre-*` (`src/index.css`).
 - Node est dans `/usr/local/bin` (installateur officiel, pas Homebrew — macOS 14 non supporté par Homebrew).
