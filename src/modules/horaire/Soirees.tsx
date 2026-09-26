@@ -230,7 +230,7 @@ function TableTaches({
                         {ecriture && (
                           <select
                             aria-label={`Ajouter — ${l.libelle}, ${nuit}`}
-                            className="w-9 rounded border border-pierre-200 bg-white text-xs print:hidden"
+                            className="sans-fleche w-9 rounded border border-pierre-200 bg-white text-center text-xs print:hidden"
                             value=""
                             onChange={(e) => ajouter(k, e.target.value)}
                           >

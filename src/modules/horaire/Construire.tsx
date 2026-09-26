@@ -592,7 +592,7 @@ function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) 
     maj({ [champ]: nom })
   }
 
-  const choix = 'w-full rounded border border-pierre-200 bg-white px-1 py-0.5 text-xs'
+  const choix = 'fleche-serree w-full rounded border border-pierre-200 bg-white px-1 py-0.5 text-xs'
   return (
     <th className="border-b border-r border-pierre-200 bg-pierre-50 p-1.5 text-left align-top font-normal">
       <div className="flex items-center gap-1">

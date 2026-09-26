@@ -33,8 +33,11 @@ export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'dossier
 export const trierNoms = (a: string, b: string) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' })
 
 /** Garde à jour les jours d'un horaire dans la liste (résumés, aperçu d'un modèle). */
-function majJoursListe(client: QueryClient, id: string, jours: string[]) {
-  client.setQueryData<ResumeHoraire[]>(CLES.liste, (l) => l?.map((h) => (h.id === id ? { ...h, jours } : h)))
+function majJoursListe(client: QueryClient, id: string, jours: string[], modifie = false) {
+  const maintenant = new Date().toISOString()
+  client.setQueryData<ResumeHoraire[]>(CLES.liste, (l) =>
+    l?.map((h) => (h.id === id ? { ...h, jours, ...(modifie ? { updated_at: maintenant } : {}) } : h)),
+  )
 }
 
 export function useHoraires() {
@@ -87,8 +90,9 @@ export function useSupprimerDossier() {
   })
 }
 
-export function useReglages(): Reglages {
-  const { data } = useQuery({
+/** Réglages communs, complétés par les valeurs par défaut ; charge : vrai une fois lus. */
+export function useEtatReglages(): { reglages: Reglages; charge: boolean; erreur: boolean; recharger: () => void } {
+  const { data, isError, refetch } = useQuery({
     queryKey: CLES.reglages,
     queryFn: async () => {
       const lignes = await verifier(db().from('parametres').select('valeur').eq('cle', 'reglages'))
@@ -96,8 +100,13 @@ export function useReglages(): Reglages {
     },
   })
   // Même objet tant que les réglages ne changent pas (calculs mémorisés).
-  return useMemo(() => ({ ...REGLAGES_DEFAUT, ...data, capacites: { ...REGLAGES_DEFAUT.capacites, ...data?.capacites } }), [data])
+  const reglages = useMemo(() => ({ ...REGLAGES_DEFAUT, ...data, capacites: { ...REGLAGES_DEFAUT.capacites, ...data?.capacites } }), [data])
+  // Chargés dès qu'on a des données : un rechargement raté en arrière-plan
+  // garde les données (et le formulaire des réglages reste affiché).
+  return { reglages, charge: data !== undefined, erreur: isError && data === undefined, recharger: () => void refetch() }
 }
+
+export const useReglages = (): Reglages => useEtatReglages().reglages
 
 export function useEnregistrerReglages() {
   const client = useQueryClient()
@@ -226,7 +235,7 @@ export function useEditeurSemaine(id: string | null) {
     async (cible: string, aEnvoyer: EtatSemaine) => {
       await verifier(db().from('horaires').update({ etat: aEnvoyer }).eq('id', cible))
       client.setQueryData<Horaire>(CLES.document(cible), (d) => (d ? { ...d, etat: aEnvoyer } : d))
-      majJoursListe(client, cible, aEnvoyer.jours)
+      majJoursListe(client, cible, aEnvoyer.jours, true)
     },
     [client],
   )

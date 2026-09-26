@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react'
-import { NavLink, Route, Routes } from 'react-router'
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
+import { IconeDossier, IconeModele, IconeReglages, IconeSemaine } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Conflits } from './Conflits'
 import { Conges } from './Conges'
 import { Construire } from './Construire'
 import { ContexteSemaine, useSemaine, type Semaine } from './contexte'
-import { useAjouterAnimateurs, useAnimateurs, useEditeurSemaine, useHoraires, useReferentielVide, useReglages } from './donnees'
+import { PageDossiers } from './Dossiers'
+import { useAjouterAnimateurs, useAnimateurs, useDossiers, useEditeurSemaine, useHoraires, useReferentielVide, useReglages } from './donnees'
 import { analyseConges, analyseSoirees, ANIMATEURS_ORIGINE, conflitsGrille } from './logique'
-import { BarreSemaine } from './Semaines'
+import { PageReglages } from './Reglages'
+import type { DemandeNouvel } from './emplacements'
+import { BarreSemaine, NouvelHoraire } from './Semaines'
 import { Soirees } from './Soirees'
 import { Specialiste } from './Specialiste'
 import { META_TAG, TAGS } from './types'
@@ -24,18 +28,32 @@ const lireSemaineActive = () => {
   }
 }
 
+type Page = 'semaine' | 'dossiers' | 'reglages'
+
 export default function ModuleHoraire() {
   const { peutEcrire } = useAuth()
   const ecriture = peutEcrire('horaire')
   const horaires = useHoraires()
+  const { dossiers, connus } = useDossiers()
   const reglages = useReglages()
   const animateurs = useAnimateurs()
   const referentielVide = useReferentielVide()
   const [choisie, setChoisie] = useState<string | null>(lireSemaineActive)
+  const [demande, setDemande] = useState<DemandeNouvel | null>(null)
+  const [reglagesModifies, setReglagesModifies] = useState(false)
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const page: Page = pathname.startsWith('/horaire/dossiers') ? 'dossiers' : pathname.startsWith('/horaire/reglages') ? 'reglages' : 'semaine'
+
+  // Semaine d'un dossier supprimé ailleurs (liste pas encore rechargée) :
+  // elle est « Sans dossier », comme dans la base.
+  const liste = useMemo(() => {
+    const l = horaires.data ?? []
+    return connus ? l.map((h) => (h.dossier_id && !connus.has(h.dossier_id) ? { ...h, dossier_id: null } : h)) : l
+  }, [horaires.data, connus])
 
   // Semaine ouverte : celle choisie si elle existe encore, sinon la première
   // semaine (les modèles en dernier recours).
-  const liste = horaires.data ?? []
   const active = liste.find((h) => h.id === choisie)?.id ?? (liste.find((h) => !h.modele) ?? liste[0])?.id ?? null
   const choisir = (id: string) => {
     setChoisie(id)
@@ -44,6 +62,11 @@ export default function ModuleHoraire() {
     } catch {
       /* préférence non conservée */
     }
+  }
+  /** Ouvre une semaine ou un modèle dans la grille. */
+  const ouvrir = (id: string) => {
+    choisir(id)
+    if (page !== 'semaine') navigate('/horaire')
   }
 
   const editeur = useEditeurSemaine(active)
@@ -70,33 +93,124 @@ export default function ModuleHoraire() {
 
   return (
     <div>
-      <BarreSemaine liste={liste} active={active} choisir={choisir} semaine={semaine} ecriture={ecriture} />
+      <EnteteModule
+        page={page}
+        modeleOuvert={!!liste.find((h) => h.id === active)?.modele}
+        ecriture={ecriture}
+        reglagesModifies={page === 'reglages' && reglagesModifies}
+      />
       <BandeauErreurs racine="horaire" />
       {referentielVide && <AucunAnimateur />}
-      {liste.length === 0 ? (
-        <p className={`${ui.carte} p-10 text-center text-sm text-pierre-500`}>
-          Aucune semaine pour l'instant. {ecriture ? 'Créez-en une (vide ou à partir d\'un modèle) ou importez un classeur Excel.' : ''}
-        </p>
-      ) : !semaine ? (
-        editeur.erreur ? (
-          <p className={ui.erreur}>{messageErreur(editeur.erreur)}</p>
-        ) : (
-          <p className="py-8 text-center text-sm text-pierre-500">Chargement de la semaine…</p>
-        )
-      ) : (
-        <ContexteSemaine.Provider value={semaine}>
-          <Onglets />
-          <Routes>
-            <Route index element={<Construire />} />
-            <Route path="conflits" element={<Conflits />} />
-            {TAGS.map((t) => (
-              <Route key={t} path={t} element={<Specialiste tag={t} />} />
-            ))}
-            <Route path="conges" element={<Conges />} />
-            <Route path="soirees" element={<Soirees />} />
-          </Routes>
-        </ContexteSemaine.Provider>
+      <Routes>
+        <Route
+          path="dossiers"
+          element={<PageDossiers liste={liste} dossiers={dossiers} active={active} ecriture={ecriture} ouvrir={ouvrir} nouveau={setDemande} />}
+        />
+        <Route path="reglages" element={ecriture ? <PageReglages surModif={setReglagesModifies} /> : <Navigate to="/horaire" replace />} />
+        <Route
+          path="*"
+          element={
+            <>
+              <BarreSemaine
+                liste={liste}
+                dossiers={dossiers}
+                active={active}
+                choisir={choisir}
+                semaine={semaine}
+                ecriture={ecriture}
+                nouveau={setDemande}
+              />
+              {liste.length === 0 ? (
+                <p className={`${ui.carte} p-10 text-center text-sm text-pierre-500`}>
+                  Aucune semaine pour l'instant.{' '}
+                  {ecriture ? "Créez-en une (vide ou à partir d'un modèle) ou importez un classeur Excel." : ''}
+                </p>
+              ) : !semaine ? (
+                editeur.erreur ? (
+                  <p className={ui.erreur}>{messageErreur(editeur.erreur)}</p>
+                ) : (
+                  <p className="py-8 text-center text-sm text-pierre-500">Chargement de la semaine…</p>
+                )
+              ) : (
+                <ContexteSemaine.Provider value={semaine}>
+                  <Onglets />
+                  <Routes>
+                    <Route index element={<Construire />} />
+                    <Route path="conflits" element={<Conflits />} />
+                    {TAGS.map((t) => (
+                      <Route key={t} path={t} element={<Specialiste tag={t} />} />
+                    ))}
+                    <Route path="conges" element={<Conges />} />
+                    <Route path="soirees" element={<Soirees />} />
+                    <Route path="*" element={<Navigate to="/horaire" replace />} />
+                  </Routes>
+                </ContexteSemaine.Provider>
+              )}
+            </>
+          }
+        />
+      </Routes>
+      {demande && (
+        <NouvelHoraire
+          key={`${demande.modele}|${demande.depart ?? ''}|${demande.dossier ?? ''}`}
+          liste={liste}
+          dossiers={dossiers}
+          modele={demande.modele}
+          departInitial={demande.depart ?? ''}
+          dossierInitial={demande.dossier ?? null}
+          semaine={semaine}
+          ouvrir={ouvrir}
+          fermer={() => setDemande(null)}
+        />
       )}
+    </div>
+  )
+}
+
+/**
+ * En-tête du module : le titre, et à droite les trois espaces de l'horaire —
+ * la semaine ouverte (grille), le rangement (dossiers et modèles), les réglages.
+ */
+function EnteteModule({
+  page,
+  modeleOuvert,
+  ecriture,
+  reglagesModifies,
+}: {
+  page: Page
+  modeleOuvert: boolean
+  ecriture: boolean
+  /** Réglages modifiés et pas enregistrés : on demande avant de quitter la page. */
+  reglagesModifies: boolean
+}) {
+  const espaces = [
+    { page: 'semaine' as const, chemin: '/horaire', libelle: modeleOuvert ? 'Modèle ouvert' : 'Semaine', icone: modeleOuvert ? <IconeModele /> : <IconeSemaine /> },
+    { page: 'dossiers' as const, chemin: '/horaire/dossiers', libelle: 'Dossiers et modèles', icone: <IconeDossier /> },
+    ...(ecriture ? [{ page: 'reglages' as const, chemin: '/horaire/reglages', libelle: 'Réglages', icone: <IconeReglages /> }] : []),
+  ]
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
+      <h1 className="text-2xl font-semibold">Horaire</h1>
+      <nav aria-label="Espaces de l'horaire" className="ml-auto inline-flex rounded-lg border border-pierre-200 bg-pierre-100 p-0.5">
+        {espaces.map((e) => (
+          <Link
+            key={e.page}
+            to={e.chemin}
+            aria-current={page === e.page ? 'page' : undefined}
+            onClick={(clic) => {
+              if (reglagesModifies && e.page !== 'reglages' && !confirm('Les réglages modifiés ne sont pas enregistrés. Quitter quand même ?')) {
+                clic.preventDefault()
+              }
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
+              page === e.page ? 'bg-white text-pierre-900 shadow-sm' : 'text-pierre-600 hover:text-pierre-900'
+            }`}
+          >
+            {e.icone}
+            {e.libelle}
+          </Link>
+        ))}
+      </nav>
     </div>
   )
 }

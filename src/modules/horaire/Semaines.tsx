@@ -1,82 +1,50 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
+import { IconeChevron, IconeDossier, IconeDupliquer, IconeExporter, IconeImporter, IconeModele, IconePlus, IconeRenommer, IconeTableur } from '@/lib/icones'
+import { Bulle, SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
 import type { Semaine } from './contexte'
-import {
-  useAjouterAnimateurs,
-  useChargerEtat,
-  useCreerHoraire,
-  useDossiers,
-  useEnregistrerDossier,
-  useModifierHoraire,
-  useReglages,
-  useSupprimerDossier,
-  useSupprimerHoraire,
-  type ResumeHoraire,
-} from './donnees'
+import { useAjouterAnimateurs, useChargerEtat, useCreerHoraire, useEnregistrerDossier, useModifierHoraire, useReglages, type ResumeHoraire } from './donnees'
 import { exporterClasseur, importerClasseur } from './excel'
 import { decalagePour, decalerJours, horaireVide, joursConsecutifs, lireJours, resumeJours } from './logique'
-import { Reglages } from './Reglages'
+import { dossierDe, grouper, nomLibre, nomSemaineLibre, nomsDans, type DemandeNouvel } from './emplacements'
 import { JOURS_SEMAINE, type Dossier, type EtatSemaine } from './types'
 
 // ------------------------------------------------------------------
-// Emplacements : une semaine est dans un dossier ou « sans dossier » ;
-// les modèles sont à part. Un nom est unique dans son emplacement.
-// ------------------------------------------------------------------
-
-const dossierDe = (h: ResumeHoraire) => (h.modele ? null : (h.dossier_id ?? null))
-const nomsDans = (liste: ResumeHoraire[], modele: boolean, dossier: string | null) =>
-  liste.filter((h) => !!h.modele === modele && (modele || dossierDe(h) === dossier)).map((h) => h.nom)
-
-/** Premier « Semaine N » libre, comme l'ancien créateur. */
-function nomSemaineLibre(pris: string[]) {
-  let n = 1
-  while (pris.includes(`Semaine ${n}`)) n++
-  return `Semaine ${n}`
-}
-
-function nomLibre(base: string, pris: string[]) {
-  if (!pris.includes(base)) return base
-  let i = 2
-  while (pris.includes(`${base} ${i}`)) i++
-  return `${base} ${i}`
-}
-
-type Fenetre =
-  | { type: 'nouvelle'; modele: boolean; depart?: string }
-  | { type: 'organiser' }
-  | { type: 'reglages' }
-
-// ------------------------------------------------------------------
-// Barre de la semaine : choix, nouvelle, dupliquer, renommer, Excel
+// Barre de la semaine ouverte :
+//  - à gauche, la semaine et ce qu'on en fait (nouvelle, dupliquer, renommer) ;
+//  - à droite, à part, les échanges avec Excel.
 // ------------------------------------------------------------------
 
 export function BarreSemaine({
-  liste: listeBrute,
+  liste,
+  dossiers,
   active,
   choisir,
   semaine,
   ecriture,
+  nouveau,
 }: {
   liste: ResumeHoraire[]
+  dossiers: Dossier[]
   active: string | null
   choisir: (id: string) => void
   semaine: Semaine | null
   ecriture: boolean
+  nouveau: (d: DemandeNouvel) => void
 }) {
-  const { dossiers, connus } = useDossiers()
-  // Semaine d'un dossier supprimé ailleurs (liste pas encore rechargée) :
-  // elle est « Sans dossier », comme dans la base.
-  const liste = useMemo(
-    () => (connus ? listeBrute.map((h) => (h.dossier_id && !connus.has(h.dossier_id) ? { ...h, dossier_id: null } : h)) : listeBrute),
-    [listeBrute, connus],
-  )
   const creer = useCreerHoraire()
   const modifier = useModifierHoraire()
   const ajouterAnimateurs = useAjouterAnimateurs()
   const fichier = useRef<HTMLInputElement>(null)
-  const [fenetre, setFenetre] = useState<Fenetre | null>(null)
+  const boutonRenommer = useRef<HTMLButtonElement>(null)
+  const [renommage, setRenommage] = useState(false)
+  /** Ferme la bulle de renommage et rend le focus au bouton (clavier). */
+  const finirRenommage = () => {
+    setRenommage(false)
+    boutonRenommer.current?.focus()
+  }
   const [message, setMessage] = useState<string | null>(null)
 
   const actif = liste.find((h) => h.id === active)
@@ -84,9 +52,28 @@ export function BarreSemaine({
   const dossierActif = actif ? dossierDe(actif) : null
   const nomDossier = dossiers.find((d) => d.id === dossierActif)?.nom
 
-  /** Crée une copie au même endroit que l'horaire ouvert (dossier ou modèles) et l'ouvre. */
-  async function creerIci(nom: string, etat: EtatSemaine) {
-    choisir(await creer.mutateAsync({ nom, etat, modele: estModele, dossier_id: dossierActif }))
+  async function dupliquer() {
+    if (!semaine) return
+    try {
+      const nom = nomLibre(`${semaine.horaire.nom} (copie)`, nomsDans(liste, estModele, dossierActif))
+      choisir(await creer.mutateAsync({ nom, etat: structuredClone(semaine.etat), modele: estModele, dossier_id: dossierActif }))
+    } catch (e) {
+      setMessage(messageErreur(e))
+    }
+  }
+
+  async function renommer(nom: string) {
+    if (!semaine) return null
+    if (nomsDans(liste, estModele, dossierActif).includes(nom)) {
+      return estModele ? 'Un modèle porte déjà ce nom.' : 'Une semaine de ce dossier porte déjà ce nom.'
+    }
+    try {
+      await modifier.mutateAsync({ id: semaine.horaire.id, nom })
+      finirRenommage()
+      return null
+    } catch (e) {
+      return messageErreur(e)
+    }
   }
 
   async function importer(f: File) {
@@ -105,78 +92,56 @@ export function BarreSemaine({
   }
 
   const statut = semaine?.statut
+  const boutonExcel =
+    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-pierre-700 hover:bg-white hover:text-pierre-900 hover:shadow-sm'
   return (
     <div className="mb-3 print:hidden">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 text-2xl font-semibold">Horaire</h1>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        {/* La semaine ouverte */}
         {actif && (estModele || nomDossier) && (
-          <span className="text-sm text-pierre-500">{estModele ? '📐 Modèle' : `📁 ${nomDossier}`}</span>
+          <span className="inline-flex items-center gap-1 text-sm text-pierre-500">
+            {estModele ? <IconeModele /> : <IconeDossier />}
+            {estModele ? 'Modèles' : nomDossier}
+            <IconeChevron className="size-3.5 text-pierre-300" />
+          </span>
         )}
         {liste.length > 0 && <ChoixSemaine liste={liste} dossiers={dossiers} active={active} choisir={choisir} />}
         {ecriture && (
+          <button className={ui.boutonSecondaire} onClick={() => nouveau({ modele: false, dossier: dossierActif })}>
+            <IconePlus /> Nouvelle
+          </button>
+        )}
+        {ecriture && semaine && (
           <>
-            <button className={ui.boutonSecondaire} onClick={() => setFenetre({ type: 'nouvelle', modele: false })}>
-              + Nouvelle
+            <button className={ui.boutonSecondaire} onClick={() => void dupliquer()}>
+              <IconeDupliquer /> Dupliquer
             </button>
-            {semaine && (
-              <>
-                <button
-                  className={ui.boutonSecondaire}
-                  onClick={() =>
-                    creerIci(
-                      nomLibre(`${semaine.horaire.nom} (copie)`, nomsDans(liste, estModele, dossierActif)),
-                      structuredClone(semaine.etat),
-                    ).catch((e) => setMessage(messageErreur(e)))
-                  }
-                >
-                  Dupliquer
-                </button>
-                <button
-                  className={ui.boutonSecondaire}
-                  onClick={() => {
-                    const nom = prompt(`Nouveau nom pour ${estModele ? 'ce modèle' : 'cette semaine'} :`, semaine.horaire.nom)?.trim()
-                    if (!nom || nom === semaine.horaire.nom) return
-                    if (nomsDans(liste, estModele, dossierActif).includes(nom)) {
-                      return setMessage(estModele ? 'Un modèle porte déjà ce nom.' : 'Une semaine de ce dossier porte déjà ce nom.')
-                    }
-                    modifier.mutate({ id: semaine.horaire.id, nom }, { onError: (e) => setMessage(messageErreur(e)) })
-                  }}
-                >
-                  Renommer
-                </button>
-              </>
-            )}
-            <button className={ui.boutonSecondaire} onClick={() => fichier.current?.click()}>
-              Importer Excel
-            </button>
-            <input
-              ref={fichier}
-              type="file"
-              accept=".xlsx,.xls"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) void importer(f)
-                e.target.value = ''
-              }}
-            />
+            <div className="relative">
+              <button
+                ref={boutonRenommer}
+                className={ui.boutonSecondaire}
+                aria-expanded={renommage}
+                onClick={() => setRenommage((r) => !r)}
+              >
+                <IconeRenommer /> Renommer
+              </button>
+              {renommage && (
+                <Bulle ancre={boutonRenommer} fermer={() => setRenommage(false)}>
+                  <p className="mb-2 text-sm font-medium">Renommer {estModele ? 'le modèle' : 'la semaine'}</p>
+                  <SaisieNom
+                    compact
+                    valeurInitiale={semaine.horaire.nom}
+                    libelleOk="Renommer"
+                    valider={renommer}
+                    annuler={finirRenommage}
+                  />
+                </Bulle>
+              )}
+            </div>
           </>
         )}
-        {semaine && (
-          <button className={ui.boutonSecondaire} onClick={() => void exporterClasseur(semaine.horaire.nom, semaine.etat, semaine.reglages)}>
-            Exporter Excel
-          </button>
-        )}
-        <button className={ui.boutonSecondaire} onClick={() => setFenetre({ type: 'organiser' })}>
-          Dossiers et modèles
-        </button>
-        {ecriture && (
-          <button className={ui.boutonSecondaire} onClick={() => setFenetre({ type: 'reglages' })}>
-            Réglages
-          </button>
-        )}
         {semaine && ecriture && (
-          <span className="ml-auto text-xs text-pierre-500" role="status">
+          <span className="ml-1 text-xs text-pierre-500" role="status">
             {statut === 'en-attente' && 'Enregistrement…'}
             {statut === 'enregistre' && '✓ Enregistré'}
             {statut === 'erreur' && (
@@ -189,15 +154,49 @@ export function BarreSemaine({
             )}
           </span>
         )}
+
+        {/* Excel : autre chose, à part et à droite */}
+        {(ecriture || semaine) && (
+          <div className="ml-auto inline-flex items-center gap-0.5 rounded-lg border border-pierre-200 bg-pierre-100/70 p-0.5">
+            <span className="inline-flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#107c41]">
+              <IconeTableur /> Excel
+            </span>
+            {ecriture && (
+              <button className={boutonExcel} title="Créer une semaine à partir d'un classeur Excel" onClick={() => fichier.current?.click()}>
+                <IconeImporter /> Importer
+              </button>
+            )}
+            {semaine && (
+              <button
+                className={boutonExcel}
+                title="Télécharger cette semaine en classeur Excel"
+                onClick={() => void exporterClasseur(semaine.horaire.nom, semaine.etat, semaine.reglages)}
+              >
+                <IconeExporter /> Exporter
+              </button>
+            )}
+            <input
+              ref={fichier}
+              type="file"
+              accept=".xlsx,.xls"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void importer(f)
+                e.target.value = ''
+              }}
+            />
+          </div>
+        )}
       </div>
       {estModele && semaine && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950">
           <span className="min-w-60 flex-1">
-            📐 <b>Modèle</b> ({resumeJours(semaine.etat.jours)}). Une semaine créée à partir de ce modèle en reprend les jours,
-            les périodes, les groupes, les activités et les soirées.
+            <b>Modèle</b> ({resumeJours(semaine.etat.jours)}). Une semaine créée à partir de ce modèle en reprend les jours, les
+            périodes, les groupes, les activités et les soirées.
           </span>
           {ecriture && (
-            <button className={ui.bouton} onClick={() => setFenetre({ type: 'nouvelle', modele: false, depart: semaine.horaire.id })}>
+            <button className={ui.bouton} onClick={() => nouveau({ modele: false, depart: semaine.horaire.id, dossier: null })}>
               Créer une semaine à partir de ce modèle
             </button>
           )}
@@ -210,31 +209,6 @@ export function BarreSemaine({
             Fermer
           </button>
         </p>
-      )}
-      {fenetre?.type === 'reglages' && <Reglages fermer={() => setFenetre(null)} />}
-      {fenetre?.type === 'nouvelle' && (
-        <NouvelHoraire
-          key={`${fenetre.modele}|${fenetre.depart ?? ''}`}
-          liste={liste}
-          dossiers={dossiers}
-          modele={fenetre.modele}
-          departInitial={fenetre.depart ?? ''}
-          dossierInitial={dossierActif}
-          semaine={semaine}
-          choisir={choisir}
-          fermer={() => setFenetre(null)}
-        />
-      )}
-      {fenetre?.type === 'organiser' && (
-        <Organiser
-          liste={liste}
-          dossiers={dossiers}
-          active={active}
-          ecriture={ecriture}
-          choisir={choisir}
-          nouveau={(modele, depart) => setFenetre({ type: 'nouvelle', modele, depart })}
-          fermer={() => setFenetre(null)}
-        />
       )}
     </div>
   )
@@ -252,8 +226,7 @@ function ChoixSemaine({
   active: string | null
   choisir: (id: string) => void
 }) {
-  const groupes = grouper(liste, dossiers)
-  const nonVides = groupes.filter((g) => g.horaires.length)
+  const nonVides = grouper(liste, dossiers).filter((g) => g.horaires.length)
   const options = (l: ResumeHoraire[]) =>
     l.map((h) => (
       <option key={h.id} value={h.id}>
@@ -263,14 +236,14 @@ function ChoixSemaine({
   return (
     <select
       aria-label="Semaine ouverte"
-      className="max-w-72 rounded-lg border border-pierre-300 bg-white px-3 py-2 text-sm font-medium"
+      className="max-w-72 rounded-lg border border-pierre-300 bg-white py-2 pl-3 text-sm font-medium"
       value={active ?? ''}
       onChange={(e) => choisir(e.target.value)}
     >
       {nonVides.length === 1 && !nonVides[0].modeles
         ? options(nonVides[0].horaires)
         : nonVides.map((g) => (
-            <optgroup key={g.cle} label={g.titre}>
+            <optgroup key={g.cle} label={g.modeles ? '📐 Modèles' : g.dossier ? `📁 ${g.titre}` : g.titre}>
               {options(g.horaires)}
             </optgroup>
           ))}
@@ -278,35 +251,18 @@ function ChoixSemaine({
   )
 }
 
-/** Dossiers (par nom), puis « Sans dossier », puis les modèles. */
-function grouper(liste: ResumeHoraire[], dossiers: Dossier[]) {
-  const connus = new Set(dossiers.map((d) => d.id))
-  const semaines = liste.filter((h) => !h.modele)
-  return [
-    ...dossiers.map((d) => ({ cle: d.id, titre: `📁 ${d.nom}`, dossier: d as Dossier | null, modeles: false, horaires: semaines.filter((h) => h.dossier_id === d.id) })),
-    {
-      cle: 'sans-dossier',
-      titre: dossiers.length ? 'Sans dossier' : 'Semaines',
-      dossier: null,
-      modeles: false,
-      horaires: semaines.filter((h) => !h.dossier_id || !connus.has(h.dossier_id)),
-    },
-    { cle: 'modeles', titre: '📐 Modèles', dossier: null, modeles: true, horaires: liste.filter((h) => h.modele) },
-  ]
-}
-
 // ------------------------------------------------------------------
 // Nouvelle semaine (vide ou à partir d'un modèle) / nouveau modèle
 // ------------------------------------------------------------------
 
-function NouvelHoraire({
+export function NouvelHoraire({
   liste,
   dossiers,
   modele,
   departInitial,
   dossierInitial,
   semaine,
-  choisir,
+  ouvrir,
   fermer,
 }: {
   liste: ResumeHoraire[]
@@ -316,7 +272,8 @@ function NouvelHoraire({
   departInitial: string
   dossierInitial: string | null
   semaine: Semaine | null
-  choisir: (id: string) => void
+  /** Ouvre l'horaire créé. */
+  ouvrir: (id: string) => void
   fermer: () => void
 }) {
   const reglages = useReglages()
@@ -329,6 +286,7 @@ function NouvelHoraire({
   const nomParDefaut = (dossier: string) =>
     modele ? nomLibre('Nouveau modèle', nomsDans(liste, true, null)) : nomSemaineLibre(nomsDans(liste, false, dossier || null))
   const [dossier, setDossier] = useState(dossierInitial ?? '')
+  const [nouveauDossier, setNouveauDossier] = useState(false)
   const [nom, setNom] = useState(() => nomParDefaut(dossierInitial ?? ''))
   const [nomTouche, setNomTouche] = useState(false)
   const [depart, setDepart] = useState(liste.some((h) => h.id === departInitial) ? departInitial : '')
@@ -359,19 +317,20 @@ function NouvelHoraire({
     if (j?.[0]) setPremier(j[0])
   }
 
-  async function changerDossier(valeur: string) {
-    let cible = valeur
-    if (valeur === '__nouveau__') {
-      const n = prompt('Nom du nouveau dossier (ex. Été 2027, Automne 2026) :')?.trim()
-      if (!n) return
-      try {
-        cible = dossiers.find((d) => d.nom === n)?.id ?? (await creerDossier.mutateAsync({ nom: n }))
-      } catch (e) {
-        return setErreur(messageErreur(e))
-      }
-    }
+  function changerDossier(cible: string) {
     setDossier(cible)
     if (!nomTouche) setNom(nomParDefaut(cible))
+  }
+
+  async function creerDossierIci(n: string) {
+    const existant = dossiers.find((d) => d.nom === n)
+    try {
+      changerDossier(existant?.id ?? (await creerDossier.mutateAsync({ nom: n })))
+      setNouveauDossier(false)
+      return null
+    } catch (e) {
+      return messageErreur(e)
+    }
   }
 
   async function creerHoraire() {
@@ -393,7 +352,7 @@ function NouvelHoraire({
         }
         etat = decalerJours(base, suite ? decalagePour(base.jours, premier) : 0, reglages.nuits)
       }
-      choisir(await creer.mutateAsync({ nom: propre, etat, modele, dossier_id: dossierCible }))
+      ouvrir(await creer.mutateAsync({ nom: propre, etat, modele, dossier_id: dossierCible }))
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))
@@ -437,18 +396,34 @@ function NouvelHoraire({
         </label>
 
         {!modele && (
-          <label className="block">
-            <span className={ui.etiquette}>Dossier</span>
-            <select className={ui.champ} value={dossier} onChange={(e) => void changerDossier(e.target.value)}>
-              <option value="">Sans dossier</option>
-              {dossiers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  📁 {d.nom}
-                </option>
-              ))}
-              <option value="__nouveau__">＋ Nouveau dossier…</option>
-            </select>
-          </label>
+          <div>
+            <label htmlFor="nouvel-horaire-dossier" className={ui.etiquette}>
+              Dossier
+            </label>
+            {nouveauDossier ? (
+              <SaisieNom
+                compact
+                placeholder="Nom du dossier (ex. Été 2027)"
+                libelleOk="Créer"
+                valider={creerDossierIci}
+                annuler={() => setNouveauDossier(false)}
+              />
+            ) : (
+              <div className="flex gap-2">
+                <select id="nouvel-horaire-dossier" className={ui.champ} value={dossier} onChange={(e) => changerDossier(e.target.value)}>
+                  <option value="">Sans dossier</option>
+                  {dossiers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      📁 {d.nom}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className={`${ui.boutonSecondaire} shrink-0`} onClick={() => setNouveauDossier(true)}>
+                  <IconePlus /> Dossier
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         <label className="block">
@@ -515,7 +490,11 @@ function NouvelHoraire({
               Tout le contenu de « {source.nom} » est décalé pour commencer le {premier}.
             </span>
           )}
-          {!source && <span className="block text-xs text-pierre-500">Jours, périodes et soirées modifiables ensuite (« Jours et périodes ») ; groupes dans la grille.</span>}
+          {!source && (
+            <span className="block text-xs text-pierre-500">
+              Jours, périodes et soirées modifiables ensuite (« Jours et périodes ») ; groupes dans la grille.
+            </span>
+          )}
         </p>
 
         {erreur && <p className={ui.erreur}>{erreur}</p>}
@@ -523,222 +502,11 @@ function NouvelHoraire({
           <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
             Annuler
           </button>
-          <button type="submit" className={ui.bouton} disabled={!!probleme || enCours}>
+          <button type="submit" className={ui.bouton} disabled={!!probleme || enCours || nouveauDossier}>
             {enCours ? 'Création…' : 'Créer'}
           </button>
         </div>
       </form>
-    </Dialogue>
-  )
-}
-
-// ------------------------------------------------------------------
-// Dossiers et modèles : ranger, ouvrir, supprimer
-// ------------------------------------------------------------------
-
-function Organiser({
-  liste,
-  dossiers,
-  active,
-  ecriture,
-  choisir,
-  nouveau,
-  fermer,
-}: {
-  liste: ResumeHoraire[]
-  dossiers: Dossier[]
-  active: string | null
-  ecriture: boolean
-  choisir: (id: string) => void
-  /** Ouvre la fenêtre de création (semaine ou modèle), avec un point de départ. */
-  nouveau: (modele: boolean, depart?: string) => void
-  fermer: () => void
-}) {
-  const modifier = useModifierHoraire()
-  const supprimer = useSupprimerHoraire()
-  const enregistrerDossier = useEnregistrerDossier()
-  const supprimerDossier = useSupprimerDossier()
-  const [message, setMessage] = useState<string | null>(null)
-  const surErreur = { onError: (e: unknown) => setMessage(messageErreur(e)) }
-  const groupes = grouper(liste, dossiers)
-  const sansDossier = groupes.find((g) => g.cle === 'sans-dossier')!
-  const modeles = groupes.find((g) => g.modeles)!
-
-  function nomDossier(actuel?: Dossier) {
-    const nom = prompt('Nom du dossier (ex. Été 2027, Automne 2026) :', actuel?.nom ?? '')?.trim()
-    if (!nom || nom === actuel?.nom) return
-    if (dossiers.some((d) => d.nom === nom)) return setMessage(`Le dossier « ${nom} » existe déjà.`)
-    enregistrerDossier.mutate({ id: actuel?.id, nom }, surErreur)
-  }
-
-  function retirerDossier(d: Dossier, contenu: ResumeHoraire[]) {
-    const doublons = contenu.filter((h) => sansDossier.horaires.some((x) => x.nom === h.nom)).map((h) => `« ${h.nom} »`)
-    if (doublons.length) {
-      return setMessage(`« Sans dossier » contient déjà ${doublons.join(', ')} : renommez ou déplacez ces semaines avant de supprimer le dossier.`)
-    }
-    const texte = contenu.length
-      ? `Supprimer le dossier « ${d.nom} » ? Ses ${contenu.length} semaine(s) ne sont pas supprimées : elles passent dans « Sans dossier ».`
-      : `Supprimer le dossier « ${d.nom} » ?`
-    if (confirm(texte)) supprimerDossier.mutate(d.id, surErreur)
-  }
-
-  function deplacer(h: ResumeHoraire, cible: string | null) {
-    if (nomsDans(liste, false, cible).includes(h.nom)) {
-      return setMessage(`Ce dossier contient déjà une semaine « ${h.nom} » : renommez-la d'abord.`)
-    }
-    modifier.mutate({ id: h.id, dossier_id: cible }, surErreur)
-  }
-
-  const retirer = (h: ResumeHoraire) =>
-    confirm(`Supprimer ${h.modele ? 'le modèle' : 'la semaine'} « ${h.nom} » ? Cette action est définitive.`) && supprimer.mutate(h.id, surErreur)
-
-  const ouvrir = (h: ResumeHoraire) =>
-    h.id === active ? (
-      <span className="rounded-full bg-foret-100 px-2 py-0.5 text-xs text-foret-800">ouvert</span>
-    ) : (
-      <button
-        className="text-foret-700 hover:underline"
-        onClick={() => {
-          choisir(h.id)
-          fermer()
-        }}
-      >
-        Ouvrir
-      </button>
-    )
-
-  const petit = 'rounded border border-pierre-300 bg-white px-1.5 py-1 text-xs'
-  return (
-    <Dialogue titre="Dossiers et modèles" fermer={fermer} large>
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="flex-1 text-sm text-pierre-500">
-          Rangez les semaines par saison dans des dossiers. Les modèles servent de point de départ aux nouvelles semaines (séjours
-          d'école de 2, 3 ou 4 jours, semaine d'été…).
-        </p>
-        {ecriture && (
-          <button className={ui.boutonSecondaire} onClick={() => nomDossier()}>
-            + Nouveau dossier
-          </button>
-        )}
-      </div>
-      {message && (
-        <p className={`${ui.erreur} mt-3 flex justify-between gap-3`}>
-          {message}
-          <button className="underline" onClick={() => setMessage(null)}>
-            Fermer
-          </button>
-        </p>
-      )}
-
-      <div className="mt-4 space-y-4">
-        {groupes
-          .filter((g) => !g.modeles && (g.dossier || g.horaires.length || !dossiers.length))
-          .map((g) => (
-            <section key={g.cle} className="rounded-lg border border-pierre-200">
-              <header className="flex flex-wrap items-center gap-2 border-b border-pierre-100 bg-pierre-50 px-3 py-2">
-                <h3 className="flex-1 text-sm font-semibold">
-                  {g.titre} <span className="font-normal text-pierre-500">({g.horaires.length})</span>
-                </h3>
-                {g.dossier && ecriture && (
-                  <>
-                    <button className="text-sm text-foret-700 hover:underline" onClick={() => nomDossier(g.dossier!)}>
-                      Renommer
-                    </button>
-                    <button className={ui.boutonDanger} onClick={() => retirerDossier(g.dossier!, g.horaires)}>
-                      Supprimer
-                    </button>
-                  </>
-                )}
-              </header>
-              {g.horaires.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-pierre-500">
-                  Dossier vide. {ecriture && 'Rangez-y des semaines avec le menu « Dossier » de chaque semaine.'}
-                </p>
-              ) : (
-                <ul className="divide-y divide-pierre-100">
-                  {g.horaires.map((h) => (
-                    <li key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm">
-                      <span className="min-w-40 flex-1 font-medium">{h.nom}</span>
-                      <span className="text-xs text-pierre-500">{h.jours ? resumeJours(h.jours) : ''}</span>
-                      {ouvrir(h)}
-                      {ecriture && (
-                        <>
-                          <select
-                            aria-label={`Dossier de ${h.nom}`}
-                            className={petit}
-                            value={dossierDe(h) ?? ''}
-                            onChange={(e) => deplacer(h, e.target.value || null)}
-                          >
-                            <option value="">Sans dossier</option>
-                            {dossiers.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                📁 {d.nom}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="text-foret-700 hover:underline"
-                            title="Créer un modèle à partir de cette semaine"
-                            onClick={() => nouveau(true, h.id)}
-                          >
-                            → Modèle
-                          </button>
-                          <button className={ui.boutonDanger} onClick={() => retirer(h)}>
-                            Supprimer
-                          </button>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-
-        <section className="rounded-lg border border-sky-200">
-          <header className="flex flex-wrap items-center gap-2 border-b border-sky-100 bg-sky-50 px-3 py-2">
-            <h3 className="flex-1 text-sm font-semibold">
-              {modeles.titre} <span className="font-normal text-pierre-500">({modeles.horaires.length})</span>
-            </h3>
-            {ecriture && (
-              <button className={ui.boutonSecondaire} onClick={() => nouveau(true)}>
-                + Nouveau modèle
-              </button>
-            )}
-          </header>
-          {modeles.horaires.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-pierre-500">
-              Aucun modèle. Créez-en un vide (choisissez le nombre de jours) ou à partir d'une semaine (→ Modèle).
-            </p>
-          ) : (
-            <ul className="divide-y divide-pierre-100">
-              {modeles.horaires.map((h) => (
-                <li key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm">
-                  <span className="min-w-40 flex-1 font-medium">📐 {h.nom}</span>
-                  <span className="text-xs text-pierre-500">{h.jours ? resumeJours(h.jours) : ''}</span>
-                  {ouvrir(h)}
-                  {ecriture && (
-                    <>
-                      <button className="text-foret-700 hover:underline" onClick={() => nouveau(false, h.id)}>
-                        Nouvelle semaine
-                      </button>
-                      <button className={ui.boutonDanger} onClick={() => retirer(h)}>
-                        Supprimer
-                      </button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-4 text-right">
-        <button className={ui.boutonSecondaire} onClick={fermer}>
-          Fermer
-        </button>
-      </div>
     </Dialogue>
   )
 }
