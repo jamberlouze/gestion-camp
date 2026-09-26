@@ -7,7 +7,7 @@ connexion, menu, référentiel partagé.
 | Module | État | Appareils |
 |---|---|---|
 | 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
-| 🛒 Commande : menus, recettes, commande Colabor | Migration après Embarcations | Ordinateur |
+| 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
 | 🗓️ Horaire : groupes et animateurs | En développement | Ordinateur |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,

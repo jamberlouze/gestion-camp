@@ -26,7 +26,7 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-10 border-b border-pierre-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-pierre-200 bg-white/90 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2.5">
           <Link to="/" className="flex shrink-0 items-center gap-2 font-semibold">
             <img src="/favicon.svg" alt="" className="h-7 w-7" />
@@ -60,7 +60,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 print:max-w-none print:p-0">
         <Outlet />
       </main>
     </div>

@@ -119,20 +119,6 @@ export function useModificationsEnAttente() {
   }).length
 }
 
-/** Modifications refusées par la base (droits, préfixe en double…). */
-export function useErreursEnvoi() {
-  const client = useQueryClient()
-  const erreurs = useMutationState({
-    filters: { mutationKey: [RACINE], status: 'error' },
-    select: (m) => ({ id: m.mutationId, erreur: m.state.error }),
-  })
-  const effacer = () => {
-    const cache = client.getMutationCache()
-    cache.findAll({ mutationKey: [RACINE], status: 'error' }).forEach((m) => cache.remove(m))
-  }
-  return { erreurs, effacer }
-}
-
 // ------------------------------------------------------------------
 // Modifications (définies une fois pour toutes sur le QueryClient, pour
 // pouvoir reprendre après un rechargement les envois restés en attente)

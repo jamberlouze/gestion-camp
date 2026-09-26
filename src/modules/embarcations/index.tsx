@@ -1,7 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router'
-import { messageErreur } from '@/lib/donnees'
-import { ui } from '@/lib/ui'
-import { useEnLigne, useErreursEnvoi, useModificationsEnAttente, useTempsReel } from './donnees'
+import { BandeauErreurs } from '@/lib/BandeauErreurs'
+import { useEnLigne, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Inventaire } from './Inventaire'
 import { Modeles } from './Modeles'
 import { TableauDeBord } from './TableauDeBord'
@@ -32,7 +31,7 @@ export default function ModuleEmbarcations() {
           Modèles
         </NavLink>
       </nav>
-      <ErreursEnvoi />
+      <BandeauErreurs racine="embarcations" />
       <Routes>
         <Route index element={<Inventaire />} />
         <Route path="tableau" element={<TableauDeBord />} />
@@ -63,29 +62,5 @@ function EtatSynchro() {
       <span className={`h-2 w-2 rounded-full ${pastille}`} aria-hidden />
       {texte}
     </span>
-  )
-}
-
-function ErreursEnvoi() {
-  const { erreurs, effacer } = useErreursEnvoi()
-  if (erreurs.length === 0) return null
-  return (
-    <div className={`${ui.erreur} mb-4 flex items-start justify-between gap-3`}>
-      <div>
-        <p className="font-medium">
-          {erreurs.length > 1
-            ? `${erreurs.length} modifications ont été refusées et annulées :`
-            : 'Une modification a été refusée et annulée :'}
-        </p>
-        <ul className="mt-1 list-disc pl-5">
-          {erreurs.map((e) => (
-            <li key={e.id}>{messageErreur(e.erreur)}</li>
-          ))}
-        </ul>
-      </div>
-      <button className="shrink-0 text-sm underline" onClick={effacer}>
-        Fermer
-      </button>
-    </div>
   )
 }
