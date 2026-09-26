@@ -15,13 +15,15 @@ import {
   useCreerHoraire,
   useEditeurSemaine,
   useHoraires,
+  useReferentielVide,
   useReglages,
   useRenommerHoraire,
   useSupprimerHoraire,
   type ResumeHoraire,
 } from './donnees'
 import { exporterClasseur, importerClasseur } from './excel'
-import { analyseConges, analyseSoirees, conflitsGrille, semaineVide } from './logique'
+import { Reglages } from './Reglages'
+import { analyseConges, analyseSoirees, ANIMATEURS_ORIGINE, conflitsGrille, semaineVide } from './logique'
 import { Soirees } from './Soirees'
 import { Specialiste } from './Specialiste'
 import { META_TAG, TAGS } from './types'
@@ -41,6 +43,7 @@ export default function ModuleHoraire() {
   const horaires = useHoraires()
   const reglages = useReglages()
   const animateurs = useAnimateurs()
+  const referentielVide = useReferentielVide()
   const [choisie, setChoisie] = useState<string | null>(lireSemaineActive)
 
   // Semaine active : celle choisie si elle existe encore, sinon la première.
@@ -78,6 +81,7 @@ export default function ModuleHoraire() {
     <div>
       <BarreSemaine liste={liste} active={active} choisir={choisir} semaine={semaine} ecriture={ecriture} />
       <BandeauErreurs racine="horaire" />
+      {referentielVide && <AucunAnimateur />}
       {liste.length === 0 ? (
         <p className={`${ui.carte} p-10 text-center text-sm text-pierre-500`}>
           Aucune semaine pour l'instant. {ecriture ? 'Créez-en une ou importez un classeur Excel.' : ''}
@@ -142,6 +146,7 @@ function BarreSemaine({
   const ajouterAnimateurs = useAjouterAnimateurs()
   const fichier = useRef<HTMLInputElement>(null)
   const [gestion, setGestion] = useState(false)
+  const [reglages, setReglages] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const noms = liste.map((h) => h.nom)
 
@@ -236,6 +241,11 @@ function BarreSemaine({
             Gérer
           </button>
         )}
+        {ecriture && (
+          <button className={ui.boutonSecondaire} onClick={() => setReglages(true)}>
+            Réglages
+          </button>
+        )}
         {semaine && ecriture && (
           <span className="ml-auto text-xs text-pierre-500" role="status">
             {statut === 'en-attente' && 'Enregistrement…'}
@@ -259,7 +269,28 @@ function BarreSemaine({
           </button>
         </p>
       )}
+      {reglages && <Reglages fermer={() => setReglages(false)} />}
       {gestion && <GestionSemaines liste={liste} active={active} choisir={choisir} fermer={() => setGestion(false)} />}
+    </div>
+  )
+}
+
+/** Le référentiel des employés est vide : les menus d'animateurs le seraient aussi. */
+function AucunAnimateur() {
+  const { estDirection } = useAuth()
+  const ajouter = useAjouterAnimateurs()
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden">
+      <span className="flex-1">
+        Aucun animateur dans le référentiel des employés : les menus d'animateurs sont vides.
+      </span>
+      {estDirection ? (
+        <button className={ui.bouton} disabled={ajouter.isPending} onClick={() => ajouter.mutate(ANIMATEURS_ORIGINE)}>
+          {ajouter.isPending ? 'Ajout…' : `Ajouter les ${ANIMATEURS_ORIGINE.length} animateurs de l'ancienne liste`}
+        </button>
+      ) : (
+        <span>Demandez à la direction d'ajouter les employés.</span>
+      )}
     </div>
   )
 }

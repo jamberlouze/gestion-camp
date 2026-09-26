@@ -3,7 +3,6 @@ import { ui } from '@/lib/ui'
 import { useSemaine } from './contexte'
 import { useAjouterAnimateurs } from './donnees'
 import { activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe } from './logique'
-import { Reglages } from './Reglages'
 import { CONGES, META_TAG, type CodeConge, type GroupeHoraire, type Tag } from './types'
 
 /** Une case de la grille (coordonnées utiles à la sélection rectangulaire). */
@@ -18,7 +17,6 @@ interface InfoCase {
 
 export function Construire() {
   const { etat, reglages, modifier, ecriture } = useSemaine()
-  const [reglagesOuverts, setReglagesOuverts] = useState(false)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const ancre = useRef<InfoCase | null>(null)
   const glisse = useRef<{ depart: InfoCase; actif: boolean } | null>(null)
@@ -195,11 +193,6 @@ export function Construire() {
           Cliquez une case et tapez ou choisissez l'activité. Glissez (ou Maj+clic) pour sélectionner plusieurs cases, puis les
           effacer ou les fusionner (périodes doubles ou triples). Escalade, transport et sauveteur se colorent seuls.
         </p>
-        {ecriture && (
-          <button className={ui.boutonSecondaire} onClick={() => setReglagesOuverts(true)}>
-            Réglages
-          </button>
-        )}
         <button className={ui.boutonSecondaire} onClick={() => window.print()}>
           Imprimer
         </button>
@@ -344,7 +337,6 @@ export function Construire() {
           </button>
         </div>
       )}
-      {reglagesOuverts && <Reglages fermer={() => setReglagesOuverts(false)} />}
     </div>
   )
 }

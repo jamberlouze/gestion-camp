@@ -56,13 +56,23 @@ export function useEnregistrerReglages() {
   })
 }
 
-/** Animateurs du référentiel commun (employés actifs). */
-export function useAnimateurs() {
-  const { data } = useQuery({
+function useEmployes() {
+  return useQuery({
     queryKey: ['core', 'employes'],
     queryFn: async () => (await verifier(supabase.schema('core').from('employes').select('*').order('surnom'))) as Employe[],
   })
+}
+
+/** Animateurs du référentiel commun (employés actifs). */
+export function useAnimateurs() {
+  const { data } = useEmployes()
   return (data ?? []).filter((e) => e.actif).map((e) => e.surnom)
+}
+
+/** Vrai une fois le référentiel chargé, s'il ne contient aucun employé actif. */
+export function useReferentielVide() {
+  const { data } = useEmployes()
+  return !!data && !data.some((e) => e.actif)
 }
 
 export function useAjouterAnimateurs() {

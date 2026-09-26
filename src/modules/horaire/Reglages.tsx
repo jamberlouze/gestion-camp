@@ -3,14 +3,14 @@ import { Link } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { useSemaine } from './contexte'
-import { useAjouterAnimateurs, useEnregistrerReglages } from './donnees'
+import { useAjouterAnimateurs, useAnimateurs, useEnregistrerReglages, useReglages } from './donnees'
 import { ANIMATEURS_ORIGINE } from './logique'
 import { META_TAG, TAGS, type Activite, type Tag } from './types'
 
-/** Réglages communs à toutes les semaines. */
+/** Réglages communs à toutes les semaines (accessibles même sans semaine). */
 export function Reglages({ fermer }: { fermer: () => void }) {
-  const { reglages, animateurs } = useSemaine()
+  const reglages = useReglages()
+  const animateurs = useAnimateurs()
   const { estDirection } = useAuth()
   const enregistrer = useEnregistrerReglages()
   const ajouterAnimateurs = useAjouterAnimateurs()
