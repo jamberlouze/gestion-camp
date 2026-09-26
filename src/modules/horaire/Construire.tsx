@@ -2,8 +2,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ui } from '@/lib/ui'
 import { useSemaine } from './contexte'
 import { useAjouterAnimateurs } from './donnees'
-import { activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe } from './logique'
+import { activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe, resumeJours } from './logique'
+import { JoursEtPeriodes } from './Structure'
 import { CONGES, META_TAG, type CodeConge, type GroupeHoraire, type Tag } from './types'
+
+/** Largeur des colonnes (px) : identique dans l'en-tête et le corps de la grille. */
+const LARGEUR = { jour: 96, periode: 112, groupe: 128, ajout: 112 }
 
 /** Une case de la grille (coordonnées utiles à la sélection rectangulaire). */
 interface InfoCase {
@@ -17,6 +21,7 @@ interface InfoCase {
 
 export function Construire() {
   const { etat, reglages, modifier, ecriture } = useSemaine()
+  const [structure, setStructure] = useState(false)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const ancre = useRef<InfoCase | null>(null)
   const glisse = useRef<{ depart: InfoCase; actif: boolean } | null>(null)
@@ -175,16 +180,40 @@ export function Construire() {
   function remplir(jour: string, periodes: string[], libelle: string) {
     const v = prompt(`Activité pour tous les groupes — ${libelle} :`, 'Parc aquatique / Journée commune')
     if (v == null) return
-    modifier((e) =>
+    modifier((e) => {
+      // Une période couverte par une fusion prend l'activité du début de la fusion.
+      const { couverture } = cartesFusion(e)
       e.groupes.forEach((g) =>
         periodes.forEach((p) => {
+          const pi = e.periodes.indexOf(p)
+          const debut = couverture[`${g.id}|${jour}|${pi}`]
+          if (debut !== undefined && debut !== pi) return
           const k = cle(g.id, jour, p)
           if (v.trim()) e.cellules[k] = v
           else delete e.cellules[k]
         }),
-      ),
-    )
+      )
+    })
   }
+
+  const colonnes = (
+    <colgroup>
+      <col style={{ width: LARGEUR.jour }} />
+      <col style={{ width: LARGEUR.periode }} />
+      {etat.groupes.map((g) => (
+        <col key={g.id} style={{ width: LARGEUR.groupe }} />
+      ))}
+      {ecriture && <col className="w-(--largeur-ajout) print:w-0" />}
+    </colgroup>
+  )
+  // Largeur fixe des tables ; à l'impression, sans la colonne « + Groupe ».
+  const largeurImpression = LARGEUR.jour + LARGEUR.periode + etat.groupes.length * LARGEUR.groupe
+  const dimensions = {
+    '--largeur': `${largeurImpression + (ecriture ? LARGEUR.ajout : 0)}px`,
+    '--largeur-impression': `${largeurImpression}px`,
+    '--largeur-ajout': `${LARGEUR.ajout}px`,
+  } as React.CSSProperties
+  const table = 'table-fixed border-separate border-spacing-0 text-sm w-(--largeur) print:w-(--largeur-impression)'
 
   return (
     <div>
@@ -193,11 +222,20 @@ export function Construire() {
           Cliquez une case et tapez ou choisissez l'activité. Glissez (ou Maj+clic) pour sélectionner plusieurs cases, puis les
           effacer ou les fusionner (périodes doubles ou triples). Escalade, transport et sauveteur se colorent seuls.
         </p>
+        <span className="text-sm text-pierre-700">
+          {resumeJours(etat.jours)} · {etat.periodes.length} période{etat.periodes.length > 1 ? 's' : ''}
+        </span>
+        {ecriture && (
+          <button className={ui.boutonSecondaire} onClick={() => setStructure(true)}>
+            Jours et périodes
+          </button>
+        )}
         <button className={ui.boutonSecondaire} onClick={() => window.print()}>
           Imprimer
         </button>
       </div>
       <Legende />
+      {structure && <JoursEtPeriodes fermer={() => setStructure(false)} />}
 
       <datalist id="liste-activites">
         {reglages.activites.map((a) => (
@@ -205,29 +243,54 @@ export function Construire() {
         ))}
       </datalist>
 
-      <div className={`${ui.carte} max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible`}>
-        <table className="border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20 bg-white">
-            <tr>
-              <th className="sticky left-0 z-30 w-24 min-w-24 border-b border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500">
-                Jour
-              </th>
-              <th className="sticky left-24 z-30 w-28 min-w-28 border-b border-r border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500">
-                Période
-              </th>
-              {etat.groupes.map((g, gi) => (
-                <EnteteGroupe key={g.id} groupe={g} gi={gi} />
-              ))}
-              {ecriture && (
-                <th className="border-b border-pierre-200 px-2 py-2 print:hidden">
-                  <button
-                    className={ui.boutonSecondaire}
-                    onClick={() => modifier((e) => e.groupes.push(nouveauGroupe(prochainIdGroupe(e), { num: String(e.groupes.length + 1) })))}
-                  >
-                    + Groupe
-                  </button>
+      {/* La grille s'affiche au complet : c'est la page qui défile. L'en-tête
+          des groupes reste visible sous la barre du haut ; il est dans une
+          table à part, qui suit le défilement horizontal du corps. */}
+      <GrilleDefilante
+        entete={
+          <table className={table} style={dimensions}>
+            {colonnes}
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 border-b border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500">
+                  Jour
                 </th>
-              )}
+                <th
+                  className="sticky z-10 border-b border-r border-pierre-200 bg-pierre-50 px-2 py-2 text-left font-medium text-pierre-500"
+                  style={{ left: LARGEUR.jour }}
+                >
+                  Période
+                </th>
+                {etat.groupes.map((g, gi) => (
+                  <EnteteGroupe key={g.id} groupe={g} gi={gi} />
+                ))}
+                {ecriture && (
+                  <th className="border-b border-pierre-200 bg-white px-2 py-2 print:hidden">
+                    <button
+                      className={ui.boutonSecondaire}
+                      onClick={() => modifier((e) => e.groupes.push(nouveauGroupe(prochainIdGroupe(e), { num: String(e.groupes.length + 1) })))}
+                    >
+                      + Groupe
+                    </button>
+                  </th>
+                )}
+              </tr>
+            </thead>
+          </table>
+        }
+      >
+        <table className={table} style={dimensions}>
+          {colonnes}
+          <thead className="hidden print:table-header-group">
+            <tr>
+              <th className="border-b border-pierre-300 px-2 py-1 text-left">Jour</th>
+              <th className="border-b border-r border-pierre-300 px-2 py-1 text-left">Période</th>
+              {etat.groupes.map((g) => (
+                <th key={g.id} className="border-b border-r border-pierre-300 px-2 py-1 text-left">
+                  Gr. {g.num}
+                  <span className="block text-xs font-normal">{g.anim}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -252,9 +315,10 @@ export function Construire() {
                     </td>
                   )}
                   <td
-                    className={`sticky left-24 z-10 border-r border-pierre-200 bg-white px-2 py-1.5 align-top text-xs text-pierre-700 ${
+                    className={`sticky z-10 border-r border-pierre-200 bg-white px-2 py-1.5 align-top text-xs text-pierre-700 ${
                       pi === etat.periodes.length - 1 ? 'border-b-2' : 'border-b'
                     } border-b-pierre-200`}
+                    style={{ left: LARGEUR.jour }}
                   >
                     {p}
                     {ecriture && (
@@ -290,6 +354,7 @@ export function Construire() {
                         key={g.id}
                         k={k}
                         mc={mc}
+                        etiquette={`Activité — Gr. ${g.num || '?'}${g.anim ? ` (${g.anim})` : ''}, ${jour}, ${p}`}
                         valeur={valeur}
                         span={span}
                         tag={tag}
@@ -312,7 +377,7 @@ export function Construire() {
             )}
           </tbody>
         </table>
-      </div>
+      </GrilleDefilante>
 
       {selection.size > 0 && ecriture && (
         <div className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit items-center gap-2 rounded-full border border-pierre-200 bg-white px-4 py-2 shadow-lg print:hidden">
@@ -341,6 +406,79 @@ export function Construire() {
   )
 }
 
+/**
+ * Grille qui défile avec la page (pas de hauteur maximale) : l'en-tête
+ * colle sous la barre du haut et suit le défilement horizontal du corps ;
+ * il porte aussi une barre de défilement horizontale, toujours à portée.
+ * Deux tables (même largeur de colonnes), car un élément qui défile
+ * horizontalement empêcherait l'en-tête de coller à la page.
+ */
+function GrilleDefilante({ entete, children }: { entete: React.ReactNode; children: React.ReactNode }) {
+  const haut = useRef<HTMLDivElement>(null)
+  const corps = useRef<HTMLDivElement>(null)
+  // Position donnée par programme à chaque bande : l'événement de défilement
+  // qui en résulte (l'écho) est ignoré une fois, sinon les deux bandes se
+  // renverraient une position déjà dépassée.
+  const attendu = useRef<{ haut: number | null; corps: number | null }>({ haut: null, corps: null })
+
+  const suivre = (source: 'haut' | 'corps') => {
+    const [src, cible, autre] = source === 'haut' ? [haut.current, corps.current, 'corps' as const] : [corps.current, haut.current, 'haut' as const]
+    if (!src || !cible) return
+    const echo = attendu.current[source]
+    attendu.current[source] = null
+    if (echo !== null && Math.abs(src.scrollLeft - echo) <= 1) return
+    if (Math.abs(cible.scrollLeft - src.scrollLeft) <= 1) return
+    attendu.current[autre] = src.scrollLeft
+    cible.scrollLeft = src.scrollLeft
+  }
+
+  // À l'impression, rien n'est défilé.
+  useEffect(() => {
+    const remettre = () => {
+      attendu.current = { haut: null, corps: null }
+      if (haut.current) haut.current.scrollLeft = 0
+      if (corps.current) corps.current.scrollLeft = 0
+    }
+    window.addEventListener('beforeprint', remettre)
+    return () => window.removeEventListener('beforeprint', remettre)
+  }, [])
+
+  useEffect(() => {
+    const h = haut.current
+    const c = corps.current
+    if (!h || !c) return
+    // Molette ou pavé tactile sur l'en-tête : défile le corps à l'horizontale.
+    const roue = (e: WheelEvent) => {
+      const echelle = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? c.clientWidth : 1
+      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX
+      if (!dx || (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(dx))) return
+      e.preventDefault()
+      c.scrollLeft += dx * echelle
+    }
+    h.addEventListener('wheel', roue, { passive: false })
+    return () => h.removeEventListener('wheel', roue)
+  }, [])
+
+  // Empilement : les colonnes collées à gauche (z-10) restent dans leur
+  // table ; l'en-tête (z-5) passe sous la barre du haut de l'app (z-10).
+  // À l'impression, l'en-tête à l'écran est masqué : la table du corps a
+  // son propre en-tête, répété sur chaque page.
+  return (
+    <div className={`${ui.carte} print:border-0 print:shadow-none`}>
+      <div
+        ref={haut}
+        className="sticky top-(--hauteur-entete) z-5 overflow-x-auto rounded-t-xl bg-white print:hidden"
+        onScroll={() => suivre('haut')}
+      >
+        {entete}
+      </div>
+      <div ref={corps} className="relative z-0 overflow-x-auto print:overflow-visible" onScroll={() => suivre('corps')}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function Legende() {
   return (
     <div className="mb-3 flex flex-wrap gap-3 text-xs text-pierre-700 print:hidden">
@@ -364,6 +502,7 @@ function Legende() {
 const Case = memo(function Case({
   k,
   mc,
+  etiquette,
   valeur,
   span,
   tag,
@@ -381,6 +520,8 @@ const Case = memo(function Case({
   k: string
   /** Coordonnée de fusion « gid|jour|indice ». */
   mc: string
+  /** Nom accessible du champ (groupe, jour, période) : l'en-tête est dans une autre table. */
+  etiquette: string
   valeur: string
   span: number
   tag?: Tag
@@ -403,7 +544,7 @@ const Case = memo(function Case({
       onMouseDown={(e) => surAppui(k, e)}
       onMouseEnter={(e) => surSurvol(k, e)}
       title={remplacant ? `Congé de ${animateur} — groupe animé par ${remplacant}` : undefined}
-      className={`relative min-w-32 border-b border-r border-pierre-100 p-0 ${derniere ? 'border-b-2 border-b-pierre-200' : ''} ${anneau} ${
+      className={`relative border-b border-r border-pierre-100 p-0 ${derniere ? 'border-b-2 border-b-pierre-200' : ''} ${anneau} ${
         selectionnee ? 'bg-sky-100' : ''
       }`}
       style={!selectionnee && meta ? { background: meta.clair } : undefined}
@@ -423,7 +564,7 @@ const Case = memo(function Case({
       )}
       <input
         list="liste-activites"
-        aria-label="Activité"
+        aria-label={etiquette}
         readOnly={!ecriture}
         className="h-full min-h-9 w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:bg-white/70 focus:ring-2 focus:ring-inset focus:ring-foret-600"
         value={valeur}
@@ -453,7 +594,7 @@ function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) 
 
   const choix = 'w-full rounded border border-pierre-200 bg-white px-1 py-0.5 text-xs'
   return (
-    <th className="min-w-32 border-b border-r border-pierre-200 bg-pierre-50 p-1.5 text-left align-top font-normal">
+    <th className="border-b border-r border-pierre-200 bg-pierre-50 p-1.5 text-left align-top font-normal">
       <div className="flex items-center gap-1">
         <span className="text-xs text-pierre-500">Gr.</span>
         <input

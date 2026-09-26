@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { Employe } from '@/lib/types'
 import { completer, REGLAGES_DEFAUT } from './logique'
-import type { EtatSemaine, Horaire, Reglages } from './types'
+import type { Dossier, EtatSemaine, Horaire, Reglages } from './types'
 
 // Chaque semaine est un document (horaire.horaires.etat). L'éditeur garde
 // une copie locale, modifiée tout de suite, et l'enregistre peu après la
@@ -24,14 +25,65 @@ async function verifier<T>(requete: PromiseLike<{ data: T; error: unknown }>): P
   return data
 }
 
-export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'updated_at' | 'created_at'>
+/** Semaine ou modèle, sans la grille (seulement ses jours, pour les résumés). */
+export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'dossier_id' | 'modele' | 'updated_at' | 'created_at'> & {
+  jours: string[] | null
+}
+
+export const trierNoms = (a: string, b: string) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' })
+
+/** Garde à jour les jours d'un horaire dans la liste (résumés, aperçu d'un modèle). */
+function majJoursListe(client: QueryClient, id: string, jours: string[]) {
+  client.setQueryData<ResumeHoraire[]>(CLES.liste, (l) => l?.map((h) => (h.id === id ? { ...h, jours } : h)))
+}
 
 export function useHoraires() {
   return useQuery({
     queryKey: CLES.liste,
     queryFn: async () =>
-      (await verifier(db().from('horaires').select('id, nom, semaine_id, updated_at, created_at'))) as ResumeHoraire[],
-    select: (l) => [...l].sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true, sensitivity: 'base' })),
+      (await verifier(
+        db().from('horaires').select('id, nom, semaine_id, dossier_id, modele, updated_at, created_at, jours:etat->jours'),
+      )) as ResumeHoraire[],
+    select: (l) => [...l].sort((a, b) => trierNoms(a.nom, b.nom)),
+  })
+}
+
+/** Dossiers de rangement des semaines (par saison…), triés par nom. */
+export function useDossiers() {
+  const requete = useListe<Dossier>('horaire', 'dossiers', 'nom')
+  const dossiers = useMemo(() => [...(requete.data ?? [])].sort((a, b) => trierNoms(a.nom, b.nom)), [requete.data])
+  // Dossiers existants (null tant qu'ils ne sont pas chargés) : un dossier
+  // supprimé ailleurs vaut « Sans dossier » (la base a mis dossier_id à null).
+  const connus = useMemo(() => (requete.data ? new Set(requete.data.map((d) => d.id)) : null), [requete.data])
+  return { ...requete, dossiers, connus }
+}
+
+/** Crée (sans id) ou renomme un dossier ; renvoie l'id du dossier. */
+export function useEnregistrerDossier() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['horaire', 'dossier'],
+    mutationFn: async ({ id, nom }: { id?: string; nom: string }) => {
+      if (id) {
+        await verifier(db().from('dossiers').update({ nom }).eq('id', id))
+        return id
+      }
+      return ((await verifier(db().from('dossiers').insert({ nom }).select('id').single())) as { id: string }).id
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['horaire', 'dossiers'] }),
+  })
+}
+
+/** Supprime un dossier ; ses semaines passent dans « Sans dossier ». */
+export function useSupprimerDossier() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['horaire', 'supprimer-dossier'],
+    mutationFn: (id: string) => verifier(db().from('dossiers').delete().eq('id', id)),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ['horaire', 'dossiers'] })
+      client.invalidateQueries({ queryKey: CLES.liste })
+    },
   })
 }
 
@@ -43,7 +95,8 @@ export function useReglages(): Reglages {
       return ((lignes as { valeur: Partial<Reglages> }[])[0]?.valeur ?? {}) as Partial<Reglages>
     },
   })
-  return { ...REGLAGES_DEFAUT, ...data, capacites: { ...REGLAGES_DEFAUT.capacites, ...data?.capacites } }
+  // Même objet tant que les réglages ne changent pas (calculs mémorisés).
+  return useMemo(() => ({ ...REGLAGES_DEFAUT, ...data, capacites: { ...REGLAGES_DEFAUT.capacites, ...data?.capacites } }), [data])
 }
 
 export function useEnregistrerReglages() {
@@ -93,23 +146,54 @@ export function useAjouterAnimateurs() {
   })
 }
 
+export interface NouvelHoraire {
+  nom: string
+  etat: EtatSemaine
+  dossier_id: string | null
+  modele: boolean
+}
+
 export function useCreerHoraire() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['horaire', 'creer'],
-    mutationFn: async ({ nom, etat }: { nom: string; etat: EtatSemaine }) =>
-      ((await verifier(db().from('horaires').insert({ nom, etat }).select('id').single())) as { id: string }).id,
+    mutationFn: async (h: NouvelHoraire) =>
+      ((await verifier(db().from('horaires').insert(h).select('id').single())) as { id: string }).id,
     onSettled: () => client.invalidateQueries({ queryKey: CLES.liste }),
   })
 }
 
-export function useRenommerHoraire() {
+/** Renomme une semaine ou la range dans un autre dossier. */
+export function useModifierHoraire() {
   const client = useQueryClient()
   return useMutation({
-    mutationKey: ['horaire', 'renommer'],
-    mutationFn: ({ id, nom }: { id: string; nom: string }) => verifier(db().from('horaires').update({ nom }).eq('id', id)),
+    mutationKey: ['horaire', 'modifier'],
+    mutationFn: ({ id, ...champs }: { id: string; nom?: string; dossier_id?: string | null }) =>
+      verifier(db().from('horaires').update(champs).eq('id', id)),
     onSettled: () => client.invalidateQueries({ queryKey: CLES.liste }),
   })
+}
+
+/** État enregistré d'un horaire (ex. un modèle, pour en créer une semaine). */
+export function useChargerEtat() {
+  const client = useQueryClient()
+  return useCallback(
+    async (id: string) => {
+      const etat = completer(
+        (
+          await client.fetchQuery({
+            queryKey: CLES.document(id),
+            // Toujours relu : on copie la version enregistrée la plus récente.
+            staleTime: 0,
+            queryFn: async () => (await verifier(db().from('horaires').select('*').eq('id', id).single())) as Horaire,
+          })
+        ).etat,
+      )
+      majJoursListe(client, id, etat.jours)
+      return etat
+    },
+    [client],
+  )
 }
 
 export function useSupprimerHoraire() {
@@ -142,6 +226,7 @@ export function useEditeurSemaine(id: string | null) {
     async (cible: string, aEnvoyer: EtatSemaine) => {
       await verifier(db().from('horaires').update({ etat: aEnvoyer }).eq('id', cible))
       client.setQueryData<Horaire>(CLES.document(cible), (d) => (d ? { ...d, etat: aEnvoyer } : d))
+      majJoursListe(client, cible, aEnvoyer.jours)
     },
     [client],
   )

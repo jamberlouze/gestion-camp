@@ -38,7 +38,7 @@ scripts/migration/  import unique des anciens projets
 - `core` : `profils` et `acces_modules` (rôles), `groupes`, `employes`, `semaines`
 - `embarcations` : `modeles`, `embarcations`
 - `commande` : `recettes`, `consommables`, `banque_ingredients`, `groupes_repas`, `plan_cells`, `menus_sauves`, `ajouts_*`, `sorties`
-- `horaire` : `parametres`, `horaires` (un document par semaine, le temps que le module se stabilise)
+- `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
 un code à 6 chiffres par courriel. Il y a trois rôles, appliqués par la RLS de

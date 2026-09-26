@@ -62,6 +62,8 @@ export interface EtatSemaine {
   surv: Record<string, string[]>
   /** « jour|période|groupe|colonne » → valeur (heure de départ, lieu, chauffeur, autobus) */
   transport: Record<string, string>
+  /** Nuits avec soirées propres à cet horaire (séjour court) ; absent : celles des réglages communs. */
+  nuits?: string[]
 }
 
 /** Réglages communs à toutes les semaines (horaire.parametres, clé « reglages »). */
@@ -76,7 +78,18 @@ export interface Horaire {
   id: string
   nom: string
   semaine_id: string | null
+  /** Dossier de rangement (null : « Sans dossier » ; toujours null pour un modèle). */
+  dossier_id: string | null
+  /** Modèle de séjour : point de départ des nouvelles semaines. */
+  modele: boolean
   etat: Partial<EtatSemaine>
   updated_at: string
   created_at: string
+}
+
+export interface Dossier {
+  id: string
+  nom: string
+  created_at: string
+  updated_at: string
 }

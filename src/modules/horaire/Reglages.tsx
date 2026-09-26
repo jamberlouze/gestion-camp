@@ -124,7 +124,7 @@ export function Reglages({ fermer }: { fermer: () => void }) {
           <textarea rows={6} className={ui.champ} value={sections} onChange={(e) => setSections(e.target.value)} />
         </label>
         <label>
-          <span className={ui.etiquette}>Nuits avec soirées, une par ligne</span>
+          <span className={ui.etiquette}>Nuits avec soirées, une par ligne (un séjour peut avoir les siennes)</span>
           <textarea rows={6} className={ui.champ} value={nuits} onChange={(e) => setNuits(e.target.value)} />
         </label>
       </div>

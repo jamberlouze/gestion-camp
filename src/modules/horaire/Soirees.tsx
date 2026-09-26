@@ -26,7 +26,8 @@ export function Soirees() {
       </div>
       <p className="text-sm text-pierre-500">
         Assignez les jeux de soirée, la surveillance pré-jeu et les chouettes (par section). Sont signalés : un animateur en
-        congé ou en camping ce soir-là, ou en double. Sections et nuits : dans les Réglages de l'onglet Construire.
+        congé ou en camping ce soir-là, ou en double. Sections : dans les Réglages. Soirs : dans les Réglages, ou « Jours et
+        périodes » (onglet Construire) pour un séjour qui a les siens.
       </p>
       <div className="flex flex-wrap gap-2">
         <Puce niveau={erreurs.length ? 'err' : 'ok'}>
