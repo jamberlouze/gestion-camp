@@ -16,7 +16,7 @@ const Commande = lazy(() => import('@/modules/commande'))
 const Horaire = lazy(() => import('@/modules/horaire'))
 
 export default function App() {
-  const { session, profil, chargement } = useAuth()
+  const { session, profil, chargement, erreurProfil } = useAuth()
 
   if (configManquante) {
     return (
@@ -28,6 +28,7 @@ export default function App() {
   }
   if (chargement) return <Chargement />
   if (!session) return <PageConnexion />
+  if (erreurProfil) return <ProfilIndisponible />
   if (!profil) return <CompteInactif />
 
   return (
@@ -49,6 +50,20 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+  )
+}
+
+function ProfilIndisponible() {
+  return (
+    <div className="mx-auto max-w-md p-8 text-center">
+      <p className="text-lg font-medium">Impossible de charger votre profil</p>
+      <p className="mt-1 text-sm text-pierre-500">
+        Vérifiez la connexion Internet. La première ouverture de l'app doit se faire avec du réseau.
+      </p>
+      <button className="mt-4 text-sm text-foret-700 underline" onClick={() => location.reload()}>
+        Réessayer
+      </button>
+    </div>
   )
 }
 

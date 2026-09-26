@@ -22,3 +22,11 @@
 body {
   @apply bg-pierre-50 text-pierre-900 antialiased;
 }
+
+/* Défilement horizontal sans barre visible (rangées de filtres sur téléphone). */
+.sans-barre {
+  scrollbar-width: none;
+}
+.sans-barre::-webkit-scrollbar {
+  display: none;
+}

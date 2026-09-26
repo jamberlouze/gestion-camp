@@ -6,7 +6,7 @@ connexion, menu, référentiel partagé.
 
 | Module | État | Appareils |
 |---|---|---|
-| 🚣 Embarcations : état de la flotte et réparations | Migration début octobre | Mobile + ordinateur, hors ligne |
+| 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
 | 🛒 Commande : menus, recettes, commande Colabor | Migration après Embarcations | Ordinateur |
 | 🗓️ Horaire : groupes et animateurs | En développement | Ordinateur |
 
@@ -49,6 +49,26 @@ Postgres (et pas seulement dans l'interface) :
 | `admin` | Tout, y compris la page Utilisateurs |
 | `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation) |
 | `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) |
+
+## Hors ligne et installation sur téléphone
+
+L'app est une PWA : sur téléphone, **Partager → Sur l'écran d'accueil** (iPhone,
+Safari) ou **Installer l'application** (Android, Chrome). Elle s'ouvre alors
+directement sur Embarcations.
+
+- Le code de l'app est gardé par un service worker (généré au build par
+  `vite-plugin-pwa`) : elle s'ouvre sans réseau.
+- Les données lues sont conservées sur l'appareil (cache TanStack Query dans le
+  `localStorage`, 30 jours) : la flotte reste consultable sans réseau.
+- Chaque modification s'affiche tout de suite. Sans réseau, elle est mise en
+  file d'attente, conservée même si l'app est fermée, puis envoyée au retour du
+  réseau. Si la base la refuse, seule cette modification est annulée et un
+  bandeau l'explique. La dernière modification l'emporte, champ par champ.
+- Une embarcation créée hors ligne reçoit son numéro à la synchronisation.
+- La déconnexion efface le cache de l'appareil, file d'attente comprise
+  (avec confirmation s'il reste des modifications non envoyées).
+- La première ouverture sur un appareil doit se faire avec du réseau (connexion
+  et premier chargement).
 
 ## Commandes
 

@@ -1,3 +1,4 @@
+import { useMutationState } from '@tanstack/react-query'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useAuth } from './auth'
 import { MODULES } from './modules'
@@ -9,6 +10,19 @@ const lien = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const { profil, estAdmin, estDirection, peutLire, deconnexion } = useAuth()
+  const enAttente = useMutationState({ filters: { status: 'pending' } }).length
+
+  const seDeconnecter = () => {
+    // La déconnexion efface le cache de l'appareil, file d'attente comprise.
+    if (
+      enAttente &&
+      !confirm(
+        `${enAttente} modification(s) faite(s) hors ligne n'ont pas encore été envoyées et seront perdues. Se déconnecter quand même ?`,
+      )
+    )
+      return
+    deconnexion()
+  }
 
   return (
     <div className="min-h-dvh">
@@ -40,7 +54,7 @@ export function Layout() {
             <span className="hidden text-sm text-pierre-500 md:inline">
               {profil?.nom ?? profil?.courriel}
             </span>
-            <button onClick={deconnexion} className="text-sm text-pierre-500 hover:text-pierre-900">
+            <button onClick={seDeconnecter} className="text-sm text-pierre-500 hover:text-pierre-900">
               Déconnexion
             </button>
           </div>

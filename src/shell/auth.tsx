@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
-import { useQuery } from '@tanstack/react-query'
+import { useIsRestoring, useQuery } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { viderCache } from '@/lib/requetes'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, ModuleId, Profil } from '@/lib/types'
 
@@ -9,6 +10,8 @@ interface EtatAuth {
   profil: Profil | null
   /** Vrai tant que la session ou le profil se chargent. */
   chargement: boolean
+  /** Le profil n'a pas pu être lu (ex. première ouverture sans réseau). */
+  erreurProfil: boolean
   estAdmin: boolean
   estDirection: boolean
   peutLire: (module: ModuleId) => boolean
@@ -32,7 +35,8 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
   }, [])
 
   const userId = session?.user.id
-  const { data: droits, isLoading } = useQuery({
+  const restauration = useIsRestoring()
+  const { data: droits, isError } = useQuery({
     queryKey: ['droits', userId],
     enabled: !!userId,
     queryFn: async () => {
@@ -54,14 +58,16 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
   const valeur: EtatAuth = {
     session,
     profil,
-    chargement: !sessionChargee || (!!userId && isLoading),
+    chargement: !sessionChargee || restauration || (!!userId && !droits && !isError),
+    erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
     peutLire: (m) => estDirection || (!!profil && acces.some((a) => a.module === m)),
     peutEcrire: (m) =>
       estDirection || (!!profil && acces.some((a) => a.module === m && a.niveau === 'ecriture')),
     deconnexion: async () => {
-      await supabase.auth.signOut()
+      await viderCache()
+      await supabase.auth.signOut({ scope: 'local' })
     },
   }
 

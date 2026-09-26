@@ -10,8 +10,9 @@ export function useListe<T>(schema: Schema, table: string, tri: string) {
   const client = useQueryClient()
 
   useEffect(() => {
+    // Nom unique : voir useTempsReel (modules/embarcations/donnees.ts).
     const canal = supabase
-      .channel(`${schema}.${table}`)
+      .channel(`${schema}.${table}-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema, table }, () =>
         client.invalidateQueries({ queryKey: [schema, table] }),
       )
@@ -64,7 +65,9 @@ export function messageErreur(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e) {
     const m = String((e as { message: unknown }).message)
     if (m.includes('duplicate key')) return 'Cette valeur existe déjà.'
-    if (m.includes('row-level security')) return "Vous n'avez pas la permission de faire cette modification."
+    if (m.includes('row-level security') || m.includes('permission denied')) {
+      return "Vous n'avez pas la permission de faire cette modification."
+    }
     if (m.includes('Failed to fetch')) return 'Pas de connexion au serveur.'
     return m
   }
