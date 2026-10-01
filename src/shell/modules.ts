@@ -6,8 +6,6 @@ export interface DefinitionModule {
   description: string
   icone: string
   chemin: string
-  /** Utilise toute la largeur de l'écran (grandes grilles). */
-  pleineLargeur?: boolean
 }
 
 /** Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx. */
@@ -32,6 +30,12 @@ export const MODULES: DefinitionModule[] = [
     description: 'Horaire des groupes et des animateurs',
     icone: '🗓️',
     chemin: '/horaire',
-    pleineLargeur: true,
+  },
+  {
+    id: 'mastertimeline',
+    nom: 'Mastertimeline',
+    description: "Tâches de l'année, toutes entreprises",
+    icone: '📆',
+    chemin: '/mastertimeline',
   },
 ]

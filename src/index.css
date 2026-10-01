@@ -21,8 +21,9 @@
   --color-pierre-900: #1f1e1a;
 }
 
+/* Fond blanc (à l'essai ; avant : bg-pierre-50). */
 body {
-  @apply bg-pierre-50 text-pierre-900 antialiased;
+  @apply bg-white text-pierre-900 antialiased;
 }
 
 /* Défilement horizontal sans barre visible (rangées de filtres sur téléphone). */

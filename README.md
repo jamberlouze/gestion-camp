@@ -9,6 +9,7 @@ connexion, menu, référentiel partagé.
 | 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
 | 🗓️ Horaire : groupes et animateurs | En service | Ordinateur |
+| 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
@@ -39,6 +40,7 @@ scripts/migration/  import unique des anciens projets
 - `embarcations` : `modeles`, `embarcations`
 - `commande` : `recettes`, `consommables`, `banque_ingredients`, `groupes_repas`, `plan_cells`, `menus_sauves`, `ajouts_*`, `sorties`
 - `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
+- `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
 un code à 6 chiffres par courriel. Il y a trois rôles, appliqués par la RLS de

@@ -14,6 +14,7 @@ import { PageConnexion } from '@/shell/PageConnexion'
 const Embarcations = lazy(() => import('@/modules/embarcations'))
 const Commande = lazy(() => import('@/modules/commande'))
 const Horaire = lazy(() => import('@/modules/horaire'))
+const Mastertimeline = lazy(() => import('@/modules/mastertimeline'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="embarcations/*" element={<GardeModule module="embarcations"><Embarcations /></GardeModule>} />
           <Route path="commande/*" element={<GardeModule module="commande"><Commande /></GardeModule>} />
           <Route path="horaire/*" element={<GardeModule module="horaire"><Horaire /></GardeModule>} />
+          <Route path="mastertimeline/*" element={<GardeModule module="mastertimeline"><Mastertimeline /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />

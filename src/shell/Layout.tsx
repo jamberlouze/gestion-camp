@@ -1,6 +1,6 @@
 import { useMutationState } from '@tanstack/react-query'
 import { useLayoutEffect, useRef } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { Link, NavLink, Outlet } from 'react-router'
 import { useAuth } from './auth'
 import { MODULES } from './modules'
 
@@ -12,9 +12,9 @@ const lien = ({ isActive }: { isActive: boolean }) =>
 export function Layout() {
   const { profil, estAdmin, estDirection, peutLire, deconnexion } = useAuth()
   const enAttente = useMutationState({ filters: { status: 'pending' } }).length
-  const { pathname } = useLocation()
-  const pleineLargeur = MODULES.some((m) => m.pleineLargeur && (pathname === m.chemin || pathname.startsWith(`${m.chemin}/`)))
-  const largeur = pleineLargeur ? 'max-w-none' : 'max-w-7xl'
+  // Même cadre pour tous les modules (pleine largeur, mêmes marges) : la
+  // barre du haut et le bord du contenu ne bougent pas d'un module à l'autre.
+  const marges = 'px-4 lg:px-6'
 
   // Hauteur de la barre du haut (--hauteur-entete) : ce qui colle sous elle
   // en tient compte (ex. en-tête de la grille de l'horaire).
@@ -44,7 +44,7 @@ export function Layout() {
   return (
     <div className="min-h-dvh">
       <header ref={entete} className="sticky top-0 z-10 border-b border-pierre-200 bg-white/90 backdrop-blur print:hidden">
-        <div className={`mx-auto flex ${largeur} items-center gap-4 px-4 py-2.5`}>
+        <div className={`flex items-center gap-4 ${marges} py-2.5`}>
           <Link to="/" className="flex shrink-0 items-center gap-2 font-semibold">
             <img src="/favicon.svg" alt="" className="h-7 w-7" />
             <span className="hidden sm:inline">Gestion du camp</span>
@@ -77,7 +77,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className={`mx-auto ${largeur} px-4 py-6 print:max-w-none print:p-0`}>
+      <main className={`${marges} py-6 print:p-0`}>
         <Outlet />
       </main>
     </div>

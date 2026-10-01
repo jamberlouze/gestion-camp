@@ -1,19 +1,25 @@
 import { Fragment, useState, type FormEvent } from 'react'
 import { messageErreur, useEnregistrer, useListe, useSupprimer } from '@/lib/donnees'
 import type { Schema } from '@/lib/supabase'
-import type { Specialite } from '@/lib/types'
 import { ui } from '@/lib/ui'
 
-type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'specialites'
+type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'specialites' | 'choix'
+
+export interface Option {
+  id: string
+  libelle: string
+}
 
 export interface Colonne<T> {
   champ: keyof T & string
   libelle: string
   type: TypeChamp
   requis?: boolean
+  /** Type « choix » : liste de cases à cocher, valeur = tableau d'id. */
+  options?: Option[]
 }
 
-const SPECIALITES: { id: Specialite; libelle: string }[] = [
+const SPECIALITES: Option[] = [
   { id: 'escalade', libelle: 'Escalade' },
   { id: 'transport', libelle: 'Transport' },
   { id: 'sauveteur', libelle: 'Sauveteur' },
@@ -163,11 +169,11 @@ export function TableauReferentiel<T extends { id: string }>({
   )
 }
 
-/** Champs texte vides → null, pour ne pas enregistrer de chaînes vides. */
+/** Champs texte ou date vides → null, pour ne pas enregistrer de chaînes vides. */
 function nettoyer<T>(ligne: Partial<T>, colonnes: Colonne<T>[]): Partial<T> {
   const copie: Record<string, unknown> = { ...ligne }
   for (const c of colonnes) {
-    if (c.type === 'texte' && typeof copie[c.champ] === 'string') {
+    if ((c.type === 'texte' || c.type === 'date') && typeof copie[c.champ] === 'string') {
       const v = (copie[c.champ] as string).trim()
       copie[c.champ] = v === '' ? null : v
     }
@@ -188,15 +194,18 @@ function Affichage<T>({ colonne, valeur }: { colonne: Colonne<T>; valeur: unknow
         <span>{new Date(`${valeur}T12:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       ) : null
     case 'specialites':
+    case 'choix': {
+      const options = colonne.options ?? SPECIALITES
       return (
         <span className="flex flex-wrap gap-1">
-          {((valeur as Specialite[]) ?? []).map((s) => (
+          {((valeur as string[]) ?? []).map((s) => (
             <span key={s} className="rounded-full bg-foret-100 px-2 py-0.5 text-xs text-foret-800">
-              {SPECIALITES.find((x) => x.id === s)?.libelle ?? s}
+              {options.find((x) => x.id === s)?.libelle ?? s}
             </span>
           ))}
         </span>
       )
+    }
     default:
       return <span>{valeur == null ? '' : String(valeur)}</span>
   }
@@ -250,11 +259,12 @@ function Saisie<T>({
           onChange={(e) => onChange(e.target.checked)}
         />
       )
-    case 'specialites': {
-      const choisies = (valeur as Specialite[]) ?? []
+    case 'specialites':
+    case 'choix': {
+      const choisies = (valeur as string[]) ?? []
       return (
         <div className="flex flex-col gap-1 pt-1">
-          {SPECIALITES.map((s) => (
+          {(colonne.options ?? SPECIALITES).map((s) => (
             <label key={s.id} className="flex items-center gap-1.5 whitespace-nowrap">
               <input
                 type="checkbox"

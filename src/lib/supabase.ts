@@ -10,4 +10,4 @@ export const supabase = createClient(url ?? 'http://localhost', cle ?? 'manquant
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 })
 
-export type Schema = 'core' | 'embarcations' | 'commande' | 'horaire'
+export type Schema = 'core' | 'embarcations' | 'commande' | 'horaire' | 'mastertimeline'
