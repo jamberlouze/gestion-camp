@@ -373,7 +373,8 @@ export function HoraireCuisine() {
               const f = p.fonction_id ? fonctionDe.get(p.fonction_id) : undefined
               const total = totaux.get(p.id)!
               return (
-                <tr key={p.id}>
+                // Sur papier : seulement les personnes qui ont au moins une case remplie cette semaine.
+                <tr key={p.id} className={avecQuarts.has(p.id) ? undefined : 'print:hidden'}>
                   <td
                     className="truncate border-b border-pierre-100 px-3 py-1.5 font-medium print:whitespace-normal print:break-words print:border-pierre-400 print:px-1.5"
                     style={f ? { background: f.couleur, color: encre(f.couleur) } : undefined}
