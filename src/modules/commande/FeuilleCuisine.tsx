@@ -18,8 +18,8 @@ import {
   type RepasCuisine,
   type RolePlat,
 } from './cuisine'
-import { useEtatCommande } from './donnees'
-import { COULEURS_GROUPES, type Portee } from './types'
+import { useEtatCommande, useTableMenu } from './donnees'
+import { COULEURS_GROUPES, DIETES, type GroupeRepas, type Participant, type Portee } from './types'
 
 /** Ajoutés d'office à chaque repas : affichés après les plats planifiés, plus discrets. */
 const AUTOMATIQUES: RolePlat[] = ['buffet', 'bar']
@@ -127,6 +127,36 @@ function preparer(feuille: Feuille): { jours: JourAffiche[]; sansJour: Carte[] }
 
 const portions = (n: number) => `${n.toLocaleString('fr-CA')} portion${n > 1 ? 's' : ''}`
 
+/** Diètes et allergies des groupes, pour les rappels de chaque repas. */
+interface InfosGroupes {
+  groupes: Map<string, GroupeRepas>
+  participants: Map<string, Participant[]>
+}
+
+interface Rappel {
+  /** « 12 végé », « 3 sans gluten »… (groupes présents). */
+  dietes: string[]
+  /** Groupes présents avec des participants allergiques. */
+  allergies: { groupe: string; participants: Participant[] }[]
+}
+
+function rappel(r: RepasCuisine, infos: InfosGroupes): Rappel {
+  const presents = r.groupes.filter((g) => !g.absent && g.portions > 0)
+  const dietes = DIETES.map((d) => {
+    // Végé : le compte du repas (sorties retirées) ; les autres : ceux du groupe.
+    const n = d.cle === 'vege' ? r.totalVege : presents.reduce((s, g) => s + (infos.groupes.get(g.id)?.[d.cle] ?? 0), 0)
+    return n > 0 ? `${n} ${d.court}` : null
+  }).filter((x): x is string => !!x)
+  const allergies = presents
+    .map((g) => ({ groupe: g.name, participants: infos.participants.get(g.id) ?? [] }))
+    .filter((a) => a.participants.length > 0)
+  return { dietes, allergies }
+}
+
+/** « Léa (arachides, EpiPen) » */
+const decrireParticipant = (p: Participant) =>
+  `${p.nom || 'Sans nom'}${p.allergies || p.epipen ? ` (${[p.allergies, p.epipen ? 'EpiPen' : ''].filter(Boolean).join(', ')})` : ''}`
+
 export function FeuilleCuisine() {
   const { menu } = useMenu()
   const etat = useEtatCommande(menu)
@@ -134,6 +164,12 @@ export function FeuilleCuisine() {
   const feuille = useMemo(() => (etat ? preparer(feuilleCuisine(etat)) : null), [etat])
   const [params, setParams] = useSearchParams()
   const [detail, setDetail] = useState(true)
+  const participants = useTableMenu('participants', menu.id)
+  const infos = useMemo<InfosGroupes>(() => {
+    const parGroupe = new Map<string, Participant[]>()
+    for (const p of participants.data ?? []) parGroupe.set(p.groupe_id, [...(parGroupe.get(p.groupe_id) ?? []), p])
+    return { groupes: new Map((etat?.groupes ?? []).map((g) => [g.id, g])), participants: parGroupe }
+  }, [etat, participants.data])
 
   if (!feuille || vide == null) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
   if (vide) {
@@ -164,8 +200,9 @@ export function FeuilleCuisine() {
   const sansJour = feuille.sansJour.length > 0 && (choix == null || choix === SANS_JOUR)
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-wrap items-center gap-3 print:hidden">
+    <>
+    <div className="space-y-10 print:hidden">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex flex-wrap gap-0.5 rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" role="group" aria-label="Jour affiché">
           <BoutonJour actif={choix == null} onClick={() => choisir(null)}>
             Tous les jours
@@ -195,7 +232,7 @@ export function FeuilleCuisine() {
         <section key={jour.day} className={i > 0 ? 'print:break-before-page' : undefined}>
           <EnteteFeuille titre={jour.libelle} menu={menu.nom} />
           {repas.map((r) => (
-            <BlocRepas key={r.repas.meal} {...r} jour={jour.libelle} detail={detail} />
+            <BlocRepas key={r.repas.meal} {...r} jour={jour.libelle} detail={detail} rappel={rappel(r.repas, infos)} />
           ))}
         </section>
       ))}
@@ -208,6 +245,8 @@ export function FeuilleCuisine() {
         </section>
       )}
     </div>
+    <FeuilleImprimee jours={jours} sansJour={sansJour ? feuille.sansJour : []} menu={menu.nom} detail={detail} infos={infos} />
+    </>
   )
 }
 
@@ -237,7 +276,7 @@ function EnteteFeuille({ titre, menu }: { titre: string; menu: string }) {
  * rappelé dans le titre du repas et sur chaque carte, et le titre reste avec
  * sa première carte (pas seul en bas de page).
  */
-function BlocRepas({ repas: r, cartes, aucunPlat, jour, detail }: RepasAffiche & { jour: string; detail: boolean }) {
+function BlocRepas({ repas: r, cartes, aucunPlat, jour, detail, rappel }: RepasAffiche & { jour: string; detail: boolean; rappel: Rappel }) {
   return (
     <div className="mt-7">
       <div className="print:break-after-avoid">
@@ -250,7 +289,10 @@ function BlocRepas({ repas: r, cartes, aucunPlat, jour, detail }: RepasAffiche &
           {r.totalVege > 0 && <span className="text-lg font-medium text-foret-800">dont {r.totalVege} végé</span>}
         </div>
         {r.total > 0 ? (
-          <PastillesGroupes groupes={r.groupes} />
+          <>
+            <PastillesGroupes groupes={r.groupes} />
+            <RappelRepas rappel={rappel} />
+          </>
         ) : (
           <p className="mt-1 text-base text-pierre-500">Aucun groupe présent</p>
         )}
@@ -400,5 +442,141 @@ function TableIngredients({ carte: { lignes, parPortee, avecEquivalence, automat
         })}
       </tbody>
     </table>
+  )
+}
+
+/** Diètes et allergies des groupes présents à ce repas. */
+function RappelRepas({ rappel, imprime }: { rappel: Rappel; imprime?: boolean }) {
+  if (!rappel.dietes.length && !rappel.allergies.length) return null
+  return (
+    <div className={imprime ? 'mt-1 space-y-0.5 text-[9.5pt]' : 'mt-2 space-y-1 text-sm'}>
+      {rappel.dietes.length > 0 && (
+        <p>
+          <b>Diètes :</b> {rappel.dietes.join(' · ')}
+        </p>
+      )}
+      {rappel.allergies.map((a) => (
+        <p key={a.groupe} className={imprime ? '' : 'rounded-md bg-red-50 px-2 py-1 text-red-900'}>
+          <b>⚠ Allergies — {a.groupe} :</b> {a.participants.map(decrireParticipant).join(' · ')}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------
+// Sur papier : un jour par page, en format compact
+// ------------------------------------------------------------------
+
+function FeuilleImprimee({
+  jours,
+  sansJour,
+  menu,
+  detail,
+  infos,
+}: {
+  jours: JourAffiche[]
+  sansJour: Carte[]
+  menu: string
+  detail: boolean
+  infos: InfosGroupes
+}) {
+  return (
+    <div className="hidden text-[10.5pt] leading-snug text-black print:block">
+      {jours.map(({ jour, repas }, i) => (
+        <section key={jour.day} className={i > 0 ? 'break-before-page' : undefined}>
+          <EntetePapier titre={jour.libelle} menu={menu} />
+          {repas.map((r) => (
+            <RepasPapier key={r.repas.meal} affiche={r} detail={detail} rappel={rappel(r.repas, infos)} />
+          ))}
+        </section>
+      ))}
+      {sansJour.length > 0 && (
+        <section className={jours.length > 0 ? 'break-before-page' : undefined}>
+          <EntetePapier titre="Sans jour précis" menu={menu} />
+          <div className="mt-2 space-y-2">
+            {sansJour.map((c) => (
+              <PlatPapier key={c.cle} carte={c} detail={detail} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function EntetePapier({ titre, menu }: { titre: string; menu: string }) {
+  return (
+    <header className="flex items-baseline justify-between gap-4 border-b-2 border-black pb-1">
+      <h2 className="text-[18pt] font-bold">{titre}</h2>
+      <p className="text-[9pt]">Feuille de cuisine · {menu}</p>
+    </header>
+  )
+}
+
+function RepasPapier({ affiche: { repas: r, cartes, aucunPlat }, detail, rappel }: { affiche: RepasAffiche; detail: boolean; rappel: Rappel }) {
+  const presents = r.groupes.filter((g) => !g.absent && g.portions > 0)
+  const absents = r.groupes.filter((g) => g.absent)
+  const prevus = cartes.filter((c) => !c.automatique)
+  const automatiques = cartes.filter((c) => c.automatique)
+  return (
+    <div className="mt-3 break-inside-avoid border-b border-pierre-300 pb-2">
+      <h3 className="text-[13pt] font-bold">
+        {r.libelle}
+        {r.total > 0 ? ` — ${portions(r.total)}` : ''}
+        {r.totalVege > 0 && <span className="font-semibold"> (dont {r.totalVege} végé)</span>}
+      </h3>
+      {r.total > 0 ? (
+        <p className="text-[9pt]">
+          {presents.map((g) => `${g.name} (${g.portions}${g.enSortie > 0 ? `, −${g.enSortie} en sortie` : ''})`).join(' · ')}
+          {absents.length > 0 && <> · Absents : {absents.map((g) => g.name).join(', ')}</>}
+        </p>
+      ) : (
+        <p className="text-[9pt]">Aucun groupe présent</p>
+      )}
+      <RappelRepas rappel={rappel} imprime />
+      {r.total > 0 && aucunPlat && <p className="mt-1 italic">Aucun plat planifié</p>}
+      <div className="mt-1.5 space-y-1.5">
+        {prevus.map((c) => (
+          <PlatPapier key={c.cle} carte={c} detail={detail} />
+        ))}
+        {automatiques.map((c) => (
+          <p key={c.cle} className="text-[9pt]">
+            <b>
+              {LIBELLES_ROLE[c.plat.role]} ({c.plat.portions})
+            </b>
+            {detail && c.lignes.length > 0 && <> : {c.lignes.map((l) => `${l.nom} ${l.quantite}`).join(' · ')}</>}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PlatPapier({ carte: { plat, lignes, parPortee }, detail }: { carte: Carte; detail: boolean }) {
+  const glaciere = plat.role === 'glaciere'
+  return (
+    <div className={`break-inside-avoid ${glaciere ? 'border-2 border-black p-1.5' : ''}`}>
+      <p>
+        <span className="text-[8pt] font-semibold uppercase tracking-wide">{glaciere ? '🧊 Glacière' : LIBELLES_ROLE[plat.role]}</span>{' '}
+        <b className="text-[12pt]">{plat.nom}</b> — {portions(plat.portions)}
+        {plat.vege > 0 && <b> · 🌱 {plat.vege} végé</b>}
+      </p>
+      {plat.note && <p className="text-[9pt] italic">{plat.note}</p>}
+      {detail && lignes.length > 0 && (
+        <ul className="mt-0.5 columns-2 gap-x-6 pl-3">
+          {lignes.map((l) => (
+            <li key={l.cle} className="flex break-inside-avoid justify-between gap-2 border-b border-dotted border-pierre-300">
+              <span className="min-w-0">
+                {parPortee && l.portee === 'veggie' && '🌱 '}
+                {l.nom}
+                {parPortee && l.portee !== 'all' && <span className="text-[8pt]"> ({l.pour.replace('🌱 ', '')})</span>}
+              </span>
+              <b className="shrink-0 tabular-nums">{l.quantite}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

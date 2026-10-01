@@ -11,6 +11,7 @@ import type {
   Fonction,
   GroupeRepas,
   Menu,
+  Participant,
   Personne,
   Produit,
   Quart,
@@ -50,11 +51,12 @@ interface Tables {
   ajouts_consommables: AjoutConsommable
   ajouts_recettes: AjoutRecette
   sorties: Sortie
+  participants: Participant
 }
 type NomTable = keyof Tables
-type TableMenu = 'groupes_repas' | 'plan_cells' | 'ajouts_consommables' | 'ajouts_recettes' | 'sorties'
+type TableMenu = 'groupes_repas' | 'plan_cells' | 'ajouts_consommables' | 'ajouts_recettes' | 'sorties' | 'participants'
 type TableCommune = Exclude<NomTable, TableMenu>
-const TABLES_MENU = new Set<NomTable>(['groupes_repas', 'plan_cells', 'ajouts_consommables', 'ajouts_recettes', 'sorties'])
+const TABLES_MENU = new Set<NomTable>(['groupes_repas', 'plan_cells', 'ajouts_consommables', 'ajouts_recettes', 'sorties', 'participants'])
 
 const cle = (table: NomTable, menuId?: string | null) => (TABLES_MENU.has(table) ? [RACINE, table, menuId ?? ''] : [RACINE, table])
 const CLE_QUARTS = [RACINE, 'quarts']
@@ -63,7 +65,7 @@ async function lire<T extends NomTable>(table: T, menuId?: string): Promise<Tabl
   let requete = db().from(table).select('*')
   if (menuId) requete = requete.eq('menu_id', menuId)
   if (table === 'recettes' || table === 'consommables') requete = requete.is('deleted_at', null)
-  if (table === 'ajouts_recettes' || table === 'sorties') requete = requete.order('created_at')
+  if (table === 'ajouts_recettes' || table === 'sorties' || table === 'participants') requete = requete.order('created_at').order('id')
   if (table === 'groupes_repas') requete = requete.order('created_at').order('id')
   if (table === 'fonctions' || table === 'personnel') requete = requete.order('ordre').order('nom')
   const { data, error } = await requete
@@ -334,6 +336,10 @@ export const groupeParDefaut = (): Omit<GroupeRepas, 'menu_id'> => ({
   age: 'Mixtes',
   portions: 0,
   vege: 0,
+  sans_porc: 0,
+  sans_lactose: 0,
+  sans_gluten: 0,
+  notes: '',
   color: '#2E7D32',
 })
 
@@ -492,11 +498,37 @@ export function useEnregistrerGroupe() {
   )
 }
 
+/** Supprime un groupe et ses participants (cascade). */
 export function useSupprimerGroupe() {
   return useEcriture<{ menu_id: string; id: string }>(
-    ['groupes_repas'],
+    ['groupes_repas', 'participants'],
     ({ menu_id, id }) => verifier(db().from('groupes_repas').delete().eq('menu_id', menu_id).eq('id', id)),
-    ({ id }, l) => ({ groupes_repas: (l.groupes_repas ?? []).filter((g) => g.id !== id) }),
+    ({ id }, l) => ({
+      groupes_repas: (l.groupes_repas ?? []).filter((g) => g.id !== id),
+      participants: (l.participants ?? []).filter((p) => p.groupe_id !== id),
+    }),
+    duMenu,
+  )
+}
+
+/** Ajoute ou modifie un participant (allergies, restrictions). */
+export function useEnregistrerParticipant() {
+  return useEcriture<Participant>(
+    ['participants'],
+    (p) => {
+      const { created_at: _c, ...ligne } = p
+      return verifier(db().from('participants').upsert(ligne))
+    },
+    (p, l) => ({ participants: remplacer(l.participants, [p], memeId) }),
+    duMenu,
+  )
+}
+
+export function useSupprimerParticipant() {
+  return useEcriture<{ menu_id: string; id: string }>(
+    ['participants'],
+    ({ id }) => verifier(db().from('participants').delete().eq('id', id)),
+    ({ id }, l) => ({ participants: (l.participants ?? []).filter((p) => p.id !== id) }),
     duMenu,
   )
 }

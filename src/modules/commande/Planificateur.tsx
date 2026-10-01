@@ -1,20 +1,19 @@
-import { useMemo, useState, type ComponentProps } from 'react'
+import { useMemo } from 'react'
+import { Link } from 'react-router'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
-import { libelleJour, portionsGroupe } from './calcul'
+import { libelleJour } from './calcul'
+import { ChampNombre } from './ChampNombre'
 import { useMenu } from './contexte'
 import {
-  nouvelId,
   useEffacerGrille,
   useEnregistrerCellule,
-  useEnregistrerGroupe,
   useModifierMenu,
-  useSupprimerGroupe,
   useTable,
   useTableMenu,
 } from './donnees'
-import { AGES, COULEURS_GROUPES, REPAS, type CellulePlan, type GroupeRepas, type Recette, type Repas } from './types'
+import { COULEURS_GROUPES, DIETES, REPAS, type CellulePlan, type GroupeRepas, type Recette, type Repas } from './types'
 
 export function Planificateur() {
   const { menu } = useMenu()
@@ -109,156 +108,34 @@ function Reglages() {
   )
 }
 
+/** Résumé des groupes ; ils se modifient dans l'onglet « Groupes et diètes ». */
 function Groupes({ groupes }: { groupes: GroupeRepas[] }) {
-  const { menu, ecriture } = useMenu()
-  const enregistrer = useEnregistrerGroupe()
-  const supprimer = useSupprimerGroupe()
   const total = groupes.reduce((s, g) => s + g.portions, 0)
-  const totalVege = groupes.reduce((s, g) => s + portionsGroupe(g, 0).vege, 0)
-  const nombre = (v: string) => Math.max(0, Math.trunc(Number(v)) || 0)
-
   return (
     <div className={`${ui.carte} p-4`}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">Groupes</h2>
-        <span className="text-right text-sm text-pierre-500">
-          {total} portions
-          {totalVege > 0 && <span className="block text-xs">dont {totalVege} végé</span>}
-        </span>
+        <span className="text-sm text-pierre-500">{total} portions</span>
       </div>
-      <ul className="mt-3 space-y-2">
-        {groupes.map((g) => (
-          <li key={g.id} className="rounded-lg border border-pierre-200 p-2.5">
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                aria-label="Couleur"
-                disabled={!ecriture}
-                className="h-6 w-6 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
-                value={g.color ?? COULEURS_GROUPES[0]}
-                onChange={(e) => enregistrer.mutate({ ...g, color: e.target.value })}
-              />
-              <ChampTexte
-                aria-label="Nom du groupe"
-                disabled={!ecriture}
-                className="min-w-0 flex-1 rounded border border-transparent px-1.5 py-1 text-sm font-medium hover:border-pierre-300 focus:border-foret-600"
-                valeur={g.name}
-                obligatoire
-                enregistrer={(name) => enregistrer.mutate({ ...g, name })}
-              />
-              {ecriture && (
-                <button
-                  aria-label={`Supprimer ${g.name}`}
-                  className="rounded px-1.5 text-red-700 hover:bg-red-50 disabled:opacity-30"
-                  disabled={groupes.length <= 1}
-                  title={groupes.length <= 1 ? 'Au moins un groupe est requis' : undefined}
-                  onClick={async () =>
-                    (await confirmer({ titre: `Supprimer le groupe « ${g.name} » ?` })) && supprimer.mutate({ menu_id: menu.id, id: g.id })
-                  }
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-            {/* Âge, portions et, en dessous, les portions végé (comprises dans les portions). */}
-            <div className="mt-2 grid grid-cols-[1fr_3.5rem_auto] items-center gap-x-1.5 gap-y-1">
-              <select
-                aria-label="Âge"
-                disabled={!ecriture}
-                className="min-w-0 rounded border border-pierre-300 px-1.5 py-1 text-sm"
-                value={g.age ?? 'Mixtes'}
-                onChange={(e) => enregistrer.mutate({ ...g, age: e.target.value })}
-              >
-                {AGES.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </select>
-              <label className="contents">
-                <ChampNombre
-                  aria-label="Nombre de portions"
-                  disabled={!ecriture}
-                  className="w-full rounded border border-pierre-300 px-1.5 py-1 text-right text-sm text-pierre-900"
-                  valeur={g.portions}
-                  enregistrer={(v) => {
-                    const portions = nombre(v)
-                    if (portions !== g.portions) {
-                      enregistrer.mutate({ ...g, portions, vege: Math.min(portionsGroupe(g, 0).vege, portions) })
-                    }
-                    return portions
-                  }}
-                />
-                <span className="text-xs text-pierre-500">portions</span>
-              </label>
-              <label className="contents">
-                <span className="text-right text-xs text-pierre-500">dont</span>
-                <ChampNombre
-                  aria-label="Portions végé"
-                  title="Portions végé, comprises dans les portions : elles prennent l’option végé des recettes qui en ont une."
-                  max={g.portions}
-                  disabled={!ecriture}
-                  className="w-full rounded border border-pierre-300 px-1.5 py-1 text-right text-sm text-pierre-900"
-                  valeur={portionsGroupe(g, 0).vege}
-                  enregistrer={(v) => {
-                    const vege = Math.min(g.portions, nombre(v))
-                    if (vege !== g.vege) enregistrer.mutate({ ...g, vege })
-                    return vege
-                  }}
-                />
-                <span className="text-xs text-pierre-500">végé</span>
-              </label>
-            </div>
-          </li>
-        ))}
+      <ul className="mt-2 space-y-1 text-sm">
+        {groupes.map((g) => {
+          const dietes = DIETES.filter((d) => g[d.cle] > 0).map((d) => `${g[d.cle]} ${d.court}`)
+          return (
+            <li key={g.id} className="flex items-start gap-2">
+              <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: g.color ?? COULEURS_GROUPES[0] }} aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{g.name}</span>
+                {dietes.length > 0 && <span className="block text-xs text-pierre-500">{dietes.join(' · ')}</span>}
+              </span>
+              <span className="tabular-nums text-pierre-600">{g.portions}</span>
+            </li>
+          )
+        })}
       </ul>
-      {ecriture && (
-        <button
-          className={`${ui.boutonSecondaire} mt-3 w-full`}
-          onClick={() =>
-            enregistrer.mutate({
-              menu_id: menu.id,
-              id: nouvelId('g'),
-              name: `Groupe ${groupes.length + 1}`,
-              age: 'Mixtes',
-              portions: 40,
-              vege: 0,
-              color: COULEURS_GROUPES[groupes.length % COULEURS_GROUPES.length],
-            })
-          }
-        >
-          + Ajouter un groupe
-        </button>
-      )}
+      <Link to="/cuisine/groupes" className={`${ui.boutonSecondaire} mt-3 w-full`}>
+        Groupes, diètes et allergies
+      </Link>
     </div>
-  )
-}
-
-/**
- * Nombre enregistré à la sortie du champ. `enregistrer` renvoie la valeur
- * retenue (ex. végé ramené aux portions) : le champ l'affiche, même quand
- * elle ne change pas la valeur déjà enregistrée (ChampTexte ne se resynchronise
- * que si la valeur enregistrée change).
- */
-function ChampNombre({
-  valeur,
-  enregistrer,
-  ...props
-}: { valeur: number; enregistrer: (v: string) => number } & Omit<
-  ComponentProps<typeof ChampTexte>,
-  'valeur' | 'enregistrer' | 'type' | 'obligatoire'
->) {
-  const [version, setVersion] = useState(0)
-  return (
-    <ChampTexte
-      key={version}
-      min={0}
-      {...props}
-      type="number"
-      obligatoire
-      valeur={String(valeur)}
-      enregistrer={(v) => {
-        if (String(enregistrer(v)) !== v) setVersion((n) => n + 1)
-      }}
-    />
   )
 }
 

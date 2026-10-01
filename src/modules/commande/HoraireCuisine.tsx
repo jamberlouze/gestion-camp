@@ -129,7 +129,7 @@ export function HoraireCuisine() {
         </button>
         <SautDate lundi={lundi} aller={aller} />
       </div>
-      <h2 className="text-lg font-semibold sm:ml-2">
+      <h2 className="text-lg font-semibold sm:ml-2 print:ml-0 print:text-[18pt]">
         <span className="hidden print:inline">Horaire de la cuisine · </span>
         {titreSemaine(lundi)}
       </h2>
@@ -339,14 +339,14 @@ export function HoraireCuisine() {
       </datalist>
 
       <div className={`${ui.carte} overflow-x-auto print:overflow-visible print:rounded-none print:border-0 print:shadow-none`}>
-        <table className="w-full min-w-[64rem] table-fixed border-collapse text-sm print:min-w-0 print:text-xs print:[print-color-adjust:exact]">
+        <table className="w-full min-w-[64rem] table-fixed border-collapse text-sm print:h-[17.5cm] print:min-w-0 print:text-[12pt] print:[print-color-adjust:exact]">
           <colgroup>
-            <col className="w-28 print:w-24" />
+            <col className="w-28 print:w-32" />
             <col className="w-44 print:w-32" />
             {jours.map((j) => (
               <col key={j} />
             ))}
-            <col className="w-28 print:w-24" />
+            <col className="w-28 print:w-20" />
           </colgroup>
           <thead className="bg-pierre-50 text-left">
             <tr>
@@ -360,7 +360,7 @@ export function HoraireCuisine() {
                   }`}
                 >
                   <span className="block font-semibold text-pierre-900">{JOURS[i]}</span>
-                  <span className="text-xs">{dateCourte(j)}</span>
+                  <span className="text-xs print:text-[10pt]">{dateCourte(j)}</span>
                 </th>
               ))}
               <th className="border-b border-l border-pierre-200 px-3 py-2 text-right font-medium text-pierre-500 print:border-pierre-400 print:px-1.5">

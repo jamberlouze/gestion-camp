@@ -93,9 +93,37 @@ export interface GroupeRepas {
   name: string
   age: string | null
   portions: number
-  /** Portions végé comprises dans `portions`. */
+  /** Portions végé (diète végétarienne) comprises dans `portions`. */
   vege: number
+  /** Autres diètes (information pour la cuisine, sans effet sur la commande). */
+  sans_porc: number
+  sans_lactose: number
+  sans_gluten: number
+  /** Notes sur le groupe (imprimées sur sa liste). */
+  notes: string
   color: string | null
+  created_at?: string
+}
+
+/** Diètes standard demandées à chaque groupe (une par participant ; régulière = le reste). */
+export const DIETES = [
+  { cle: 'vege', libelle: 'Végétarienne', court: 'végé' },
+  { cle: 'sans_porc', libelle: 'Sans porc', court: 'sans porc' },
+  { cle: 'sans_lactose', libelle: 'Sans lactose', court: 'sans lactose' },
+  { cle: 'sans_gluten', libelle: 'Sans gluten', court: 'sans gluten' },
+] as const
+export type CleDiete = (typeof DIETES)[number]['cle']
+
+/** Participant d'un groupe avec une allergie ou une restriction. */
+export interface Participant {
+  id: string
+  menu_id: string
+  groupe_id: string
+  nom: string
+  allergies: string
+  /** Allergie grave : auto-injecteur (EpiPen). */
+  epipen: boolean
+  note: string
   created_at?: string
 }
 

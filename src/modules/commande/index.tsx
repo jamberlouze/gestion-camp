@@ -13,6 +13,7 @@ import { useDossiers, useMenus, useTempsReelCommande } from './donnees'
 import type { DemandeNouveau } from './emplacements'
 import { Equipe } from './Equipe'
 import { FeuilleCuisine } from './FeuilleCuisine'
+import { Groupes } from './Groupes'
 import { HoraireCuisine } from './HoraireCuisine'
 import { Ingredients } from './Ingredients'
 import { BarreMenu, NouveauMenu } from './Menus'
@@ -140,6 +141,7 @@ export default function ModuleCuisine() {
                     {/* Un autre menu : les pages repartent de zéro (rien de l'ancien menu). */}
                     <Routes key={contexte.menu.id}>
                       <Route index element={<Planificateur />} />
+                      <Route path="groupes" element={<Groupes />} />
                       <Route path="ajouts" element={<Ajouts />} />
                       <Route path="sorties" element={<Sorties />} />
                       <Route path="commande" element={<Commande />} />
@@ -215,6 +217,7 @@ interface Onglet {
 
 const ONGLETS_MENU: Onglet[] = [
   { chemin: '/cuisine', libelle: 'Planificateur', fin: true },
+  { chemin: '/cuisine/groupes', libelle: 'Groupes et diètes' },
   { chemin: '/cuisine/ajouts', libelle: 'Ajouts manuels' },
   { chemin: '/cuisine/sorties', libelle: 'Sorties' },
   { chemin: '/cuisine/commande', libelle: 'Commande' },
