@@ -346,7 +346,7 @@ export function HoraireCuisine() {
             {jours.map((j) => (
               <col key={j} />
             ))}
-            <col className="w-28 print:w-20" />
+            <col className="w-28 print:hidden" />
           </colgroup>
           <thead className="bg-pierre-50 text-left">
             <tr>
@@ -363,7 +363,7 @@ export function HoraireCuisine() {
                   <span className="text-xs print:text-[10pt]">{dateCourte(j)}</span>
                 </th>
               ))}
-              <th className="border-b border-l border-pierre-200 px-3 py-2 text-right font-medium text-pierre-500 print:border-pierre-400 print:px-1.5">
+              <th className="border-b border-l border-pierre-200 px-3 py-2 text-right font-medium text-pierre-500 print:hidden">
                 Total
               </th>
             </tr>
@@ -409,7 +409,7 @@ export function HoraireCuisine() {
                       />
                     )
                   })}
-                  <td className={`${bord} px-3 py-1.5 text-right tabular-nums print:px-1.5`}>
+                  <td className={`${bord} px-3 py-1.5 text-right tabular-nums print:hidden`}>
                     <Total {...total} />
                   </td>
                 </tr>
@@ -438,7 +438,7 @@ export function HoraireCuisine() {
                     {a.des != null && <span className="ml-1 text-xs text-pierre-500">dès {heure(a.des)}</span>}
                   </td>
                 ))}
-                <td className="border-l border-pierre-200 px-3 py-1.5 text-right tabular-nums print:border-pierre-400 print:px-1.5">
+                <td className="border-l border-pierre-200 px-3 py-1.5 text-right tabular-nums print:hidden">
                   <Total {...equipe} />
                 </td>
               </tr>
