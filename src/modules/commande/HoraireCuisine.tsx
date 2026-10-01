@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
 import { trierNoms, useEcrireQuart, useLireQuarts, useQuarts, useReglagesHoraire, useRemplacerQuarts, useTable } from './donnees'
 import {
@@ -85,6 +86,7 @@ export function HoraireCuisine() {
   const jours = joursDeLaSemaine(lundi)
   const dimanche = jours[6]
   const lundiPrecedent = ajouterJours(lundi, -7)
+  useTitreImpression(`Horaire cuisine - ${titreSemaine(lundi)}`)
 
   const personnel = useTable('personnel')
   const fonctions = useTable('fonctions')

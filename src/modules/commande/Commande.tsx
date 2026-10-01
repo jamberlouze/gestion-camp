@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ui } from '@/lib/ui'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { calculerCommande, portionsGroupe, quantiteAffichee, type LigneColabor, type LigneProduit } from './calcul'
 import { useMenu } from './contexte'
 import { useEtatCommande } from './donnees'
@@ -30,6 +31,7 @@ function useStock() {
 
 export function Commande() {
   const { menu } = useMenu()
+  useTitreImpression(`Commande - ${menu.nom}`)
   const etat = useEtatCommande(menu)
   const [stock, setStock] = useStock()
   const resultat = useMemo(() => (etat ? calculerCommande(etat) : null), [etat])

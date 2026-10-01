@@ -6,6 +6,7 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { ChampNombre } from './ChampNombre'
 import { useMenu } from './contexte'
 import { nouvelId, useEnregistrerGroupe, useEnregistrerParticipant, useSupprimerGroupe, useSupprimerParticipant, useTableMenu } from './donnees'
@@ -27,6 +28,8 @@ export function Groupes() {
   const enregistrer = useEnregistrerGroupe()
   /** Groupe à imprimer (id), « tous », ou null (Cmd+P : tous les groupes). */
   const [aImprimer, setAImprimer] = useState<string | null>(null)
+  const groupeImprime = aImprimer && aImprimer !== 'tous' ? groupes.data?.find((g) => g.id === aImprimer) : undefined
+  useTitreImpression(groupeImprime ? `Liste du groupe - ${groupeImprime.name} - ${menu.nom}` : `Listes des groupes - ${menu.nom}`)
 
   // L'impression attend que la liste choisie soit affichée.
   useEffect(() => {

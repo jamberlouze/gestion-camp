@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { libelleJour } from './calcul'
 import { ChampNombre } from './ChampNombre'
 import { useMenu } from './contexte'
@@ -17,6 +18,7 @@ import { COULEURS_GROUPES, DIETES, REPAS, type CellulePlan, type GroupeRepas, ty
 
 export function Planificateur() {
   const { menu } = useMenu()
+  useTitreImpression(`Menu - ${menu.nom}`)
   const recettes = useTable('recettes')
   const groupes = useTableMenu('groupes_repas', menu.id)
   const cellules = useTableMenu('plan_cells', menu.id)

@@ -4,6 +4,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { ui } from '@/lib/ui'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { calculerCommande } from './calcul'
 import { useMenu } from './contexte'
 import {
@@ -170,6 +171,12 @@ export function FeuilleCuisine() {
     for (const p of participants.data ?? []) parGroupe.set(p.groupe_id, [...(parGroupe.get(p.groupe_id) ?? []), p])
     return { groupes: new Map((etat?.groupes ?? []).map((g) => [g.id, g])), participants: parGroupe }
   }, [etat, participants.data])
+  // Nom du PDF : le menu et le jour imprimé (?jour=), sinon tous les jours.
+  const jourImprime =
+    params.get('jour') === SANS_JOUR
+      ? 'Sans jour précis'
+      : (feuille?.jours.find((j) => String(j.jour.day) === params.get('jour'))?.jour.libelle ?? 'Tous les jours')
+  useTitreImpression(`Feuille de cuisine - ${menu.nom} - ${jourImprime}`)
 
   if (!feuille || vide == null) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
   if (vide) {
