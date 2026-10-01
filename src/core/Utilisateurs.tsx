@@ -65,7 +65,8 @@ export function Utilisateurs() {
       <h1 className="text-2xl font-semibold">Utilisateurs</h1>
       <div className="mt-3 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
         <strong>Inviter quelqu'un :</strong> Supabase → Authentication → Users → <em>Invite user</em>. La
-        personne apparaît ici dès l'invitation, avec le rôle Direction.
+        personne apparaît ici dès l'invitation, avec le rôle Direction. Elle se connecte ensuite sur le
+        site avec son adresse (code par courriel), même si le lien d'invitation a expiré.
       </div>
       {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
 

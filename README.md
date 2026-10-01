@@ -117,7 +117,9 @@ Supabase. Il faut donc passer par le compte Google du camp.
 ### 3. Premier administrateur
 
 1. Supabase → **Authentication → Users → Invite user** : entrez votre adresse.
-2. Acceptez l'invitation reçue par courriel.
+2. Connectez-vous sur le site avec votre adresse : un code vous est envoyé. Le
+   lien du courriel d'invitation expire après 15 minutes, mais il n'est pas
+   nécessaire : l'adresse est confirmée dès l'invitation.
 3. Supabase → **SQL Editor** :
    ```sql
    update core.profils set role = 'admin' where courriel = 'votre@adresse.com';
