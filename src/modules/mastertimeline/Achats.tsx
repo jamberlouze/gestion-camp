@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChampTexte } from '@/lib/ChampTexte'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer, useSupprimer } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
@@ -122,7 +123,10 @@ export function Achats() {
                     <button
                       aria-label={`Supprimer ${a.item}`}
                       className="rounded p-1 text-pierre-400 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => confirm(`Supprimer « ${a.item} » ?`) && supprimer.mutate(a.id, { onError: (e) => setErreur(messageErreur(e)) })}
+                      onClick={async () =>
+                        (await confirmer({ titre: `Supprimer « ${a.item} » ?` })) &&
+                        supprimer.mutate(a.id, { onError: (e) => setErreur(messageErreur(e)) })
+                      }
                     >
                       <IconeCorbeille />
                     </button>

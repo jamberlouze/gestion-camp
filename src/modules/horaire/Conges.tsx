@@ -3,24 +3,16 @@ import { ui } from '@/lib/ui'
 import { Puce } from './Conflits'
 import { ChoixAnimateur } from './Construire'
 import { useSemaine } from './contexte'
-import { useAjouterAnimateurs } from './donnees'
 import { analyseConges } from './logique'
 
 export function Conges() {
   const { etat, modifier, ecriture, animateurs, horaire } = useSemaine()
-  const ajouterAnimateurs = useAjouterAnimateurs()
   const { enConge, tournees, conflits } = useMemo(() => analyseConges(etat), [etat])
   const erreurs = conflits.filter((c) => c.sev === 'err')
   const avertissements = conflits.filter((c) => c.sev === 'warn')
   const remplacants = Object.keys(tournees).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
 
-  function choisirRemplacant(gi: number, valeur: string) {
-    let nom = valeur
-    if (valeur === '__nouveau__') {
-      nom = prompt('Nom du nouveau remplaçant :')?.trim() ?? ''
-      if (!nom) return
-      if (!animateurs.includes(nom)) ajouterAnimateurs.mutate([nom])
-    }
+  function choisirRemplacant(gi: number, nom: string) {
     modifier((e) => {
       e.groupes[gi].remp = nom
     })
@@ -85,6 +77,7 @@ export function Conges() {
                       valeur={g.remp}
                       animateurs={animateurs}
                       disabled={!ecriture}
+                      titreAjout="Nouveau remplaçant"
                       onChange={(v) => choisirRemplacant(gi, v)}
                     />
                   </td>

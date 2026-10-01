@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ChampTexte } from '@/lib/ChampTexte'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
@@ -205,9 +206,11 @@ function CarteEquipe({ personnel, fonctions, ecriture }: { personnel: Personne[]
                     <button
                       aria-label={`Supprimer ${p.nom}`}
                       className="rounded p-1.5 text-red-700 hover:bg-red-50"
-                      onClick={() =>
-                        confirm(`Supprimer ${p.nom} et tous ses quarts ? Pour garder l'historique, décochez plutôt « Actif ».`) &&
-                        supprimer.mutate(p.id)
+                      onClick={async () =>
+                        (await confirmer({
+                          titre: `Supprimer ${p.nom} et tous ses quarts ?`,
+                          message: "Pour garder l'historique, décochez plutôt « Actif ».",
+                        })) && supprimer.mutate(p.id)
                       }
                     >
                       <IconeCorbeille />
@@ -284,10 +287,10 @@ function CarteFonctions({ fonctions, personnel, ecriture }: { fonctions: Fonctio
     setErreur(null)
   }
 
-  function retirer(f: Fonction) {
+  async function retirer(f: Fonction) {
     const n = nombre(f.id)
-    const suite = !n ? '' : n === 1 ? " La personne qui l'a n'aura plus de fonction." : ` Les ${n} personnes qui l'ont n'auront plus de fonction.`
-    if (confirm(`Supprimer la fonction « ${f.nom} » ?${suite}`)) supprimer.mutate(f.id)
+    const message = !n ? undefined : n === 1 ? "La personne qui l'a n'aura plus de fonction." : `Les ${n} personnes qui l'ont n'auront plus de fonction.`
+    if (await confirmer({ titre: `Supprimer la fonction « ${f.nom} » ?`, message })) supprimer.mutate(f.id)
   }
 
   return (

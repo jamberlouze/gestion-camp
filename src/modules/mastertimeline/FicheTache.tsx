@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer } from '@/lib/donnees'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
@@ -112,7 +113,11 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
   }
 
   async function supprimer() {
-    if (!demande.tache || !confirm(`Supprimer « ${demande.tache.titre} » ? Ses coches des années passées restent dans la base.`)) return
+    if (
+      !demande.tache ||
+      !(await confirmer({ titre: `Supprimer « ${demande.tache.titre} » ?`, message: 'Ses coches des années passées restent dans la base.' }))
+    )
+      return
     try {
       await enregistrer.mutateAsync({ id: demande.tache.id, archivee: true })
       fermer()

@@ -13,9 +13,12 @@ export function SaisieNom({
   valider,
   annuler,
   compact,
+  liste,
 }: {
   valeurInitiale?: string
   placeholder?: string
+  /** Id d'un <datalist> de suggestions. */
+  liste?: string
   libelleOk?: string
   valider: (nom: string) => string | null | Promise<string | null>
   annuler: () => void
@@ -53,6 +56,7 @@ export function SaisieNom({
           aria-label={placeholder ?? 'Nom'}
           className={`min-w-0 flex-1 rounded-lg border border-pierre-300 bg-white ${taille} focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20`}
           value={nom}
+          list={liste}
           placeholder={placeholder}
           onChange={(e) => {
             setNom(e.target.value)

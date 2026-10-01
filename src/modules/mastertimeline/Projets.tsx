@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur, useEnregistrer } from '@/lib/donnees'
 import { IconeChevron, IconePlus } from '@/lib/icones'
@@ -315,8 +316,8 @@ function ProjetPonctuel({ projet, taches, refs }: { projet: Projet; taches: Tach
               </button>
               <button
                 className={ui.boutonDanger}
-                onClick={() => {
-                  if (!confirm(`Supprimer « ${projet.nom} » et ses ${taches.length} tâches ?`)) return
+                onClick={async () => {
+                  if (!(await confirmer({ titre: `Supprimer « ${projet.nom} » ?`, message: `Ses ${taches.length} tâches seront aussi supprimées.` }))) return
                   action(async () => {
                     await supprimerProjet(projet.id)
                     navigate('/mastertimeline/projets')

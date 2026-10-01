@@ -1,5 +1,6 @@
 import { useMemo, useState, type ComponentProps } from 'react'
 import { ChampTexte } from '@/lib/ChampTexte'
+import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
 import { libelleJour, portionsGroupe } from './calcul'
 import { useMenu } from './contexte'
@@ -98,7 +99,7 @@ function Reglages() {
         {ecriture && (
           <button
             className={ui.boutonDanger}
-            onClick={() => confirm('Effacer tous les repas planifiés ?') && effacer.mutate({ menu_id: menu.id })}
+            onClick={async () => (await confirmer({ titre: 'Effacer tous les repas planifiés ?', libelleOk: 'Effacer' })) && effacer.mutate({ menu_id: menu.id })}
           >
             Effacer
           </button>
@@ -151,8 +152,8 @@ function Groupes({ groupes }: { groupes: GroupeRepas[] }) {
                   className="rounded px-1.5 text-red-700 hover:bg-red-50 disabled:opacity-30"
                   disabled={groupes.length <= 1}
                   title={groupes.length <= 1 ? 'Au moins un groupe est requis' : undefined}
-                  onClick={() =>
-                    confirm(`Supprimer le groupe « ${g.name} » ?`) && supprimer.mutate({ menu_id: menu.id, id: g.id })
+                  onClick={async () =>
+                    (await confirmer({ titre: `Supprimer le groupe « ${g.name} » ?` })) && supprimer.mutate({ menu_id: menu.id, id: g.id })
                   }
                 >
                   ✕

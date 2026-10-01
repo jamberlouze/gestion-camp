@@ -1,6 +1,8 @@
 import { useMutationState } from '@tanstack/react-query'
 import { useLayoutEffect, useRef } from 'react'
 import { Link, NavLink, Outlet } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
+import { IconeAttention } from '@/lib/icones'
 import { useAuth } from './auth'
 import { MODULES } from './modules'
 
@@ -29,13 +31,16 @@ export function Layout() {
     return () => observateur.disconnect()
   }, [])
 
-  const seDeconnecter = () => {
+  const seDeconnecter = async () => {
     // La déconnexion efface le cache de l'appareil, file d'attente comprise.
     if (
       enAttente &&
-      !confirm(
-        `${enAttente} modification(s) faite(s) hors ligne n'ont pas encore été envoyées et seront perdues. Se déconnecter quand même ?`,
-      )
+      !(await confirmer({
+        titre: 'Se déconnecter quand même ?',
+        message: `${enAttente} modification(s) faite(s) hors ligne n'ont pas encore été envoyées et seront perdues.`,
+        libelleOk: 'Se déconnecter',
+        icone: <IconeAttention className="size-5" />,
+      }))
     )
       return
     deconnexion()

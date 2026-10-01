@@ -1,4 +1,5 @@
 import { ChampTexte } from '@/lib/ChampTexte'
+import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
 import { libelleJour, portionsGroupe, portionsSortie, repasSortie } from './calcul'
 import { useMenu } from './contexte'
@@ -101,7 +102,7 @@ function CarteSortie({ sortie: s }: { sortie: Sortie }) {
           <button
             aria-label="Supprimer la sortie"
             className="rounded px-2 py-1 text-red-700 hover:bg-red-50"
-            onClick={() => confirm('Supprimer cette sortie ?') && supprimer.mutate({ menu_id: menu.id, id: s.id })}
+            onClick={async () => (await confirmer({ titre: 'Supprimer cette sortie ?' })) && supprimer.mutate({ menu_id: menu.id, id: s.id })}
           >
             ✕
           </button>

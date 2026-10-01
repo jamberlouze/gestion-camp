@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -390,8 +391,8 @@ function BoutonSupprimer({ ligne }: { ligne: Ligne }) {
   return (
     <button
       className={ui.boutonDanger}
-      onClick={() => {
-        if (confirm(`Retirer l'embarcation ${ligne.numero_identification ?? '(nouvelle)'} de la flotte ?`)) {
+      onClick={async () => {
+        if (await confirmer({ titre: `Retirer l'embarcation ${ligne.numero_identification ?? '(nouvelle)'} de la flotte ?`, libelleOk: 'Retirer' })) {
           maj.mutate({ id: ligne.id, champs: { deleted_at: new Date().toISOString() } })
         }
       }}

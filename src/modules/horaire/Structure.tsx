@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { useSemaine } from './contexte'
@@ -61,7 +62,7 @@ export function JoursEtPeriodes({ fermer }: { fermer: () => void }) {
       return n
     })
 
-  function appliquer() {
+  async function appliquer() {
     if (probleme || !pertes) return
     if (JSON.stringify([etat.jours, etat.periodes]) !== depart) {
       return setMessage("L'horaire a changé pendant la modification (autre personne ?). Fermez et rouvrez cette fenêtre.")
@@ -72,7 +73,11 @@ export function JoursEtPeriodes({ fermer }: { fermer: () => void }) {
       pertes.transport.length ? `les infos de transport de la période ${liste(pertes.transport.map((p) => `« ${p} »`))}` : '',
       pertes.nuits.length ? `les tâches de soirée du ${liste(pertes.nuits)}` : '',
     ].filter(Boolean)
-    if (effaces.length && !confirm(`Cette modification efface ${liste(effaces)}. Continuer ?`)) return
+    if (
+      effaces.length &&
+      !(await confirmer({ titre: 'Appliquer la modification ?', message: `Elle efface ${liste(effaces)}.`, libelleOk: 'Appliquer' }))
+    )
+      return
     remplacer(restructurer(etat, structure, communes))
     fermer()
   }

@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './index.css'
+import { Confirmations } from './lib/Confirmation'
 import { clientRequetes, persistance } from './lib/requetes'
 import { FournisseurAuth } from './shell/auth'
 
@@ -22,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
       <FournisseurAuth>
         <BrowserRouter>
           <App />
+          <Confirmations />
         </BrowserRouter>
       </FournisseurAuth>
     </PersistQueryClientProvider>

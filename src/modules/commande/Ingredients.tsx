@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
@@ -221,8 +222,14 @@ function DialogueProduit({
             <button
               type="button"
               className={ui.boutonDanger}
-              onClick={() => {
-                if (confirm('Retirer cet ingrédient de la banque ?\nLes recettes qui l’utilisent ne sont pas modifiées.')) {
+              onClick={async () => {
+                if (
+                  await confirmer({
+                    titre: 'Retirer cet ingrédient de la banque ?',
+                    message: 'Les recettes qui l’utilisent ne sont pas modifiées.',
+                    libelleOk: 'Retirer',
+                  })
+                ) {
                   supprimer.mutate(produit.id)
                   fermer()
                 }

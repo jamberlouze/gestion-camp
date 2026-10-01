@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
@@ -440,8 +441,8 @@ function DialogueRecette({
                 <button
                   type="button"
                   className={ui.boutonDanger}
-                  onClick={() => {
-                    if (confirm(`Supprimer la recette « ${recette.name} » ?`)) {
+                  onClick={async () => {
+                    if (await confirmer({ titre: `Supprimer la recette « ${recette.name} » ?` })) {
                       supprimer.mutate(recette.id)
                       fermer()
                     }
@@ -618,8 +619,8 @@ function DialogueConsommable({ consommable, fermer }: { consommable: Consommable
             <button
               type="button"
               className={ui.boutonDanger}
-              onClick={() => {
-                if (confirm(`Supprimer « ${consommable.name} » ?`)) {
+              onClick={async () => {
+                if (await confirmer({ titre: `Supprimer « ${consommable.name} » ?` })) {
                   supprimer.mutate(consommable.id)
                   fermer()
                 }

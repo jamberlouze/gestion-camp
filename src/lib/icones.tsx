@@ -95,6 +95,12 @@ export const IconeCorbeille = (p: Props) => (
   </Icone>
 )
 
+export const IconeAttention = (p: Props) => (
+  <Icone {...p}>
+    <path d="M12 4 2.5 20h19L12 4ZM12 10v4.5M12 17.5v.01" />
+  </Icone>
+)
+
 export const IconeChevron = (p: Props) => (
   <Icone {...p}>
     <path d="m9 6 6 6-6 6" />

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
-import { IconeDossier, IconeModele, IconeReglages, IconeSemaine } from '@/lib/icones'
+import { IconeAttention, IconeDossier, IconeModele, IconeReglages, IconeSemaine } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Conflits } from './Conflits'
@@ -183,6 +184,7 @@ function EnteteModule({
   /** Réglages modifiés et pas enregistrés : on demande avant de quitter la page. */
   reglagesModifies: boolean
 }) {
+  const navigate = useNavigate()
   const espaces = [
     { page: 'semaine' as const, chemin: '/horaire', libelle: modeleOuvert ? 'Modèle ouvert' : 'Semaine', icone: modeleOuvert ? <IconeModele /> : <IconeSemaine /> },
     { page: 'dossiers' as const, chemin: '/horaire/dossiers', libelle: 'Dossiers et modèles', icone: <IconeDossier /> },
@@ -197,10 +199,16 @@ function EnteteModule({
             key={e.page}
             to={e.chemin}
             aria-current={page === e.page ? 'page' : undefined}
-            onClick={(clic) => {
-              if (reglagesModifies && e.page !== 'reglages' && !confirm('Les réglages modifiés ne sont pas enregistrés. Quitter quand même ?')) {
-                clic.preventDefault()
-              }
+            onClick={async (clic) => {
+              if (!reglagesModifies || e.page === 'reglages') return
+              clic.preventDefault()
+              const quitter = await confirmer({
+                titre: 'Quitter sans enregistrer ?',
+                message: 'Les réglages modifiés ne sont pas enregistrés.',
+                libelleOk: 'Quitter',
+                icone: <IconeAttention className="size-5" />,
+              })
+              if (quitter) navigate(e.chemin)
             }}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
               page === e.page ? 'bg-white text-pierre-900 shadow-sm' : 'text-pierre-600 hover:text-pierre-900'

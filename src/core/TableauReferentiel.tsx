@@ -1,4 +1,5 @@
 import { Fragment, useState, type FormEvent } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer, useListe, useSupprimer } from '@/lib/donnees'
 import type { Schema } from '@/lib/supabase'
 import { ui } from '@/lib/ui'
@@ -69,7 +70,7 @@ export function TableauReferentiel<T extends { id: string }>({
   }
 
   async function retirer(ligne: T) {
-    if (!confirm(`Supprimer « ${nomLigne(ligne)} » ?`)) return
+    if (!(await confirmer({ titre: `Supprimer « ${nomLigne(ligne)} » ?` }))) return
     try {
       await supprimer.mutateAsync(ligne.id)
     } catch (err) {

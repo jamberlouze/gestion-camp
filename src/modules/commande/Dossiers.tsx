@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import { useSearchParams } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeDossier, IconeModele, IconePlus, IconeRenommer } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
@@ -100,15 +101,15 @@ export function PageDossiers({
     }
   }
 
-  function retirerDossier(d: Dossier, contenu: Menu[]) {
+  async function retirerDossier(d: Dossier, contenu: Menu[]) {
     const doublons = contenu.filter((m) => sansDossier.menus.some((x) => x.nom === m.nom)).map((m) => `« ${m.nom} »`)
     if (doublons.length) {
       return setMessage(`« Sans dossier » contient déjà ${doublons.join(', ')} : renommez ou déplacez ces menus avant de supprimer le dossier.`)
     }
-    const texte = contenu.length
-      ? `Supprimer le dossier « ${d.nom} » ? Ses ${contenu.length} menu(s) ne sont pas supprimés : ils passent dans « Sans dossier ».`
-      : `Supprimer le dossier « ${d.nom} » ?`
-    if (!confirm(texte)) return
+    const message = contenu.length
+      ? `Ses ${contenu.length} menu(s) ne sont pas supprimés : ils passent dans « Sans dossier ».`
+      : undefined
+    if (!(await confirmer({ titre: `Supprimer le dossier « ${d.nom} » ?`, message }))) return
     supprimerDossier.mutate(d.id, surErreur)
     afficher(SANS)
   }
@@ -123,10 +124,11 @@ export function PageDossiers({
     modifier.mutate({ id, dossier_id: cible }, surErreur)
   }
 
-  const retirer = (m: Menu) =>
-    confirm(
-      `Supprimer ${m.modele ? 'le modèle' : 'le menu'} « ${m.nom} » et tout son contenu (groupes, grille, sorties, ajouts) ? Cette action est définitive.`,
-    ) && supprimer.mutate(m.id, surErreur)
+  const retirer = async (m: Menu) =>
+    (await confirmer({
+      titre: `Supprimer ${m.modele ? 'le modèle' : 'le menu'} « ${m.nom} » ?`,
+      message: 'Tout son contenu (groupes, grille, sorties, ajouts) est supprimé. Cette action est définitive.',
+    })) && supprimer.mutate(m.id, surErreur)
 
   // Glisser un menu sur un dossier de la colonne de gauche.
   const cible = (cle: string) =>

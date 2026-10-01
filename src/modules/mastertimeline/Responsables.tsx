@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { cleAujourdhui, clesExercice, exerciceDeCle, libelleExercice, libelleMois, majuscule } from './calendrier'
@@ -49,7 +50,7 @@ export function Responsables() {
     if (!actif || actif === AUCUN) return
     const cible = vers === AUCUN ? null : vers
     const nomCible = cible ? refs.responsable.get(cible)?.nom : 'personne'
-    if (!confirm(`Passer les ${nbTaches} tâches de ${nom} à ${nomCible} ?`)) return
+    if (!(await confirmer({ titre: `Passer les ${nbTaches} tâches de ${nom} à ${nomCible} ?`, libelleOk: 'Réassigner', danger: false }))) return
     try {
       const n = await reassigner(actif, cible)
       setMessage({ texte: `${n} tâche${n > 1 ? 's' : ''} passée${n > 1 ? 's' : ''} à ${nomCible}.` })

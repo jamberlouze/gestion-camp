@@ -1,4 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { confirmer } from '@/lib/Confirmation'
+import { Dialogue } from '@/lib/Dialogue'
+import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
 import { useSemaine } from './contexte'
 import { useAjouterAnimateurs } from './donnees'
@@ -8,6 +12,10 @@ import { CONGES, META_TAG, type CodeConge, type GroupeHoraire, type Tag } from '
 
 /** Largeur des colonnes (px) : identique dans l'en-tête et le corps de la grille. */
 const LARGEUR = { jour: 96, periode: 112, groupe: 128, ajout: 112 }
+
+/** Cases à remplir d'un coup (↦ jour, ↦ ligne). */
+type Remplissage = { jour: string; periodes: string[]; libelle: string }
+const ACTIVITE_COMMUNE = 'Parc aquatique / Journée commune'
 
 /** Une case de la grille (coordonnées utiles à la sélection rectangulaire). */
 interface InfoCase {
@@ -22,6 +30,7 @@ interface InfoCase {
 export function Construire() {
   const { etat, reglages, modifier, ecriture } = useSemaine()
   const [structure, setStructure] = useState(false)
+  const [remplissage, setRemplissage] = useState<Remplissage | null>(null)
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const ancre = useRef<InfoCase | null>(null)
   const glisse = useRef<{ depart: InfoCase; actif: boolean } | null>(null)
@@ -177,9 +186,9 @@ export function Construire() {
     [modifier],
   )
 
-  function remplir(jour: string, periodes: string[], libelle: string) {
-    const v = prompt(`Activité pour tous les groupes — ${libelle} :`, 'Parc aquatique / Journée commune')
-    if (v == null) return
+  /** Même activité pour tous les groupes ; vide = efface ces cases. */
+  function remplir({ jour, periodes }: Remplissage, v: string) {
+    setRemplissage(null)
     modifier((e) => {
       // Une période couverte par une fusion prend l'activité du début de la fusion.
       const { couverture } = cartesFusion(e)
@@ -236,6 +245,29 @@ export function Construire() {
       </div>
       <Legende />
       {structure && <JoursEtPeriodes fermer={() => setStructure(false)} />}
+      {remplissage && (
+        <Dialogue titre={`Remplir — ${remplissage.libelle}`} fermer={() => setRemplissage(null)}>
+          <p className="mb-3 text-sm text-pierre-600">Même activité pour tous les groupes.</p>
+          <SaisieNom
+            placeholder="Activité"
+            liste="liste-activites"
+            libelleOk="Remplir"
+            valider={(v) => {
+              remplir(remplissage, v)
+              return null
+            }}
+            annuler={() => setRemplissage(null)}
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <button className="text-foret-700 hover:underline" onClick={() => remplir(remplissage, ACTIVITE_COMMUNE)}>
+              {ACTIVITE_COMMUNE}
+            </button>
+            <button className={ui.boutonDanger} onClick={() => remplir(remplissage, '')}>
+              Vider ces cases
+            </button>
+          </div>
+        </Dialogue>
+      )}
 
       <datalist id="liste-activites">
         {reglages.activites.map((a) => (
@@ -307,7 +339,7 @@ export function Construire() {
                         <button
                           className="mt-1 block text-xs font-normal text-foret-700 hover:underline print:hidden"
                           title="Remplir toute la journée (journée commune)"
-                          onClick={() => remplir(jour, etat.periodes, `toute la journée ${jour}`)}
+                          onClick={() => setRemplissage({ jour, periodes: etat.periodes, libelle: `toute la journée ${jour}` })}
                         >
                           ↦ jour
                         </button>
@@ -325,7 +357,7 @@ export function Construire() {
                       <button
                         className="block text-foret-700 hover:underline print:hidden"
                         title="Même activité pour tous les groupes à cette période"
-                        onClick={() => remplir(jour, [p], `${jour} ${p}`)}
+                        onClick={() => setRemplissage({ jour, periodes: [p], libelle: `${jour} ${p}` })}
                       >
                         ↦ ligne
                       </button>
@@ -580,17 +612,7 @@ const Case = memo(function Case({
 
 function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) {
   const { modifier, ecriture, animateurs } = useSemaine()
-  const ajouterAnimateurs = useAjouterAnimateurs()
   const maj = (champs: Partial<GroupeHoraire>) => modifier((e) => Object.assign(e.groupes[gi], champs))
-
-  function choisirAnimateur(champ: 'anim' | 'remp', valeur: string) {
-    if (valeur !== '__nouveau__') return maj({ [champ]: valeur })
-    const nom = prompt(champ === 'anim' ? 'Nom du nouvel animateur :' : 'Nom du nouveau remplaçant :')?.trim()
-    if (!nom) return
-    // Ajouté au référentiel commun des employés (si on en a le droit).
-    if (!animateurs.includes(nom)) ajouterAnimateurs.mutate([nom])
-    maj({ [champ]: nom })
-  }
 
   const choix = 'fleche-serree w-full rounded border border-pierre-200 bg-white px-1 py-0.5 text-xs'
   return (
@@ -609,8 +631,8 @@ function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) 
           <button
             aria-label={`Retirer le groupe ${g.num}`}
             className="ml-auto rounded px-1 text-red-700 hover:bg-red-50 print:hidden"
-            onClick={() => {
-              if (!confirm('Retirer ce groupe et ses activités ?')) return
+            onClick={async () => {
+              if (!(await confirmer({ titre: 'Retirer ce groupe et ses activités ?', libelleOk: 'Retirer' }))) return
               modifier((e) => {
                 const id = e.groupes[gi].id
                 e.groupes.splice(gi, 1)
@@ -629,7 +651,7 @@ function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) 
         valeur={g.anim}
         animateurs={animateurs}
         disabled={!ecriture}
-        onChange={(v) => choisirAnimateur('anim', v)}
+        onChange={(anim) => maj({ anim })}
       />
       <div className="mt-1 flex gap-1 print:hidden">
         <select
@@ -655,36 +677,65 @@ function EnteteGroupe({ groupe: g, gi }: { groupe: GroupeHoraire; gi: number }) 
           animateurs={animateurs}
           vide="Rempl."
           disabled={!ecriture}
-          onChange={(v) => choisirAnimateur('remp', v)}
+          titreAjout="Nouveau remplaçant"
+          onChange={(remp) => maj({ remp })}
         />
       </div>
     </th>
   )
 }
 
-/** Menu des animateurs du référentiel ; une valeur hors liste reste visible. */
+/**
+ * Menu des animateurs du référentiel ; une valeur hors liste reste visible.
+ * « Ajouter… » demande le nom dans une fenêtre et l'ajoute au référentiel.
+ */
 export function ChoixAnimateur({
   valeur,
   animateurs,
   onChange,
   vide = '—',
+  titreAjout = 'Nouvel animateur',
   ...props
 }: {
   valeur: string
   animateurs: string[]
   onChange: (v: string) => void
   vide?: string
+  titreAjout?: string
 } & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'>) {
+  const [ajout, setAjout] = useState(false)
+  const ajouterAnimateurs = useAjouterAnimateurs()
   return (
-    <select {...props} value={valeur} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{vide}</option>
-      {valeur && !animateurs.includes(valeur) && <option value={valeur}>{valeur} (hors liste)</option>}
-      {animateurs.map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-      <option value="__nouveau__">＋ Ajouter…</option>
-    </select>
+    <>
+      <select {...props} value={valeur} onChange={(e) => (e.target.value === '__nouveau__' ? setAjout(true) : onChange(e.target.value))}>
+        <option value="">{vide}</option>
+        {valeur && !animateurs.includes(valeur) && <option value={valeur}>{valeur} (hors liste)</option>}
+        {animateurs.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+        <option value="__nouveau__">＋ Ajouter…</option>
+      </select>
+      {ajout &&
+        // Hors de la grille : ses cellules collantes passeraient par-dessus la fenêtre.
+        createPortal(
+          <Dialogue titre={titreAjout} fermer={() => setAjout(false)}>
+            <SaisieNom
+              placeholder="Nom"
+              libelleOk="Ajouter"
+              valider={(nom) => {
+                // Ajouté au référentiel commun des employés (si on en a le droit).
+                if (!animateurs.includes(nom)) ajouterAnimateurs.mutate([nom])
+                onChange(nom)
+                setAjout(false)
+                return null
+              }}
+              annuler={() => setAjout(false)}
+            />
+          </Dialogue>,
+          document.body,
+        )}
+    </>
   )
 }

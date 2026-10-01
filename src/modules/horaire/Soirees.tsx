@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
 import { Puce } from './Conflits'
 import { useSemaine } from './contexte'
@@ -80,15 +81,22 @@ export function Soirees() {
             <>
               <button
                 className={ui.boutonSecondaire}
-                onClick={() =>
-                  confirm(
-                    'Répartir automatiquement les chouettes dans les cases vides, de façon équilibrée ?\n(Respecte les congés, le camping, et évite les doublons. Les cases déjà remplies sont conservées.)',
-                  ) && modifier((e) => (e.chouettes = repartirChouettes(e, reglages)))
+                onClick={async () =>
+                  (await confirmer({
+                    titre: 'Répartir automatiquement les chouettes ?',
+                    message:
+                      'Les cases vides sont remplies de façon équilibrée, en respectant les congés et le camping, sans doublons. Les cases déjà remplies sont conservées.',
+                    libelleOk: 'Répartir',
+                    danger: false,
+                  })) && modifier((e) => (e.chouettes = repartirChouettes(e, reglages)))
                 }
               >
                 🎲 Répartir automatiquement
               </button>
-              <button className={ui.boutonDanger} onClick={() => confirm('Vider toutes les chouettes ?') && modifier((e) => (e.chouettes = {}))}>
+              <button
+                className={ui.boutonDanger}
+                onClick={async () => (await confirmer({ titre: 'Vider toutes les chouettes ?', libelleOk: 'Vider' })) && modifier((e) => (e.chouettes = {}))}
+              >
                 Vider
               </button>
             </>

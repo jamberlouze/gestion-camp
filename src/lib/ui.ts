@@ -4,6 +4,8 @@ export const ui = {
     'inline-flex items-center justify-center gap-1.5 rounded-lg bg-foret-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-foret-800 disabled:opacity-50',
   boutonSecondaire:
     'inline-flex items-center justify-center gap-1.5 rounded-lg border border-pierre-300 bg-white px-3.5 py-2 text-sm font-medium text-pierre-800 hover:bg-pierre-50 disabled:opacity-50',
+  boutonRouge:
+    'inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50',
   boutonDanger:
     'inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50',
   champ:

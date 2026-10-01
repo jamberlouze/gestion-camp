@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
@@ -228,7 +229,16 @@ export function HoraireCuisine() {
       const actifs = new Set(personnel.data?.filter((p) => p.actif).map((p) => p.id))
       const copie = precedente.filter((q) => actifs.has(q.personne_id)).map((q) => ({ ...q, jour: ajouterJours(q.jour, 7) }))
       if (!copie.length) return setMessage({ lundi, texte: `La semaine du ${dateCourte(lundiPrecedent)} est vide : rien à copier.` })
-      if (liste.length && !confirm(`Remplacer les ${liste.length} cases de cette semaine par celles de la semaine du ${dateCourte(lundiPrecedent)} ?`)) return
+      if (
+        liste.length &&
+        !(await confirmer({
+          titre: 'Remplacer cette semaine ?',
+          message: `Les ${liste.length} cases de cette semaine seront remplacées par celles de la semaine du ${dateCourte(lundiPrecedent)}.`,
+          libelleOk: 'Remplacer',
+        }))
+      )
+        return
+      if (semaine.current !== lundi) return
       remplacer.mutate(copie, {
         onSuccess: () => setMessage({ lundi, texte: `Semaine du ${dateCourte(lundiPrecedent)} copiée (${copie.length} cases).` }),
         onSettled: finCopie,
@@ -252,8 +262,8 @@ export function HoraireCuisine() {
             <button
               className={ui.boutonDanger}
               disabled={remplacer.isPending || copieEnCours}
-              onClick={() => {
-                if (!confirm(`Vider la semaine ? Les ${liste.length} cases seront effacées.`)) return
+              onClick={async () => {
+                if (!(await confirmer({ titre: 'Vider la semaine ?', message: `Les ${liste.length} cases seront effacées.`, libelleOk: 'Vider' }))) return
                 setMessage(null)
                 remplacer.mutate([])
               }}

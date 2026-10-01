@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import { useSearchParams } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeDossier, IconeModele, IconePlus, IconeRenommer } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
@@ -84,15 +85,15 @@ export function PageDossiers({
     }
   }
 
-  function retirerDossier(d: Dossier, contenu: ResumeHoraire[]) {
+  async function retirerDossier(d: Dossier, contenu: ResumeHoraire[]) {
     const doublons = contenu.filter((h) => sansDossier.horaires.some((x) => x.nom === h.nom)).map((h) => `« ${h.nom} »`)
     if (doublons.length) {
       return setMessage(`« Sans dossier » contient déjà ${doublons.join(', ')} : renommez ou déplacez ces semaines avant de supprimer le dossier.`)
     }
-    const texte = contenu.length
-      ? `Supprimer le dossier « ${d.nom} » ? Ses ${contenu.length} semaine(s) ne sont pas supprimées : elles passent dans « Sans dossier ».`
-      : `Supprimer le dossier « ${d.nom} » ?`
-    if (!confirm(texte)) return
+    const message = contenu.length
+      ? `Ses ${contenu.length} semaine(s) ne sont pas supprimées : elles passent dans « Sans dossier ».`
+      : undefined
+    if (!(await confirmer({ titre: `Supprimer le dossier « ${d.nom} » ?`, message }))) return
     supprimerDossier.mutate(d.id, surErreur)
     afficher(SANS)
   }
@@ -107,8 +108,9 @@ export function PageDossiers({
     modifier.mutate({ id, dossier_id: cible }, surErreur)
   }
 
-  const retirer = (h: ResumeHoraire) =>
-    confirm(`Supprimer ${h.modele ? 'le modèle' : 'la semaine'} « ${h.nom} » ? Cette action est définitive.`) && supprimer.mutate(h.id, surErreur)
+  const retirer = async (h: ResumeHoraire) =>
+    (await confirmer({ titre: `Supprimer ${h.modele ? 'le modèle' : 'la semaine'} « ${h.nom} » ?`, message: 'Cette action est définitive.' })) &&
+    supprimer.mutate(h.id, surErreur)
 
   // Glisser une semaine sur un dossier de la colonne de gauche.
   const cible = (cle: string) =>
