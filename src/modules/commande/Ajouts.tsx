@@ -1,31 +1,56 @@
 import { useState, type FormEvent } from 'react'
+import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { useAuth } from '@/shell/auth'
-import { useAjoutConsommable, useAjouterRecette, useRetirerAjoutRecette, useTable } from './donnees'
+import { useMenu } from './contexte'
+import { useAjoutConsommable, useAjouterRecette, useRetirerAjoutRecette, useTable, useTableMenu } from './donnees'
 import { CATEGORIES } from './types'
 
-/** Articles ajoutés à la main à la commande en cours, en plus du planificateur. */
+/** Articles ajoutés à la main à la commande du menu ouvert, en plus du planificateur. */
 export function Ajouts() {
-  const { peutEcrire } = useAuth()
-  const ecriture = peutEcrire('commande')
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      <Consommables ecriture={ecriture} />
-      <RecettesAjoutees ecriture={ecriture} />
+      <Consommables />
+      <RecettesAjoutees />
     </div>
   )
 }
 
-function Consommables({ ecriture }: { ecriture: boolean }) {
-  const consommables = useTable('consommables').data ?? []
-  const ajouts = useTable('ajouts_consommables').data ?? []
+/** Pas encore chargé (ou lecture impossible) : rien d'affiché ni de modifiable. */
+function Attente({ erreur }: { erreur: unknown }) {
+  return erreur ? (
+    <p className={`${ui.erreur} mt-3`}>{messageErreur(erreur)}</p>
+  ) : (
+    <p className="mt-3 text-sm text-pierre-500">Chargement…</p>
+  )
+}
+
+function Consommables() {
+  const { menu, ecriture } = useMenu()
+  const requeteConsommables = useTable('consommables')
+  const requeteAjouts = useTableMenu('ajouts_consommables', menu.id)
   const ajouter = useAjoutConsommable()
+  const consommables = requeteConsommables.data
+  const ajouts = requeteAjouts.data
+  const entete = (
+    <>
+      <h2 className="font-semibold">Consommables</h2>
+      <p className="mt-0.5 text-sm text-pierre-500">Commandés à la caisse, directement dans la commande Colabor de ce menu.</p>
+    </>
+  )
+  // Quantités du menu pas encore lues : afficher 0 inviterait à écraser les vraies.
+  if (!consommables || !ajouts) {
+    return (
+      <section className={`${ui.carte} p-5`}>
+        {entete}
+        <Attente erreur={requeteConsommables.error ?? requeteAjouts.error} />
+      </section>
+    )
+  }
   const quantite = (id: string) => ajouts.find((a) => a.cons_id === id)?.qty ?? 0
 
   return (
     <section className={`${ui.carte} p-5`}>
-      <h2 className="font-semibold">Consommables</h2>
-      <p className="mt-0.5 text-sm text-pierre-500">Commandés à la caisse, directement dans la commande Colabor.</p>
+      {entete}
       {consommables.length === 0 && <p className="mt-3 text-sm text-pierre-500">Aucun consommable défini (onglet Recettes).</p>}
       <ul className="mt-3 space-y-2">
         {consommables.map((c) => {
@@ -41,7 +66,7 @@ function Consommables({ ecriture }: { ecriture: boolean }) {
                 disabled={!ecriture}
                 className="h-4 w-4 accent-foret-700"
                 checked={qty > 0}
-                onChange={(e) => ajouter.mutate({ cons_id: c.id, qty: e.target.checked ? Math.max(qty, 1) : 0 })}
+                onChange={(e) => ajouter.mutate({ menu_id: menu.id, cons_id: c.id, qty: e.target.checked ? Math.max(qty, 1) : 0 })}
               />
               <span className="min-w-0 flex-1 text-sm">
                 <span className="font-medium">{c.name}</span>
@@ -56,7 +81,9 @@ function Consommables({ ecriture }: { ecriture: boolean }) {
                 disabled={!ecriture}
                 className="w-16 rounded border border-pierre-300 px-1.5 py-1 text-right text-sm font-semibold tabular-nums"
                 value={qty}
-                onChange={(e) => ajouter.mutate({ cons_id: c.id, qty: Math.max(0, Math.trunc(Number(e.target.value)) || 0) })}
+                onChange={(e) =>
+                  ajouter.mutate({ menu_id: menu.id, cons_id: c.id, qty: Math.max(0, Math.trunc(Number(e.target.value)) || 0) })
+                }
               />
               <span className="text-xs text-pierre-500">caisse(s)</span>
             </li>
@@ -67,9 +94,12 @@ function Consommables({ ecriture }: { ecriture: boolean }) {
   )
 }
 
-function RecettesAjoutees({ ecriture }: { ecriture: boolean }) {
-  const recettes = useTable('recettes').data ?? []
-  const ajouts = useTable('ajouts_recettes').data ?? []
+function RecettesAjoutees() {
+  const { menu, ecriture } = useMenu()
+  const requeteRecettes = useTable('recettes')
+  const requeteAjouts = useTableMenu('ajouts_recettes', menu.id)
+  const recettes = requeteRecettes.data ?? []
+  const ajouts = requeteAjouts.data
   const ajouter = useAjouterRecette()
   const retirer = useRetirerAjoutRecette()
   const [recetteId, setRecetteId] = useState('')
@@ -81,7 +111,12 @@ function RecettesAjoutees({ ecriture }: { ecriture: boolean }) {
     e.preventDefault()
     const p = Math.trunc(Number(portions)) || 0
     if (!recetteId || p <= 0) return
-    ajouter.mutate({ recipe_id: recetteId, portions: p, veg: choisie?.has_veg ? Math.min(p, Math.trunc(Number(vege)) || 0) : 0 })
+    ajouter.mutate({
+      menu_id: menu.id,
+      recipe_id: recetteId,
+      portions: p,
+      veg: choisie?.has_veg ? Math.min(p, Math.max(0, Math.trunc(Number(vege)) || 0)) : 0,
+    })
     setRecetteId('')
     setPortions('1')
     setVege('0')
@@ -90,7 +125,7 @@ function RecettesAjoutees({ ecriture }: { ecriture: boolean }) {
   return (
     <section className={`${ui.carte} p-5`}>
       <h2 className="font-semibold">Recettes</h2>
-      <p className="mt-0.5 text-sm text-pierre-500">Portions supplémentaires hors planificateur (le végé compte ici).</p>
+      <p className="mt-0.5 text-sm text-pierre-500">Portions supplémentaires hors planificateur, ajoutées à la commande de ce menu.</p>
       {ecriture && (
         <form onSubmit={soumettre} className="mt-3 grid gap-2 sm:grid-cols-[1fr_6rem_6rem_auto] sm:items-end">
           <div>
@@ -139,7 +174,9 @@ function RecettesAjoutees({ ecriture }: { ecriture: boolean }) {
           </button>
         </form>
       )}
-      {ajouts.length === 0 ? (
+      {!ajouts || !requeteRecettes.data ? (
+        <Attente erreur={requeteRecettes.error ?? requeteAjouts.error} />
+      ) : ajouts.length === 0 ? (
         <p className="mt-4 text-sm text-pierre-500">Aucune recette ajoutée.</p>
       ) : (
         <ul className="mt-4 divide-y divide-pierre-100">
@@ -155,7 +192,7 @@ function RecettesAjoutees({ ecriture }: { ecriture: boolean }) {
                 <button
                   aria-label="Retirer"
                   className="rounded px-2 py-1 text-red-700 hover:bg-red-50"
-                  onClick={() => retirer.mutate(a.id)}
+                  onClick={() => retirer.mutate({ menu_id: menu.id, id: a.id })}
                 >
                   ✕
                 </button>

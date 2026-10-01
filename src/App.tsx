@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router'
+import { Navigate, Route, Routes, useParams } from 'react-router'
 import { Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
 import { Utilisateurs } from '@/core/Utilisateurs'
 import { configManquante } from '@/lib/supabase'
@@ -12,7 +12,7 @@ import { PageConnexion } from '@/shell/PageConnexion'
 // Chaque module est chargé à la demande : son code n'est téléchargé
 // qu'à la première visite.
 const Embarcations = lazy(() => import('@/modules/embarcations'))
-const Commande = lazy(() => import('@/modules/commande'))
+const Cuisine = lazy(() => import('@/modules/commande'))
 const Horaire = lazy(() => import('@/modules/horaire'))
 const Mastertimeline = lazy(() => import('@/modules/mastertimeline'))
 
@@ -38,7 +38,9 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Accueil />} />
           <Route path="embarcations/*" element={<GardeModule module="embarcations"><Embarcations /></GardeModule>} />
-          <Route path="commande/*" element={<GardeModule module="commande"><Commande /></GardeModule>} />
+          <Route path="cuisine/*" element={<GardeModule module="commande"><Cuisine /></GardeModule>} />
+          {/* Ancienne adresse du module (favoris). */}
+          <Route path="commande/*" element={<AncienneCommande />} />
           <Route path="horaire/*" element={<GardeModule module="horaire"><Horaire /></GardeModule>} />
           <Route path="mastertimeline/*" element={<GardeModule module="mastertimeline"><Mastertimeline /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
@@ -53,6 +55,15 @@ export default function App() {
       </Routes>
     </Suspense>
   )
+}
+
+/**
+ * /commande/… → /cuisine/… (même page) ; l'ancien planificateur est
+ * maintenant la page d'accueil du module.
+ */
+function AncienneCommande() {
+  const page = useParams()['*'] ?? ''
+  return <Navigate to={page && page !== 'planificateur' ? `/cuisine/${page}` : '/cuisine'} replace />
 }
 
 function ProfilIndisponible() {

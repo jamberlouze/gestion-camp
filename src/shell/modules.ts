@@ -19,10 +19,10 @@ export const MODULES: DefinitionModule[] = [
   },
   {
     id: 'commande',
-    nom: 'Commande',
-    description: 'Menus, recettes et commande Colabor',
-    icone: '🛒',
-    chemin: '/commande',
+    nom: 'Cuisine',
+    description: 'Menus, commande, feuille de cuisine et horaire du personnel',
+    icone: '🍳',
+    chemin: '/cuisine',
   },
   {
     id: 'horaire',

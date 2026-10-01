@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { ui } from '@/lib/ui'
-import { calculerCommande, quantiteAffichee, type LigneColabor, type LigneProduit } from './calcul'
-import { useParametresPlan, useTable } from './donnees'
+import { calculerCommande, portionsGroupe, quantiteAffichee, type LigneColabor, type LigneProduit } from './calcul'
+import { useMenu } from './contexte'
+import { useEtatCommande } from './donnees'
+import { versIso } from './quarts'
 import { UNITES } from './types'
 
 const CLE_STOCK = 'commande-stock'
@@ -27,36 +29,12 @@ function useStock() {
 }
 
 export function Commande() {
-  const recettes = useTable('recettes')
-  const consommables = useTable('consommables')
-  const groupes = useTable('groupes_repas')
-  const cellules = useTable('plan_cells')
-  const ajoutsConsommables = useTable('ajouts_consommables')
-  const ajoutsRecettes = useTable('ajouts_recettes')
-  const sorties = useTable('sorties')
-  const plan = useParametresPlan()
+  const { menu } = useMenu()
+  const etat = useEtatCommande(menu)
   const [stock, setStock] = useStock()
+  const resultat = useMemo(() => (etat ? calculerCommande(etat) : null), [etat])
 
-  const pret = [recettes, consommables, groupes, cellules, ajoutsConsommables, ajoutsRecettes, sorties].every((q) => q.data)
-  const resultat = useMemo(
-    () =>
-      pret
-        ? calculerCommande({
-            recettes: recettes.data!,
-            consommables: consommables.data!,
-            groupes: groupes.data!,
-            cellules: cellules.data!,
-            ajoutsConsommables: ajoutsConsommables.data!,
-            ajoutsRecettes: ajoutsRecettes.data!,
-            sorties: sorties.data!,
-            jours: plan.jours,
-            debut: plan.debut,
-          })
-        : null,
-    [pret, recettes.data, consommables.data, groupes.data, cellules.data, ajoutsConsommables.data, ajoutsRecettes.data, sorties.data, plan.jours, plan.debut],
-  )
-
-  if (!resultat) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  if (!etat || !resultat) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
   if (resultat.vide) {
     return (
       <p className={`${ui.carte} p-10 text-center text-sm text-pierre-500`}>
@@ -65,23 +43,32 @@ export function Commande() {
     )
   }
 
-  const aCommander = (l: LigneColabor) => (l.caisses == null ? null : Math.max(0, l.caisses - (stock[l.id] ?? 0)))
+  // Un même # produit en deux unités (recettes incohérentes) donne deux
+  // lignes : chacune a alors son propre stock, et un avertissement.
+  const parId = new Map<string, number>()
+  for (const l of resultat.colabor) parId.set(l.id, (parId.get(l.id) ?? 0) + 1)
+  const doublon = (l: LigneColabor) => (parId.get(l.id) ?? 0) > 1
+  const cleStock = (l: LigneColabor) => (doublon(l) ? l.cle : l.id)
+  const aCommander = (l: LigneColabor) => (l.caisses == null ? null : Math.max(0, l.caisses - (stock[cleStock(l)] ?? 0)))
+  const vege = etat.groupes.reduce((s, g) => s + portionsGroupe(g, 0).vege, 0)
 
   return (
     <div className="space-y-5">
+      <h2 className="hidden text-lg font-semibold print:block">Commande — {menu.nom}</h2>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className={`grid grid-cols-2 gap-3 ${vege > 0 ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
           <Tuile libelle="Produits Colabor" valeur={resultat.colabor.length} />
           <Tuile libelle="Produits Costco" valeur={resultat.costco.length} />
           <Tuile libelle="Produits Maxi" valeur={resultat.maxi.length} />
-          <Tuile libelle="Jours planifiés" valeur={plan.jours} />
-          <Tuile libelle="Groupes" valeur={groupes.data!.length} />
+          <Tuile libelle="Jours planifiés" valeur={menu.jours} />
+          <Tuile libelle="Groupes" valeur={etat.groupes.length} />
+          {vege > 0 && <Tuile libelle="Portions végé" valeur={vege} />}
         </div>
         <div className="flex gap-2 print:hidden">
           <button className={ui.boutonSecondaire} onClick={() => setStock({})}>
             Réinitialiser le stock
           </button>
-          <button className={ui.boutonSecondaire} onClick={() => exporterCsv(resultat.colabor, aCommander)}>
+          <button className={ui.boutonSecondaire} onClick={() => exporterCsv(resultat.colabor, aCommander, menu.nom)}>
             Exporter CSV
           </button>
           <button className={ui.bouton} onClick={() => window.print()}>
@@ -109,11 +96,14 @@ export function Commande() {
               {resultat.colabor.map((l) => {
                 const net = aCommander(l)
                 return (
-                  <tr key={l.id}>
+                  <tr key={l.cle}>
                     <td className="px-5 py-1.5 text-pierre-500">{l.id}</td>
                     <td className="px-3 py-1.5">
                       <span className="font-medium">{l.name}</span>
                       {l.pkg && <span className="block text-xs text-pierre-500">{l.pkg}</span>}
+                      {doublon(l) && (
+                        <span className="block text-xs text-amber-700">⚠ Même # produit, unités différentes : vérifier les recettes</span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-right">{quantiteAffichee(l)}</td>
                     <td className="px-3 py-1.5 text-right text-pierre-500">
@@ -132,8 +122,8 @@ export function Commande() {
                         min={0}
                         aria-label={`Stock de ${l.name}`}
                         className="w-16 rounded border border-pierre-300 px-1.5 py-1 text-right print:border-0"
-                        value={stock[l.id] ?? 0}
-                        onChange={(e) => setStock({ ...stock, [l.id]: Math.max(0, Math.trunc(Number(e.target.value)) || 0) })}
+                        value={stock[cleStock(l)] ?? 0}
+                        onChange={(e) => setStock({ ...stock, [cleStock(l)]: Math.max(0, Math.trunc(Number(e.target.value)) || 0) })}
                       />
                     </td>
                     <td className={`px-5 py-1.5 text-right font-bold ${net === 0 ? 'text-pierre-300' : ''}`}>{net ?? '—'}</td>
@@ -158,7 +148,14 @@ export function Commande() {
                 <span>
                   {g.recette} — {g.sortie} ({g.repas})
                 </span>
-                <span className="whitespace-nowrap font-semibold">{g.portions} portions</span>
+                <span className="whitespace-nowrap text-right font-semibold">
+                  {g.portions} portions
+                  {g.vege > 0 && (
+                    <span className="block text-xs font-normal">
+                      dont {g.vege} végé{g.optionVege ? '' : ' (pas d’option végé)'}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -183,7 +180,7 @@ function AutreMagasin({ titre, lignes }: { titre: string; lignes: LigneProduit[]
         </thead>
         <tbody className="divide-y divide-pierre-100 tabular-nums">
           {lignes.map((l) => (
-            <tr key={l.id}>
+            <tr key={l.cle}>
               <td className="px-5 py-1.5 text-pierre-500">{l.id}</td>
               <td className="px-3 py-1.5">
                 <span className="font-medium">{l.name}</span>
@@ -207,14 +204,25 @@ function Tuile({ libelle, valeur }: { libelle: string; valeur: number }) {
   )
 }
 
-function exporterCsv(lignes: LigneColabor[], aCommander: (l: LigneColabor) => number | null) {
+function exporterCsv(lignes: LigneColabor[], aCommander: (l: LigneColabor) => number | null, nomMenu: string) {
   const entetes = ['# Produit', 'Description', 'Empaquetage', 'Quantité brute', 'Caisses brutes', 'À commander']
   const valeurs = lignes.map((l) => [l.id, l.name, l.pkg, quantiteAffichee(l), l.caisses ?? '', aCommander(l) ?? ''])
   const csv = [entetes, ...valeurs].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
-  a.download = `commande-colabor-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `commande-colabor-${slug(nomMenu)}-${versIso(new Date())}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** « Semaine 1 — Été » → « semaine-1-ete » (nom de fichier). */
+function slug(texte: string): string {
+  const propre = texte
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return propre || 'menu'
 }

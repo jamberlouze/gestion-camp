@@ -100,3 +100,25 @@ export const IconeChevron = (p: Props) => (
     <path d="m9 6 6 6-6 6" />
   </Icone>
 )
+
+export const IconeMenu = (p: Props) => (
+  <Icone {...p}>
+    <path d="M4 3v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V3M7 3v18" />
+    <path d="M20 15V3a4 4 0 0 0-4 4v6a2 2 0 0 0 2 2h2Zm0 0v6" />
+  </Icone>
+)
+
+export const IconeRecettes = (p: Props) => (
+  <Icone {...p}>
+    <path d="M12 7v14" />
+    <path d="M3 18V4h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5v14h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3Z" />
+  </Icone>
+)
+
+export const IconePersonnel = (p: Props) => (
+  <Icone {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  </Icone>
+)

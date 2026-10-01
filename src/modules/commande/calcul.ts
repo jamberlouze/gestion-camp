@@ -1,5 +1,8 @@
 // Calcul de la commande — fonctions pures, reprises fidèlement de l'ancien
-// calculateur (calcPlanOrder). Testées dans calcul.test.mts.
+// calculateur (calcPlanOrder), plus les portions végé par groupe : avec
+// vege = 0 partout, le résultat est identique à l'ancien, sauf qu'un même
+// # produit en deux unités (ou, chez Costco et Maxi, sous deux noms) donne
+// deux lignes au lieu d'une somme fausse (voir cleLigne).
 import {
   RECETTE_BAR_SALADE,
   RECETTE_BUFFET_DEJEUNER,
@@ -9,6 +12,7 @@ import {
   type CellulePlan,
   type Consommable,
   type GroupeRepas,
+  type GroupeSortie,
   type IngredientRecette,
   type Magasin,
   type Recette,
@@ -48,9 +52,14 @@ export function repasSortie(s: Pick<Sortie, 'jour_depart' | 'pattern'>): { day: 
   ]
 }
 
+const entier = (n: unknown) => Math.trunc(Number(n)) || 0
+
 export function portionsSortie(s: Pick<Sortie, 'groupes'>): number {
-  return (s.groupes ?? []).reduce((somme, g) => somme + (Math.trunc(Number(g.portions)) || 0), 0)
+  return (s.groupes ?? []).reduce((somme, g) => somme + entier(g.portions), 0)
 }
+
+/** Végé indiqués pour un groupe d'une sortie (compris dans ses portions). */
+const vegeIndique = (g: GroupeSortie) => Math.min(Math.max(0, entier(g.vege)), Math.max(0, entier(g.portions)))
 
 /** Portions retirées par les sorties, par « jour_repas_groupe ». */
 export function deductionsSorties(sorties: Sortie[]): Map<string, number> {
@@ -59,11 +68,25 @@ export function deductionsSorties(sorties: Sortie[]): Map<string, number> {
     for (const r of repasSortie(s)) {
       for (const g of s.groupes ?? []) {
         const cle = `${r.day}_${r.meal}_${g.groupId}`
-        retraits.set(cle, (retraits.get(cle) ?? 0) + (Math.trunc(Number(g.portions)) || 0))
+        retraits.set(cle, (retraits.get(cle) ?? 0) + entier(g.portions))
       }
     }
   }
   return retraits
+}
+
+/** Végé indiqués dans les sorties (compris dans les portions retirées), par « jour_repas_groupe ». */
+export function vegeDesSorties(sorties: Sortie[]): Map<string, number> {
+  const vege = new Map<string, number>()
+  for (const s of sorties) {
+    for (const r of repasSortie(s)) {
+      for (const g of s.groupes ?? []) {
+        const cle = `${r.day}_${r.meal}_${g.groupId}`
+        vege.set(cle, (vege.get(cle) ?? 0) + vegeIndique(g))
+      }
+    }
+  }
+  return vege
 }
 
 // ------------------------------------------------------------------
@@ -83,6 +106,8 @@ export interface EtatCommande {
 }
 
 export interface LigneProduit {
+  /** Clé de la ligne (voir cleLigne) : un même # produit peut donner plusieurs lignes. */
+  cle: string
   id: string
   name: string
   pkg: string
@@ -102,6 +127,10 @@ export interface LigneGlaciere {
   sortie: string
   recette: string
   portions: number
+  /** Portions végé parties avec la sortie (comprises dans portions). */
+  vege: number
+  /** La recette a une option végé (sinon les végé mangent la recette régulière). */
+  optionVege: boolean
   repas: string
 }
 
@@ -115,19 +144,117 @@ export interface ResultatCommande {
 }
 
 /** Portions couvertes par un ingrédient selon sa portée (régulier / végé / tous). */
-function couverture(ing: IngredientRecette, portions: number, vege: number): number {
+export function couverture(ing: IngredientRecette, portions: number, vege: number): number {
   if (ing.scope === 'all') return portions
   if (ing.scope === 'regular') return Math.max(0, portions - vege)
   return vege
+}
+
+/** Portions végé d'un groupe (comprises dans ses portions). */
+const vegeGroupe = (g: GroupeRepas) => Math.min(Math.max(0, g.portions), Math.max(0, entier(g.vege)))
+
+/**
+ * Végé d'un groupe partis en sortie à un repas : ceux indiqués dans les
+ * sorties, et au moins ceux qui ne tiennent plus dans les portions restées
+ * au camp (sinon ils ne seraient comptés nulle part).
+ */
+const vegePartis = (vege: number, auCamp: number, indiques: number) => Math.min(vege, Math.max(indiques, vege - auCamp))
+
+/**
+ * Portions d'un groupe à un repas, une fois retirées celles parties en sortie
+ * (`retire`, dont `vegeRetire` végé indiqués dans les sorties). Les portions
+ * végé restées au camp ne dépassent jamais ce qui reste : le surplus est
+ * parti en sortie (voir vegeSorties, même règle).
+ */
+export function portionsGroupe(g: GroupeRepas, retire: number, vegeRetire = 0): { portions: number; vege: number } {
+  const portions = Math.max(0, g.portions - retire)
+  const vege = vegeGroupe(g)
+  return { portions, vege: vege - vegePartis(vege, portions, vegeRetire) }
+}
+
+/**
+ * Portions végé parties avec chaque sortie (servies par son repas de
+ * glacière), dans l'ordre de `sorties`. Comptées au premier repas manqué,
+ * avec la même règle que le camp (portionsGroupe) : les végé indiqués dans
+ * les sorties, plus le surplus qui ne tient plus au camp, réparti dans
+ * l'ordre des sorties. Sans végé, tout vaut 0.
+ */
+export function vegeSorties(sorties: Sortie[], groupes: GroupeRepas[]): number[] {
+  const parId = new Map(groupes.map((g) => [g.id, g]))
+  // Lignes (sortie, groupe) qui manquent chaque « jour_repas_groupe ».
+  const lignes = new Map<string, { sortie: number; ligne: number; portions: number; vege: number }[]>()
+  sorties.forEach((s, i) => {
+    for (const r of repasSortie(s)) {
+      for (const [j, g] of (s.groupes ?? []).entries()) {
+        const cle = `${r.day}_${r.meal}_${g.groupId}`
+        lignes.set(cle, [...(lignes.get(cle) ?? []), { sortie: i, ligne: j, portions: entier(g.portions), vege: vegeIndique(g) }])
+      }
+    }
+  })
+  const parts = new Map<string, number[]>()
+  const partage = (cle: string, groupId: string) => {
+    const deja = parts.get(cle)
+    if (deja) return deja
+    const l = lignes.get(cle) ?? []
+    const g = parId.get(groupId)
+    let reste = 0
+    if (g) {
+      const vege = vegeGroupe(g)
+      const auCamp = Math.max(0, g.portions - l.reduce((s, x) => s + x.portions, 0))
+      reste = vegePartis(vege, auCamp, l.reduce((s, x) => s + x.vege, 0))
+    }
+    // D'abord les végé indiqués, puis le surplus là où il reste de la place.
+    const indiques = l.map((x) => {
+      const n = Math.min(x.vege, reste)
+      reste -= n
+      return n
+    })
+    const resultat = indiques.map((n, k) => {
+      const surplus = Math.min(Math.max(0, l[k].portions - n), reste)
+      reste -= surplus
+      return n + surplus
+    })
+    parts.set(cle, resultat)
+    return resultat
+  }
+  return sorties.map((s, i) => {
+    const premier = repasSortie(s)[0]
+    return (s.groupes ?? []).reduce((total, g, j) => {
+      const cle = `${premier.day}_${premier.meal}_${g.groupId}`
+      const k = (lignes.get(cle) ?? []).findIndex((x) => x.sortie === i && x.ligne === j)
+      return total + (k >= 0 ? partage(cle, g.groupId)[k] : 0)
+    }, 0)
+  })
+}
+
+/**
+ * Portions couvertes par un ingrédient d'une recette du planificateur.
+ * Recette avec option végé : régulier = portions − végé, végé = végé, tous =
+ * portions. Sans option végé : tout le monde mange la recette régulière (les
+ * ingrédients marqués végé sont ignorés, comme avant).
+ */
+export function couverturePlan(recette: Recette, ing: IngredientRecette, portions: number, vege: number): number {
+  if (recette.has_veg) return couverture(ing, portions, vege)
+  return ing.scope === 'veggie' ? 0 : portions
+}
+
+/**
+ * Ligne de commande d'un ingrédient : même # produit et même unité (des
+ * grammes et des unités ne s'additionnent pas). Chez Costco et Maxi, le #
+ * produit est souvent un mot (« maxi ») : le nom distingue aussi les produits.
+ */
+export function cleLigne(store: Magasin, id: string, unit: Unite, name: string): string {
+  return store === 'colabor' ? `${id}|${unit}` : `${id}|${unit}|${name.trim().toLocaleLowerCase('fr-CA')}`
 }
 
 export function calculerCommande(e: EtatCommande): ResultatCommande {
   const recettes = new Map(e.recettes.map((r) => [r.id, r]))
   const cellules = new Map(e.cellules.map((c) => [`${c.day}_${c.meal}`, c]))
   const retraits = deductionsSorties(e.sorties)
+  const vegeRetraits = vegeDesSorties(e.sorties)
   const present = (c: CellulePlan | undefined, gid: string) => !c?.absent?.includes(gid)
   const portionsEffectives = (jour: number, repas: Repas, g: GroupeRepas) =>
-    Math.max(0, g.portions - (retraits.get(`${jour}_${repas}_${g.id}`) ?? 0))
+    portionsGroupe(g, retraits.get(`${jour}_${repas}_${g.id}`) ?? 0).portions
 
   const parMagasin: Record<Magasin, Map<string, LigneProduit>> = {
     colabor: new Map(),
@@ -137,7 +264,9 @@ export function calculerCommande(e: EtatCommande): ResultatCommande {
   const ajouter = (ing: IngredientRecette, quantite: number) => {
     const cible = parMagasin[ing.store]
     if (!cible) return
-    const ligne = cible.get(ing.id) ?? {
+    const cleIng = cleLigne(ing.store, ing.id, ing.unit, ing.name)
+    const ligne = cible.get(cleIng) ?? {
+      cle: cleIng,
       id: ing.id,
       name: ing.name,
       pkg: ing.pkg ?? '',
@@ -147,7 +276,7 @@ export function calculerCommande(e: EtatCommande): ResultatCommande {
       total: 0,
     }
     ligne.total += ing.qty * quantite
-    cible.set(ing.id, ligne)
+    cible.set(cleIng, ligne)
   }
 
   // Y a-t-il quelque chose à commander ?
@@ -157,19 +286,23 @@ export function calculerCommande(e: EtatCommande): ResultatCommande {
   }
   if (!quelqueChose) return { vide: true, colabor: [], costco: [], maxi: [], glaciere: [] }
 
-  // 1. Grille : plat, salade, dessert × portions des groupes présents (sans le végé).
+  // 1. Grille : plat, salade, dessert × portions des groupes présents. Pour
+  //    une recette avec option végé, les portions végé du groupe prennent les
+  //    ingrédients végé au lieu des réguliers.
   for (let d = 0; d < e.jours; d++) {
     for (const repas of REPAS) {
       const c = cellules.get(`${d}_${repas.id}`)
       if (!c) continue
       for (const g of e.groupes) {
         if (!present(c, g.id)) continue
-        const portions = portionsEffectives(d, repas.id, g)
+        const k = `${d}_${repas.id}_${g.id}`
+        const { portions, vege } = portionsGroupe(g, retraits.get(k) ?? 0, vegeRetraits.get(k) ?? 0)
         if (portions <= 0) continue
         for (const rid of [c.plat, c.salade, c.dessert]) {
           const recette = rid ? recettes.get(rid) : undefined
           recette?.ingredients.forEach((ing) => {
-            if (ing.scope !== 'veggie') ajouter(ing, portions)
+            const cov = couverturePlan(recette, ing, portions, vege)
+            if (cov > 0) ajouter(ing, cov)
           })
         }
       }
@@ -211,7 +344,9 @@ export function calculerCommande(e: EtatCommande): ResultatCommande {
     const c = consommables.get(a.cons_id)
     if (!c || a.qty <= 0 || !c.prod_id) continue
     const cible = parMagasin.colabor
-    const ligne = cible.get(c.prod_id) ?? {
+    const cleCons = cleLigne('colabor', c.prod_id, 'caisse', c.prod_name ?? c.name)
+    const ligne = cible.get(cleCons) ?? {
+      cle: cleCons,
       id: c.prod_id,
       name: c.prod_name ?? c.name,
       pkg: c.pkg ?? '',
@@ -221,27 +356,34 @@ export function calculerCommande(e: EtatCommande): ResultatCommande {
       total: 0,
     }
     ligne.total += a.qty
-    cible.set(c.prod_id, ligne)
+    cible.set(cleCons, ligne)
   }
 
-  // 5. Sorties : le repas de glacière s'ajoute à la commande (sans le végé).
+  // 5. Sorties : le repas de glacière s'ajoute à la commande. Les végé partis
+  //    en sortie (vegeSorties) prennent l'option végé de la recette, comme
+  //    au camp ; sans végé, tout le monde mange la recette régulière.
   const glaciere: LigneGlaciere[] = []
-  for (const s of e.sorties) {
+  const vegeParSortie = vegeSorties(e.sorties, e.groupes)
+  e.sorties.forEach((s, i) => {
     const portions = portionsSortie(s)
     const recette = s.glaciere_id ? recettes.get(s.glaciere_id) : undefined
-    if (portions <= 0 || !recette) continue
+    if (portions <= 0 || !recette) return
+    const vege = vegeParSortie[i]
     recette.ingredients.forEach((ing) => {
-      if (ing.scope !== 'veggie') ajouter(ing, portions)
+      const cov = couverturePlan(recette, ing, portions, vege)
+      if (cov > 0) ajouter(ing, cov)
     })
     glaciere.push({
       sortie: s.nom || 'Sortie',
       recette: recette.name,
       portions,
+      vege,
+      optionVege: recette.has_veg,
       repas: repasSortie(s)
         .map((r) => `${REPAS.find((x) => x.id === r.meal)!.libelle} (${libelleJour(r.day, e.debut)})`)
         .join(', '),
     })
-  }
+  })
 
   const numero = (id: string) => Number.parseInt(id) || 99999
   const colabor = [...parMagasin.colabor.values()]

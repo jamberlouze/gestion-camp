@@ -88,14 +88,19 @@ export interface Produit {
 }
 
 export interface GroupeRepas {
+  menu_id: string
   id: string
   name: string
   age: string | null
   portions: number
+  /** Portions végé comprises dans `portions`. */
+  vege: number
   color: string | null
+  created_at?: string
 }
 
 export interface CellulePlan {
+  menu_id: string
   day: number
   meal: Repas
   plat: string | null
@@ -105,22 +110,39 @@ export interface CellulePlan {
   absent: string[]
 }
 
-export interface MenuSauve {
+/**
+ * Menu d'un séjour ou d'une semaine (document nommé, comme une semaine de
+ * l'Horaire). Ses groupes, sa grille, ses sorties et ses ajouts manuels sont
+ * dans leurs tables, liés par menu_id. Un modèle n'a ni dossier ni date.
+ */
+export interface Menu {
   id: string
-  name: string
-  saved_at: string
-  days: number | null
-  groups: GroupeRepas[]
-  /** Grille sauvegardée : clé « jour_repas ». */
-  cells: Record<string, Partial<CellulePlan>>
+  nom: string
+  /** null : « Sans dossier » (toujours null pour un modèle). */
+  dossier_id: string | null
+  modele: boolean
+  jours: number
+  /** AAAA-MM-JJ, ou null : les jours sont alors numérotés (Jour 1, Jour 2…). */
+  debut: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Dossier {
+  id: string
+  nom: string
+  created_at: string
+  updated_at: string
 }
 
 export interface AjoutConsommable {
+  menu_id: string
   cons_id: string
   qty: number
 }
 
 export interface AjoutRecette {
+  menu_id: string
   id: number
   recipe_id: string
   portions: number
@@ -131,9 +153,12 @@ export interface AjoutRecette {
 export interface GroupeSortie {
   groupId: string
   portions: number
+  /** Portions végé parmi celles-ci (absent = 0) : elles prennent l'option végé de la glacière. */
+  vege?: number
 }
 
 export interface Sortie {
+  menu_id: string
   id: string
   nom: string | null
   jour_depart: number
@@ -143,8 +168,39 @@ export interface Sortie {
   created_at: string
 }
 
-export interface ParametresPlan {
-  jours: number
-  /** AAAA-MM-JJ, ou null : les jours sont alors numérotés (Jour 1, Jour 2…). */
-  debut: string | null
+// ------------------------------------------------------------------
+// Horaire du personnel de cuisine
+// ------------------------------------------------------------------
+
+/** Fonction en cuisine (Gestionnaire, Lead, Cook…), avec sa couleur dans l'horaire. */
+export interface Fonction {
+  id: string
+  nom: string
+  couleur: string
+  ordre: number
+}
+
+/** Membre du personnel de cuisine (liste propre au module). */
+export interface Personne {
+  id: string
+  nom: string
+  fonction_id: string | null
+  actif: boolean
+  ordre: number
+}
+
+/** Case de l'horaire : texte tel qu'écrit (« 6h30 à 14h30 », « 9ish », « OFF »…). */
+export interface Quart {
+  personne_id: string
+  /** AAAA-MM-JJ */
+  jour: string
+  texte: string
+}
+
+/** Réglages de l'horaire (commande.parametres, clé « horaire_cuisine »). */
+export interface ReglagesHoraire {
+  /** Quarts proposés en un clic. */
+  quarts: string[]
+  /** Mots qui ne sont pas des quarts travaillés (OFF, Vacance…). */
+  statuts: string[]
 }
