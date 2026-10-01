@@ -150,6 +150,8 @@ export interface Montrer {
   entreprise?: boolean
   projet?: boolean
   responsable?: boolean
+  /** Responsable changé directement sur la ligne (menu), sans ouvrir la fiche. */
+  responsableModifiable?: boolean
   /** Mois du passage (listes qui mélangent plusieurs mois). */
   mois?: boolean
   frequence?: boolean

@@ -28,7 +28,7 @@ export const MODULES: DefinitionModule[] = [
     id: 'horaire',
     nom: 'Horaire',
     description: 'Horaire des groupes et des animateurs',
-    icone: '🗓️',
+    icone: '🧩',
     chemin: '/horaire',
   },
   {

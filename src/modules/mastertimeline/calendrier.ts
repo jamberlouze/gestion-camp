@@ -68,6 +68,11 @@ export function clesExercice(exercice: number) {
   return MOIS_EXERCICE.map((m) => cleMois(m >= 10 ? exercice : exercice + 1, m))
 }
 
+/** « oct. » */
+export function moisCourt(cle: string) {
+  return NOMS_MOIS_COURTS[lireCle(cle).mois - 1]
+}
+
 /** « octobre 2026 » */
 export function libelleMois(cle: string) {
   const { annee, mois } = lireCle(cle)

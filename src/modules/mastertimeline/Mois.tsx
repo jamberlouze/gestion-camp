@@ -3,15 +3,18 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { cleAujourdhui, decalerMois, exerciceDeCle, libelleExercice, libelleMois, majuscule } from './calendrier'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 import { BarreFiltres, ChoixRegroupement, EnTeteGroupe, LigneTache } from './commun'
-import { useCoches, useReferences, useTaches } from './donnees'
-import { passagesDuMois, regrouper, retards, trierPassages, useEcriture, useFiltres, useOuvrirFiche, type Regroupement } from './outils'
+import { useCoches, useReferences, useTaches, type References } from './donnees'
+import { passagesDuMois, regrouper, retards, trierPassages, useEcriture, useFiltres, useOuvrirFiche, type Passage, type Regroupement } from './outils'
+import { TableauPassages, type Colonnes } from './TableauPassages'
 
 const CLE_REGROUPEMENT = 'mastertimeline-regroupement'
 
 export function Mois() {
   const ecriture = useEcriture()
   const ouvrir = useOuvrirFiche()
+  const large = useMediaQuery('(min-width: 768px)')
   const refs = useReferences()
   const taches = useTaches()
   const [cle, setCle] = useState(cleAujourdhui)
@@ -50,7 +53,6 @@ export function Mois() {
   if (!taches.data || !coches.pret || !refs.pret) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const { duMois, enRetard, groupes, faites } = donnees
-  const montrer = { entreprise: par !== 'entreprise', projet: par !== 'projet', responsable: par !== 'responsable' }
 
   return (
     <div className="space-y-4">
@@ -97,11 +99,7 @@ export function Mois() {
               {enRetard.length} passage{enRetard.length > 1 ? 's' : ''} pas encore fait{enRetard.length > 1 ? 's' : ''} depuis octobre
             </span>
           </div>
-          <ul className="divide-y divide-pierre-100">
-            {enRetard.map((p) => (
-              <LigneTache key={`${p.tache.id}|${p.periode}`} {...p} refs={refs} montrer={{ ...montrer, mois: true, entreprise: true }} />
-            ))}
-          </ul>
+          <Liste passages={enRetard} refs={refs} large={large} colonnes={{ mois: true, entreprise: true, projet: true }} />
         </section>
       )}
 
@@ -111,23 +109,36 @@ export function Mois() {
           : `${faites} sur ${duMois.length} passage${duMois.length > 1 ? 's' : ''} réglé${faites > 1 ? 's' : ''} ce mois-là`}
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
         {groupes.map((g) => (
-          <section key={g.cle} className={`${ui.carte} self-start`}>
+          <section key={g.cle} className={ui.carte}>
             <EnTeteGroupe
               nom={g.nom}
               couleur={g.couleur}
               faites={g.elements.filter((p) => p.etat === 'faite' || p.etat === 'sautee').length}
               total={g.elements.length}
             />
-            <ul className="divide-y divide-pierre-100">
-              {g.elements.map((p) => (
-                <LigneTache key={`${p.tache.id}|${p.periode}`} {...p} refs={refs} montrer={montrer} />
-              ))}
-            </ul>
+            <Liste passages={g.elements} refs={refs} large={large} colonnes={{ entreprise: par !== 'entreprise', projet: par !== 'projet' }} />
           </section>
         ))}
       </div>
     </div>
+  )
+}
+
+/** Ordinateur : tableau à colonnes alignées. Téléphone : lignes empilées. */
+function Liste({ passages, colonnes, refs, large }: { passages: Passage[]; colonnes: Colonnes; refs: References; large: boolean }) {
+  if (large) return <TableauPassages passages={passages} refs={refs} colonnes={colonnes} />
+  return (
+    <ul className="divide-y divide-pierre-100">
+      {passages.map((p) => (
+        <LigneTache
+          key={`${p.tache.id}|${p.periode}`}
+          {...p}
+          refs={refs}
+          montrer={{ mois: colonnes.mois, entreprise: colonnes.entreprise, projet: colonnes.projet, responsableModifiable: true }}
+        />
+      ))}
+    </ul>
   )
 }

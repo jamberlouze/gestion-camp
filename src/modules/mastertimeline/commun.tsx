@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { dateCourte, estAnnuelle, libelleFrequence, lireCle, NOMS_MOIS_COURTS, type Etat } from './calendrier'
-import type { References } from './donnees'
+import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
+import { useModifierTache, type References } from './donnees'
 import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, type Filtres, type Montrer, type Regroupement } from './outils'
 import { PRIORITES, type Coche, type Tache } from './types'
 
@@ -157,34 +157,72 @@ export function LigneTache({
   const fournisseur = t.fournisseur_id ? refs.fournisseur.get(t.fournisseur_id) : null
   const finie = etat === 'faite' || etat === 'sautee'
   const annuelle = estAnnuelle(t)
+  const responsableModifiable = montrer.responsableModifiable && ecriture
+  const ouvrirFiche = () => ouvrir({ tache: t, periode })
 
+  // Seul le titre ouvre la fiche : les étiquettes peuvent contenir un menu.
   return (
     <li className="flex items-start gap-3 px-3 py-2.5">
       <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!ecriture} />
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => ouvrir({ tache: t, periode })}>
-        <span className={`text-sm ${finie ? 'text-pierre-500 line-through decoration-pierre-300' : 'text-pierre-900'}`}>{t.titre}</span>
-        <span className="mt-1 flex flex-wrap gap-1.5">
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          className={`text-left text-sm hover:underline ${finie ? 'text-pierre-500 line-through decoration-pierre-300' : 'text-pierre-900 decoration-pierre-300'}`}
+          onClick={ouvrirFiche}
+        >
+          {t.titre}
+        </button>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {montrer.mois && annuelle && <Puce ton={etat === 'retard' ? 'retard' : undefined}>{moisCourt(periode)}</Puce>}
           {etat === 'sautee' && <Puce>Pas cette année</Puce>}
           {montrer.entreprise && entreprise && <Puce couleur={entreprise.couleur}>{entreprise.nom}</Puce>}
           {montrer.projet && projet && <Puce couleur={projet.couleur}>{projet.nom}</Puce>}
-          {montrer.responsable !== false && responsable && <Puce>{responsable.nom}</Puce>}
+          {responsableModifiable ? (
+            <ChoixResponsable tache={t} refs={refs} />
+          ) : (
+            montrer.responsable !== false && responsable && <Puce>{responsable.nom}</Puce>
+          )}
           {!annuelle && t.echeance && <Puce ton={etat === 'retard' ? 'retard' : undefined}>{etat === 'retard' ? 'En retard · ' : ''}{dateCourte(t.echeance)}</Puce>}
           {!annuelle && t.priorite && <Puce>{PRIORITES[t.priorite]}</Puce>}
           {montrer.frequence && annuelle && <Puce>{libelleFrequence(t)}</Puce>}
           {t.corvee && <Puce ton="corvee">Corvée</Puce>}
           {fournisseur && <Puce>{fournisseur.nom}</Puce>}
           {t.note && <span className="text-xs text-pierre-400" title={t.note}>📝</span>}
-        </span>
-        {coche?.note && <span className="mt-1 block whitespace-pre-line text-xs italic text-pierre-500">{coche.note}</span>}
-      </button>
+        </div>
+        {coche?.note && (
+          <button type="button" className="mt-1 block whitespace-pre-line text-left text-xs italic text-pierre-500" onClick={ouvrirFiche}>
+            {coche.note}
+          </button>
+        )}
+      </div>
     </li>
   )
 }
 
-const moisCourt = (cle: string) => {
-  const { mois } = lireCle(cle)
-  return NOMS_MOIS_COURTS[mois - 1]
+/** Petit menu en forme d'étiquette : change le responsable de la tâche (toutes les années). */
+export function ChoixResponsable({ tache: t, refs }: { tache: Tache; refs: References }) {
+  const modifier = useModifierTache()
+  const actuel = t.responsable_id
+  return (
+    <select
+      aria-label={`Responsable de « ${t.titre} »`}
+      title="Responsable de la tâche"
+      className={`fleche-serree max-w-full rounded-full border py-0.5 pl-2 text-xs ${
+        actuel ? 'border-pierre-200 bg-pierre-100 text-pierre-700' : 'border-dashed border-pierre-300 bg-white text-pierre-500'
+      }`}
+      value={actuel ?? ''}
+      onChange={(e) => modifier.mutate({ id: t.id, champs: { responsable_id: e.target.value || null } })}
+    >
+      <option value="">{actuel ? 'Personne' : 'Responsable…'}</option>
+      {refs.responsables
+        .filter((r) => r.actif || r.id === actuel)
+        .map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.nom}
+          </option>
+        ))}
+    </select>
+  )
 }
 
 export function EnTeteGroupe({ nom, couleur, faites, total }: { nom: string; couleur: string | null; faites: number; total: number }) {

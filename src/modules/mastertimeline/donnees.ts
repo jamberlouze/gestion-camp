@@ -114,9 +114,14 @@ export function useCocher() {
   })
 }
 
-/** Modifie une tâche (ou plusieurs champs d'un coup) ; erreurs dans le bandeau du module. */
+/**
+ * Modifie une tâche (ou plusieurs champs d'un coup) ; erreurs dans le bandeau
+ * du module. Affichage mis à jour d'avance ; si la base refuse, la ligne
+ * d'avant est remise.
+ */
 export function useModifierTache() {
   const client = useQueryClient()
+  const cle = [S, 'taches']
   return useMutation({
     mutationKey: [S, 'tache'],
     networkMode: 'always',
@@ -124,7 +129,17 @@ export function useModifierTache() {
       const { error } = await db().from('taches').update(champs).eq('id', id)
       if (error) throw error
     },
-    onSettled: () => client.invalidateQueries({ queryKey: [S, 'taches'] }),
+    onMutate: async ({ id, champs }) => {
+      await client.cancelQueries({ queryKey: cle })
+      const avant = client.getQueryData<Tache[]>(cle)?.find((t) => t.id === id)
+      client.setQueryData<Tache[]>(cle, (liste) => liste?.map((t) => (t.id === id ? { ...t, ...champs } : t)))
+      return { avant }
+    },
+    onError: (_e, _v, ctx) => {
+      const avant = ctx?.avant
+      if (avant) client.setQueryData<Tache[]>(cle, (liste) => liste?.map((t) => (t.id === avant.id ? avant : t)))
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: cle }),
   })
 }
 
