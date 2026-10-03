@@ -14,7 +14,7 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 /** Vigie de subventions : administrateurs et direction seulement. */
 export default function ModuleSubventions() {
-  const aValider = (useSubventions().data ?? []).filter((g) => g.status === 'nouveau').length
+  const aValider = (useSubventions().data ?? []).filter((g) => g.status === 'nouveau' || g.status === 'a_valider').length
   return (
     <>
       <h1 className="text-2xl font-semibold">Vigie de subventions</h1>

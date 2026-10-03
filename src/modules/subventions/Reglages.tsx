@@ -84,7 +84,7 @@ function FicheEntreprise({ e }: { e: Entreprise }) {
         <label className="block">
           <span className={ui.etiquette}>Statut juridique</span>
           <ChampTexte
-            className={`${ui.champ} ${e.legal_status ? '' : 'border-amber-400'}`}
+            className={ui.champ}
             placeholder="Ex. OBNL, entreprise privée"
             valeur={e.legal_status ?? ''}
             enregistrer={(v) => maj({ legal_status: v || null })}

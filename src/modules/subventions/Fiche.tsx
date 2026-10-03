@@ -6,7 +6,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { ChampDate, ChampMontant, FilNotes, LienOfficiel, Pastille, PastilleStatut, Section, ZoneTexte } from './commun'
+import { champ, ChampDate, ChampMontant, FilNotes, LienOfficiel, Pastille, PastilleStatut, Section, ZoneTexte } from './commun'
 import {
   copierEtapes,
   useEnregistrer,
@@ -111,7 +111,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
           ) : (
             <select
               aria-label="Statut"
-              className={ui.champ + ' w-auto'}
+              className={`${champ} w-auto`}
               value={g.status}
               onChange={(e) => changerStatut(e.target.value as Statut)}
             >
@@ -370,7 +370,7 @@ function HeuresInvesties({ g }: { g: Subvention }) {
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Mes heures</p>
         <div className="flex flex-wrap items-end gap-2">
           <input
-            className={`${ui.champ} w-24`}
+            className={`${champ} w-24`}
             aria-label="Heures"
             inputMode="decimal"
             placeholder="Heures"
@@ -378,9 +378,9 @@ function HeuresInvesties({ g }: { g: Subvention }) {
             onChange={(e) => setNombre(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ajouter()}
           />
-          <input type="date" className={`${ui.champ} w-auto`} aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" className={`${champ} w-auto`} aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
           <input
-            className={`${ui.champ} min-w-32 flex-1`}
+            className={`${champ} min-w-32 flex-1`}
             aria-label="Note"
             placeholder="Note (facultatif)"
             value={note}
@@ -571,14 +571,14 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
 
       <div className="flex flex-wrap items-end gap-2">
         <input
-          className={`${ui.champ} min-w-56 flex-1`}
+          className={`${champ} min-w-56 flex-1`}
           aria-label="Nouvelle étape"
           placeholder="Nouvelle étape (ex. soumettre les talons de paie du trimestre)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && ajouter()}
         />
-        <input type="date" aria-label="Échéance" className={`${ui.champ} w-auto`} value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+        <input type="date" aria-label="Échéance" className={`${champ} w-auto`} value={echeance} onChange={(e) => setEcheance(e.target.value)} />
         <button className={ui.boutonSecondaire} disabled={!description.trim() || enregistrer.isPending} onClick={ajouter}>
           <IconePlus /> Ajouter
         </button>
@@ -587,7 +587,7 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
       {sources.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-pierre-100 pt-3">
           <span className="text-sm text-pierre-600">Reprendre les étapes de</span>
-          <select aria-label="Subvention source" className={`${ui.champ} w-auto max-w-full`} value={source} onChange={(e) => setSource(e.target.value)}>
+          <select aria-label="Subvention source" className={`${champ} w-auto max-w-full`} value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="">Choisir une subvention…</option>
             {sources.map(({ g: x, suggeree }) => (
               <option key={x.id} value={x.id}>
