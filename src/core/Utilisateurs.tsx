@@ -115,7 +115,7 @@ export function Utilisateurs() {
                   <td className="px-3 py-2">
                     {p.role === 'coordo' ? (
                       <div className="flex flex-wrap gap-2">
-                        {MODULES.map((m) => {
+                        {MODULES.filter((m) => !m.directionSeulement).map((m) => {
                           const a = data.acces.find((x) => x.user_id === p.id && x.module === m.id)
                           return (
                             <label key={m.id} className="flex items-center gap-1 whitespace-nowrap">

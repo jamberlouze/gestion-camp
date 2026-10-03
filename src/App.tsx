@@ -15,6 +15,7 @@ const Embarcations = lazy(() => import('@/modules/embarcations'))
 const Cuisine = lazy(() => import('@/modules/commande'))
 const Horaire = lazy(() => import('@/modules/horaire'))
 const Mastertimeline = lazy(() => import('@/modules/mastertimeline'))
+const Subventions = lazy(() => import('@/modules/subventions'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="commande/*" element={<AncienneCommande />} />
           <Route path="horaire/*" element={<GardeModule module="horaire"><Horaire /></GardeModule>} />
           <Route path="mastertimeline/*" element={<GardeModule module="mastertimeline"><Mastertimeline /></GardeModule>} />
+          <Route path="subventions/*" element={<GardeModule module="subventions"><Subventions /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />

@@ -10,6 +10,7 @@ connexion, menu, référentiel partagé.
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
 | 🧩 Horaire : groupes et animateurs | En service | Ordinateur |
 | 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
+| 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, direction seulement |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
@@ -28,7 +29,8 @@ supabase/
   migrations/   schéma SQL versionné (un schéma Postgres par module)
   templates/    courriels d'invitation et de code de connexion
   config.toml   réglages Supabase (connexion, courriels, schémas exposés)
-worker/         code du Worker : waker Supabase (cron 4×/jour) + /_ping
+worker/         code du Worker : waker Supabase (cron) + /_ping, Vigie de subventions
+                (cron du lundi + /api/subventions/*, tests : npm run test:worker)
 wrangler.jsonc  configuration du Worker (site + cron)
 .env.production valeurs Supabase publiques utilisées au build
 scripts/migration/  import unique des anciens projets
@@ -40,6 +42,7 @@ scripts/migration/  import unique des anciens projets
 - `embarcations` : `modeles`, `embarcations`
 - `commande` : `recettes`, `consommables`, `banque_ingredients`, `groupes_repas`, `plan_cells`, `menus_sauves`, `ajouts_*`, `sorties`
 - `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
+- `subventions` : `grant_companies` (entreprises du groupe, critères), `grants` (une subvention : trouvée, validée ou rejetée, puis demandé / accordé / reçu), `grant_feedback` (décisions qui nourrissent la mémoire), `grant_notes`, `grant_time_entries` (heures), `grant_reporting_steps` (reddition de compte), `grant_search_runs` (journal des recherches), `grant_learned_rules` (mémoire), `grant_settings`, `grant_digests` (courriels du lundi). Noms repris de la feuille de route de la Vigie
 - `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
@@ -50,7 +53,7 @@ Postgres (et pas seulement dans l'interface) :
 |---|---|
 | `admin` | Tout, y compris la page Utilisateurs |
 | `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation) |
-| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) |
+| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions |
 
 ## Hors ligne et installation sur téléphone
 
@@ -84,6 +87,7 @@ directement sur Embarcations.
 | `npm run import:essai` | Lit les anciennes bases et affiche les décomptes (n'écrit rien) |
 | `npm run import` | Importe les anciennes données dans la nouvelle base |
 | `npm run deploy` | Déploiement manuel (normalement automatique à chaque push) |
+| `npm run test:worker` | Tests du Worker (Vigie de subventions), réseau simulé |
 
 ---
 
@@ -147,8 +151,8 @@ Settings → Build) :
 - Deploy command : `npx wrangler deploy`
 
 Chaque `git push` sur `main` construit et redéploie le site et le cron du waker.
-Aucune variable n'est à définir dans Cloudflare : tout est dans `wrangler.jsonc`
-et `.env.production`.
+Les valeurs publiques sont dans `wrangler.jsonc` et `.env.production` ; seuls
+les secrets de la Vigie de subventions s'ajoutent dans Cloudflare (section 8).
 
 Vérification du waker : https://gestion-camp.maxime-0f5.workers.dev/_ping.
 Le waker de secours (GitHub Actions) lit lui aussi `.env.production` : rien à
@@ -164,6 +168,58 @@ configurer.
 
 Les anciennes apps restent en service jusqu'au portage de leur module. On
 éteint ensuite leurs projets Supabase et leurs wakers.
+
+### 8. Vigie de subventions : secrets Cloudflare
+
+Chaque lundi, le Worker demande à Claude (recherche web) les subventions
+pertinentes pour chaque entreprise active, une par passage du cron (8 h, 9 h,
+10 h UTC, soit 4 h à 6 h l'été à Montréal), puis envoie le courriel de rappel.
+Il lui faut six secrets. Ils s'ajoutent dans Cloudflare, **jamais** dans le
+dépôt : [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
+`gestion-camp` → Settings → Variables and Secrets → **Add** → Type **Secret**.
+Ils restent en place aux déploiements suivants.
+
+| Secret | Où le trouver |
+|---|---|
+| `ANTHROPIC_API_KEY` | [platform.claude.com](https://platform.claude.com) → Settings → Workspaces → **Create workspace** « Vigie de subventions », avec une **limite de dépense mensuelle** (Limits) ; puis API Keys → **Create Key** dans ce workspace. Une clé à part, pas une clé générale. |
+| `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys → Secret keys → **New secret key** (nom : `worker-gestion-camp`). Elle contourne la RLS : seulement dans Cloudflare. |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` | Voir « Gmail » ci-dessous. |
+| `GMAIL_REFRESH_TOKEN` | Voir « Gmail » ci-dessous. |
+| `GMAIL_EXPEDITEUR` | L'adresse qui envoie (celle autorisée à l'étape 5 ci-dessous), ex. `maxime@camptremblant.com`. |
+
+**Gmail (API Gmail, compte Google Workspace du camp)** — une seule fois :
+
+1. [console.cloud.google.com](https://console.cloud.google.com), connecté avec le compte du camp : **New project** « Vigie ».
+2. APIs & Services → Library → **Gmail API** → Enable.
+3. APIs & Services → OAuth consent screen : type **Internal** (sinon le jeton
+   expire au bout de 7 jours), nom « Vigie de subventions ».
+4. Credentials → Create credentials → **OAuth client ID** → Web application ;
+   Authorized redirect URI : `https://developers.google.com/oauthplayground`.
+   Notez le Client ID et le Client secret.
+5. [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground) :
+   roue dentée → **Use your own OAuth credentials** (collez les deux valeurs) ;
+   à gauche, tapez la portée `https://www.googleapis.com/auth/gmail.send` →
+   Authorize APIs (avec l'adresse d'envoi) → **Exchange authorization code for
+   tokens** → copiez le **Refresh token**.
+
+Les mêmes quatre valeurs `GMAIL_*` servent au module Vigie des camps
+compétiteurs (secrets Supabase, mêmes noms).
+
+**Vérifier** : app → Subventions → Recherches. La carte Configuration doit
+afficher trois ✓. Lancez une recherche pour une entreprise (3 à 10 minutes),
+puis « M'envoyer un courriel d'essai ».
+
+**Coût** : avec `claude-opus-5-5` (variable `SUBVENTIONS_MODELE` dans
+`wrangler.jsonc`), compter de l'ordre de 1 à 2 $ US par entreprise et par
+recherche (jetons + recherches web à 10 $ les 1000) : environ 10 à 25 $ par mois
+pour trois entreprises. Le journal des recherches affiche les jetons et le
+nombre de recherches web de chaque passage. `claude-sonnet-5-5` coûte deux fois
+moins cher.
+
+**Forfait gratuit de Cloudflare** : 10 ms de calcul par appel. Les appels à
+Claude ne sont pas diffusés en flux pour rester sous cette limite ; si le
+journal montre des erreurs « Exceeded CPU », passer au forfait Workers Paid
+(5 $/mois).
 
 ## Ajouter un module
 

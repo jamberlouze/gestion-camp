@@ -36,7 +36,7 @@ export default defineConfig({
         globIgnores: ['**/xlsx-*.js'],
         // Toute page de l'app s'ouvre hors ligne (le routeur React prend le relais).
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/_ping/],
+        navigateFallbackDenylist: [/^\/_ping/, /^\/api\//],
       },
     }),
   ],

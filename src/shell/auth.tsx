@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { viderCache } from '@/lib/requetes'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, ModuleId, Profil } from '@/lib/types'
+import { MODULES } from './modules'
 
 interface EtatAuth {
   session: Session | null
@@ -20,6 +21,8 @@ interface EtatAuth {
 }
 
 const ContexteAuth = createContext<EtatAuth | null>(null)
+
+const directionSeulement = (m: ModuleId) => !!MODULES.find((d) => d.id === m)?.directionSeulement
 
 export function FournisseurAuth({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -62,9 +65,10 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
-    peutLire: (m) => estDirection || (!!profil && acces.some((a) => a.module === m)),
+    peutLire: (m) => estDirection || (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m)),
     peutEcrire: (m) =>
-      estDirection || (!!profil && acces.some((a) => a.module === m && a.niveau === 'ecriture')),
+      estDirection ||
+      (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m && a.niveau === 'ecriture')),
     deconnexion: async () => {
       await viderCache()
       await supabase.auth.signOut({ scope: 'local' })

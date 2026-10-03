@@ -6,6 +6,8 @@ export interface DefinitionModule {
   description: string
   icone: string
   chemin: string
+  /** Réservé aux administrateurs et à la direction : jamais offert aux coordonnateurs. */
+  directionSeulement?: boolean
 }
 
 /** Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx. */
@@ -37,5 +39,13 @@ export const MODULES: DefinitionModule[] = [
     description: "Tâches de l'année, toutes entreprises",
     icone: '📆',
     chemin: '/mastertimeline',
+  },
+  {
+    id: 'subventions',
+    nom: 'Subventions',
+    description: 'Vigie hebdomadaire, demandes, montants obtenus et reddition de compte',
+    icone: '💰',
+    chemin: '/subventions',
+    directionSeulement: true,
   },
 ]

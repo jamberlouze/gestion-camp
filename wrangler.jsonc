@@ -1,6 +1,8 @@
-// Cloudflare Worker unique : sert l'application (fichiers de dist/) et garde
-// Supabase éveillé (cron). Déployé automatiquement par Cloudflare (Workers
-// Builds) à chaque push sur main : build `npm run build`, puis `npx wrangler deploy`.
+// Cloudflare Worker unique : sert l'application (fichiers de dist/), garde
+// Supabase éveillé (cron) et fait la recherche du lundi de la Vigie de
+// subventions (cron + routes /api/subventions/*). Déployé automatiquement
+// par Cloudflare (Workers Builds) à chaque push sur main : build
+// `npm run build`, puis `npx wrangler deploy`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gestion-camp",
@@ -10,17 +12,25 @@
     "directory": "./dist",
     // Toute adresse inconnue renvoie index.html : le routeur React s'en charge.
     "not_found_handling": "single-page-application",
-    // Seule l'adresse de vérification du waker passe par le code du Worker.
-    "run_worker_first": ["/_ping"]
+    // Seules ces adresses passent par le code du Worker.
+    "run_worker_first": ["/_ping", "/api/*"]
   },
   "triggers": {
-    // Quatre fois par jour (Supabase veut « quelques requêtes chaque jour »).
-    "crons": ["0 2,8,14,20 * * *"]
+    // Une seule expression (le forfait gratuit limite le nombre de crons par
+    // compte). Chaque passage garde Supabase éveillé (il veut « quelques
+    // requêtes chaque jour ») ; le lundi, les passages de 8 h à 11 h UTC
+    // font aussi la recherche de subventions, une entreprise par passage.
+    "crons": ["0 2,8,9,10,11,14,20 * * *"]
   },
-  // Valeurs publiques (les mêmes que dans .env.production).
+  // Valeurs publiques (les mêmes que dans .env.production). Les secrets
+  // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*) se mettent dans
+  // Cloudflare (Worker → Settings → Variables and Secrets), jamais ici.
   "vars": {
     "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x8nstxT1q6UT9ZAm2N6zTA_woykXT1y"
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x8nstxT1q6UT9ZAm2N6zTA_woykXT1y",
+    "APP_URL": "https://gestion-camp.maxime-0f5.workers.dev",
+    // Modèle Claude de la Vigie de subventions.
+    "SUBVENTIONS_MODELE": "claude-opus-5-5"
   },
   "observability": { "enabled": true }
 }
