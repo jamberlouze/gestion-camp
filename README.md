@@ -11,6 +11,7 @@ connexion, menu, référentiel partagé.
 | 🧩 Horaire : groupes et animateurs | En service | Ordinateur |
 | 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
 | 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, direction seulement |
+| 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, direction seulement |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
@@ -28,6 +29,7 @@ src/
 supabase/
   migrations/   schéma SQL versionné (un schéma Postgres par module)
   templates/    courriels d'invitation et de code de connexion
+  functions/    fonctions Edge (vigie : recherches de la Vigie des camps par Claude)
   config.toml   réglages Supabase (connexion, courriels, schémas exposés)
 worker/         code du Worker : waker Supabase (cron) + /_ping, Vigie de subventions
                 (cron du lundi + /api/subventions/*, tests : npm run test:worker)
@@ -43,6 +45,7 @@ scripts/migration/  import unique des anciens projets
 - `commande` : `recettes`, `consommables`, `banque_ingredients`, `groupes_repas`, `plan_cells`, `menus_sauves`, `ajouts_*`, `sorties`
 - `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
 - `subventions` : `grant_companies` (entreprises du groupe, critères), `grants` (une subvention : trouvée, validée ou rejetée, puis demandé / accordé / reçu), `grant_feedback` (décisions qui nourrissent la mémoire), `grant_notes`, `grant_time_entries` (heures), `grant_reporting_steps` (reddition de compte), `grant_search_runs` (journal des recherches), `grant_learned_rules` (mémoire), `grant_settings`, `grant_digests` (courriels du lundi). Noms repris de la feuille de route de la Vigie
+- `vigie` : `camps` (proposé / inclus / exclu, compétiteur direct ou référence, membre ACQ ou non), `programmes` (prix et durée ; prix par nuit calculé), `activites` (liste candidate commune : saisons, offerte à la BPA, coûts estimés par Claude), `camps_activites`, `photos` (une par activité et par camp), `maquettes` (3D), `changements` (détectés, à valider), `recherches` (journal), `requetes_ia` (file des appels à Claude), `parametres`. Import du Google Sheets « BPA_Vigie_ Comparatif des camps » le 2026-10-03 (`scripts/migration/vigie.py`)
 - `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
@@ -53,7 +56,7 @@ Postgres (et pas seulement dans l'interface) :
 |---|---|
 | `admin` | Tout, y compris la page Utilisateurs |
 | `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation) |
-| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions |
+| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions ni Vigie des camps |
 
 ## Hors ligne et installation sur téléphone
 
@@ -220,6 +223,43 @@ moins cher.
 Claude ne sont pas diffusés en flux pour rester sous cette limite ; si le
 journal montre des erreurs « Exceeded CPU », passer au forfait Workers Paid
 (5 $/mois).
+
+### 9. Vigie des camps compétiteurs : secrets Supabase
+
+Le 1er de chaque mois, la base (pg_cron) lance la vérification des camps suivis ;
+la découverte de nouveaux camps part à la date choisie dans le module (par défaut
+tous les 3 mois, prochaine le 2027-01-01). Les appels à Claude passent par la
+fonction Edge Supabase `vigie` (`supabase/functions/vigie`), en lot (Message
+Batches : moitié prix, aucune limite de temps) ; pg_cron la réveille toutes les
+10 minutes tant qu'il y a du travail. Les changements trouvés attendent une
+validation dans l'app ; le rapport part par Gmail.
+
+Secrets **Supabase** (pas Cloudflare) : `ANTHROPIC_API_KEY` et les quatre
+`GMAIL_*` de la section 8 (mêmes valeurs). Le plus simple, depuis `gestion-camp/` :
+
+```bash
+./scripts/vigie-secrets.sh
+```
+
+Le script demande chaque valeur sans l'afficher. Autre façon : Supabase →
+Edge Functions → Secrets. Pour la clé Claude, créez de préférence une clé à part
+dans un workspace « Vigie des camps » avec une limite de dépense mensuelle
+(même marche à suivre qu'en 8).
+
+**Vérifier** : app → Vigie des camps → Réglages → Connexions (deux ✅), puis
+« Envoyer un courriel d'essai ». Journal → « Lancer la vérification mensuelle
+maintenant » pour une première passe sans attendre le 1er novembre.
+
+**Coût** : avec `claude-opus-5-5` (modifiable dans Réglages), compter de l'ordre
+de 15 à 30 $ US par vérification mensuelle des ~100 camps suivis (jetons en lot
+à moitié prix + recherches web à 10 $ les 1000), 1 à 3 $ par découverte. Le
+Journal affiche le coût de chaque recherche.
+
+**Déployer la fonction** après une modification de `supabase/functions/vigie` :
+
+```bash
+npx supabase functions deploy vigie --no-verify-jwt --use-api
+```
 
 ## Ajouter un module
 

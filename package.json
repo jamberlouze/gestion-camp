@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "db:push": "supabase db push",
     "db:config": "supabase config push",
-    "db:types": "supabase gen types typescript --linked --schema core,embarcations,commande,horaire,mastertimeline > src/lib/database.types.ts",
+    "db:types": "supabase gen types typescript --linked --schema core,embarcations,commande,horaire,mastertimeline,subventions,vigie > src/lib/database.types.ts",
     "import:essai": "node scripts/migration/importer.mjs --essai",
     "import": "node scripts/migration/importer.mjs",
     "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder",

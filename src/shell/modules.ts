@@ -48,4 +48,12 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/subventions',
     directionSeulement: true,
   },
+  {
+    id: 'vigie',
+    nom: 'Vigie des camps',
+    description: 'Prix, programmes et activités des camps compétiteurs',
+    icone: '🔭',
+    chemin: '/vigie',
+    directionSeulement: true,
+  },
 ]
