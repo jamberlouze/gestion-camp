@@ -12,6 +12,28 @@ import { FournisseurAuth } from './shell/auth'
 // Service worker : garde l'app disponible sans réseau et se met à jour seul.
 registerSW({ immediate: true })
 
+// Après une mise en ligne, un onglet resté ouvert peut réclamer les fichiers
+// d'un module qui n'existent plus (nouveaux noms) : au lieu d'une page
+// blanche, on recharge pour prendre la nouvelle version. Une seule fois par
+// minute, pour ne pas boucler si le réseau est vraiment coupé.
+window.addEventListener('vite:preloadError', (evenement) => {
+  const cle = 'rechargement-apres-mise-a-jour'
+  let dernier = 0
+  try {
+    dernier = Number(sessionStorage.getItem(cle) ?? 0)
+  } catch {
+    // Stockage indisponible : on recharge quand même.
+  }
+  if (Date.now() - dernier < 60_000) return
+  try {
+    sessionStorage.setItem(cle, String(Date.now()))
+  } catch {
+    // Idem.
+  }
+  evenement.preventDefault()
+  location.reload()
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <PersistQueryClientProvider
