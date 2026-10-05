@@ -4,19 +4,32 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
 import { nonConfirme, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
-import { ajouterJours, ajouterMois, aujourdhui, depuisIso, ecartJours, grilleMois, jourCourt, semaine, titreMois, titreSemaine, heure } from './dates'
+import { IconeChevron } from '@/lib/icones'
+import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { useEcriture, useEvenements, usePresenceJour, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
 import { META_SECTEUR, SECTEURS, TYPES_EVENEMENT, type Evenement, type PresenceJour, type Sejour } from './types'
 
 const SANS_SECTION = 'Section à préciser'
 
-/** Calendrier semaine (une colonne par jour, une rangée par section du bâtiment) ou mois. */
+type Mode = 'semaine' | 'mois' | 'periode'
+/** Période libre : au plus deux mois de colonnes. */
+const MAX_JOURS = 62
+
+/**
+ * Calendrier : semaine, mois ou période libre (dates exactes, pour couvrir un
+ * groupe qui chevauche deux semaines ou deux mois). Une colonne par jour,
+ * une rangée par section du bâtiment.
+ */
 export function Vue() {
   const [date, choisir] = useDateChoisie()
   const [params, setParams] = useSearchParams()
-  const mois = params.get('vue') === 'mois'
-  const jours = useMemo(() => (mois ? grilleMois(date) : semaine(date)), [mois, date])
+  const mode: Mode = params.get('vue') === 'mois' ? 'mois' : params.get('vue') === 'periode' ? 'periode' : 'semaine'
+  // Période libre : ?du=…&au=… (sinon la semaine de la date choisie).
+  const du = estIso(params.get('du')) ? params.get('du')! : lundiDe(date)
+  const auBrut = estIso(params.get('au')) ? params.get('au')! : ajouterJours(du, 6)
+  const au = auBrut < du ? du : ecartJours(du, auBrut) >= MAX_JOURS ? ajouterJours(du, MAX_JOURS - 1) : auBrut
+  const jours = useMemo(() => (mode === 'mois' ? grilleMois(date) : mode === 'periode' ? joursEntre(du, au) : semaine(date)), [mode, date, du, au])
   const debut = jours[0]
   const fin = jours[jours.length - 1]
 
@@ -32,26 +45,37 @@ export function Vue() {
   }, [presence.data])
   const [fiche, setFiche] = useState<{ evenement: Evenement; occurrence: string } | null>(null)
 
-  const changerVue = (v: 'semaine' | 'mois') =>
+  /** Change le mode ; la période libre reprend les jours affichés. */
+  const changerMode = (v: Mode, periode?: { du: string; au: string }) =>
     setParams(
       (p) => {
         const n = new URLSearchParams(p)
-        if (v === 'mois') n.set('vue', 'mois')
-        else n.delete('vue')
+        n.delete('vue')
+        n.delete('du')
+        n.delete('au')
+        if (v !== 'semaine') n.set('vue', v)
+        if (v === 'periode') {
+          const cible = periode ?? (mode === 'mois' ? { du: premierDuMois(date), au: dernierDuMois(date) } : { du: debut, au: fin })
+          n.set('du', cible.du)
+          n.set('au', cible.au)
+        }
+        if (v !== 'periode' && mode === 'periode') n.set('date', du)
         return n
       },
       { replace: true },
     )
+  /** Cadre la période sur un séjour (arrivée → départ). */
+  const cadrer = (s: Sejour) => changerMode('periode', { du: s.date_arrivee, au: s.date_depart })
 
   const bascule = (
     <div className="flex rounded-lg border border-pierre-300 p-0.5 text-sm">
-      {(['semaine', 'mois'] as const).map((v) => (
+      {(['semaine', 'mois', 'periode'] as const).map((v) => (
         <button
           key={v}
-          className={`rounded-md px-3 py-1 ${(v === 'mois') === mois ? 'bg-foret-700 text-white' : 'text-pierre-700 hover:bg-pierre-50'}`}
-          onClick={() => changerVue(v)}
+          className={`rounded-md px-3 py-1 ${v === mode ? 'bg-foret-700 text-white' : 'text-pierre-700 hover:bg-pierre-50'}`}
+          onClick={() => changerMode(v)}
         >
-          {v === 'semaine' ? 'Semaine' : 'Mois'}
+          {v === 'semaine' ? 'Semaine' : v === 'mois' ? 'Mois' : 'Période'}
         </button>
       ))}
     </div>
@@ -59,29 +83,81 @@ export function Vue() {
 
   const erreur = sejours.error ?? evenements.error ?? presence.error
   const ouvrir = (evenement: Evenement, occurrence: string) => setFiche({ evenement, occurrence })
+  const nbJours = jours.length
 
   return (
     <div>
-      <NavDate
-        titre={mois ? titreMois(date) : titreSemaine(date)}
-        date={date}
-        choisir={choisir}
-        precedent={mois ? ajouterMois(date, -1) : ajouterJours(date, -7)}
-        suivant={mois ? ajouterMois(date, 1) : ajouterJours(date, 7)}
-        droite={bascule}
-      />
+      {mode === 'periode' ? (
+        <NavPeriode du={du} au={au} changer={(d, a) => changerMode('periode', { du: d, au: a })} droite={bascule} />
+      ) : (
+        <NavDate
+          titre={mode === 'mois' ? titreMois(date) : titreSemaine(date)}
+          date={date}
+          choisir={choisir}
+          precedent={mode === 'mois' ? ajouterMois(date, -1) : ajouterJours(date, -7)}
+          suivant={mode === 'mois' ? ajouterMois(date, 1) : ajouterJours(date, 7)}
+          droite={bascule}
+        />
+      )}
       {erreur && <p className={`${ui.erreur} mb-4`}>{messageErreur(erreur)}</p>}
       {!sejours.data || !evenements.data ? (
         <Chargement />
-      ) : mois ? (
-        <GrilleMois jours={jours} date={date} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} />
+      ) : mode === 'mois' ? (
+        <GrilleMois jours={jours} date={date} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} cadrer={cadrer} />
       ) : (
-        <GrilleSemaine jours={jours} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} />
+        <GrilleJours jours={jours} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} cadrer={cadrer} />
       )}
       <p className="mt-3 text-xs text-pierre-500">
-        Bordure pointillée : réservation pas encore confirmée dans Airtable. Cliquez sur un jour pour voir le détail.
+        Cliquez sur un groupe pour afficher exactement ses jours (vue Période). Bordure pointillée : réservation pas encore confirmée dans Airtable.
+        {mode === 'periode' && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
       {fiche && <FicheEvenement evenement={fiche.evenement} dateDefaut={fiche.occurrence} occurrence={fiche.occurrence} fermer={() => setFiche(null)} />}
+    </div>
+  )
+}
+
+const premierDuMois = (iso: string) => `${iso.slice(0, 7)}-01`
+const dernierDuMois = (iso: string) => ajouterJours(ajouterMois(premierDuMois(iso), 1), -1)
+
+/** En-tête de la période libre : ← → décalent de toute sa longueur ; Du / Au exacts. */
+function NavPeriode({ du, au, changer, droite }: { du: string; au: string; changer: (du: string, au: string) => void; droite: React.ReactNode }) {
+  const n = ecartJours(du, au) + 1
+  const annee = depuisIso(au).getFullYear()
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1">
+        <button className={`${ui.boutonSecondaire} px-2.5`} aria-label="Période précédente" onClick={() => changer(ajouterJours(du, -n), ajouterJours(au, -n))}>
+          <IconeChevron className="size-4 rotate-180" />
+        </button>
+        <button className={`${ui.boutonSecondaire} px-2.5`} aria-label="Période suivante" onClick={() => changer(ajouterJours(du, n), ajouterJours(au, n))}>
+          <IconeChevron className="size-4" />
+        </button>
+      </div>
+      <h2 className="order-first w-full min-w-0 text-lg font-semibold sm:order-none sm:w-auto sm:flex-1">
+        Du {dateCourte(du)} au {dateCourte(au)} {annee} <span className="text-sm font-normal text-pierre-500">({n} jour{n > 1 ? 's' : ''})</span>
+      </h2>
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <label className="flex items-center gap-1.5 text-sm text-pierre-600">
+          Du
+          <input
+            type="date"
+            className={`${ui.champ} w-auto! py-1.5`}
+            value={du}
+            onChange={(e) => estIso(e.target.value) && changer(e.target.value, e.target.value > au ? e.target.value : au)}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-pierre-600">
+          Au
+          <input
+            type="date"
+            className={`${ui.champ} w-auto! py-1.5`}
+            value={au}
+            min={du}
+            onChange={(e) => estIso(e.target.value) && changer(e.target.value < du ? e.target.value : du, e.target.value)}
+          />
+        </label>
+        {droite}
+      </div>
     </div>
   )
 }
@@ -97,28 +173,37 @@ function enLignes(sejours: Sejour[]): Sejour[][] {
   return lignes
 }
 
+/** Lien vers la semaine qui contient ce jour. */
 function LienJour({ jour, children, className = '' }: { jour: string; children: React.ReactNode; className?: string }) {
   return (
-    <Link to={`/calendrier?date=${jour}`} className={className}>
+    <Link to={`/calendrier?date=${jour}`} className={className} title="Voir la semaine">
       {children}
     </Link>
   )
 }
 
-function ComptesPersonnel({ liste }: { liste: PresenceJour[] | undefined }) {
+/** Qui travaille ce jour-là, par secteur (noms). */
+function NomsPersonnel({ liste }: { liste: PresenceJour[] | undefined }) {
   if (!liste?.length) return <span className="text-xs text-pierre-400">—</span>
   return (
-    <span className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
+    <div className="space-y-1 text-xs leading-4">
       {SECTEURS.map((s) => {
-        const n = liste.filter((p) => p.secteur === s).length
-        return n ? (
-          <span key={s} className="flex items-center gap-1" title={META_SECTEUR[s].libelle}>
-            <span className={`size-2 rounded-full ${META_SECTEUR[s].pastille}`} aria-hidden />
-            {META_SECTEUR[s].libelle.slice(0, 3)}. {n}
-          </span>
+        const noms = liste.filter((p) => p.secteur === s)
+        return noms.length ? (
+          <div key={s} className="flex gap-1" title={META_SECTEUR[s].libelle}>
+            <span className={`mt-1 size-2 shrink-0 rounded-full ${META_SECTEUR[s].pastille}`} aria-hidden />
+            <span>
+              {noms.map((p, i) => (
+                <span key={`${p.personnel_id}|${i}`} title={p.description || undefined}>
+                  {i > 0 && ', '}
+                  {p.nom}
+                </span>
+              ))}
+            </span>
+          </div>
         ) : null
       })}
-    </span>
+    </div>
   )
 }
 
@@ -137,18 +222,20 @@ function PuceEvenement({ ev, jour, ouvrir }: { ev: Evenement; jour: string; ouvr
   )
 }
 
-function GrilleSemaine({
+function GrilleJours({
   jours,
   sejours,
   evParJour,
   presenceParJour,
   ouvrir,
+  cadrer,
 }: {
   jours: string[]
   sejours: Sejour[]
   evParJour: Map<string, Evenement[]>
   presenceParJour: Map<string, PresenceJour[]>
   ouvrir: (e: Evenement, d: string) => void
+  cadrer: (s: Sejour) => void
 }) {
   const auj = aujourdhui()
   const sections = useMemo(() => {
@@ -160,48 +247,59 @@ function GrilleSemaine({
     return [...m.entries()].sort(([a], [b]) => (a === SANS_SECTION ? 1 : b === SANS_SECTION ? -1 : a.localeCompare(b, 'fr')))
   }, [sejours])
 
-  const colonnes = 'grid grid-cols-[7rem_repeat(7,minmax(6.5rem,1fr))] sm:grid-cols-[9rem_repeat(7,minmax(6.5rem,1fr))]'
+  const n = jours.length
+  const dernier = jours[n - 1]
+  // Première colonne : sections ; puis une colonne par jour (6,5 rem au moins).
+  const gabarit = { gridTemplateColumns: `var(--col-sections) repeat(${n}, minmax(6.5rem, 1fr))` }
+  const colonnes = 'grid [--col-sections:7rem] sm:[--col-sections:9rem]'
   const cellule = 'border-b border-l border-pierre-200 p-1.5'
   return (
     <div className="overflow-x-auto rounded-xl border border-pierre-200">
-      <div className="min-w-[52rem] sm:min-w-[56rem]">
-        <div className={`${colonnes} bg-pierre-50 text-sm`}>
+      <div style={{ minWidth: `calc(9rem + ${n} * 6.5rem)` }}>
+        <div className={`${colonnes} bg-pierre-50 text-sm`} style={gabarit}>
           <div className="sticky left-0 z-10 border-b border-pierre-200 bg-pierre-50 p-2" />
           {jours.map((j) => (
-            <LienJour key={j} jour={j} className={`${cellule} p-2 font-medium hover:bg-pierre-100 ${j === auj ? 'text-foret-700' : ''}`}>
-              <span className="first-letter:uppercase">{jourCourt(j)}</span>
-            </LienJour>
+            <div key={j} className={`${cellule} p-2 font-medium ${j === auj ? 'text-foret-700' : ''}`}>
+              <span className="block first-letter:uppercase">{jourCourt(j)}</span>
+              {(j === jours[0] || j.endsWith('-01')) && <span className="block text-xs font-normal text-pierre-500">{titreMois(j)}</span>}
+            </div>
           ))}
         </div>
 
         {sections.length === 0 && (
-          <div className={colonnes}>
+          <div className={colonnes} style={gabarit}>
             <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Séjours</div>
-            <div className="col-span-7 border-b border-l border-pierre-200 p-2 text-sm text-pierre-500">Aucun groupe cette semaine.</div>
+            <div className="border-b border-l border-pierre-200 p-2 text-sm text-pierre-500" style={{ gridColumn: `2 / ${n + 2}` }}>
+              Aucun groupe pendant ces jours.
+            </div>
           </div>
         )}
         {sections.map(([section, liste]) => (
-          <div key={section} className={colonnes}>
+          <div key={section} className={colonnes} style={gabarit}>
             <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-sm font-medium">{section}</div>
-            <div className="col-span-7 grid grid-cols-7 gap-y-1 border-b border-l border-pierre-200 py-1.5">
+            <div
+              className="grid gap-y-1 border-b border-l border-pierre-200 py-1.5"
+              style={{ gridColumn: `2 / ${n + 2}`, gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+            >
               {enLignes(liste).map((ligne, i) =>
                 ligne.map((s) => {
                   const a = Math.max(0, ecartJours(jours[0], s.date_arrivee))
-                  const b = Math.min(6, ecartJours(jours[0], s.date_depart))
+                  const b = Math.min(n - 1, ecartJours(jours[0], s.date_depart))
                   const avant = s.date_arrivee < jours[0]
-                  const apres = s.date_depart > jours[6]
+                  const apres = s.date_depart > dernier
                   return (
-                    <div
+                    <button
                       key={s.id}
                       style={{ gridColumn: `${a + 1} / ${b + 2}`, gridRow: i + 1 }}
-                      className={`mx-1 truncate rounded-md border px-2 py-1 text-xs ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
-                      title={`${s.nom_groupe}${s.type_sejour ? ` — ${s.type_sejour}` : ''}${s.etat ? ` (${s.etat})` : ''}`}
+                      className={`mx-1 truncate rounded-md border px-2 py-1 text-left text-xs hover:brightness-95 ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
+                      title={`${s.nom_groupe}${s.type_sejour ? ` — ${s.type_sejour}` : ''}${s.etat ? ` (${s.etat})` : ''} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
+                      onClick={() => cadrer(s)}
                     >
                       {avant && '‹ '}
                       <span className="font-medium">{s.nom_groupe}</span>
                       {s.nb_participants != null && <span className="opacity-75"> · {s.nb_participants}</span>}
                       {apres && ' ›'}
-                    </div>
+                    </button>
                   )
                 }),
               )}
@@ -209,7 +307,7 @@ function GrilleSemaine({
           </div>
         ))}
 
-        <div className={colonnes}>
+        <div className={colonnes} style={gabarit}>
           <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Événements</div>
           {jours.map((j) => (
             <div key={j} className={`${cellule} space-y-1`}>
@@ -219,12 +317,12 @@ function GrilleSemaine({
             </div>
           ))}
         </div>
-        <div className={colonnes}>
+        <div className={colonnes} style={gabarit}>
           <div className="sticky left-0 z-10 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Personnel</div>
           {jours.map((j) => (
-            <LienJour key={j} jour={j} className="border-l border-pierre-200 p-1.5 hover:bg-pierre-50">
-              <ComptesPersonnel liste={presenceParJour.get(j)} />
-            </LienJour>
+            <div key={j} className="border-l border-pierre-200 p-1.5">
+              <NomsPersonnel liste={presenceParJour.get(j)} />
+            </div>
           ))}
         </div>
       </div>
@@ -239,6 +337,7 @@ function GrilleMois({
   evParJour,
   presenceParJour,
   ouvrir,
+  cadrer,
 }: {
   jours: string[]
   date: string
@@ -246,6 +345,7 @@ function GrilleMois({
   evParJour: Map<string, Evenement[]>
   presenceParJour: Map<string, PresenceJour[]>
   ouvrir: (e: Evenement, d: string) => void
+  cadrer: (s: Sejour) => void
 }) {
   const auj = aujourdhui()
   const moisCourant = depuisIso(date).getMonth()
@@ -265,14 +365,19 @@ function GrilleMois({
             <div key={j} className={`min-h-28 border-b border-pierre-200 p-1 ${i % 7 ? 'border-l' : ''} ${hors ? 'bg-pierre-50/60' : ''}`}>
               <LienJour jour={j} className="mb-1 flex items-center justify-between rounded px-1 text-xs hover:bg-pierre-100">
                 <span className={`font-medium ${j === auj ? 'rounded-full bg-foret-700 px-1.5 text-white' : hors ? 'text-pierre-400' : ''}`}>{depuisIso(j).getDate()}</span>
-                <span className="text-pierre-500">{presenceParJour.get(j)?.length || ''}</span>
+                <span className="text-pierre-500" title="Personnes au travail">{presenceParJour.get(j)?.length || ''}</span>
               </LienJour>
               <div className="space-y-0.5">
                 {duJour.slice(0, 4).map((s) => (
-                  <div key={s.id} className={`truncate rounded border px-1 text-[11px] leading-4 ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`} title={s.nom_groupe}>
+                  <button
+                    key={s.id}
+                    className={`block w-full truncate rounded border px-1 text-left text-[11px] leading-4 hover:brightness-95 ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
+                    title={`${s.nom_groupe} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
+                    onClick={() => cadrer(s)}
+                  >
                     {s.date_arrivee === j ? '→ ' : ''}
                     {s.nom_groupe}
-                  </div>
+                  </button>
                 ))}
                 {duJour.length > 4 && (
                   <LienJour jour={j} className="block px-1 text-[11px] text-pierre-500">

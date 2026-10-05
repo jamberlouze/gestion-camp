@@ -1,9 +1,8 @@
-import { NavLink, Route, Routes, useSearchParams } from 'react-router'
+import { Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { Animation } from './Animation'
 import { Evenements } from './Evenements'
 import { Journal } from './Journal'
-import { Jour } from './Jour'
 import { Presences } from './Presences'
 import { Reglages } from './Reglages'
 import { Vue } from './Vue'
@@ -14,8 +13,7 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
   }`
 
 const ONGLETS = [
-  { chemin: '/calendrier', libelle: "Aujourd'hui", date: true },
-  { chemin: '/calendrier/vue', libelle: 'Calendrier', date: true },
+  { chemin: '/calendrier', libelle: 'Calendrier', date: true },
   { chemin: '/calendrier/presences', libelle: 'Présences', date: true },
   { chemin: '/calendrier/animation', libelle: 'Animation', date: true },
   { chemin: '/calendrier/evenements', libelle: 'Événements' },
@@ -40,8 +38,9 @@ export default function ModuleCalendrier() {
       </nav>
       <BandeauErreurs racine="calendrier" />
       <Routes>
-        <Route index element={<Jour />} />
-        <Route path="vue" element={<Vue />} />
+        <Route index element={<Vue />} />
+        {/* Ancienne adresse de la vue Calendrier (la vue « Aujourd'hui » a été retirée). */}
+        <Route path="vue" element={<AncienneVue />} />
         <Route path="presences" element={<Presences />} />
         <Route path="animation" element={<Animation />} />
         <Route path="evenements" element={<Evenements />} />
@@ -50,4 +49,9 @@ export default function ModuleCalendrier() {
       </Routes>
     </>
   )
+}
+
+function AncienneVue() {
+  const { search } = useLocation()
+  return <Navigate to={`/calendrier${search}`} replace />
 }
