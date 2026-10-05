@@ -49,6 +49,7 @@ export const MODULES: DefinitionModule[] = [
     icone: '💰',
     chemin: '/subventions',
     directionSeulement: true,
+    adminSeulement: true,
   },
   {
     id: 'vigie',

@@ -10,7 +10,7 @@ connexion, menu, référentiel partagé.
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
 | 🧩 Horaire : groupes et animateurs | En service | Ordinateur |
 | 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
-| 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, direction seulement |
+| 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, administrateurs seulement pour l'instant |
 | 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, administrateurs seulement (pour l'instant) |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
@@ -55,7 +55,7 @@ Postgres (et pas seulement dans l'interface) :
 | Rôle | Accès |
 |---|---|
 | `admin` | Tout, y compris la page Utilisateurs |
-| `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation) |
+| `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation), sauf Subventions et Vigie des camps, réservés aux administrateurs pour l'instant |
 | `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions ni Vigie des camps |
 
 ## Hors ligne et installation sur téléphone

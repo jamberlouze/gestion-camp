@@ -12,7 +12,7 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'border-foret-700 text-foret-800' : 'border-transparent text-pierre-500 hover:text-pierre-800'
   }`
 
-/** Vigie de subventions : administrateurs et direction seulement. */
+/** Vigie de subventions : administrateurs seulement pour l'instant (voir subventions.role_autorise). */
 export default function ModuleSubventions() {
   const aValider = (useSubventions().data ?? []).filter((g) => g.status === 'nouveau' || g.status === 'a_valider').length
   return (
