@@ -333,12 +333,46 @@ async function traiterResultat(ctx: Contexte, r: Requete, resultat: any, modele:
   }
 }
 
+/**
+ * Lot « manuel » : résultats produits ailleurs que par l'API (ex. une
+ * conversation Claude dans l'abonnement, pour tester sans clé API), déposés
+ * dans requetes_ia avec lot_id = 'manuel', statut 'soumise' et
+ * donnees.resultat_manuel = ce que l'outil aurait reçu. Ils passent par le
+ * même traitement que les vrais résultats.
+ */
+const LOT_MANUEL = 'manuel'
+
+async function lireLotManuel(ctx: Contexte, reglages: Reglages, debut: number) {
+  const manuelles = (await verifier(
+    db.from('requetes_ia').select('*').eq('statut', 'soumise').eq('lot_id', LOT_MANUEL),
+  )) as unknown as Requete[]
+  let traitees = 0
+  for (const r of manuelles) {
+    if (Date.now() - debut > BUDGET_MS) break
+    const entree = r.donnees?.resultat_manuel
+    const resultat = entree
+      ? { type: 'succeeded', message: { stop_reason: 'tool_use', usage: {}, content: [{ type: 'tool_use', name: OUTIL_ATTENDU[r.type], input: entree }] } }
+      : { type: 'errored', error: { type: 'invalid_request', message: 'donnees.resultat_manuel absent' } }
+    await traiterResultat(ctx, r, resultat, reglages.modele)
+    traitees++
+  }
+  return traitees
+}
+
+const contexte = async (): Promise<Contexte> => ({
+  db,
+  stockage: admin.storage,
+  activites: (await verifier(db.from('activites').select('id, nom'))) as any[],
+  photosRestantes: PHOTOS_PAR_REVEIL,
+})
+
 async function lireLots(claude: Anthropic, reglages: Reglages, debut: number) {
-  const soumises = (await verifier(db.from('requetes_ia').select('*').eq('statut', 'soumise'))) as unknown as Requete[]
+  const soumises = ((await verifier(db.from('requetes_ia').select('*').eq('statut', 'soumise'))) as unknown as Requete[]).filter(
+    (r: any) => r.lot_id !== LOT_MANUEL,
+  )
   const lots = [...new Set(soumises.map((r: any) => r.lot_id as string))]
   if (!lots.length) return 0
-  const activites = (await verifier(db.from('activites').select('id, nom'))) as any[]
-  const ctx: Contexte = { db, stockage: admin.storage, activites, photosRestantes: PHOTOS_PAR_REVEIL }
+  const ctx = await contexte()
   let traitees = 0
   for (const lotId of lots) {
     if (Date.now() - debut > BUDGET_MS) break
@@ -452,6 +486,7 @@ async function tic() {
   try {
     const reglages = await lireReglages()
     const bilan: Record<string, unknown> = {}
+    bilan.manuelles = await lireLotManuel(await contexte(), reglages, debut)
     if (!CLE_ANTHROPIC) {
       bilan.attention = 'Secret ANTHROPIC_API_KEY absent : les requêtes restent en attente.'
     } else {
