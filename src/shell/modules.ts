@@ -29,6 +29,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/embarcations',
   },
   {
+    id: 'vehicules',
+    nom: 'Véhicules',
+    description: 'Minibus, VTT et remorques : immatriculation, assurance, inspections et entretien',
+    icone: '🚌',
+    chemin: '/vehicules',
+  },
+  {
     id: 'commande',
     nom: 'Cuisine',
     description: 'Menus, commande, feuille de cuisine et horaire du personnel',

@@ -68,6 +68,7 @@ export function messageErreur(e: unknown): string {
     if (m.includes('row-level security') || m.includes('permission denied')) {
       return "Vous n'avez pas la permission de faire cette modification."
     }
+    if (m.includes('violates foreign key constraint')) return 'Impossible de supprimer : cet élément est encore utilisé.'
     if (m.includes('Failed to fetch')) return 'Pas de connexion au serveur.'
     return m
   }
