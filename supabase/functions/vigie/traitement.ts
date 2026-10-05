@@ -352,7 +352,8 @@ export async function traiterDecouverte(ctx: Contexte, r: Requete, entree: any) 
       membre_acq: c.membre_acq === true,
       resume: chaine(c.resume),
       pertinence: chaine(c.pertinence),
-      categorie: c.categorie === 'reference' ? 'reference' : 'competiteur_direct',
+      // Catégorie par défaut ; « leader » et « pas un comparable » se posent à la main.
+      categorie: 'reference',
       statut_inclusion: 'propose',
       origine: 'decouverte',
       lien_source: site,

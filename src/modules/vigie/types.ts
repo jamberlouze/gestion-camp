@@ -1,7 +1,7 @@
 // Types du schéma vigie (voir supabase/migrations/20261003000002_vigie.sql).
 
 export type Saison = 'hiver' | 'printemps' | 'ete' | 'automne'
-export type Categorie = 'competiteur_direct' | 'reference'
+export type Categorie = 'leader' | 'reference' | 'non_comparable'
 export type StatutInclusion = 'propose' | 'inclus' | 'exclu'
 
 export const SAISONS: { id: Saison; libelle: string }[] = [
@@ -12,8 +12,9 @@ export const SAISONS: { id: Saison; libelle: string }[] = [
 ]
 
 export const CATEGORIES: Record<Categorie, string> = {
-  competiteur_direct: 'Compétiteur direct',
-  reference: 'Référence / inspiration',
+  leader: "Leader de l'industrie",
+  reference: 'Référence',
+  non_comparable: 'Pas un comparable',
 }
 
 export const TYPES_CAMP: Record<string, string> = {
@@ -50,7 +51,7 @@ export interface Camp {
   tiktok: string | null
   tiktok_score: number | null
   membre_acq: boolean
-  categorie: Categorie | null
+  categorie: Categorie
   statut_inclusion: StatutInclusion
   origine: 'import' | 'decouverte' | 'manuel'
   lien_source: string | null

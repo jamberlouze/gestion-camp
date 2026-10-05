@@ -5,7 +5,7 @@ import { IconePlus } from '@/lib/icones'
 import { Bulle, SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
 import { Chargement, Saisons } from './commun'
-import { argent, estDirectSuivi, indexer, menu } from './outils'
+import { argent, estComparable, estLeader, indexer, menu } from './outils'
 import { useActivites, useCamps, useEcriture, useLiens, useMaquettes, useModifier, usePhotos, useProgrammes } from './donnees'
 import { SAISONS, type Activite, type Saison } from './types'
 
@@ -50,13 +50,13 @@ export function Activites() {
   if (!activites.data || !camps.data || !liens.data || !programmes.data) return <Chargement />
 
   const compte = (a: Activite) => {
-    const offrent = (idx.campsParActivite.get(a.id) ?? []).filter((c) => c.statut_inclusion === 'inclus')
-    return { directs: offrent.filter(estDirectSuivi).length, tous: offrent.length }
+    const offrent = idx.campsParActivite.get(a.id) ?? []
+    return { leaders: offrent.filter(estLeader).length, comparables: offrent.filter(estComparable).length }
   }
   const recherche = texte.trim().toLowerCase()
   const liste = activites.data
     .map((a) => ({ a, ...compte(a) }))
-    .filter((x) => !manquantes || (!x.a.offert_bpa && x.directs > 0))
+    .filter((x) => !manquantes || (!x.a.offert_bpa && x.comparables > 0))
     .filter((x) => !saison || x.a.saisons.includes(saison))
     .filter((x) => !recherche || x.a.nom.toLowerCase().includes(recherche))
     .sort((x, y) =>
@@ -64,7 +64,7 @@ export function Activites() {
         ? x.a.nom.localeCompare(y.a.nom, 'fr')
         : tri === 'implantation'
           ? (x.a.cout_implantation ?? Infinity) - (y.a.cout_implantation ?? Infinity)
-          : y.directs - x.directs || y.tous - x.tous || x.a.nom.localeCompare(y.a.nom, 'fr'),
+          : y.leaders - x.leaders || y.comparables - x.comparables || x.a.nom.localeCompare(y.a.nom, 'fr'),
     )
 
   return (
@@ -72,7 +72,7 @@ export function Activites() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" checked={manquantes} onChange={(e) => changer('manquantes', e.target.checked ? '1' : '')} />
-          Absentes à la BPA, offertes par des compétiteurs directs
+          Absentes à la BPA, offertes par des camps comparables
         </label>
         <select aria-label="Saison" className={menu} value={saison} onChange={(e) => changer('saison', e.target.value)}>
           <option value="">Toutes les saisons</option>
@@ -83,7 +83,7 @@ export function Activites() {
           ))}
         </select>
         <select aria-label="Trier" className={menu} value={tri} onChange={(e) => setTri(e.target.value as Tri)}>
-          <option value="competiteurs">Trier par nombre de compétiteurs</option>
+          <option value="competiteurs">Trier par leaders, puis camps comparables</option>
           <option value="nom">Trier par nom</option>
           <option value="implantation">Trier par coût d'implantation</option>
         </select>
@@ -124,8 +124,11 @@ export function Activites() {
               <th className="px-3 py-2 font-medium">Activité</th>
               <th className="px-3 py-2 font-medium">Saisons</th>
               <th className="px-3 py-2 text-center font-medium">À la BPA</th>
-              <th className="px-3 py-2 text-right font-medium" title="Compétiteurs directs / tous les camps suivis">
-                Compétiteurs
+              <th className="px-3 py-2 text-right font-medium" title="Leaders de l'industrie qui l'offrent">
+                ★ Leaders
+              </th>
+              <th className="px-3 py-2 text-right font-medium" title="Camps comparables suivis (leaders et références) qui l'offrent">
+                Camps comparables
               </th>
               <th className="px-3 py-2 text-right font-medium">Implantation</th>
               <th className="px-3 py-2 text-right font-medium">Opération / an</th>
@@ -133,7 +136,7 @@ export function Activites() {
             </tr>
           </thead>
           <tbody className="divide-y divide-pierre-100">
-            {liste.map(({ a, directs, tous }) => (
+            {liste.map(({ a, leaders, comparables }) => (
               <tr key={a.id} className="hover:bg-pierre-50">
                 <td className="px-3 py-2">
                   <Link to={`/vigie/activites/${a.id}`} className="font-medium hover:underline">
@@ -152,10 +155,8 @@ export function Activites() {
                     onChange={(e) => modifier.mutate({ id: a.id, offert_bpa: e.target.checked })}
                   />
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <b>{directs}</b>
-                  <span className="text-pierre-400"> / {tous}</span>
-                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{leaders ? <b className="text-amber-900">{leaders}</b> : <span className="text-pierre-400">0</span>}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{comparables}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{argent(a.cout_implantation)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{argent(a.cout_operation_annuel)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-pierre-500">

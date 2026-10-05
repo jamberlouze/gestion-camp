@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { IconeAttention } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { ChoixCategorie, Chargement, PastilleCategorie } from './commun'
-import { dateCourte, estDirectSuivi, fourchetteParNuit, indexer, menu } from './outils'
+import { dateCourte, estComparable, estLeader, fourchetteParNuit, indexer, menu, rangCategorie } from './outils'
 import { useActivites, useAValider, useCamps, useEcriture, useLiens, useModifier, useProgrammes } from './donnees'
 import type { Camp, Categorie, StatutInclusion } from './types'
 
@@ -19,7 +19,15 @@ export function TableauDeBord() {
   const programmes = useProgrammes()
   const aValider = useAValider()
   const modifier = useModifier<Camp>('camps')
-  const [categorie, setCategorie] = useState<'' | Categorie | 'aucune'>('')
+  // Catégorie dans l'adresse (?categorie=leader) : la métrique des leaders y mène.
+  const [params, setParams] = useSearchParams()
+  const categorie = (params.get('categorie') ?? '') as '' | Categorie
+  const setCategorie = (c: '' | Categorie) => {
+    const p = new URLSearchParams(params)
+    if (c) p.set('categorie', c)
+    else p.delete('categorie')
+    setParams(p, { replace: true })
+  }
   const [region, setRegion] = useState('')
   const [statut, setStatut] = useState<StatutInclusion>('inclus')
   const [texte, setTexte] = useState('')
@@ -31,18 +39,29 @@ export function TableauDeBord() {
   )
 
   const metriques = useMemo(() => {
-    const directs = (camps.data ?? []).filter(estDirectSuivi)
+    const suivis = camps.data ?? []
+    // n = camps comparables (leaders et références) qui l'offrent ; l = dont leaders.
     const manquantes = (activites.data ?? [])
       .filter((a) => !a.offert_bpa)
-      .map((a) => ({ a, n: (idx.campsParActivite.get(a.id) ?? []).filter(estDirectSuivi).length }))
+      .map((a) => {
+        const offrent = idx.campsParActivite.get(a.id) ?? []
+        return { a, n: offrent.filter(estComparable).length, l: offrent.filter(estLeader).length }
+      })
       .filter((x) => x.n > 0)
-      .sort((x, y) => y.n - x.n || x.a.nom.localeCompare(y.a.nom))
+      .sort((x, y) => y.l - x.l || y.n - x.n || x.a.nom.localeCompare(y.a.nom))
     // Activités propres à l'hiver d'abord (pas d'été), puis celles de toute l'année.
     const propre = (x: (typeof manquantes)[number]) => !x.a.saisons.includes('ete')
     const hiver = manquantes
       .filter((x) => x.a.saisons.includes('hiver'))
-      .sort((x, y) => Number(propre(y)) - Number(propre(x)) || y.n - x.n)
-    return { directs: directs.length, manquantes, hiver, propresHiver: hiver.filter(propre).length }
+      .sort((x, y) => Number(propre(y)) - Number(propre(x)) || y.l - x.l || y.n - x.n)
+    return {
+      leaders: suivis.filter(estLeader).length,
+      references: suivis.filter((c) => estComparable(c) && c.categorie === 'reference').length,
+      manquantes,
+      chezLeaders: manquantes.filter((x) => x.l > 0).length,
+      hiver,
+      propresHiver: hiver.filter(propre).length,
+    }
   }, [camps.data, activites.data, idx])
 
   const erreur = camps.error ?? activites.error ?? liens.error ?? programmes.error
@@ -54,24 +73,28 @@ export function TableauDeBord() {
   const recherche = texte.trim().toLowerCase()
   const liste = camps.data
     .filter((c) => c.statut_inclusion === statut)
-    .filter((c) => !categorie || (categorie === 'aucune' ? !c.categorie : c.categorie === categorie))
+    .filter((c) => !categorie || c.categorie === categorie)
     .filter((c) => !region || c.region === region)
     .filter((c) => !recherche || `${c.nom} ${c.ville ?? ''}`.toLowerCase().includes(recherche))
     .sort((a, b) => {
       if (tri === 'region') return (a.region ?? '~').localeCompare(b.region ?? '~', 'fr') || a.nom.localeCompare(b.nom, 'fr')
       if (tri === 'prix') return prixMin(a) - prixMin(b) || a.nom.localeCompare(b.nom, 'fr')
       if (tri === 'activites') return (idx.activitesParCamp.get(b.id)?.length ?? 0) - (idx.activitesParCamp.get(a.id)?.length ?? 0)
-      return a.nom.localeCompare(b.nom, 'fr')
+      return rangCategorie(a) - rangCategorie(b) || a.nom.localeCompare(b.nom, 'fr')
     })
   const nbAValider = (aValider.data?.length ?? 0) + camps.data.filter((c) => c.statut_inclusion === 'propose').length
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metrique valeur={metriques.directs} libelle="compétiteurs directs suivis" />
+        <Metrique
+          valeur={metriques.leaders}
+          libelle={`leaders de l'industrie suivis, et ${metriques.references} camps de référence`}
+          lien="/vigie?categorie=leader"
+        />
         <Metrique
           valeur={metriques.manquantes.length}
-          libelle="activités absentes à la BPA mais offertes par des compétiteurs directs"
+          libelle={`activités absentes à la BPA mais offertes par des camps comparables, dont ${metriques.chezLeaders} chez des leaders`}
           lien="/vigie/activites?manquantes=1"
         />
         <div className={`${ui.carte} border-sky-200 bg-sky-50/60 p-4`}>
@@ -81,13 +104,14 @@ export function TableauDeBord() {
             <span className="text-sm font-medium">activités d'hiver manquantes</span>
           </div>
           <p className="mt-1 text-xs text-sky-900/80">
-            Possibles l'hiver, offertes par des compétiteurs directs et pas à la BPA (qui accueille pourtant des classes neige) ; dont{' '}
-            {metriques.propresHiver} propres à l'hiver. Nombre de compétiteurs après le nom.
+            Possibles l'hiver, offertes par des camps comparables et pas à la BPA (qui accueille pourtant des classes neige) ; dont{' '}
+            {metriques.propresHiver} propres à l'hiver. Après le nom : nombre de camps (★ = leaders).
           </p>
           <div className="mt-2 flex flex-wrap gap-1">
-            {metriques.hiver.slice(0, 6).map(({ a, n }) => (
+            {metriques.hiver.slice(0, 6).map(({ a, n, l }) => (
               <Link key={a.id} to={`/vigie/activites/${a.id}`} className="rounded-full bg-white px-2 py-0.5 text-xs text-sky-900 ring-1 ring-sky-200 hover:ring-sky-400">
                 {a.nom} · {n}
+                {l > 0 && ` · ★${l}`}
               </Link>
             ))}
             {metriques.hiver.length > 6 && (
@@ -110,9 +134,9 @@ export function TableauDeBord() {
           </select>
           <select aria-label="Catégorie" className={menu} value={categorie} onChange={(e) => setCategorie(e.target.value as typeof categorie)}>
             <option value="">Toutes les catégories</option>
-            <option value="competiteur_direct">Compétiteurs directs</option>
-            <option value="reference">Références / inspiration</option>
-            <option value="aucune">À catégoriser</option>
+            <option value="leader">Leaders de l'industrie</option>
+            <option value="reference">Références</option>
+            <option value="non_comparable">Pas des comparables</option>
           </select>
           <select aria-label="Région" className={menu} value={region} onChange={(e) => setRegion(e.target.value)}>
             <option value="">Toutes les régions</option>
@@ -123,7 +147,7 @@ export function TableauDeBord() {
             ))}
           </select>
           <select aria-label="Trier" className={menu} value={tri} onChange={(e) => setTri(e.target.value as Tri)}>
-            <option value="nom">Trier par nom</option>
+            <option value="nom">Leaders d'abord, puis par nom</option>
             <option value="region">Trier par région</option>
             <option value="prix">Trier par prix par nuit</option>
             <option value="activites">Trier par nombre d'activités</option>

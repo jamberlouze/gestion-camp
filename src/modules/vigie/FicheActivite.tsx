@@ -6,7 +6,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { Carte, Chargement, PastilleCategorie, TexteLibre } from './commun'
-import { argent, dateCourte } from './outils'
+import { argent, dateCourte, rangCategorie } from './outils'
 import { adressePhoto, demander, useActivites, useCamps, useEcriture, useLiens, useMaquettes, useModifier, usePhotos, useRequetes } from './donnees'
 import { SAISONS, type Activite, type Photo } from './types'
 
@@ -36,7 +36,7 @@ export function FicheActivite() {
     const ids = new Set((liens.data ?? []).filter((l) => l.activite_id === id).map((l) => l.camp_id))
     return (camps.data ?? [])
       .filter((c) => ids.has(c.id) && c.statut_inclusion !== 'exclu')
-      .sort((a, b) => (a.categorie === 'competiteur_direct' ? 0 : 1) - (b.categorie === 'competiteur_direct' ? 0 : 1) || a.nom.localeCompare(b.nom, 'fr'))
+      .sort((a, b) => rangCategorie(a) - rangCategorie(b) || a.nom.localeCompare(b.nom, 'fr'))
   }, [liens.data, camps.data, id])
   const nomCamp = useMemo(() => new Map((camps.data ?? []).map((c) => [c.id, c.nom])), [camps.data])
 

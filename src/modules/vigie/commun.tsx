@@ -40,15 +40,16 @@ export function Saisons({ saisons }: { saisons: Saison[] }) {
   )
 }
 
-export function PastilleCategorie({ categorie }: { categorie: Categorie | null }) {
-  if (!categorie) return <span className="rounded-full bg-pierre-100 px-2 py-0.5 text-xs text-pierre-600">À catégoriser</span>
+const COULEURS_CATEGORIE: Record<Categorie, string> = {
+  leader: 'bg-amber-100 text-amber-900',
+  reference: 'bg-indigo-50 text-indigo-800',
+  non_comparable: 'bg-pierre-100 text-pierre-500',
+}
+
+export function PastilleCategorie({ categorie }: { categorie: Categorie }) {
   return (
-    <span
-      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${
-        categorie === 'competiteur_direct' ? 'bg-red-50 text-red-800' : 'bg-indigo-50 text-indigo-800'
-      }`}
-    >
-      {categorie === 'competiteur_direct' ? 'Compétiteur direct' : 'Référence'}
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${COULEURS_CATEGORIE[categorie]}`}>
+      {categorie === 'leader' ? '★ Leader' : CATEGORIES[categorie]}
     </span>
   )
 }
@@ -58,19 +59,18 @@ export function ChoixCategorie({
   changer,
   desactive,
 }: {
-  valeur: Categorie | null
-  changer: (c: Categorie | null) => void
+  valeur: Categorie
+  changer: (c: Categorie) => void
   desactive?: boolean
 }) {
   return (
     <select
       aria-label="Catégorie"
-      className={`${menu} fleche-serree py-1 text-xs`}
-      value={valeur ?? ''}
+      className={`${menu} fleche-serree py-1 text-xs ${valeur === 'leader' ? 'font-medium text-amber-900' : valeur === 'non_comparable' ? 'text-pierre-500' : ''}`}
+      value={valeur}
       disabled={desactive}
-      onChange={(e) => changer((e.target.value || null) as Categorie | null)}
+      onChange={(e) => changer(e.target.value as Categorie)}
     >
-      <option value="">À catégoriser</option>
       {Object.entries(CATEGORIES).map(([id, libelle]) => (
         <option key={id} value={id}>
           {libelle}

@@ -37,4 +37,8 @@ export function indexer(camps: Camp[], activites: Activite[], liens: LienActivit
   return { camp, activite, campsParActivite, activitesParCamp, programmesParCamp }
 }
 
-export const estDirectSuivi = (c: Camp) => c.statut_inclusion === 'inclus' && c.categorie === 'competiteur_direct'
+/** Camp suivi qui compte dans les comparaisons (leader ou référence). */
+export const estComparable = (c: Camp) => c.statut_inclusion === 'inclus' && c.categorie !== 'non_comparable'
+export const estLeader = (c: Camp) => c.statut_inclusion === 'inclus' && c.categorie === 'leader'
+/** Ordre d'affichage : leaders, références, puis les non-comparables. */
+export const rangCategorie = (c: Camp) => (c.categorie === 'leader' ? 0 : c.categorie === 'reference' ? 1 : 2)

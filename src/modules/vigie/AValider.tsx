@@ -5,7 +5,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeAttention } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { ChoixCategorie, Chargement, LienExterne, PastilleCategorie } from './commun'
-import { dateCourte } from './outils'
+import { dateCourte, rangCategorie } from './outils'
 import { adresseStockage, reveiller, useAValider, useCamps, useEcriture, useModifier, useProgrammes, useValider } from './donnees'
 import { TYPES_CAMP, type Camp, type Categorie, type Changement } from './types'
 
@@ -29,7 +29,7 @@ export function AValider() {
   const nouveauxProgrammes = parType('nouveau_programme')
   const activites = parType('nouvelle_activite')
   const proposes = camps.data.filter((c) => c.statut_inclusion === 'propose').sort((a, b) =>
-    (a.categorie === 'competiteur_direct' ? 0 : 1) - (b.categorie === 'competiteur_direct' ? 0 : 1) || a.nom.localeCompare(b.nom, 'fr'))
+    rangCategorie(a) - rangCategorie(b) || a.nom.localeCompare(b.nom, 'fr'))
 
   const decider = (c: Changement, accepter: boolean) => valider.mutate({ id: c.id, accepter })
   const toutValider = async (liste: Changement[], titre: string) => {
@@ -190,7 +190,7 @@ function Boutons({ decider }: { decider: (accepter: boolean) => void }) {
 
 function CampPropose({ camp, ecriture }: { camp: Camp; ecriture: boolean }) {
   const modifier = useModifier<Camp>('camps')
-  const [categorie, setCategorie] = useState<Categorie | null>(camp.categorie)
+  const [categorie, setCategorie] = useState<Categorie>(camp.categorie)
   const decider = (statut: 'inclus' | 'exclu') => {
     modifier.mutate({ id: camp.id, statut_inclusion: statut, categorie }, { onSuccess: () => statut === 'inclus' && reveiller() })
   }
