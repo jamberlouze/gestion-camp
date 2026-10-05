@@ -1,25 +1,12 @@
 import { useState } from 'react'
-import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
-import { PastilleStatut } from './commun'
-import {
-  nomDe,
-  useChangerStatut,
-  useEnregistrerNote,
-  useFeuille,
-  useHeures,
-  useMembres,
-  useSaisir,
-  type Heure,
-  type Statut,
-} from './donnees'
+import { nomDe, useEnregistrerNote, useFeuille, useHeures, useMembres, useSaisir, type Heure } from './donnees'
 import {
   aujourdhui,
   depuisIso,
-  finPeriode,
   formatHeures,
   jourCourt,
   joursPeriode,
@@ -29,16 +16,11 @@ import {
   type TypeHeures,
 } from './periodes'
 
-const dateHeure = (iso: string) =>
-  new Date(iso).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-
-const dateLongue = (iso: string) =>
-  depuisIso(iso).toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })
-
 /**
  * Feuille de temps d'une personne pour une période : deux semaines de
- * dimanche à samedi, une rangée par type d'heures. La personne saisit tant
- * que la feuille est en brouillon ; un admin peut toujours corriger.
+ * dimanche à samedi, une rangée par type d'heures. La personne saisit et
+ * corrige en tout temps (pas d'approbation) ; un admin peut corriger toute
+ * feuille.
  */
 export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const { profil, estAdmin } = useAuth()
@@ -46,11 +28,9 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const feuille = useFeuille(userId, debut)
   const membres = useMembres()
   const saisir = useSaisir(userId, debut)
-  const changerStatut = useChangerStatut()
   const enregistrerNote = useEnregistrerNote()
   const [erreurAction, setErreurAction] = useState<string | null>(null)
 
-  const soiMeme = userId === profil?.id
   const personne = membres.data?.find((m) => m.id === userId)
   const titre = `Feuille de temps - ${nomDe(personne)} - ${libellePeriode(debut)}`
   useTitreImpression(personne ? titre : null)
@@ -59,36 +39,13 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!heures.data || feuille.data === undefined) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const statut: Statut = feuille.data?.statut ?? 'brouillon'
-  const modifiable = estAdmin || (soiMeme && statut === 'brouillon')
+  const modifiable = estAdmin || userId === profil?.id
   const jours = joursPeriode(debut)
   const semaines = [jours.slice(0, 7), jours.slice(7)]
   const valeur = (jour: string, type: TypeHeures) => heures.data.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
   const somme = (liste: Heure[]) => liste.reduce((s, h) => s + h.heures, 0)
   const totalType = (type: TypeHeures) => somme(heures.data.filter((h) => h.type === type))
   const total = somme(heures.data)
-  const approbateur = membres.data?.find((m) => m.id === feuille.data?.approuvee_par)
-
-  const changer = async (nouveau: Statut) => {
-    setErreurAction(null)
-    if (nouveau === 'soumise') {
-      const fin = finPeriode(debut)
-      const ok = await confirmer({
-        titre: 'Soumettre la feuille ?',
-        message: (
-          <>
-            {total === 0 ? 'Aucune heure n’est inscrite. ' : `${formatHeures(total)} h au total. `}
-            {aujourdhui() < fin && `La période se termine le ${dateLongue(fin)}. `}
-            Vous ne pourrez plus la modifier, sauf en la reprenant avant son approbation.
-          </>
-        ),
-        libelleOk: 'Soumettre',
-        danger: false,
-      })
-      if (!ok) return
-    }
-    changerStatut.mutate({ userId, debut, statut: nouveau }, { onError: (e) => setErreurAction(messageErreur(e)) })
-  }
 
   return (
     <div className="space-y-4">
@@ -96,49 +53,7 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
         <h2 className="text-lg font-semibold">{nomDe(personne)}</h2>
         <p className="text-sm">Période du {libellePeriode(debut)}</p>
       </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <PastilleStatut statut={statut} />
-        <span className="text-sm text-pierre-600">
-          {statut === 'brouillon' &&
-            (soiMeme ? 'À soumettre à la fin de la période.' : 'Pas encore soumise.')}
-          {statut === 'soumise' &&
-            `Soumise le ${dateHeure(feuille.data!.soumise_le!)}, en attente d’approbation.`}
-          {statut === 'approuvee' &&
-            `Approuvée le ${dateHeure(feuille.data!.approuvee_le!)}${approbateur ? ` par ${nomDe(approbateur)}` : ''}.`}
-        </span>
-        <div className="ml-auto flex flex-wrap gap-2 print:hidden">
-          {soiMeme && statut === 'brouillon' && (
-            <button className={ui.bouton} disabled={changerStatut.isPending} onClick={() => changer('soumise')}>
-              Soumettre la feuille
-            </button>
-          )}
-          {statut === 'soumise' && (soiMeme || estAdmin) && (
-            <button className={ui.boutonSecondaire} disabled={changerStatut.isPending} onClick={() => changer('brouillon')}>
-              {soiMeme ? 'Reprendre pour modifier' : 'Renvoyer pour correction'}
-            </button>
-          )}
-          {estAdmin && statut !== 'approuvee' && (
-            <button className={ui.bouton} disabled={changerStatut.isPending} onClick={() => changer('approuvee')}>
-              Approuver
-            </button>
-          )}
-          {estAdmin && statut === 'approuvee' && (
-            <button className={ui.boutonSecondaire} disabled={changerStatut.isPending} onClick={() => changer('brouillon')}>
-              Retirer l’approbation
-            </button>
-          )}
-          <button className={ui.boutonSecondaire} onClick={() => window.print()}>
-            Imprimer
-          </button>
-        </div>
-      </div>
       {erreurAction && <p className={ui.erreur}>{erreurAction}</p>}
-      {estAdmin && statut !== 'brouillon' && (
-        <p className="text-xs text-pierre-500 print:hidden">
-          Feuille {statut === 'approuvee' ? 'approuvée' : 'soumise'} : vous pouvez quand même la corriger (administrateur).
-        </p>
-      )}
 
       {semaines.map((s, i) => (
         <Semaine

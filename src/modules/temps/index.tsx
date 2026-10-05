@@ -1,5 +1,6 @@
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
+import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { usePeriode } from './outils'
@@ -53,7 +54,12 @@ function MaFeuille() {
   const [debut, setDebut] = usePeriode()
   return (
     <div className="space-y-4">
-      <ChoixPeriode debut={debut} onChange={setDebut} />
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <ChoixPeriode debut={debut} onChange={setDebut} />
+        <button className={ui.boutonSecondaire} onClick={() => window.print()}>
+          Imprimer
+        </button>
+      </div>
       <Feuille key={debut} userId={profil!.id} debut={debut} />
     </div>
   )
@@ -73,7 +79,12 @@ function FeuillePersonne() {
         </Link>
         <h2 className="text-lg font-semibold">{membres.data ? nomDe(personne) : '…'}</h2>
       </div>
-      <ChoixPeriode debut={debut} onChange={setDebut} />
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <ChoixPeriode debut={debut} onChange={setDebut} />
+        <button className={ui.boutonSecondaire} onClick={() => window.print()}>
+          Imprimer
+        </button>
+      </div>
       <Feuille key={`${id}-${debut}`} userId={id} debut={debut} />
     </div>
   )

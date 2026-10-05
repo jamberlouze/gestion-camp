@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { IconeTableur } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { ChoixPeriode, PastilleStatut } from './commun'
+import { ChoixPeriode } from './commun'
 import { menu, usePeriode } from './outils'
-import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre, type Statut } from './donnees'
+import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre } from './donnees'
 import { ajouterJours, dateCourte, finPeriode, formatHeures, libellePeriode, periodesEntre, PREMIERE_PERIODE, TYPES, type TypeHeures } from './periodes'
 
 interface Ligne {
@@ -14,14 +14,14 @@ interface Ligne {
   sem2: number
   types: Record<TypeHeures, number>
   total: number
-  statut: Statut
+  note: string | null
 }
 
 const vide = (): Record<TypeHeures, number> => ({ regulieres: 0, vacances: 0, maladie: 0 })
 
 /**
- * Administrateurs seulement : toutes les feuilles d'une période (état,
- * heures par type, régulières par semaine) et le cumul depuis une période
+ * Administrateurs seulement : toutes les feuilles d'une période (heures
+ * par type, note, régulières par semaine) et le cumul depuis une période
  * choisie. Un clic ouvre la feuille de la personne.
  */
 export function TableauDeBord() {
@@ -53,7 +53,7 @@ export function TableauDeBord() {
         sem2: reg.filter((h) => h.jour >= milieu).reduce((s, h) => s + h.heures, 0),
         types,
         total: types.regulieres + types.vacances + types.maladie,
-        statut: feuilles.data.find((f) => f.user_id === m.id)?.statut ?? 'brouillon',
+        note: feuilles.data.find((f) => f.user_id === m.id)?.note ?? null,
       }
     }
     return {
@@ -70,8 +70,7 @@ export function TableauDeBord() {
   const h = (n: number) => (n ? formatHeures(n) : <span className="text-pierre-300">—</span>)
 
   const nb = donnees?.periode.length ?? 0
-  const soumises = donnees?.periode.filter((l) => l.statut !== 'brouillon').length ?? 0
-  const aApprouver = donnees?.periode.filter((l) => l.statut === 'soumise').length ?? 0
+  const remplies = donnees?.periode.filter((l) => l.total > 0).length ?? 0
 
   return (
     <div className="space-y-5">
@@ -83,9 +82,12 @@ export function TableauDeBord() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Tuile titre="Feuilles soumises" valeur={donnees ? `${soumises} / ${nb}` : '…'} />
-        <Tuile titre="À approuver" valeur={donnees ? String(aApprouver) : '…'} accent={aApprouver > 0} />
+        <Tuile titre="Feuilles remplies" valeur={donnees ? `${remplies} / ${nb}` : '…'} />
         <Tuile titre="Heures de la période" valeur={donnees ? `${formatHeures(somme(donnees.periode, (l) => l.total))} h` : '…'} />
+        <Tuile
+          titre="Vacances et maladie"
+          valeur={donnees ? `${formatHeures(somme(donnees.periode, (l) => l.types.vacances + l.types.maladie))} h` : '…'}
+        />
       </div>
 
       <section className={ui.carte}>
@@ -106,7 +108,7 @@ export function TableauDeBord() {
                     </th>
                   ))}
                   <th className="px-3 py-2 text-right font-medium">Total</th>
-                  <th className="px-3 py-2 text-left font-medium">État</th>
+                  <th className="px-3 py-2 text-left font-medium">Note</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-pierre-100">
@@ -124,8 +126,8 @@ export function TableauDeBord() {
                       </td>
                     ))}
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">{h(l.total)}</td>
-                    <td className="px-3 py-2">
-                      <PastilleStatut statut={l.statut} />
+                    <td className="max-w-64 truncate px-3 py-2 text-pierre-600" title={l.note ?? undefined}>
+                      {l.note}
                     </td>
                   </tr>
                 ))}
@@ -208,22 +210,20 @@ export function TableauDeBord() {
   )
 }
 
-function Tuile({ titre, valeur, accent = false }: { titre: string; valeur: string; accent?: boolean }) {
+function Tuile({ titre, valeur }: { titre: string; valeur: string }) {
   return (
     <div className={`${ui.carte} p-5`}>
       <p className="text-sm text-pierre-500">{titre}</p>
-      <p className={`mt-1 text-3xl font-semibold tabular-nums ${accent ? 'text-amber-700' : 'text-foret-800'}`}>{valeur}</p>
+      <p className="mt-1 text-3xl font-semibold tabular-nums text-foret-800">{valeur}</p>
     </div>
   )
 }
-
-const LIBELLES_STATUT: Record<Statut, string> = { brouillon: 'Brouillon', soumise: 'Soumise', approuvee: 'Approuvée' }
 
 /** CSV pour Excel (séparateur « ; », virgule décimale, BOM pour les accents). */
 function exporter(debut: string, lignes: Ligne[]) {
   const nombre = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',')
   const champ = (t: string) => (/[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t)
-  const entete = ['Personne', 'Courriel', 'Début', 'Fin', 'Régulières sem. 1', 'Régulières sem. 2', 'Régulières', 'Vacances', 'Maladie', 'Total', 'État']
+  const entete = ['Personne', 'Courriel', 'Début', 'Fin', 'Régulières sem. 1', 'Régulières sem. 2', 'Régulières', 'Vacances', 'Maladie', 'Total', 'Note']
   const rangees = lignes.map((l) => [
     champ(nomDe(l.membre)),
     champ(l.membre.courriel),
@@ -235,7 +235,7 @@ function exporter(debut: string, lignes: Ligne[]) {
     nombre(l.types.vacances),
     nombre(l.types.maladie),
     nombre(l.total),
-    LIBELLES_STATUT[l.statut],
+    champ(l.note ?? ''),
   ])
   const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')

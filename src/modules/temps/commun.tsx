@@ -1,5 +1,4 @@
 import { IconeChevron } from '@/lib/icones'
-import type { Statut } from './donnees'
 import { menu, periodeCourante } from './outils'
 import {
   libellePeriode,
@@ -45,15 +44,4 @@ export function ChoixPeriode({ debut, onChange }: { debut: string; onChange: (d:
       )}
     </div>
   )
-}
-
-const STATUTS: Record<Statut, { libelle: string; classes: string }> = {
-  brouillon: { libelle: 'Brouillon', classes: 'bg-pierre-100 text-pierre-700' },
-  soumise: { libelle: 'Soumise', classes: 'bg-amber-100 text-amber-800' },
-  approuvee: { libelle: 'Approuvée', classes: 'bg-foret-100 text-foret-800' },
-}
-
-export function PastilleStatut({ statut }: { statut: Statut }) {
-  const s = STATUTS[statut]
-  return <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${s.classes}`}>{s.libelle}</span>
 }

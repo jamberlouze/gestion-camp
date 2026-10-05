@@ -11,8 +11,6 @@ import { finPeriode, type TypeHeures } from './periodes'
 const S = 'temps'
 const db = () => supabase.schema(S)
 
-export type Statut = 'brouillon' | 'soumise' | 'approuvee'
-
 export interface Heure {
   id: string
   user_id: string
@@ -27,11 +25,7 @@ export interface Feuille {
   id: string
   user_id: string
   debut: string
-  statut: Statut
   note: string | null
-  soumise_le: string | null
-  approuvee_le: string | null
-  approuvee_par: string | null
 }
 
 export interface Membre {
@@ -79,7 +73,7 @@ export function useHeures(userId: string, debut: string) {
   })
 }
 
-/** La feuille (état, note) d'une personne pour une période ; null = brouillon jamais touché. */
+/** La note d'une personne pour une période ; null = pas de note. */
 export function useFeuille(userId: string, debut: string) {
   return useQuery({
     queryKey: [S, 'feuille', userId, debut],
@@ -187,20 +181,6 @@ export function useSaisir(userId: string, debut: string) {
 const invaliderFeuilles = (client: ReturnType<typeof useQueryClient>) => {
   client.invalidateQueries({ queryKey: [S, 'feuille'] })
   client.invalidateQueries({ queryKey: [S, 'plage-feuilles'] })
-}
-
-/** Soumettre, reprendre, approuver, renvoyer : la base vérifie qui a le droit. Erreur affichée sur place (racine S-local). */
-export function useChangerStatut() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationKey: [`${S}-local`, 'statut'],
-    networkMode: 'always',
-    mutationFn: async (p: { userId: string; debut: string; statut: Statut }) => {
-      const { error } = await db().rpc('changer_statut', { p_user: p.userId, p_debut: p.debut, p_statut: p.statut })
-      if (error) throw error
-    },
-    onSettled: () => invaliderFeuilles(client),
-  })
 }
 
 export function useEnregistrerNote() {
