@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { nonConfirme, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { nonConfirme, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { IconeChevron } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
@@ -122,8 +122,20 @@ export function Vue() {
           cadrer={cadrer}
         />
       )}
-      <p className="mt-3 text-xs text-pierre-500">
-        Cliquez sur un groupe pour afficher exactement ses jours (vue Période). Bordure pointillée : réservation pas encore confirmée dans Airtable.
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-pierre-600">
+        {TEINTES_BATIMENT.map((t) => (
+          <span key={t.code} className="flex items-center gap-1.5">
+            <span className={`inline-block h-3 w-5 rounded border ${t.classes}`} aria-hidden />
+            {t.libelle}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5">
+          <span className={`inline-block h-3 w-5 rounded border border-dashed ${TEINTE_AUTRE}`} aria-hidden />
+          Bordure pointillée : pas encore confirmée dans Airtable
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-pierre-500">
+        Cliquez sur un groupe pour afficher exactement ses jours (vue Période).
         {mode === 'periode' && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
       {fiche && <FicheEvenement evenement={fiche.evenement} dateDefaut={fiche.occurrence} occurrence={fiche.occurrence} fermer={() => setFiche(null)} />}

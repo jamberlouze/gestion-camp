@@ -53,21 +53,20 @@ export function useEvenementsPlage(evenements: Evenement[] | undefined, debut: s
   }, [evenements, debut, fin])
 }
 
-/** Couleur stable d'un séjour (d'après son nom), pour les barres du calendrier. */
-const TEINTES = [
-  'bg-sky-100 text-sky-900 border-sky-300',
-  'bg-amber-100 text-amber-900 border-amber-300',
-  'bg-emerald-100 text-emerald-900 border-emerald-300',
-  'bg-violet-100 text-violet-900 border-violet-300',
-  'bg-rose-100 text-rose-900 border-rose-300',
-  'bg-teal-100 text-teal-900 border-teal-300',
-  'bg-orange-100 text-orange-900 border-orange-300',
-  'bg-indigo-100 text-indigo-900 border-indigo-300',
+/**
+ * Couleur d'un séjour d'après son bâtiment (code Airtable « Bâtiment » :
+ * PP, VF…) : vert pour le Pavillon principal, mauve pour Vieille-France,
+ * gris sinon. Plusieurs bâtiments : le premier.
+ */
+export const TEINTES_BATIMENT: { code: string; libelle: string; classes: string }[] = [
+  { code: 'PP', libelle: 'Pavillon principal (PP)', classes: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+  { code: 'VF', libelle: 'Vieille-France (VF)', classes: 'bg-violet-100 text-violet-900 border-violet-300' },
 ]
+export const TEINTE_AUTRE = 'bg-pierre-100 text-pierre-800 border-pierre-300'
+
 export function teinteSejour(s: Sejour): string {
-  let h = 0
-  for (const c of s.nom_groupe) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return TEINTES[h % TEINTES.length]
+  const code = (s.batiment ?? '').split(',')[0].trim().toUpperCase()
+  return TEINTES_BATIMENT.find((t) => t.code === code)?.classes ?? TEINTE_AUTRE
 }
 
 /** Réservation pas encore confirmée : bordure pointillée et mention de l'état. */
