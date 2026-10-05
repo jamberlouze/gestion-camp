@@ -15,6 +15,13 @@ export interface DefinitionModule {
 /** Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx. */
 export const MODULES: DefinitionModule[] = [
   {
+    id: 'calendrier',
+    nom: 'Calendrier',
+    description: 'Séjours, événements et qui travaille chaque jour',
+    icone: '🗓️',
+    chemin: '/calendrier',
+  },
+  {
     id: 'embarcations',
     nom: 'Embarcations',
     description: 'État de la flotte et réparations',

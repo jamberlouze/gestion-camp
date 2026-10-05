@@ -12,6 +12,7 @@ connexion, menu, référentiel partagé.
 | 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
 | 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, administrateurs seulement pour l'instant |
 | 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, administrateurs seulement (pour l'instant) |
+| 🗓️ Calendrier des opérations : séjours (Airtable), événements, qui travaille chaque jour | En service (secret Airtable à ajouter, voir 10) | Téléphone pour consulter, ordinateur pour modifier (en ligne) |
 
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
@@ -32,7 +33,8 @@ supabase/
   functions/    fonctions Edge (vigie : recherches de la Vigie des camps par Claude)
   config.toml   réglages Supabase (connexion, courriels, schémas exposés)
 worker/         code du Worker : waker Supabase (cron) + /_ping, Vigie de subventions
-                (cron du lundi + /api/subventions/*, tests : npm run test:worker)
+                (cron du lundi + /api/subventions/*), synchro des séjours Airtable du
+                Calendrier (cron aux 15 min + /api/calendrier/*) ; tests : npm run test:worker
 wrangler.jsonc  configuration du Worker (site + cron)
 .env.production valeurs Supabase publiques utilisées au build
 scripts/migration/  import unique des anciens projets
@@ -46,6 +48,7 @@ scripts/migration/  import unique des anciens projets
 - `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
 - `subventions` : `grant_companies` (entreprises du groupe, critères), `grants` (une subvention : trouvée, validée ou rejetée, puis demandé / accordé / reçu), `grant_feedback` (décisions qui nourrissent la mémoire), `grant_notes`, `grant_time_entries` (heures), `grant_reporting_steps` (reddition de compte), `grant_search_runs` (journal des recherches), `grant_learned_rules` (mémoire), `grant_settings`, `grant_digests` (courriels du lundi). Noms repris de la feuille de route de la Vigie
 - `vigie` : `camps` (proposé / inclus / exclu, compétiteur direct ou référence, membre ACQ ou non), `programmes` (prix et durée ; prix par nuit calculé), `activites` (liste candidate commune : saisons, offerte à la BPA, coûts estimés par Claude), `camps_activites`, `photos` (une par activité et par camp), `maquettes` (3D), `changements` (détectés, à valider), `recherches` (journal), `requetes_ia` (file des appels à Claude), `parametres`. Import du Google Sheets « BPA_Vigie_ Comparatif des camps » le 2026-10-03 (`scripts/migration/vigie.py`)
+- `calendrier` : `sejours` (copie en lecture seule de la base Airtable « Réservation Groupes », écrite par le Worker), `evenements` (ponctuels ou récurrents), `personnel` (direction, animation, terrain), `affectations_animation` (feuille de route), `presences_simples` (direction et terrain), vue `v_presence_jour` (qui travaille, quel secteur, fait quoi ; la cuisine vient de `commande.quarts`), `journal` (chaque modification, par déclencheur), `synchros`. Rien n'est effacé (`deleted_at`)
 - `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
@@ -260,6 +263,26 @@ Journal affiche le coût de chaque recherche.
 ```bash
 npx supabase functions deploy vigie --no-verify-jwt --use-api
 ```
+
+### 10. Calendrier des opérations : synchro Airtable
+
+Le Worker lit la base Airtable « Réservation Groupes » (table Réservations)
+toutes les 15 minutes et met à jour `calendrier.sejours` (sens unique : rien
+n'est jamais écrit dans Airtable). Une réservation retirée d'Airtable est
+marquée supprimée, pas effacée. Les champs sont lus par leur identifiant
+(`worker/calendrier/synchro.js`, `CHAMPS`) : renommer un champ dans Airtable ne
+casse rien ; en supprimer ou en remplacer un, oui.
+
+Secrets **Cloudflare** (même endroit qu'en 8) :
+
+| Secret | Où le trouver |
+|---|---|
+| `AIRTABLE_TOKEN` | [airtable.com/create/tokens](https://airtable.com/create/tokens) → **Create token** « Calendrier gestion-camp », portée `data.records:read` seulement, accès à la base « Réservation Groupes - GLITCH ». |
+| `SUPABASE_SECRET_KEY` | Le même qu'en 8 (déjà là si Subventions est configuré). |
+| `CALENDRIER_JETON_SYNCHRO` | Facultatif : une longue chaîne au hasard (ex. `openssl rand -hex 24`), pour qu'une automatisation Airtable demande une synchro immédiate (Calendrier → Réglages → « Mise à jour immédiate »). |
+
+**Vérifier** : app → Calendrier → Réglages → « Synchroniser maintenant » ; la
+liste « Dernières synchros » affiche le bilan (ou l'erreur).
 
 ## Ajouter un module
 

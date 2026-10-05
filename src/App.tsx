@@ -17,6 +17,7 @@ const Horaire = lazy(() => import('@/modules/horaire'))
 const Mastertimeline = lazy(() => import('@/modules/mastertimeline'))
 const Subventions = lazy(() => import('@/modules/subventions'))
 const Vigie = lazy(() => import('@/modules/vigie'))
+const Calendrier = lazy(() => import('@/modules/calendrier'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="mastertimeline/*" element={<GardeModule module="mastertimeline"><Mastertimeline /></GardeModule>} />
           <Route path="subventions/*" element={<GardeModule module="subventions"><Subventions /></GardeModule>} />
           <Route path="vigie/*" element={<GardeModule module="vigie"><Vigie /></GardeModule>} />
+          <Route path="calendrier/*" element={<GardeModule module="calendrier"><Calendrier /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />

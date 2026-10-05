@@ -17,13 +17,15 @@
   },
   "triggers": {
     // Une seule expression (le forfait gratuit limite le nombre de crons par
-    // compte). Chaque passage garde Supabase éveillé (il veut « quelques
-    // requêtes chaque jour ») ; le lundi, les passages de 8 h à 11 h UTC
-    // font aussi la recherche de subventions, une entreprise par passage.
-    "crons": ["0 2,8,9,10,11,14,20 * * *"]
+    // compte), aux 15 minutes : synchro des séjours Airtable du Calendrier.
+    // Chaque passage garde aussi Supabase éveillé ; le lundi, les passages
+    // de l'heure pile de 8 h à 11 h UTC font la recherche de subventions,
+    // une entreprise par passage.
+    "crons": ["*/15 * * * *"]
   },
   // Valeurs publiques (les mêmes que dans .env.production). Les secrets
-  // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*) se mettent dans
+  // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*, AIRTABLE_TOKEN,
+  // CALENDRIER_JETON_SYNCHRO) se mettent dans
   // Cloudflare (Worker → Settings → Variables and Secrets), jamais ici.
   "vars": {
     "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",
