@@ -8,6 +8,8 @@ export interface DefinitionModule {
   chemin: string
   /** Réservé aux administrateurs et à la direction : jamais offert aux coordonnateurs. */
   directionSeulement?: boolean
+  /** Réservé aux administrateurs (pas même la direction), le temps d'un rodage. */
+  adminSeulement?: boolean
 }
 
 /** Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx. */
@@ -55,5 +57,6 @@ export const MODULES: DefinitionModule[] = [
     icone: '🔭',
     chemin: '/vigie',
     directionSeulement: true,
+    adminSeulement: true,
   },
 ]

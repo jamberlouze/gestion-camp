@@ -475,7 +475,7 @@ const CORS = {
 const json = (corps: unknown, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-/** Personne connectée avec le droit d'écrire dans le module vigie. */
+/** Personne connectée qui a accès au module vigie (administrateurs seulement). */
 async function peutEcrire(req: Request) {
   const jeton = req.headers.get('Authorization')?.replace(/^Bearer /, '')
   if (!jeton) return false
@@ -483,10 +483,8 @@ async function peutEcrire(req: Request) {
   const id = data.user?.id
   if (!id) return false
   const { data: profil } = await admin.schema('core').from('profils').select('role, actif').eq('id', id).maybeSingle()
-  if (!profil?.actif) return false
-  if (profil.role === 'admin' || profil.role === 'direction') return true
-  const { data: acces } = await admin.schema('core').from('acces_modules').select('niveau').eq('user_id', id).eq('module', 'vigie').maybeSingle()
-  return acces?.niveau === 'ecriture'
+  // Module réservé aux administrateurs pour l'instant (comme la RLS du schéma).
+  return !!profil?.actif && profil.role === 'admin'
 }
 
 Deno.serve(async (req) => {

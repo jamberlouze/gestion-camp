@@ -23,6 +23,7 @@ interface EtatAuth {
 const ContexteAuth = createContext<EtatAuth | null>(null)
 
 const directionSeulement = (m: ModuleId) => !!MODULES.find((d) => d.id === m)?.directionSeulement
+const adminSeulement = (m: ModuleId) => !!MODULES.find((d) => d.id === m)?.adminSeulement
 
 export function FournisseurAuth({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -65,8 +66,10 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
-    peutLire: (m) => estDirection || (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m)),
+    peutLire: (m) =>
+      adminSeulement(m) ? estAdmin : estDirection || (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m)),
     peutEcrire: (m) =>
+      adminSeulement(m) ? estAdmin :
       estDirection ||
       (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m && a.niveau === 'ecriture')),
     deconnexion: async () => {
