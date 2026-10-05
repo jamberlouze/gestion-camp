@@ -1,6 +1,5 @@
 import { Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
-import { Animation } from './Animation'
 import { Evenements } from './Evenements'
 import { Journal } from './Journal'
 import { Reglages } from './Reglages'
@@ -13,7 +12,6 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 const ONGLETS = [
   { chemin: '/calendrier', libelle: 'Calendrier', date: true },
-  { chemin: '/calendrier/animation', libelle: 'Animation', date: true },
   { chemin: '/calendrier/evenements', libelle: 'Événements' },
   { chemin: '/calendrier/journal', libelle: 'Journal' },
   { chemin: '/calendrier/reglages', libelle: 'Réglages' },
@@ -41,7 +39,8 @@ export default function ModuleCalendrier() {
         <Route path="vue" element={<AncienneVue />} />
         {/* Ancien onglet Présences : direction et terrain se saisissent dans la grille du Calendrier. */}
         <Route path="presences" element={<AncienneVue />} />
-        <Route path="animation" element={<Animation />} />
+        {/* Ancien onglet Animation : la rangée Animation de la grille et le module Animation suffisent. */}
+        <Route path="animation" element={<AncienneVue />} />
         <Route path="evenements" element={<Evenements />} />
         <Route path="journal" element={<Journal />} />
         <Route path="reglages" element={<Reglages />} />

@@ -2,8 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/shell/auth'
 import { supabase, type Schema } from '@/lib/supabase'
-import { ajouterJours } from './dates'
-import type { HoraireDate } from './horaire'
 import type { EntreeJournal, Evenement, Personne, PresenceJour, PresenceSimple, Sejour, Synchro } from './types'
 
 // Module en ligne seulement (comme Mastertimeline et Cuisine) : mutations
@@ -103,35 +101,6 @@ export function usePresencesSimples(debut: string, fin: string) {
       toutLire<PresenceSimple>((a, b) =>
         db().from('presences_simples').select('*').is('deleted_at', null).gte('date', debut).lte('date', fin).order('date').range(a, b),
       ),
-  })
-}
-
-/**
- * Horaires d'animation datés qui touchent la plage (un horaire dure au plus
- * 7 jours : il commence au plus 6 jours avant), et le nombre de semaines
- * pas encore datées (invisibles dans le Calendrier).
- */
-export function useHorairesAnimation(debut: string, fin: string) {
-  useTempsReel('horaire', 'horaires', [[S, 'horaires']])
-  return useQuery({
-    queryKey: [S, 'horaires', debut, fin],
-    queryFn: async () => {
-      const horaire = supabase.schema('horaire')
-      const [dates, sansDate] = await Promise.all([
-        horaire
-          .from('horaires')
-          .select('id, nom, debut, etat')
-          .eq('modele', false)
-          .gte('debut', ajouterJours(debut, -6))
-          .lte('debut', fin)
-          .order('debut')
-          .order('nom'),
-        horaire.from('horaires').select('id', { count: 'exact', head: true }).eq('modele', false).is('debut', null),
-      ])
-      if (dates.error) throw dates.error
-      if (sansDate.error) throw sansDate.error
-      return { horaires: (dates.data ?? []) as HoraireDate[], sansDate: sansDate.count ?? 0 }
-    },
   })
 }
 
