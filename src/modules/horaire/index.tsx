@@ -261,17 +261,21 @@ function AucunAnimateur() {
 // Onglets, avec le nombre de conflits bloquants
 // ------------------------------------------------------------------
 
+/**
+ * Onglets de la semaine ouverte : les vues de l'horaire (soulignées), puis,
+ * à part et à droite, les horaires des spécialistes (pastilles à leur
+ * couleur, comme dans la grille).
+ */
 function Onglets() {
   const badges = useBadges()
   const onglets = [
     { chemin: '/horaire', libelle: 'Construire', fin: true },
     { chemin: '/horaire/conflits', libelle: 'Conflits', badge: badges.grille },
-    ...TAGS.map((t) => ({ chemin: `/horaire/${t}`, libelle: `${META_TAG[t].icone} ${META_TAG[t].libelle}` })),
-    { chemin: '/horaire/conges', libelle: 'Congés & remplacements', badge: badges.conges },
-    { chemin: '/horaire/soirees', libelle: 'Soirées 🌙', badge: badges.soirees },
+    { chemin: '/horaire/conges', libelle: '🏖️ Congés & remplacements', badge: badges.conges },
+    { chemin: '/horaire/soirees', libelle: '🌙 Soirées', badge: badges.soirees },
   ]
   return (
-    <nav className="sans-barre mb-4 flex gap-5 overflow-x-auto border-b border-pierre-200 print:hidden">
+    <nav className="sans-barre mb-4 flex items-end gap-5 overflow-x-auto border-b border-pierre-200 print:hidden">
       {onglets.map((o) => (
         <NavLink
           key={o.chemin}
@@ -284,13 +288,34 @@ function Onglets() {
           }
         >
           {o.libelle}
-          {'badge' in o && !!o.badge && (
+          {!!o.badge && (
             <span className="rounded-full bg-[#d03b3b] px-1.5 text-xs font-semibold text-white" aria-label={`${o.badge} conflit(s)`}>
               {o.badge}
             </span>
           )}
         </NavLink>
       ))}
+
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 pb-1.5 pl-4" role="group" aria-label="Horaires des spécialistes">
+        <span className="mr-1 text-xs font-medium uppercase tracking-wide text-pierre-500">Spécialistes</span>
+        {TAGS.map((t) => (
+          <NavLink
+            key={t}
+            to={`/horaire/${t}`}
+            className={({ isActive }) =>
+              `inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
+                isActive ? 'shadow-sm' : 'border-pierre-200 bg-white text-pierre-600 hover:border-pierre-300 hover:text-pierre-900'
+              }`
+            }
+            style={({ isActive }) =>
+              isActive ? { background: META_TAG[t].clair, borderColor: META_TAG[t].couleur, color: META_TAG[t].couleur } : undefined
+            }
+          >
+            <span aria-hidden>{META_TAG[t].icone}</span>
+            {META_TAG[t].libelle}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   )
 }
