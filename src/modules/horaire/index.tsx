@@ -269,8 +269,8 @@ function AucunAnimateur() {
 function Onglets() {
   const badges = useBadges()
   const onglets = [
-    { chemin: '/horaire', libelle: 'Construire', fin: true },
-    { chemin: '/horaire/conflits', libelle: 'Conflits', badge: badges.grille },
+    { chemin: '/horaire', libelle: '🛠️ Construire', fin: true },
+    { chemin: '/horaire/conflits', libelle: '⚠️ Conflits', badge: badges.grille },
     { chemin: '/horaire/conges', libelle: '🏖️ Congés & remplacements', badge: badges.conges },
     { chemin: '/horaire/soirees', libelle: '🌙 Soirées', badge: badges.soirees },
   ]
