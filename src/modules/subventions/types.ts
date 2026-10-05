@@ -19,6 +19,8 @@ export interface Entreprise {
   name: string
   specific_criteria: string | null
   legal_status: string | null
+  /** Embauche du personnel : priorité aux subventions salariales dans sa recherche. */
+  hires_staff: boolean
   active: boolean
   sort_order: number
 }

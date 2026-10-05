@@ -75,19 +75,43 @@ describe('lecture de la réponse', () => {
 })
 
 describe('prompts', () => {
-  it('recherche : critères, règles, programmes connus', () => {
+  const groupe = [
+    { name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL' },
+    { name: 'Trembloc', legal_status: null },
+  ]
+
+  it('recherche : groupe, priorité salariale, critères, règles, programmes connus', () => {
     const p = invitationRecherche({
-      entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur' },
-      criteresCommuns: 'Priorité absolue : les subventions salariales.',
+      entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
+      groupe,
+      consignes: '',
       regles: null,
       connus: [{ program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'rejete', program_key: 'eec', discovered_fy: 2027 }],
       aujourdhui: 'samedi 3 octobre 2026',
     })
     assert.match(p, /pour Trembloc \(statut juridique non précisé/)
+    assert.match(p, /celle-ci vise seulement Trembloc\) :\n- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc\n/)
+    assert.match(p, /Priorité absolue : les subventions salariales/)
+    assert.match(p, /Ratisse large/)
+    assert.doesNotMatch(p, /Consignes de la direction/)
     assert.match(p, /Bloc extérieur/)
     assert.match(p, /Aucune règle apprise/)
     assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| rejetée \| eec \| 2026-27/)
     assert.match(p, /Réponds uniquement avec un tableau JSON/)
+  })
+
+  it('recherche : entreprise sans personnel et consignes du groupe', () => {
+    const p = invitationRecherche({
+      entreprise: { name: 'Immeubles inc', legal_status: 'Entreprise privée', specific_criteria: null, hires_staff: false },
+      groupe,
+      consignes: '  Exclure le manufacturier.  ',
+      regles: null,
+      connus: [],
+      aujourdhui: 'lundi 5 octobre 2026',
+    })
+    assert.doesNotMatch(p, /Priorité absolue/)
+    assert.match(p, /n'embauche pas de personnel/)
+    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
   })
 
   it('mémoire : une ligne par décision', () => {
@@ -225,7 +249,7 @@ function fauxReseau(scenario = {}) {
         return reponseJson(
           url.search.includes('recherche_active')
             ? [{ value: scenario.actif ?? true }]
-            : [{ key: 'criteres_communs', value: 'Priorité absolue : les subventions salariales.' }],
+            : [{ key: 'consignes_groupe', value: 'Exclure le manufacturier.' }],
         )
       if (chemin === 'grants') return reponseJson(scenario.grants ?? [])
       if (chemin === 'grant_search_runs') return reponseJson(scenario.runs ?? [])
@@ -289,6 +313,8 @@ describe('pipeline (réseau simulé)', () => {
     assert.equal(recherche.corps.output_config.effort, 'high')
     assert.deepEqual(recherche.corps.tools.map((t) => t.type), ['web_search_20260209', 'web_fetch_20260209'])
     assert.match(recherche.corps.messages[0].content, /Privilégier les programmes salariaux/)
+    assert.match(recherche.corps.messages[0].content, /- Base de Plein Air Mont-Tremblant\n/)
+    assert.match(recherche.corps.messages[0].content, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\./)
     assert.equal(recherche.entetes.get('x-api-key'), 'sk-ant-test')
     // Reprise après pause : le tour de l'assistant est renvoyé, sans message « continue ».
     assert.equal(reprise.corps.messages.length, 2)

@@ -1,4 +1,5 @@
 import type { Profil } from '@/lib/types'
+import { ui } from '@/lib/ui'
 import type { CategorieRejet, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
 
 export const STATUTS: Record<Statut, { libelle: string; classe: string }> = {
@@ -121,3 +122,6 @@ export function trierAValider(a: Subvention, b: Subvention) {
 
 /** Entreprise qui porte la subvention : celle qui dépose, sinon celle pour qui elle a été trouvée. */
 export const entrepriseDe = (g: Subvention) => g.applicant_company_id ?? g.target_company_id
+
+/** Champ du module sans largeur imposée (ui.champ est en w-full, qui l'emporterait sur w-auto / w-24). */
+export const champ = ui.champ.replace('w-full ', '')

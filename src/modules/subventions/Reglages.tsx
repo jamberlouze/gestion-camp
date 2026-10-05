@@ -37,22 +37,25 @@ export function Reglages() {
         </p>
       </Section>
 
-      <Section titre="Critères communs à tout le groupe">
+      <Section titre="Consignes pour tout le groupe (facultatif)">
         <p className="mb-2 text-sm text-pierre-600">
-          Envoyés à Claude avec chaque recherche, avant les critères propres à l’entreprise : contexte du groupe, secteurs, priorités.
+          Ajoutées à chaque recherche. La liste des entreprises du groupe, la priorité aux subventions salariales (pour les
+          entreprises qui embauchent) et « ratisser large » y sont déjà : écrivez ici seulement une règle à imposer avant que la
+          mémoire l’apprenne de vos validations et rejets.
         </p>
         <ZoneTexte
           className={ui.champ}
-          rows={7}
-          valeur={String(valeur('criteres_communs') ?? '')}
-          enregistrer={(v) => modifier.mutate({ key: 'criteres_communs', value: v })}
+          rows={3}
+          placeholder="Ex. jamais de prêts, seulement des subventions et des crédits d’impôt"
+          valeur={String(valeur('consignes_groupe') ?? '')}
+          enregistrer={(v) => modifier.mutate({ key: 'consignes_groupe', value: v })}
         />
       </Section>
 
       <Section titre="Destinataires du courriel du lundi">
         <ChampTexte
           className={ui.champ}
-          placeholder="Vide : tous les administrateurs et membres de la direction"
+          placeholder="Vide : toutes les personnes qui ont accès au module"
           valeur={String(valeur('destinataires') ?? '')}
           enregistrer={(v) => modifier.mutate({ key: 'destinataires', value: v })}
         />
@@ -76,7 +79,7 @@ function FicheEntreprise({ e }: { e: Entreprise }) {
   const maj = (champs: Partial<Entreprise>) => enregistrer.mutate({ id: e.id, ...champs })
   return (
     <div className="rounded-lg border border-pierre-200 p-3">
-      <div className="grid gap-3 sm:grid-cols-[1fr_14rem_auto]">
+      <div className="grid gap-3 sm:grid-cols-[1fr_14rem_auto_auto]">
         <label className="block">
           <span className={ui.etiquette}>Nom</span>
           <ChampTexte className={ui.champ} obligatoire valeur={e.name} enregistrer={(name) => maj({ name })} />
@@ -89,6 +92,18 @@ function FicheEntreprise({ e }: { e: Entreprise }) {
             valeur={e.legal_status ?? ''}
             enregistrer={(v) => maj({ legal_status: v || null })}
           />
+        </label>
+        <label
+          className="flex items-center gap-2 self-end pb-2 text-sm"
+          title="Priorité aux subventions salariales dans la recherche de cette entreprise"
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-foret-700"
+            checked={e.hires_staff}
+            onChange={(ev) => maj({ hires_staff: ev.target.checked })}
+          />
+          Embauche du personnel
         </label>
         <label className="flex items-center gap-2 self-end pb-2 text-sm">
           <input type="checkbox" className="h-4 w-4 accent-foret-700" checked={e.active} onChange={(ev) => maj({ active: ev.target.checked })} />

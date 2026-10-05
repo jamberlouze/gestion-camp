@@ -6,7 +6,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { champ, ChampDate, ChampMontant, FilNotes, LienOfficiel, Pastille, PastilleStatut, Section, ZoneTexte } from './commun'
+import { ChampDate, ChampMontant, FilNotes, LienOfficiel, Pastille, PastilleStatut, Section, ZoneTexte } from './commun'
 import {
   copierEtapes,
   useEnregistrer,
@@ -21,6 +21,7 @@ import {
 import {
   argent,
   aujourdhui,
+  champ,
   CATEGORIES,
   dateCourte,
   heures as formatHeures,

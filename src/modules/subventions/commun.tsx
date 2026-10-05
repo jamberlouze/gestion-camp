@@ -9,8 +9,6 @@ import { moment, nomPersonne, STATUTS, TYPES } from './outils'
 import type { Note, Statut, TypeSubvention } from './types'
 
 export const menu = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800'
-/** Champ du module sans largeur imposée (ui.champ est en w-full, qui l'emporterait sur w-auto / w-24). */
-export const champ = ui.champ.replace('w-full ', '')
 
 export function Pastille({ children, classe = 'bg-pierre-100 text-pierre-700' }: { children: ReactNode; classe?: string }) {
   return <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${classe}`}>{children}</span>

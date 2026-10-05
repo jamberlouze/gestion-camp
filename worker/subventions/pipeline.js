@@ -85,14 +85,22 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
 
   let texte = null
   try {
-    const [reglages, connus] = await Promise.all([
+    const [reglages, groupe, connus] = await Promise.all([
       db.lire('grant_settings?select=key,value'),
+      db.lire('grant_companies?active=is.true&order=sort_order,name&select=name,legal_status'),
       db.lire(
         `grants?target_company_id=eq.${entreprise.id}&select=program_name,source_url,status,program_key,discovered_fy&order=discovered_at.desc&limit=400`,
       ),
     ])
-    const criteresCommuns = reglages.find((r) => r.key === 'criteres_communs')?.value ?? ''
-    const invite = invitationRecherche({ entreprise, criteresCommuns, regles: regles?.summary ?? null, connus, aujourdhui: aujourdhui() })
+    const consignes = reglages.find((r) => r.key === 'consignes_groupe')?.value
+    const invite = invitationRecherche({
+      entreprise,
+      groupe,
+      consignes: typeof consignes === 'string' ? consignes : '',
+      regles: regles?.summary ?? null,
+      connus,
+      aujourdhui: aujourdhui(),
+    })
 
     const reponse = await rechercher(claude, nom, invite)
     texte = reponse.texte

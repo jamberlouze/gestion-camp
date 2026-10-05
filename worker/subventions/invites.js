@@ -32,17 +32,25 @@ const FORMAT_JSON = `Réponds uniquement avec un tableau JSON, sans texte autour
 Si tu n'es pas certain d'une date ou d'un montant, mets null plutôt que d'inventer.
 Si tu ne trouves rien de nouveau, réponds [].`
 
+const PRIORITE_SALARIALE = `Priorité absolue : les subventions salariales (embauche, main-d'œuvre, formation, jeunes,
+emplois d'été).`
+const SANS_PERSONNEL = `Cette entreprise n'embauche pas de personnel : ne propose de programmes salariaux que s'ils
+restent plausibles pour elle, et concentre-toi sur ce qui correspond à ses activités et à ses actifs.`
+
 /**
- * Prompt de recherche pour une entreprise.
- * @param {{ entreprise: {name: string, legal_status: string|null, specific_criteria: string|null},
- *           criteresCommuns: string, regles: string|null,
+ * Prompt de recherche pour une entreprise. Le contexte du groupe vient de
+ * la liste des entreprises (rien à tenir à jour à la main) ; la priorité
+ * salariale ne vaut que pour une entreprise qui embauche (hires_staff).
+ * @param {{ entreprise: {name: string, legal_status: string|null, specific_criteria: string|null, hires_staff?: boolean},
+ *           groupe: {name: string, legal_status: string|null}[], consignes: string, regles: string|null,
  *           connus: {program_name: string, source_url: string|null, status: string, program_key: string|null, discovered_fy: number}[],
  *           aujourdhui: string }} p
  */
-export function invitationRecherche({ entreprise, criteresCommuns, regles, connus, aujourdhui }) {
+export function invitationRecherche({ entreprise, groupe, consignes, regles, connus, aujourdhui }) {
   const statut =
     entreprise.legal_status?.trim() ||
     'statut juridique non précisé : considère autant les programmes pour OBNL que pour entreprises'
+  const membres = groupe.map((e) => `- ${e.name}${e.legal_status?.trim() ? ` (${e.legal_status.trim()})` : ''}`).join('\n')
   const liste = connus.length
     ? connus
         .map(
@@ -58,8 +66,12 @@ actuellement ouverts ou à venir qui pourraient s'appliquer.
 
 Nous sommes le ${aujourdhui}. L'année fiscale du groupe va du 1er octobre au 30 septembre.
 
-${criteresCommuns.trim()}
+Entreprises du groupe (chacune a sa propre recherche ; celle-ci vise seulement ${entreprise.name}) :
+${membres}
 
+${entreprise.hires_staff === false ? SANS_PERSONNEL : PRIORITE_SALARIALE}
+Ratisse large : ne manque rien, quitte à proposer des programmes marginaux.
+${consignes?.trim() ? `\nConsignes de la direction pour tout le groupe :\n${consignes.trim()}\n` : ''}
 Critères propres à cette entreprise :
 ${entreprise.specific_criteria?.trim() || '(aucun pour l’instant)'}
 
