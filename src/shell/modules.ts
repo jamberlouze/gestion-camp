@@ -67,4 +67,14 @@ export const MODULES: DefinitionModule[] = [
     directionSeulement: true,
     adminSeulement: true,
   },
+  {
+    // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
+    // base : temps.role_autorise et les politiques du schéma temps).
+    id: 'temps',
+    nom: 'Feuilles de temps',
+    description: 'Heures par période de paie : régulières, vacances, maladie',
+    icone: '⏱️',
+    chemin: '/temps',
+    directionSeulement: true,
+  },
 ]

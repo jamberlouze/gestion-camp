@@ -1,5 +1,5 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
-import { QueryClient } from '@tanstack/react-query'
+import { defaultShouldDehydrateQuery, QueryClient, type Query } from '@tanstack/react-query'
 import { enregistrerMutationsEmbarcations } from '@/modules/embarcations/donnees'
 
 /** Durée de conservation du cache sur l'appareil (lecture hors ligne). */
@@ -32,6 +32,11 @@ export const persistance = {
   }),
   maxAge: TRENTE_JOURS,
   buster: 'v1',
+  // Feuilles de temps : jamais gardées sur l'appareil (renseignements
+  // personnels ; un admin lit celles de toute la direction).
+  dehydrateOptions: {
+    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && q.queryKey[0] !== 'temps',
+  },
 }
 
 /** À la déconnexion : rien des données du camp ne reste sur l'appareil. */
