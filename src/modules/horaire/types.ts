@@ -82,6 +82,8 @@ export interface Horaire {
   dossier_id: string | null
   /** Modèle de séjour : point de départ des nouvelles semaines. */
   modele: boolean
+  /** Date du premier jour (AAAA-MM-JJ) ; null pour un modèle ou une semaine pas encore datée. */
+  debut: string | null
   etat: Partial<EtatSemaine>
   updated_at: string
   created_at: string

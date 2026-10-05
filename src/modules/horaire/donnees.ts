@@ -26,7 +26,7 @@ async function verifier<T>(requete: PromiseLike<{ data: T; error: unknown }>): P
 }
 
 /** Semaine ou modèle, sans la grille (seulement ses jours, pour les résumés). */
-export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'dossier_id' | 'modele' | 'updated_at' | 'created_at'> & {
+export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'dossier_id' | 'modele' | 'debut' | 'updated_at' | 'created_at'> & {
   jours: string[] | null
 }
 
@@ -45,7 +45,7 @@ export function useHoraires() {
     queryKey: CLES.liste,
     queryFn: async () =>
       (await verifier(
-        db().from('horaires').select('id, nom, semaine_id, dossier_id, modele, updated_at, created_at, jours:etat->jours'),
+        db().from('horaires').select('id, nom, semaine_id, dossier_id, modele, debut, updated_at, created_at, jours:etat->jours'),
       )) as ResumeHoraire[],
     select: (l) => [...l].sort((a, b) => trierNoms(a.nom, b.nom)),
   })
@@ -160,6 +160,8 @@ export interface NouvelHoraire {
   etat: EtatSemaine
   dossier_id: string | null
   modele: boolean
+  /** Date du premier jour (jamais pour un modèle). */
+  debut?: string | null
 }
 
 export function useCreerHoraire() {
@@ -172,12 +174,12 @@ export function useCreerHoraire() {
   })
 }
 
-/** Renomme une semaine ou la range dans un autre dossier. */
+/** Renomme une semaine, la range dans un autre dossier ou change sa date de début. */
 export function useModifierHoraire() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['horaire', 'modifier'],
-    mutationFn: ({ id, ...champs }: { id: string; nom?: string; dossier_id?: string | null }) =>
+    mutationFn: ({ id, ...champs }: { id: string; nom?: string; dossier_id?: string | null; debut?: string | null }) =>
       verifier(db().from('horaires').update(champs).eq('id', id)),
     onSettled: () => client.invalidateQueries({ queryKey: CLES.liste }),
   })

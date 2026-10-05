@@ -46,11 +46,15 @@ export function Presences() {
       )}
       <Cuisine jours={jours} />
       <p className="text-sm text-pierre-500">
-        L'animation se planifie dans l'onglet{' '}
+        L'animation vient du module{' '}
+        <Link to="/horaire" className="text-foret-700 underline">
+          Horaire d'animation
+        </Link>{' '}
+        (onglet{' '}
         <Link to={`/calendrier/animation?date=${date}`} className="text-foret-700 underline">
           Animation
         </Link>{' '}
-        (feuille de route par jour).
+        pour la voir jour par jour).
       </p>
     </div>
   )

@@ -8,7 +8,7 @@ connexion, menu, référentiel partagé.
 |---|---|---|
 | 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
-| 🧩 Horaire : groupes et animateurs | En service | Ordinateur |
+| 🧩 Horaire d'animation : groupes et animateurs | En service | Ordinateur |
 | 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
 | 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, administrateurs seulement pour l'instant |
 | 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, administrateurs seulement (pour l'instant) |
@@ -45,10 +45,10 @@ scripts/migration/  import unique des anciens projets
 - `core` : `profils` et `acces_modules` (rôles), `groupes`, `employes`, `semaines`
 - `embarcations` : `modeles`, `embarcations`
 - `commande` : `recettes`, `consommables`, `banque_ingredients`, `groupes_repas`, `plan_cells`, `menus_sauves`, `ajouts_*`, `sorties`
-- `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise), `dossiers` (rangement des semaines par saison)
+- `horaire` : `parametres`, `horaires` (un document par semaine ou par modèle de séjour, le temps que le module se stabilise ; `debut` = date du premier jour, qui place la semaine dans le Calendrier), `dossiers` (rangement des semaines par saison)
 - `subventions` : `grant_companies` (entreprises du groupe, critères), `grants` (une subvention : trouvée, validée ou rejetée, puis demandé / accordé / reçu), `grant_feedback` (décisions qui nourrissent la mémoire), `grant_notes`, `grant_time_entries` (heures), `grant_reporting_steps` (reddition de compte), `grant_search_runs` (journal des recherches), `grant_learned_rules` (mémoire), `grant_settings`, `grant_digests` (courriels du lundi). Noms repris de la feuille de route de la Vigie
 - `vigie` : `camps` (proposé / inclus / exclu, compétiteur direct ou référence, membre ACQ ou non), `programmes` (prix et durée ; prix par nuit calculé), `activites` (liste candidate commune : saisons, offerte à la BPA, coûts estimés par Claude), `camps_activites`, `photos` (une par activité et par camp), `maquettes` (3D), `changements` (détectés, à valider), `recherches` (journal), `requetes_ia` (file des appels à Claude), `parametres`. Import du Google Sheets « BPA_Vigie_ Comparatif des camps » le 2026-10-03 (`scripts/migration/vigie.py`)
-- `calendrier` : `sejours` (copie en lecture seule de la base Airtable « Réservation Groupes », écrite par le Worker), `evenements` (ponctuels ou récurrents), `personnel` (direction, animation, terrain), `affectations_animation` (feuille de route), `presences_simples` (direction et terrain), vue `v_presence_jour` (qui travaille, quel secteur, fait quoi ; la cuisine vient de `commande.quarts`), `journal` (chaque modification, par déclencheur), `synchros`. Rien n'est effacé (`deleted_at`)
+- `calendrier` : `sejours` (copie en lecture seule de la base Airtable « Réservation Groupes », écrite par le Worker), `evenements` (ponctuels ou récurrents), `personnel` (direction et terrain), `presences_simples`, vue `v_presence_jour` (qui travaille, quel secteur, fait quoi ; la cuisine vient de `commande.quarts`, l'animation des horaires datés de `horaire.horaires`), `journal` (chaque modification, par déclencheur), `synchros`. Rien n'est effacé (`deleted_at`)
 - `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent

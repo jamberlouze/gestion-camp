@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -39,7 +39,21 @@ export default function ModuleHoraire() {
   const reglages = useReglages()
   const animateurs = useAnimateurs()
   const referentielVide = useReferentielVide()
-  const [choisie, setChoisie] = useState<string | null>(lireSemaineActive)
+  // Lien direct vers un horaire (depuis le Calendrier des opérations) :
+  // /horaire?semaine=<id> l'ouvre, puis le paramètre est retiré de l'adresse.
+  const [params, setParams] = useSearchParams()
+  const [choisie, setChoisie] = useState<string | null>(() => params.get('semaine') ?? lireSemaineActive())
+  useEffect(() => {
+    setParams(
+      (p) => {
+        if (!p.has('semaine')) return p
+        const n = new URLSearchParams(p)
+        n.delete('semaine')
+        return n
+      },
+      { replace: true },
+    )
+  }, [setParams])
   const [demande, setDemande] = useState<DemandeNouvel | null>(null)
   const [reglagesModifies, setReglagesModifies] = useState(false)
   const navigate = useNavigate()
@@ -192,7 +206,7 @@ function EnteteModule({
   ]
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
-      <h1 className="text-2xl font-semibold">Horaire</h1>
+      <h1 className="text-2xl font-semibold">Horaire d'animation</h1>
       <nav aria-label="Espaces de l'horaire" className="ml-auto inline-flex rounded-lg border border-pierre-200 bg-pierre-100 p-0.5">
         {espaces.map((e) => (
           <Link

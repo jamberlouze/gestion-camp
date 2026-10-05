@@ -49,7 +49,7 @@ function ListePersonnel() {
       }
     >
       <p className="mb-3 text-sm text-pierre-500">
-        Direction, animation et terrain. L'équipe de cuisine se gère dans Cuisine › Équipe et réglages ; elle apparaît d'elle-même dans le calendrier.
+        Direction et terrain. L'équipe de cuisine se gère dans Cuisine › Équipe et réglages, les animateurs dans Horaire d'animation : ils apparaissent d'eux-mêmes dans le calendrier.
       </p>
       {ajout && (
         <div className="mb-3">

@@ -37,7 +37,7 @@ export const MODULES: DefinitionModule[] = [
   },
   {
     id: 'horaire',
-    nom: 'Horaire',
+    nom: "Horaire d'animation",
     description: 'Horaire des groupes et des animateurs',
     icone: '🧩',
     chemin: '/horaire',

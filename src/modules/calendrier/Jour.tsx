@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { IconeAttention, IconePlus } from '@/lib/icones'
+import { IconePlus } from '@/lib/icones'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate, PastilleSecteur, Section } from './commun'
-import { nonConfirme, sejourDuJour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { nonConfirme, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { ajouterJours, dateLongue, heure, plageHeures } from './dates'
-import { useAffectations, useEcriture, useEvenements, usePresenceJour, useSejours } from './donnees'
+import { useEcriture, useEvenements, usePresenceJour, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
 import { decrireRegle } from './recurrence'
 import { META_SECTEUR, SECTEURS, TYPES_EVENEMENT, type Evenement, type Sejour } from './types'
@@ -18,7 +18,6 @@ export function Jour() {
   const sejours = useSejours()
   const evenements = useEvenements()
   const presence = usePresenceJour(date, date)
-  const affectations = useAffectations(date, date)
   const [fiche, setFiche] = useState<{ evenement?: Evenement } | null>(null)
 
   const duJour = useSejoursPlage(sejours.data, date, date)
@@ -33,12 +32,6 @@ export function Jour() {
     }
     return [...groupes.entries()].sort(([a], [b]) => (a === 'Section à préciser' ? 1 : b === 'Section à préciser' ? -1 : a.localeCompare(b, 'fr')))
   }, [duJour])
-
-  const animesParSejour = useMemo(() => {
-    const m = new Map<string, Set<string>>()
-    for (const a of affectations.data ?? []) if (a.sejour_id) m.set(a.sejour_id, (m.get(a.sejour_id) ?? new Set()).add(a.personnel_id))
-    return m
-  }, [affectations.data])
 
   const erreur = sejours.error ?? evenements.error ?? presence.error
   return (
@@ -60,7 +53,7 @@ export function Jour() {
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-pierre-500">{section}</p>
                     <ul className="space-y-2">
                       {liste.map((s) => (
-                        <CarteSejour key={s.id} sejour={s} date={date} animes={animesParSejour.get(s.id)?.size ?? 0} />
+                        <CarteSejour key={s.id} sejour={s} date={date} />
                       ))}
                     </ul>
                   </div>
@@ -159,10 +152,9 @@ export function Jour() {
   )
 }
 
-function CarteSejour({ sejour: s, date, animes }: { sejour: Sejour; date: string; animes: number }) {
+function CarteSejour({ sejour: s, date }: { sejour: Sejour; date: string }) {
   const arrive = s.date_arrivee === date
   const part = s.date_depart === date
-  const manque = s.avec_animation && sejourDuJour(s, date) && (s.nb_animateurs ?? 1) > animes
   return (
     <li className={`rounded-lg border px-3 py-2 ${nonConfirme(s) ? 'border-dashed border-pierre-400' : 'border-pierre-200'}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
@@ -178,12 +170,6 @@ function CarteSejour({ sejour: s, date, animes }: { sejour: Sejour; date: string
         {arrive && <span className="rounded-full bg-foret-50 px-2 py-0.5 text-foret-800">Arrivée{s.heure_arrivee ? ` à ${heure(s.heure_arrivee)}` : ''}</span>}
         {part && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-900">Départ{s.heure_depart ? ` à ${heure(s.heure_depart)}` : ''}</span>}
         {nonConfirme(s) && <span className="rounded-full bg-pierre-100 px-2 py-0.5 text-pierre-700">{s.etat}</span>}
-        {manque && (
-          <Link to={`/calendrier/animation?date=${date}`} className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-red-800">
-            <IconeAttention className="size-3.5" />
-            {animes ? `${animes} animateur${animes > 1 ? 's' : ''} sur ${s.nb_animateurs}` : 'Aucun animateur'}
-          </Link>
-        )}
       </div>
       {s.notes && <p className="mt-1 whitespace-pre-line text-sm text-pierre-700">{s.notes}</p>}
     </li>

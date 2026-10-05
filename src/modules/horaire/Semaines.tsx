@@ -11,6 +11,14 @@ import { decalagePour, decalerJours, horaireVide, joursConsecutifs, lireJours, r
 import { dossierDe, grouper, nomLibre, nomSemaineLibre, nomsDans, type DemandeNouvel } from './emplacements'
 import { JOURS_SEMAINE, type Dossier, type EtatSemaine } from './types'
 
+/** Jour de la semaine d'une date AAAA-MM-JJ (« Lundi »), ou null. */
+const jourDe = (date: string | null | undefined) => {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
+  const d = new Date(`${date}T12:00:00`)
+  return isNaN(d.getTime()) ? null : JOURS_SEMAINE[d.getDay()]
+}
+const dateLisible = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })
+
 // ------------------------------------------------------------------
 // Barre de la semaine ouverte :
 //  - à gauche, la semaine et ce qu'on en fait (nouvelle, dupliquer, renommer) ;
@@ -140,6 +148,14 @@ export function BarreSemaine({
             </div>
           </>
         )}
+        {actif && !estModele && semaine && (
+          <DateDebut
+            debut={actif.debut}
+            premierJour={semaine.etat.jours[0]}
+            ecriture={ecriture}
+            changer={(debut) => modifier.mutate({ id: actif.id, debut })}
+          />
+        )}
         {semaine && ecriture && (
           <span className="ml-1 text-xs text-pierre-500" role="status">
             {statut === 'en-attente' && 'Enregistrement…'}
@@ -211,6 +227,44 @@ export function BarreSemaine({
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * Date du premier jour : place la semaine dans le Calendrier des opérations
+ * (une semaine sans date n'y apparaît pas).
+ */
+function DateDebut({
+  debut,
+  premierJour,
+  ecriture,
+  changer,
+}: {
+  debut: string | null
+  premierJour: string | undefined
+  ecriture: boolean
+  changer: (debut: string | null) => void
+}) {
+  const jour = jourDe(debut)
+  const decale = !!debut && !!premierJour && jour !== premierJour
+  return (
+    <label className="inline-flex items-center gap-1.5 text-sm text-pierre-600" title="Place la semaine dans le Calendrier des opérations">
+      Premier jour
+      <input
+        type="date"
+        aria-label="Date du premier jour"
+        className={`rounded-lg border bg-white px-2 py-1.5 text-sm ${debut ? 'border-pierre-300' : 'border-amber-400 bg-amber-50'}`}
+        value={debut ?? ''}
+        disabled={!ecriture}
+        onChange={(e) => changer(jourDe(e.target.value) ? e.target.value : null)}
+      />
+      {!debut && <span className="text-xs text-amber-800">pas dans le Calendrier</span>}
+      {decale && (
+        <span className="text-xs text-amber-800">
+          le {dateLisible(debut!)} est un {jour!.toLowerCase()}, la semaine commence un {premierJour!.toLowerCase()}
+        </span>
+      )}
+    </label>
   )
 }
 
@@ -298,8 +352,18 @@ export function NouvelHoraire({
   const joursSource = source ? (source.id === semaine?.horaire.id ? semaine.etat.jours : (source.jours ?? [])) : null
   const suite = joursSource ? lireJours(joursSource) : null
   const [premier, setPremier] = useState(joursSource?.[0] ?? 'Lundi')
+  const [debut, setDebut] = useState('')
   const [nombre, setNombre] = useState(6)
   const jours = !joursSource ? joursConsecutifs(premier, nombre) : suite ? joursConsecutifs(premier, suite.nombre) : joursSource
+
+  // Date du premier jour : fixe le jour de départ (sauf jours non consécutifs).
+  const jourDebut = jourDe(debut)
+  const debutDecale = !modele && !!jourDebut && jourDebut !== jours[0]
+  function changerDebut(d: string) {
+    setDebut(d)
+    const j = jourDe(d)
+    if (j && (!joursSource || suite)) setPremier(j)
+  }
 
   const propre = nom.trim()
   const dossierCible = modele ? null : dossier || null
@@ -314,7 +378,10 @@ export function NouvelHoraire({
     setDepart(id)
     const h = liste.find((x) => x.id === id)
     const j = h ? (h.id === semaine?.horaire.id ? semaine.etat.jours : (h.jours ?? [])) : null
-    if (j?.[0]) setPremier(j[0])
+    // Une date déjà choisie fixe le premier jour (si les jours se suivent).
+    const jd = jourDe(debut)
+    if (jd && (!j || lireJours(j))) setPremier(jd)
+    else if (j?.[0]) setPremier(j[0])
   }
 
   function changerDossier(cible: string) {
@@ -352,7 +419,7 @@ export function NouvelHoraire({
         }
         etat = decalerJours(base, suite ? decalagePour(base.jours, premier) : 0, reglages.nuits)
       }
-      ouvrir(await creer.mutateAsync({ nom: propre, etat, modele, dossier_id: dossierCible }))
+      ouvrir(await creer.mutateAsync({ nom: propre, etat, modele, dossier_id: dossierCible, debut: !modele && jourDebut ? debut : null }))
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))
@@ -456,6 +523,18 @@ export function NouvelHoraire({
             </span>
           )}
         </label>
+
+        {!modele && (
+          <label className="block">
+            <span className={ui.etiquette}>Date du premier jour</span>
+            <input type="date" className={ui.champ} value={debut} onChange={(e) => changerDebut(e.target.value)} />
+            <span className="mt-1 block text-xs text-pierre-500">
+              {debutDecale
+                ? `Attention : le ${dateLisible(debut)} est un ${jourDebut!.toLowerCase()}, mais l'horaire commence un ${jours[0].toLowerCase()}.`
+                : 'Place la semaine dans le Calendrier des opérations. Peut se mettre plus tard.'}
+            </span>
+          </label>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">

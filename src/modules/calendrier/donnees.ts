@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/shell/auth'
 import { supabase, type Schema } from '@/lib/supabase'
-import type { Affectation, EntreeJournal, Evenement, Personne, PresenceJour, PresenceSimple, Sejour, Synchro } from './types'
+import { ajouterJours } from './dates'
+import type { HoraireDate } from './horaire'
+import type { EntreeJournal, Evenement, Personne, PresenceJour, PresenceSimple, Sejour, Synchro } from './types'
 
 // Module en ligne seulement (comme Mastertimeline et Cuisine) : mutations
 // networkMode « always », erreurs dans le bandeau du module (racine S).
@@ -82,7 +84,7 @@ export function useEvenements() {
 export function usePresenceJour(debut: string, fin: string) {
   const cles = [[S, 'presence']]
   useTempsReel(S, 'presences_simples', cles)
-  useTempsReel(S, 'affectations_animation', cles)
+  useTempsReel('horaire', 'horaires', cles)
   useTempsReel('commande', 'quarts', cles)
   return useQuery({
     queryKey: [S, 'presence', debut, fin],
@@ -104,23 +106,32 @@ export function usePresencesSimples(debut: string, fin: string) {
   })
 }
 
-export function useAffectations(debut: string, fin: string) {
-  useTempsReel(S, 'affectations_animation', [[S, 'affectations_animation']])
+/**
+ * Horaires d'animation datés qui touchent la plage (un horaire dure au plus
+ * 7 jours : il commence au plus 6 jours avant), et le nombre de semaines
+ * pas encore datées (invisibles dans le Calendrier).
+ */
+export function useHorairesAnimation(debut: string, fin: string) {
+  useTempsReel('horaire', 'horaires', [[S, 'horaires']])
   return useQuery({
-    queryKey: [S, 'affectations_animation', debut, fin],
-    queryFn: () =>
-      toutLire<Affectation>((a, b) =>
-        db()
-          .from('affectations_animation')
-          .select('*')
-          .is('deleted_at', null)
-          .gte('date', debut)
-          .lte('date', fin)
-          .order('date')
-          .order('heure_debut', { nullsFirst: true })
-          .order('created_at')
-          .range(a, b),
-      ),
+    queryKey: [S, 'horaires', debut, fin],
+    queryFn: async () => {
+      const horaire = supabase.schema('horaire')
+      const [dates, sansDate] = await Promise.all([
+        horaire
+          .from('horaires')
+          .select('id, nom, debut, etat')
+          .eq('modele', false)
+          .gte('debut', ajouterJours(debut, -6))
+          .lte('debut', fin)
+          .order('debut')
+          .order('nom'),
+        horaire.from('horaires').select('id', { count: 'exact', head: true }).eq('modele', false).is('debut', null),
+      ])
+      if (dates.error) throw dates.error
+      if (sansDate.error) throw sansDate.error
+      return { horaires: (dates.data ?? []) as HoraireDate[], sansDate: sansDate.count ?? 0 }
+    },
   })
 }
 
@@ -191,7 +202,7 @@ export async function lireJournal(avant: number | null, table: string | null) {
 // Écritures
 // ------------------------------------------------------------------
 
-type TableModifiable = 'personnel' | 'evenements' | 'affectations_animation' | 'presences_simples'
+type TableModifiable = 'personnel' | 'evenements' | 'presences_simples'
 
 const invalider = (client: ReturnType<typeof useQueryClient>, table: TableModifiable) => {
   client.invalidateQueries({ queryKey: [S, table] })

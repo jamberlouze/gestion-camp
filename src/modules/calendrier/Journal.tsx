@@ -11,7 +11,6 @@ const TABLES: Record<string, string> = {
   sejours: 'Séjours',
   evenements: 'Événements',
   presences_simples: 'Présences',
-  affectations_animation: 'Animation',
   personnel: 'Personnel',
 }
 
@@ -95,7 +94,7 @@ export function Journal() {
     if (e.table_name === 'sejours') return String(l.nom_groupe ?? '')
     if (e.table_name === 'personnel') return String(l.nom ?? '')
     const qui = noms.get(String(l.personnel_id)) ?? 'quelqu’un'
-    const detail = e.table_name === 'affectations_animation' ? (l.activite ? ` — ${l.activite}` : '') : l.secteur ? ` (${META_SECTEUR[l.secteur as Secteur]?.libelle ?? l.secteur})` : ''
+    const detail = l.secteur ? ` (${META_SECTEUR[l.secteur as Secteur]?.libelle ?? l.secteur})` : ''
     return `${qui}, ${l.date ? dateCourte(String(l.date)) : ''}${detail}`
   }
 

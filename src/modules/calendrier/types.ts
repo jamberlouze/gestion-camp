@@ -8,8 +8,11 @@ export const META_SECTEUR: Record<Secteur, { libelle: string; pastille: string; 
   terrain: { libelle: 'Terrain', pastille: 'bg-stone-500', clair: 'bg-stone-100 text-stone-800' },
 }
 
-/** Secteurs de la liste propre au module (la cuisine vient du module Cuisine). */
-export const SECTEURS_PERSONNEL = ['direction', 'animation', 'terrain'] as const
+/**
+ * Secteurs de la liste propre au module : la cuisine vient du module Cuisine,
+ * l'animation du module Horaire d'animation.
+ */
+export const SECTEURS_PERSONNEL = ['direction', 'terrain'] as const
 export type SecteurPersonnel = (typeof SECTEURS_PERSONNEL)[number]
 
 interface Trace {
@@ -74,18 +77,6 @@ export interface Evenement extends Trace {
   exceptions: string[]
   lieu: string | null
   notes: string | null
-}
-
-export interface Affectation extends Trace {
-  id: string
-  personnel_id: string
-  date: string
-  sejour_id: string | null
-  activite: string | null
-  heure_debut: string | null
-  heure_fin: string | null
-  lieu: string | null
-  preparation: string | null
 }
 
 export interface PresenceSimple extends Trace {
