@@ -3,7 +3,6 @@ import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { Animation } from './Animation'
 import { Evenements } from './Evenements'
 import { Journal } from './Journal'
-import { Presences } from './Presences'
 import { Reglages } from './Reglages'
 import { Vue } from './Vue'
 
@@ -14,7 +13,6 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 const ONGLETS = [
   { chemin: '/calendrier', libelle: 'Calendrier', date: true },
-  { chemin: '/calendrier/presences', libelle: 'Présences', date: true },
   { chemin: '/calendrier/animation', libelle: 'Animation', date: true },
   { chemin: '/calendrier/evenements', libelle: 'Événements' },
   { chemin: '/calendrier/journal', libelle: 'Journal' },
@@ -41,7 +39,8 @@ export default function ModuleCalendrier() {
         <Route index element={<Vue />} />
         {/* Ancienne adresse de la vue Calendrier (la vue « Aujourd'hui » a été retirée). */}
         <Route path="vue" element={<AncienneVue />} />
-        <Route path="presences" element={<Presences />} />
+        {/* Ancien onglet Présences : direction et terrain se saisissent dans la grille du Calendrier. */}
+        <Route path="presences" element={<AncienneVue />} />
         <Route path="animation" element={<Animation />} />
         <Route path="evenements" element={<Evenements />} />
         <Route path="journal" element={<Journal />} />

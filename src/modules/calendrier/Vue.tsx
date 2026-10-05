@@ -6,9 +6,10 @@ import { Chargement, NavDate } from './commun'
 import { nonConfirme, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { IconeChevron } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
-import { useEcriture, useEvenements, usePresenceJour, useSejours } from './donnees'
+import { CellulePresence } from './CellulePresence'
+import { useEcriture, useEvenements, usePersonnel, usePresence, usePresenceJour, usePresencesSimples, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
-import { META_SECTEUR, SECTEURS, TYPES_EVENEMENT, type Evenement, type PresenceJour, type Sejour } from './types'
+import { META_SECTEUR, TYPES_EVENEMENT, type Evenement, type Personne, type PresenceJour, type PresenceSimple, type Sejour, type Secteur } from './types'
 
 const SANS_SECTION = 'Section à préciser'
 
@@ -43,6 +44,10 @@ export function Vue() {
     for (const p of presence.data ?? []) m.set(p.date, [...(m.get(p.date) ?? []), p])
     return m
   }, [presence.data])
+  // Direction et terrain : saisis directement dans la grille (semaine, période).
+  const personnel = usePersonnel()
+  const simples = usePresencesSimples(debut, fin)
+  const cocher = usePresence(debut, fin)
   const [fiche, setFiche] = useState<{ evenement: Evenement; occurrence: string } | null>(null)
 
   /** Change le mode ; la période libre reprend les jours affichés. */
@@ -81,7 +86,7 @@ export function Vue() {
     </div>
   )
 
-  const erreur = sejours.error ?? evenements.error ?? presence.error
+  const erreur = sejours.error ?? evenements.error ?? presence.error ?? personnel.error ?? simples.error
   const ouvrir = (evenement: Evenement, occurrence: string) => setFiche({ evenement, occurrence })
   const nbJours = jours.length
 
@@ -105,7 +110,17 @@ export function Vue() {
       ) : mode === 'mois' ? (
         <GrilleMois jours={jours} date={date} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} cadrer={cadrer} />
       ) : (
-        <GrilleJours jours={jours} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} cadrer={cadrer} />
+        <GrilleJours
+          jours={jours}
+          sejours={visibles}
+          evParJour={evParJour}
+          presenceParJour={presenceParJour}
+          personnel={personnel.data ?? []}
+          simples={simples.data ?? []}
+          cocher={cocher.mutate}
+          ouvrir={ouvrir}
+          cadrer={cadrer}
+        />
       )}
       <p className="mt-3 text-xs text-pierre-500">
         Cliquez sur un groupe pour afficher exactement ses jours (vue Période). Bordure pointillée : réservation pas encore confirmée dans Airtable.
@@ -182,28 +197,18 @@ function LienJour({ jour, children, className = '' }: { jour: string; children: 
   )
 }
 
-/** Qui travaille ce jour-là, par secteur (noms). */
-function NomsPersonnel({ liste }: { liste: PresenceJour[] | undefined }) {
-  if (!liste?.length) return <span className="text-xs text-pierre-400">—</span>
+/** Qui travaille ce jour-là dans un secteur lu ailleurs (cuisine, animation). */
+function NomsSecteur({ liste }: { liste: PresenceJour[] }) {
+  if (!liste.length) return null
   return (
-    <div className="space-y-1 text-xs leading-4">
-      {SECTEURS.map((s) => {
-        const noms = liste.filter((p) => p.secteur === s)
-        return noms.length ? (
-          <div key={s} className="flex gap-1" title={META_SECTEUR[s].libelle}>
-            <span className={`mt-1 size-2 shrink-0 rounded-full ${META_SECTEUR[s].pastille}`} aria-hidden />
-            <span>
-              {noms.map((p, i) => (
-                <span key={`${p.personnel_id}|${i}`} title={p.description || undefined}>
-                  {i > 0 && ', '}
-                  {p.nom}
-                </span>
-              ))}
-            </span>
-          </div>
-        ) : null
-      })}
-    </div>
+    <ul className="space-y-0.5 text-xs leading-4">
+      {liste.map((p, i) => (
+        <li key={`${p.personnel_id}|${i}`}>
+          <span className="font-medium">{p.nom}</span>
+          {p.description && <span className="text-pierre-500"> · {p.description}</span>}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -222,11 +227,31 @@ function PuceEvenement({ ev, jour, ouvrir }: { ev: Evenement; jour: string; ouvr
   )
 }
 
+/** Première colonne d'une rangée de personnel : le secteur (et d'où vient l'information). */
+function EnteteSecteur({ secteur, source }: { secteur: Secteur; source?: string }) {
+  return (
+    <div className="sticky left-0 z-10 flex items-start gap-1.5 border-b border-pierre-200 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">
+      <span className={`mt-1 size-2 shrink-0 rounded-full ${META_SECTEUR[secteur].pastille}`} aria-hidden />
+      <span>
+        {META_SECTEUR[secteur].libelle}
+        {source && (
+          <Link to={source} className="block text-[11px] font-normal normal-case tracking-normal text-foret-700 underline">
+            modifier
+          </Link>
+        )}
+      </span>
+    </div>
+  )
+}
+
 function GrilleJours({
   jours,
   sejours,
   evParJour,
   presenceParJour,
+  personnel,
+  simples,
+  cocher,
   ouvrir,
   cadrer,
 }: {
@@ -234,9 +259,13 @@ function GrilleJours({
   sejours: Sejour[]
   evParJour: Map<string, Evenement[]>
   presenceParJour: Map<string, PresenceJour[]>
+  personnel: Personne[]
+  simples: PresenceSimple[]
+  cocher: React.ComponentProps<typeof CellulePresence>['cocher']
   ouvrir: (e: Evenement, d: string) => void
   cadrer: (s: Sejour) => void
 }) {
+  const ecriture = useEcriture()
   const auj = aujourdhui()
   const sections = useMemo(() => {
     const m = new Map<string, Sejour[]>()
@@ -317,14 +346,33 @@ function GrilleJours({
             </div>
           ))}
         </div>
-        <div className={colonnes} style={gabarit}>
-          <div className="sticky left-0 z-10 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Personnel</div>
-          {jours.map((j) => (
-            <div key={j} className="border-l border-pierre-200 p-1.5">
-              <NomsPersonnel liste={presenceParJour.get(j)} />
-            </div>
-          ))}
-        </div>
+        {/* Qui travaille : direction et terrain se cochent ici ; cuisine et animation viennent de leurs modules. */}
+        {(['direction', 'terrain'] as const).map((secteur) => (
+          <div key={secteur} className={colonnes} style={gabarit}>
+            <EnteteSecteur secteur={secteur} />
+            {jours.map((j) => (
+              <CellulePresence
+                key={j}
+                jour={j}
+                secteur={secteur}
+                presences={simples.filter((p) => p.date === j && p.secteur === secteur)}
+                personnel={personnel}
+                ecriture={ecriture}
+                cocher={cocher}
+              />
+            ))}
+          </div>
+        ))}
+        {(['cuisine', 'animation'] as const).map((secteur) => (
+          <div key={secteur} className={colonnes} style={gabarit}>
+            <EnteteSecteur secteur={secteur} source={secteur === 'cuisine' ? '/cuisine/horaire' : '/horaire'} />
+            {jours.map((j) => (
+              <div key={j} className="border-b border-l border-pierre-200 p-1.5">
+                <NomsSecteur liste={(presenceParJour.get(j) ?? []).filter((p) => p.secteur === secteur)} />
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   )

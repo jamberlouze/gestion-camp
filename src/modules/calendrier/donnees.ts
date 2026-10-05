@@ -135,47 +135,6 @@ export function useHorairesAnimation(debut: string, fin: string) {
   })
 }
 
-/** Horaire du module Cuisine (lecture seule ici) : quarts, personnes et fonctions. */
-export interface QuartCuisine {
-  personne_id: string
-  jour: string
-  texte: string
-}
-export interface PersonneCuisine {
-  id: string
-  nom: string
-  fonction_id: string | null
-  actif: boolean
-  ordre: number
-}
-export interface FonctionCuisine {
-  id: string
-  nom: string
-  couleur: string
-  ordre: number
-}
-
-export function useHoraireCuisine(debut: string, fin: string) {
-  useTempsReel('commande', 'quarts', [[S, 'cuisine']])
-  return useQuery({
-    queryKey: [S, 'cuisine', debut, fin],
-    queryFn: async () => {
-      const cuisine = supabase.schema('commande')
-      const [quarts, personnes, fonctions] = await Promise.all([
-        cuisine.from('quarts').select('personne_id, jour, texte').gte('jour', debut).lte('jour', fin),
-        cuisine.from('personnel').select('id, nom, fonction_id, actif, ordre').order('ordre').order('nom'),
-        cuisine.from('fonctions').select('id, nom, couleur, ordre').order('ordre'),
-      ])
-      for (const r of [quarts, personnes, fonctions]) if (r.error) throw r.error
-      return {
-        quarts: (quarts.data ?? []) as QuartCuisine[],
-        personnes: (personnes.data ?? []) as PersonneCuisine[],
-        fonctions: (fonctions.data ?? []) as FonctionCuisine[],
-      }
-    },
-  })
-}
-
 export function useSynchros() {
   useTempsReel(S, 'synchros', [[S, 'synchros']])
   return useQuery({
