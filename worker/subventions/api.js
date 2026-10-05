@@ -1,6 +1,7 @@
 // Routes /api/subventions/* (déclenchement manuel depuis l'onglet
-// Recherches). Réservées à la direction : le jeton de session Supabase de
-// la personne est vérifié par la base (fonction subventions.peut_utiliser).
+// Recherches). Réservées aux personnes qui ont accès au module (les
+// administrateurs pour l'instant) : le jeton de session Supabase de la
+// personne est vérifié par la base (fonction subventions.peut_utiliser).
 
 import { base } from './base.js'
 import { modele } from './claude.js'
@@ -10,8 +11,8 @@ import { envoyerRappelEssai, rechercheConfiguree, rechercherEntreprise } from '.
 const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
 
-/** Jeton de la personne connectée, si elle fait partie de la direction. */
-async function jetonDirection(request, env) {
+/** Jeton de la personne connectée, si elle a accès au module. */
+async function jetonAutorise(request, env) {
   const jeton = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!jeton) return null
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/peut_utiliser`, {
@@ -61,8 +62,8 @@ function rechercheEnFlux(env, parametres) {
 }
 
 export async function routeSubventions(request, env, ctx, chemin) {
-  const jeton = await jetonDirection(request, env)
-  if (!jeton) return json({ erreur: 'Réservé aux administrateurs et à la direction.' }, 403)
+  const jeton = await jetonAutorise(request, env)
+  if (!jeton) return json({ erreur: 'Réservé aux personnes qui ont accès au module Subventions.' }, 403)
 
   // État de la configuration (sans jamais renvoyer les secrets eux-mêmes).
   if (chemin === 'etat' && request.method === 'GET') {
