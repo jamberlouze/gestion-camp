@@ -10,7 +10,7 @@ import { journee, type JourneeAnimation } from './horaire'
 import { useDateChoisie } from './outils'
 
 /**
- * Animation du jour, lue dans le module Horaire d'animation (seule source) :
+ * Animation du jour, lue dans le module Animation (seule source) :
  * chaque groupe, son animateur (remplaçant pendant un congé), ses activités
  * par période, puis les tâches de soirée.
  */
@@ -24,7 +24,7 @@ export function Animation() {
   )
 
   if (!peutLire('horaire')) {
-    return <p className={`${ui.carte} p-6 text-center text-sm text-pierre-500`}>L'animation vient du module Horaire d'animation, auquel vous n'avez pas accès.</p>
+    return <p className={`${ui.carte} p-6 text-center text-sm text-pierre-500`}>L'animation vient du module Animation, auquel vous n'avez pas accès.</p>
   }
   const sansDate = horaires.data?.sansDate ?? 0
   return (
@@ -42,7 +42,7 @@ export function Animation() {
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {sansDate} semaine{sansDate > 1 ? 's' : ''} d'animation sans date : dans{' '}
           <Link to="/horaire" className="underline">
-            Horaire d'animation
+            Animation
           </Link>
           , indiquez la « date du premier jour » pour {sansDate > 1 ? 'les' : 'la'} voir ici.
         </p>

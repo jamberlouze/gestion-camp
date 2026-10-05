@@ -8,8 +8,8 @@ connexion, menu, référentiel partagé.
 |---|---|---|
 | 🚣 Embarcations : état de la flotte et réparations | En service | Mobile + ordinateur, hors ligne |
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
-| 🧩 Horaire d'animation : groupes et animateurs | En service | Ordinateur |
-| 📆 Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
+| 🤡 Animation : horaire des groupes et des animateurs | En service | Ordinateur |
+| ✅ Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
 | 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, administrateurs seulement pour l'instant |
 | 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, administrateurs seulement (pour l'instant) |
 | 🗓️ Calendrier des opérations : séjours (Airtable), événements, qui travaille chaque jour | En service (secret Airtable à ajouter, voir 10) | Téléphone pour consulter, ordinateur pour modifier (en ligne) |

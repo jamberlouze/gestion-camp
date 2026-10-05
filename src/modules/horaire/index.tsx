@@ -206,7 +206,7 @@ function EnteteModule({
   ]
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
-      <h1 className="text-2xl font-semibold">Horaire d'animation</h1>
+      <h1 className="text-2xl font-semibold">Animation</h1>
       <nav aria-label="Espaces de l'horaire" className="ml-auto inline-flex rounded-lg border border-pierre-200 bg-pierre-100 p-0.5">
         {espaces.map((e) => (
           <Link

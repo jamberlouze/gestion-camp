@@ -37,16 +37,16 @@ export const MODULES: DefinitionModule[] = [
   },
   {
     id: 'horaire',
-    nom: "Horaire d'animation",
+    nom: 'Animation',
     description: 'Horaire des groupes et des animateurs',
-    icone: '🧩',
+    icone: '🤡',
     chemin: '/horaire',
   },
   {
     id: 'mastertimeline',
     nom: 'Mastertimeline',
     description: "Tâches de l'année, toutes entreprises",
-    icone: '📆',
+    icone: '✅',
     chemin: '/mastertimeline',
   },
   {

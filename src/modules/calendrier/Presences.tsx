@@ -48,7 +48,7 @@ export function Presences() {
       <p className="text-sm text-pierre-500">
         L'animation vient du module{' '}
         <Link to="/horaire" className="text-foret-700 underline">
-          Horaire d'animation
+          Animation
         </Link>{' '}
         (onglet{' '}
         <Link to={`/calendrier/animation?date=${date}`} className="text-foret-700 underline">

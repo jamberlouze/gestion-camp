@@ -10,7 +10,7 @@ export const META_SECTEUR: Record<Secteur, { libelle: string; pastille: string; 
 
 /**
  * Secteurs de la liste propre au module : la cuisine vient du module Cuisine,
- * l'animation du module Horaire d'animation.
+ * l'animation du module Animation.
  */
 export const SECTEURS_PERSONNEL = ['direction', 'terrain'] as const
 export type SecteurPersonnel = (typeof SECTEURS_PERSONNEL)[number]

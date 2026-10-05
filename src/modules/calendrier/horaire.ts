@@ -1,4 +1,4 @@
-// L'animation vient du module Horaire d'animation (fonctions pures). Un
+// L'animation vient du module Animation (fonctions pures). Un
 // horaire daté (horaire.horaires.debut) place chacun de ses jours à la
 // première date, à partir de debut, qui porte ce nom — même règle que
 // calendrier.date_du_jour dans la base (vue commune).
