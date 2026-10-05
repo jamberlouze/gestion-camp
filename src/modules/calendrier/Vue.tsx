@@ -4,7 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
 import { nonConfirme, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
-import { IconeChevron } from '@/lib/icones'
+import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
 import { useEcriture, useEvenements, usePersonnel, usePresence, usePresenceJour, usePresencesSimples, useSejours } from './donnees'
@@ -48,7 +48,10 @@ export function Vue() {
   const personnel = usePersonnel()
   const simples = usePresencesSimples(debut, fin)
   const cocher = usePresence(debut, fin)
-  const [fiche, setFiche] = useState<{ evenement: Evenement; occurrence: string } | null>(null)
+  // Fiche d'événement : un existant (cliqué ce jour-là) ou un nouveau à cette date.
+  const [fiche, setFiche] = useState<{ evenement?: Evenement; date: string } | null>(null)
+  const ecriture = useEcriture()
+  const nouveau = (jour: string) => setFiche({ date: jour })
 
   /** Change le mode ; la période libre reprend les jours affichés. */
   const changerMode = (v: Mode, periode?: { du: string; au: string }) =>
@@ -86,14 +89,25 @@ export function Vue() {
     </div>
   )
 
+  const droite = (
+    <>
+      {ecriture && (
+        <button className={ui.boutonSecondaire} onClick={() => nouveau(mode === 'periode' ? du : date)}>
+          <IconePlus /> Événement
+        </button>
+      )}
+      {bascule}
+    </>
+  )
+
   const erreur = sejours.error ?? evenements.error ?? presence.error ?? personnel.error ?? simples.error
-  const ouvrir = (evenement: Evenement, occurrence: string) => setFiche({ evenement, occurrence })
+  const ouvrir = (evenement: Evenement, occurrence: string) => setFiche({ evenement, date: occurrence })
   const nbJours = jours.length
 
   return (
     <div>
       {mode === 'periode' ? (
-        <NavPeriode du={du} au={au} changer={(d, a) => changerMode('periode', { du: d, au: a })} droite={bascule} />
+        <NavPeriode du={du} au={au} changer={(d, a) => changerMode('periode', { du: d, au: a })} droite={droite} />
       ) : (
         <NavDate
           titre={mode === 'mois' ? titreMois(date) : titreSemaine(date)}
@@ -101,14 +115,14 @@ export function Vue() {
           choisir={choisir}
           precedent={mode === 'mois' ? ajouterMois(date, -1) : ajouterJours(date, -7)}
           suivant={mode === 'mois' ? ajouterMois(date, 1) : ajouterJours(date, 7)}
-          droite={bascule}
+          droite={droite}
         />
       )}
       {erreur && <p className={`${ui.erreur} mb-4`}>{messageErreur(erreur)}</p>}
       {!sejours.data || !evenements.data ? (
         <Chargement />
       ) : mode === 'mois' ? (
-        <GrilleMois jours={jours} date={date} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} cadrer={cadrer} />
+        <GrilleMois jours={jours} date={date} sejours={visibles} evParJour={evParJour} presenceParJour={presenceParJour} ouvrir={ouvrir} nouveau={nouveau} cadrer={cadrer} />
       ) : (
         <GrilleJours
           jours={jours}
@@ -119,6 +133,7 @@ export function Vue() {
           simples={simples.data ?? []}
           cocher={cocher.mutate}
           ouvrir={ouvrir}
+          nouveau={nouveau}
           cadrer={cadrer}
         />
       )}
@@ -138,7 +153,14 @@ export function Vue() {
         Cliquez sur un groupe pour afficher exactement ses jours (vue Période).
         {mode === 'periode' && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
-      {fiche && <FicheEvenement evenement={fiche.evenement} dateDefaut={fiche.occurrence} occurrence={fiche.occurrence} fermer={() => setFiche(null)} />}
+      {fiche && (
+        <FicheEvenement
+          evenement={fiche.evenement}
+          dateDefaut={fiche.date}
+          occurrence={fiche.evenement ? fiche.date : undefined}
+          fermer={() => setFiche(null)}
+        />
+      )}
     </div>
   )
 }
@@ -265,6 +287,7 @@ function GrilleJours({
   simples,
   cocher,
   ouvrir,
+  nouveau,
   cadrer,
 }: {
   jours: string[]
@@ -275,6 +298,7 @@ function GrilleJours({
   simples: PresenceSimple[]
   cocher: React.ComponentProps<typeof CellulePresence>['cocher']
   ouvrir: (e: Evenement, d: string) => void
+  nouveau: (jour: string) => void
   cadrer: (s: Sejour) => void
 }) {
   const ecriture = useEcriture()
@@ -355,6 +379,16 @@ function GrilleJours({
               {(evParJour.get(j) ?? []).map((ev) => (
                 <PuceEvenement key={ev.id} ev={ev} jour={j} ouvrir={ouvrir} />
               ))}
+              {ecriture && (
+                <button
+                  className={`inline-flex items-center gap-0.5 rounded px-1 text-xs text-pierre-500 hover:bg-pierre-100 hover:text-pierre-800 ${evParJour.get(j)?.length ? '' : 'opacity-60'}`}
+                  aria-label={`Ajouter un événement le ${jourCourt(j)}`}
+                  onClick={() => nouveau(j)}
+                >
+                  <IconePlus className="size-3" />
+                  {evParJour.get(j)?.length ? '' : 'Ajouter'}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -397,6 +431,7 @@ function GrilleMois({
   evParJour,
   presenceParJour,
   ouvrir,
+  nouveau,
   cadrer,
 }: {
   jours: string[]
@@ -405,8 +440,10 @@ function GrilleMois({
   evParJour: Map<string, Evenement[]>
   presenceParJour: Map<string, PresenceJour[]>
   ouvrir: (e: Evenement, d: string) => void
+  nouveau: (jour: string) => void
   cadrer: (s: Sejour) => void
 }) {
+  const ecriture = useEcriture()
   const auj = aujourdhui()
   const moisCourant = depuisIso(date).getMonth()
   return (
@@ -423,10 +460,22 @@ function GrilleMois({
           const hors = depuisIso(j).getMonth() !== moisCourant
           return (
             <div key={j} className={`min-h-28 border-b border-pierre-200 p-1 ${i % 7 ? 'border-l' : ''} ${hors ? 'bg-pierre-50/60' : ''}`}>
-              <LienJour jour={j} className="mb-1 flex items-center justify-between rounded px-1 text-xs hover:bg-pierre-100">
-                <span className={`font-medium ${j === auj ? 'rounded-full bg-foret-700 px-1.5 text-white' : hors ? 'text-pierre-400' : ''}`}>{depuisIso(j).getDate()}</span>
-                <span className="text-pierre-500" title="Personnes au travail">{presenceParJour.get(j)?.length || ''}</span>
-              </LienJour>
+              <div className="mb-1 flex items-center gap-0.5">
+                <LienJour jour={j} className="flex flex-1 items-center justify-between rounded px-1 text-xs hover:bg-pierre-100">
+                  <span className={`font-medium ${j === auj ? 'rounded-full bg-foret-700 px-1.5 text-white' : hors ? 'text-pierre-400' : ''}`}>{depuisIso(j).getDate()}</span>
+                  <span className="text-pierre-500" title="Personnes au travail">{presenceParJour.get(j)?.length || ''}</span>
+                </LienJour>
+                {ecriture && (
+                  <button
+                    className="rounded p-0.5 text-pierre-400 hover:bg-pierre-100 hover:text-pierre-800"
+                    aria-label={`Ajouter un événement le ${jourCourt(j)}`}
+                    title="Ajouter un événement"
+                    onClick={() => nouveau(j)}
+                  >
+                    <IconePlus className="size-3" />
+                  </button>
+                )}
+              </div>
               <div className="space-y-0.5">
                 {duJour.slice(0, 4).map((s) => (
                   <button
