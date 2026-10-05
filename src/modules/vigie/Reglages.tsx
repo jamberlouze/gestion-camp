@@ -8,8 +8,8 @@ import { etatFonction, testerCourriel, useEcriture, useEnregistrerReglages, useR
 import type { Reglages as TypeReglages } from './types'
 
 const MODELES = [
-  { id: 'claude-opus-5-5', libelle: 'Claude Opus 5.5 (recommandé)' },
-  { id: 'claude-sonnet-5-5', libelle: 'Claude Sonnet 5.5 (environ deux fois moins cher)' },
+  { id: 'claude-sonnet-5-5', libelle: 'Claude Sonnet 5.5 (par défaut, environ 20 à 35 $ US par mois)' },
+  { id: 'claude-opus-5-5', libelle: 'Claude Opus 5.5 (plus poussé, environ deux fois plus cher)' },
   { id: 'claude-haiku-4-5', libelle: 'Claude Haiku 4.5 (le moins cher, recherche moins poussée)' },
 ]
 

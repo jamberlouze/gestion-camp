@@ -253,9 +253,11 @@ dans un workspace « Vigie des camps » avec une limite de dépense mensuelle
 « Envoyer un courriel d'essai ». Journal → « Lancer la vérification mensuelle
 maintenant » pour une première passe sans attendre le 1er novembre.
 
-**Coût** : avec `claude-opus-5-5` (modifiable dans Réglages), compter de l'ordre
-de 15 à 30 $ US par vérification mensuelle des ~100 camps suivis (jetons en lot
-à moitié prix + recherches web à 10 $ les 1000), 1 à 3 $ par découverte. Le
+**Coût** : avec `claude-sonnet-5-5` (par défaut, modifiable dans Réglages),
+compter de l'ordre de 20 à 35 $ US par vérification mensuelle des ~100 camps
+suivis (environ 150 000 jetons lus par camp d'après l'essai du 2026-10-05, en lot
+à moitié prix, plus les recherches web à 10 $ les 1000) ; environ le double avec
+`claude-opus-5-5`. 1 à 3 $ par découverte. Le
 Journal affiche le coût de chaque recherche.
 
 **Déployer la fonction** après une modification de `supabase/functions/vigie` :

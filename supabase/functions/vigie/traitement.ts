@@ -92,7 +92,7 @@ export async function copierPhoto(stockage: SupabaseClient['storage'], campId: s
 export interface Contexte {
   db: Db
   stockage: SupabaseClient['storage']
-  activites: { id: string; nom: string }[]
+  activites: { id: string; nom: string; offert_bpa: boolean }[]
   /** Copies de photos encore permises pour ce réveil (limite de temps). */
   photosRestantes: number
 }
@@ -149,7 +149,10 @@ async function traiterActivites(ctx: Contexte, r: Requete, campId: string, liste
     }
     if (dejaVu.has(cle)) continue
     dejaVu.add(cle)
-    if (id && directement) {
+    // Activité déjà offerte à la BPA : liée sans validation (décision du
+    // 2026-10-05) ; la validation reste pour ce que la BPA n'offre pas.
+    const offerteBpa = !!id && !!ctx.activites.find((x) => x.id === id)?.offert_bpa
+    if (id && (directement || offerteBpa)) {
       await verifier(
         ctx.db.from('camps_activites').upsert(
           { camp_id: campId, activite_id: id, source: a.source ?? 'site', note: chaine(a.preuve) },

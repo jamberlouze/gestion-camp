@@ -105,7 +105,7 @@ async function lireReglages(): Promise<Reglages> {
   const ligne: any = await verifier(db.from('parametres').select('valeur').eq('cle', 'reglages').single())
   const v = ligne.valeur ?? {}
   return {
-    modele: v.modele || 'claude-opus-5-5',
+    modele: v.modele || 'claude-sonnet-5-5',
     effort: v.effort || 'medium',
     destinataires: Array.isArray(v.destinataires) ? v.destinataires.filter((x: unknown) => typeof x === 'string' && x.includes('@')) : [],
     url_app: v.url_app || 'https://gestion-camp.maxime-0f5.workers.dev/vigie',
@@ -362,7 +362,7 @@ async function lireLotManuel(ctx: Contexte, reglages: Reglages, debut: number) {
 const contexte = async (): Promise<Contexte> => ({
   db,
   stockage: admin.storage,
-  activites: (await verifier(db.from('activites').select('id, nom'))) as any[],
+  activites: (await verifier(db.from('activites').select('id, nom, offert_bpa'))) as any[],
   photosRestantes: PHOTOS_PAR_REVEIL,
 })
 
