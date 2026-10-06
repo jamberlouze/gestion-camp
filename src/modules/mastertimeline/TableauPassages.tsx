@@ -1,5 +1,5 @@
 import { dateCourte, estAnnuelle, moisCourt } from './calendrier'
-import { CaseCoche, ChoixResponsable, Pastille, Puce } from './commun'
+import { CaseCoche, ChoixResponsable, Pastille, Puce, PucesEtiquettes } from './commun'
 import type { References } from './donnees'
 import { useBasculer, useEcriture, useOuvrirFiche, type Passage } from './outils'
 import { PRIORITES } from './types'
@@ -80,7 +80,7 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
           {etat === 'sautee' && <Puce>Pas cette année</Puce>}
           {!annuelle && t.echeance && <Puce ton={etat === 'retard' ? 'retard' : undefined}>{etat === 'retard' ? 'En retard · ' : ''}{dateCourte(t.echeance)}</Puce>}
           {!annuelle && t.priorite && <Puce>{PRIORITES[t.priorite]}</Puce>}
-          {t.corvee && <Puce ton="corvee">Corvée</Puce>}
+          <PucesEtiquettes tache={t} refs={refs} />
           {t.note && (
             <span className="text-xs text-pierre-400" title={t.note}>
               📝

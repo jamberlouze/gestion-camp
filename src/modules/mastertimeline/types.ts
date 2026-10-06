@@ -16,6 +16,14 @@ export interface Projet {
   archive: boolean
 }
 
+/** Étiquette (tag) posée sur des tâches : Corvée, Woofing… Liste du module. */
+export interface Etiquette {
+  id: string
+  nom: string
+  couleur: string | null
+  ordre: number
+}
+
 export interface Responsable {
   id: string
   nom: string
@@ -43,7 +51,8 @@ export interface Tache {
   fournisseur_id: string | null
   /** Note permanente : comment faire la tâche. */
   note: string | null
-  corvee: boolean
+  /** Étiquettes de la tâche (ids de `etiquettes`). */
+  etiquette_ids: string[]
   /**
    * Mois civils (1 = janvier) où la tâche revient. Toujours rempli : les
    * tâches ponctuelles sont dans le module Travaux depuis le 2026-10-06.

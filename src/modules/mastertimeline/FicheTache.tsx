@@ -29,7 +29,7 @@ const VIDE: Brouillon = {
   responsable_id: null,
   fournisseur_id: null,
   note: null,
-  corvee: false,
+  etiquette_ids: [],
   mois: [Number(cleAujourdhui().slice(5))],
   intervalle_ans: 1,
   exercice_depart: null,
@@ -235,10 +235,31 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
           <textarea id="note" className={ui.champ} rows={3} value={b.note ?? ''} disabled={!ecriture} onChange={(e) => changer({ note: e.target.value })} />
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="h-4 w-4 accent-foret-700" checked={b.corvee} disabled={!ecriture} onChange={(e) => changer({ corvee: e.target.checked })} />
-          Se fait pendant une corvée
-        </label>
+        {refs.etiquettes.length > 0 && (
+          <div>
+            <span className={ui.etiquette}>Étiquettes</span>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Étiquettes">
+              {refs.etiquettes.map((e) => {
+                const choisie = b.etiquette_ids.includes(e.id)
+                const c = e.couleur ?? 'var(--color-pierre-500)'
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    disabled={!ecriture}
+                    aria-pressed={choisie}
+                    className={`rounded-full border px-3 py-1 text-xs ${choisie ? 'font-medium' : 'border-pierre-300 bg-white text-pierre-600 hover:border-pierre-400'}`}
+                    style={choisie ? { borderColor: c, background: `color-mix(in srgb, ${c} 14%, white)`, color: `color-mix(in srgb, ${c} 70%, black)` } : undefined}
+                    onClick={() => changer({ etiquette_ids: choisie ? b.etiquette_ids.filter((x) => x !== e.id) : [...b.etiquette_ids, e.id] })}
+                  >
+                    {choisie ? '✓ ' : ''}
+                    {e.nom}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {erreur && <p className={ui.erreur}>{erreur}</p>}
 

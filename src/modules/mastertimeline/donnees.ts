@@ -4,7 +4,7 @@ import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { Profil } from '@/lib/types'
 import { bornesExercice, exerciceDeCle, indexer, UNIQUE } from './calendrier'
-import type { Coche, Entreprise, Fournisseur, Projet, Responsable, Tache } from './types'
+import type { Coche, Entreprise, Etiquette, Fournisseur, Projet, Responsable, Tache } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne, contrairement
 // à Embarcations) : sans réseau, une modification échoue tout de suite
@@ -17,6 +17,7 @@ export const useEntreprises = () => useListe<Entreprise>(S, 'entreprises', 'ordr
 export const useProjets = () => useListe<Projet>(S, 'projets', 'ordre')
 export const useResponsables = () => useListe<Responsable>(S, 'responsables', 'nom')
 export const useFournisseurs = () => useListe<Fournisseur>(S, 'fournisseurs', 'nom')
+export const useEtiquettes = () => useListe<Etiquette>(S, 'etiquettes', 'ordre')
 /** Qui a coché : la direction voit tous les profils, les autres seulement le leur. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 
@@ -156,12 +157,13 @@ export async function reassigner(de: string, vers: string | null) {
   return count ?? 0
 }
 
-/** Entreprises, projets, responsables et fournisseurs, indexés par id. */
+/** Entreprises, projets, responsables, fournisseurs et étiquettes, indexés par id. */
 export function useReferences() {
   const entreprises = useEntreprises()
   const projets = useProjets()
   const responsables = useResponsables()
   const fournisseurs = useFournisseurs()
+  const etiquettes = useEtiquettes()
   return useMemo(() => {
     const parId = <T extends { id: string }>(l: T[] | undefined) => new Map((l ?? []).map((x) => [x.id, x]))
     return {
@@ -169,14 +171,19 @@ export function useReferences() {
       projets: (projets.data ?? []).filter((p) => !p.archive),
       responsables: responsables.data ?? [],
       fournisseurs: fournisseurs.data ?? [],
+      etiquettes: etiquettes.data ?? [],
       entreprise: parId(entreprises.data),
       projet: parId(projets.data),
       responsable: parId(responsables.data),
       fournisseur: parId(fournisseurs.data),
-      pret: !!entreprises.data && !!projets.data && !!responsables.data && !!fournisseurs.data,
-      erreur: entreprises.error ?? projets.error ?? responsables.error ?? fournisseurs.error,
+      etiquette: parId(etiquettes.data),
+      pret: !!entreprises.data && !!projets.data && !!responsables.data && !!fournisseurs.data && !!etiquettes.data,
+      erreur: entreprises.error ?? projets.error ?? responsables.error ?? fournisseurs.error ?? etiquettes.error,
     }
-  }, [entreprises.data, projets.data, responsables.data, fournisseurs.data, entreprises.error, projets.error, responsables.error, fournisseurs.error])
+  }, [
+    entreprises.data, projets.data, responsables.data, fournisseurs.data, etiquettes.data,
+    entreprises.error, projets.error, responsables.error, fournisseurs.error, etiquettes.error,
+  ])
 }
 
 export type References = ReturnType<typeof useReferences>
