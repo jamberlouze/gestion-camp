@@ -113,7 +113,7 @@ export function Recettes() {
         </section>
       </aside>
 
-      <div className="lg:sticky lg:top-20 lg:self-start">
+      <div className="lg:sticky lg:top-6 lg:self-start">
         {recette ? (
           <DetailRecette recette={recette} modifier={ecriture ? () => setEdition(recette) : undefined} />
         ) : (

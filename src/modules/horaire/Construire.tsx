@@ -412,7 +412,7 @@ export function Construire() {
       </GrilleDefilante>
 
       {selection.size > 0 && ecriture && (
-        <div className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit items-center gap-2 rounded-full border border-pierre-200 bg-white px-4 py-2 shadow-lg print:hidden">
+        <div className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit items-center gap-2 rounded-full lg:left-(--largeur-menu) border border-pierre-200 bg-white px-4 py-2 shadow-lg print:hidden">
           <span className="text-sm">
             <b>{selection.size}</b> case(s) sélectionnée(s)
           </span>

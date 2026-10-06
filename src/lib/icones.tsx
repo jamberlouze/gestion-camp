@@ -128,3 +128,31 @@ export const IconePersonnel = (p: Props) => (
     <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
   </Icone>
 )
+
+/** Trois traits : ouvre le menu de navigation (téléphone). */
+export const IconeTroisTraits = (p: Props) => (
+  <Icone {...p}>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </Icone>
+)
+
+export const IconeFermer = (p: Props) => (
+  <Icone {...p}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </Icone>
+)
+
+export const IconeDeconnexion = (p: Props) => (
+  <Icone {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="m16 17 5-5-5-5M21 12H9" />
+  </Icone>
+)
+
+/** Barre latérale avec une flèche : réduire / déployer le menu. */
+export const IconeReduireMenu = (p: Props) => (
+  <Icone {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M9 3v18M16 15l-3-3 3-3" />
+  </Icone>
+)
