@@ -42,7 +42,7 @@ export const MODULES: DefinitionModule[] = [
   {
     id: 'commande',
     nom: 'Cuisine',
-    description: 'Menus, commande, feuille de cuisine et horaire du personnel',
+    description: 'Menus, commandes et horaire du personnel',
     icone: '🍳',
     chemin: '/cuisine',
   },
