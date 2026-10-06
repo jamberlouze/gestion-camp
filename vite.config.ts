@@ -6,6 +6,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
+    // En DEV (npm run dev), icône orange « DEV » pour ne pas confondre l'onglet avec la PROD.
+    {
+      name: 'icone-dev',
+      apply: 'serve',
+      transformIndexHtml: (html) =>
+        html
+          .replace('href="/favicon.svg"', 'href="/favicon-dev.svg"')
+          .replace('content="#0f5132"', 'content="#e8590c"')
+          .replace('<title>Gestion du camp</title>', '<title>DEV · Gestion du camp</title>'),
+    },
     react(),
     tailwindcss(),
     // App installable + disponible hors ligne (service worker généré au build).

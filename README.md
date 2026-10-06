@@ -83,13 +83,20 @@ directement sur Embarcations.
 
 ## Commandes
 
+**DEV et PROD sont séparés** (depuis le 2026-10-06, l'app est utilisée par
+l'équipe) : on développe contre une base Supabase **locale** (Docker), jamais
+contre la PROD. Les commandes qui touchent la PROD commencent par `prod:`.
+
 | Commande | Effet |
 |---|---|
-| `npm run dev` | Lance l'app en local sur http://localhost:5173 |
-| `npm run build` | Vérifie les types et construit `dist/` |
-| `npm run db:push` | Applique les nouvelles migrations au projet Supabase |
-| `npm run db:config` | Envoie `supabase/config.toml` (connexion, courriels) au projet |
-| `npm run db:types` | Régénère les types TypeScript à partir de la base |
+| `npm run db:start` | DEV : démarre la base locale (Docker Desktop doit rouler). Courriels dans Mailpit : http://localhost:54324 |
+| `npm run db:reset` | DEV : recrée la base locale (toutes les migrations + `supabase/seed.sql`) |
+| `npm run db:stop` | DEV : arrête la base locale |
+| `npm run dev` | Lance l'app en local sur http://localhost:5173 (base locale, via `.env.local`) |
+| `npm run build` | Vérifie les types et construit `dist/` (base PROD, via `.env.production`) |
+| `npm run prod:db:push` | **PROD** : applique les nouvelles migrations au projet Supabase hébergé |
+| `npm run prod:db:config` | **PROD** : envoie `supabase/config.toml` (connexion, courriels) au projet hébergé |
+| `npm run db:types` | Régénère les types TypeScript à partir de la base locale |
 | `npm run import:essai` | Lit les anciennes bases et affiche les décomptes (n'écrit rien) |
 | `npm run import` | Importe les anciennes données dans la nouvelle base |
 | `npm run deploy` | Déploiement manuel (normalement automatique à chaque push) |
@@ -109,7 +116,7 @@ directement sur Embarcations.
    ```bash
    npx supabase login
    npx supabase link --project-ref <identifiant>   # l'identifiant est dans l'URL du tableau de bord
-   npm run db:push
+   npm run prod:db:push
    ```
 
 ### 2. Courriels (Google Workspace)
@@ -122,7 +129,7 @@ Supabase. Il faut donc passer par le compte Google du camp.
    d'application nommé « Supabase ».
 2. Copiez `supabase/.env.example` vers `supabase/.env`, puis remplissez
    `SMTP_USER` (l'adresse d'envoi) et `SMTP_PASS` (le mot de passe d'application).
-3. Lancez `npm run db:config`.
+3. Lancez `npm run prod:db:config`.
 
 ### 3. Premier administrateur
 
