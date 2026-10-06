@@ -20,6 +20,7 @@ const Vigie = lazy(() => import('@/modules/vigie'))
 const Calendrier = lazy(() => import('@/modules/calendrier'))
 const Temps = lazy(() => import('@/modules/temps'))
 const Vehicules = lazy(() => import('@/modules/vehicules'))
+const Rooming = lazy(() => import('@/modules/rooming'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="calendrier/*" element={<GardeModule module="calendrier"><Calendrier /></GardeModule>} />
           <Route path="temps/*" element={<GardeModule module="temps"><Temps /></GardeModule>} />
           <Route path="vehicules/*" element={<GardeModule module="vehicules"><Vehicules /></GardeModule>} />
+          <Route path="rooming/*" element={<GardeModule module="rooming"><Rooming /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />
