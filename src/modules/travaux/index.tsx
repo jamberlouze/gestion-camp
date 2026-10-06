@@ -1,20 +1,18 @@
 import { useState, useSyncExternalStore } from 'react'
 import { onlineManager } from '@tanstack/react-query'
-import { NavLink, Route, Routes } from 'react-router'
+import { Navigate, NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { ATrier } from './ATrier'
 import { Chantiers } from './Chantiers'
 import { Chargement } from './commun'
 import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Fiche } from './Fiche'
-import { MesTaches } from './MesTaches'
 import { ContexteFenetre, useDroits, type Fenetre } from './outils'
 import { Reglages } from './Reglages'
 import { Signaler } from './Signaler'
-import { Tableau } from './Tableau'
+import { Taches } from './Taches'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
@@ -48,17 +46,13 @@ export default function ModuleTravaux() {
       {/* Adresses absolues : voir Embarcations. */}
       <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
         <NavLink to="/travaux" end className={onglet}>
-          Mes tâches
+          Tâches
+          {aTrier > 0 && (
+            <span className="rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white" title={`${aTrier} à trier`}>
+              {aTrier}
+            </span>
+          )}
         </NavLink>
-        <NavLink to="/travaux/tableau" className={onglet}>
-          Tableau
-        </NavLink>
-        {droits.trieur && (
-          <NavLink to="/travaux/a-trier" className={onglet}>
-            À trier
-            {aTrier > 0 && <span className="rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">{aTrier}</span>}
-          </NavLink>
-        )}
         <NavLink to="/travaux/chantiers" className={onglet}>
           Chantiers
         </NavLink>
@@ -75,9 +69,10 @@ export default function ModuleTravaux() {
         <Chargement />
       ) : (
         <Routes>
-          <Route index element={<MesTaches d={d} />} />
-          <Route path="tableau" element={<Tableau d={d} />} />
-          <Route path="a-trier" element={<ATrier d={d} />} />
+          <Route index element={<Taches d={d} />} />
+          {/* Anciennes adresses (onglets Tableau et À trier, retirés le 2026-10-06). */}
+          <Route path="tableau" element={<Navigate to="/travaux" replace />} />
+          <Route path="a-trier" element={<Navigate to="/travaux" replace />} />
           <Route path="chantiers" element={<Chantiers d={d} />} />
           <Route path="chantiers/:id" element={<Chantiers d={d} />} />
           <Route path="reglages" element={<Reglages d={d} />} />

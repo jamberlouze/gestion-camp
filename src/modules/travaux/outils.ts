@@ -39,13 +39,15 @@ export const comparerFaites = (a: Tache, b: Tache) => (b.fait_le ?? '').localeCo
 export interface Filtres {
   lieu: string
   categorie: string
-  /** id d'une personne, 'libre' (personne) ou '' (tout le monde). */
+  /** id d'une personne, 'libre' (à assigner) ou '' (tout le monde). */
   personne: string
   chantier: string
+  /** '1', '2', '3' ou '' (toutes). */
+  priorite: string
   texte: string
 }
 
-export const FILTRES_VIDES: Filtres = { lieu: '', categorie: '', personne: '', chantier: '', texte: '' }
+export const FILTRES_VIDES: Filtres = { lieu: '', categorie: '', personne: '', chantier: '', priorite: '', texte: '' }
 
 const sansAccents = (s: string) =>
   s
@@ -61,6 +63,7 @@ export function filtrer(taches: Tache[], f: Filtres) {
       (!f.categorie || (f.categorie === 'aucune' ? !t.categorie_id : t.categorie_id === f.categorie)) &&
       (!f.personne || (f.personne === 'libre' ? !t.assigne_a : t.assigne_a === f.personne)) &&
       (!f.chantier || t.chantier_id === f.chantier) &&
+      (!f.priorite || t.priorite === Number(f.priorite)) &&
       (!texte || sansAccents(`${t.titre} ${t.description ?? ''}`).includes(texte)),
   )
 }

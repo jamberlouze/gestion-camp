@@ -7,9 +7,9 @@ import { reduireImage } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Annualiser } from './Annualiser'
+import { GaleriePhotos } from './Photos'
 import { CaseTache, Puce } from './commun'
 import {
-  useAdressePhoto,
   useAjouterCommentaire,
   useAjouterPhoto,
   useMajTache,
@@ -114,7 +114,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
               )
             ) : (
               <p>
-                À faire · {assigne ? <strong>{assigne}</strong> : <span className="text-pierre-500">libre</span>}
+                À faire · {assigne ? <strong>{assigne}</strong> : <span className="text-pierre-500">à assigner</span>}
                 {enRetard(t) && <span className="text-red-700"> · en retard</span>}
               </p>
             )}
@@ -159,7 +159,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
           <Choix
             libelle="Assignée à"
             valeur={t.assigne_a}
-            vide="Personne (libre)"
+            vide="À assigner"
             options={d.personnes.filter((p) => p.peut_assigner || p.id === t.assigne_a)}
             modifiable
             changer={(v) => modifier({ assigne_a: v })}
@@ -200,10 +200,10 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
           <Choix libelle="Fournisseur" valeur={t.fournisseur_id} options={d.fournisseurs} modifiable changer={(v) => modifier({ fournisseur_id: v })} />
         </fieldset>
       ) : (
-        (t.priorite !== 2 || t.echeance || chantier || fournisseur || t.heures_prevues) && (
+        (t.priorite !== 3 || t.echeance || chantier || fournisseur || t.heures_prevues) && (
           <div className="flex flex-wrap gap-1.5">
             {t.priorite === 1 && <Puce ton="urgent">Urgent</Puce>}
-            {t.priorite === 3 && <Puce>{PRIORITES[3]}</Puce>}
+            {t.priorite === 2 && <Puce ton="prioritaire">{PRIORITES[2]}</Puce>}
             {t.echeance && <Puce ton={enRetard(t) ? 'retard' : undefined}>Échéance {dateCourte(t.echeance)}</Puce>}
             {chantier && <Puce couleur={chantier.couleur}>{chantier.nom}</Puce>}
             {t.heures_prevues != null && <Puce>{t.heures_prevues} h prévues</Puce>}
@@ -274,20 +274,16 @@ function Photos({ tache: t, photos }: { tache: Tache; photos: Photo[] }) {
   return (
     <div>
       <span className={ui.etiquette}>Photos</span>
-      <div className="flex flex-wrap gap-2">
-        {photos.map((p) => (
-          <Vignette
-            key={p.id}
-            photo={p}
-            retirer={
-              droits.trieur || (droits.ecriture && p.ajoutee_par === droits.moi)
-                ? async () => {
-                    if (await confirmer({ titre: 'Retirer cette photo ?', libelleOk: 'Retirer', danger: true })) supprimer.mutate({ id: p.id, chemin: p.chemin })
-                  }
-                : undefined
-            }
-          />
-        ))}
+      <GaleriePhotos
+        photos={photos}
+        retirer={(p) =>
+          droits.trieur || (droits.ecriture && p.ajoutee_par === droits.moi)
+            ? async () => {
+                if (await confirmer({ titre: 'Retirer cette photo ?', libelleOk: 'Retirer', danger: true })) supprimer.mutate({ id: p.id, chemin: p.chemin })
+              }
+            : undefined
+        }
+      >
         {droits.ecriture && (
           <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-pierre-300 text-xs text-pierre-500 hover:border-foret-600 hover:text-foret-700">
             <span className="text-xl">📷</span>
@@ -295,29 +291,8 @@ function Photos({ tache: t, photos }: { tache: Tache; photos: Photo[] }) {
             <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => choisir(e.target.files)} />
           </label>
         )}
-      </div>
+      </GaleriePhotos>
       {erreur && <p className="mt-1 text-xs text-red-700">{erreur}</p>}
-    </div>
-  )
-}
-
-export function Vignette({ photo, retirer }: { photo: Photo; retirer?: () => void }) {
-  const url = useAdressePhoto(photo)
-  return (
-    <div className="relative">
-      <a href={url ?? undefined} target="_blank" rel="noreferrer" className="block h-20 w-20 overflow-hidden rounded-lg bg-pierre-100">
-        {url && <img src={url} alt="" className="h-full w-full object-cover" />}
-      </a>
-      {retirer && (
-        <button
-          type="button"
-          aria-label="Retirer la photo"
-          className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-pierre-800 text-xs text-white"
-          onClick={retirer}
-        >
-          ✕
-        </button>
-      )}
     </div>
   )
 }
