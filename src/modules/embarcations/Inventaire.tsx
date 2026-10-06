@@ -4,6 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useAuth } from '@/shell/auth'
+import { BandeauNotes } from './BandeauNotes'
 import { useCreerEmbarcation, useEmbarcations, useMajEmbarcation, useModeles } from './donnees'
 import { correspondNumero, exporterCsv, joindre, trier, type ChampTri, type Ligne, type Tri } from './outils'
 import { ENTREPRISES, TYPES, type Entreprise, type Modele } from './types'
@@ -26,6 +27,7 @@ export function Inventaire() {
   const [filtres, setFiltres] = useState<Filtres>(FILTRES_VIDES)
   const [tri, setTri] = useState<Tri>({ champ: 'numero', sens: 'asc' })
   const [creation, setCreation] = useState(false)
+  const [ajoutNote, setAjoutNote] = useState(false)
 
   const lignes = useMemo(() => {
     const toutes = joindre(embarcations.data ?? [], modeles.data ?? [])
@@ -50,9 +52,11 @@ export function Inventaire() {
   }
 
   const filtresActifs = JSON.stringify(filtres) !== JSON.stringify(FILTRES_VIDES)
+  const flotte = trier(joindre(embarcations.data, modeles.data), { champ: 'numero', sens: 'asc' })
 
   return (
     <div>
+      <BandeauNotes flotte={flotte} ecriture={ecriture} ajout={ajoutNote} fermerAjout={() => setAjoutNote(false)} />
       <BarreFiltres
         filtres={filtres}
         setFiltres={setFiltres}
@@ -62,6 +66,11 @@ export function Inventaire() {
             {ecriture && (
               <button className={ui.bouton} onClick={() => setCreation(true)}>
                 + Nouvelle
+              </button>
+            )}
+            {ecriture && (
+              <button className={ui.boutonSecondaire} onClick={() => setAjoutNote(true)} title="Noter quelque chose à traiter">
+                + Note
               </button>
             )}
             {grandEcran && (

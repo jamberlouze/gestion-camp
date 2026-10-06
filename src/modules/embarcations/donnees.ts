@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { ChampsEmbarcation, ChampsModele, Embarcation, Modele } from './types'
+import type { ChampsEmbarcation, ChampsModele, ChampsNote, Embarcation, Modele, Note } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne
@@ -30,6 +30,10 @@ export const CLES = {
   creerEmbarcation: [RACINE, 'creer-embarcation'],
   majModele: [RACINE, 'maj-modele'],
   creerModele: [RACINE, 'creer-modele'],
+  notes: [RACINE, 'notes'],
+  majNote: [RACINE, 'maj-note'],
+  creerNote: [RACINE, 'creer-note'],
+  supprimerNote: [RACINE, 'supprimer-note'],
 } as const
 
 const db = () => supabase.schema('embarcations')
@@ -76,6 +80,18 @@ export function useEmbarcations() {
   })
 }
 
+/** Toutes les notes (à traiter et traitées), les plus récentes d'abord. */
+export function useNotes() {
+  return useQuery({
+    queryKey: CLES.notes,
+    queryFn: async () => {
+      const { data, error } = await db().from('notes').select('*').order('created_at', { ascending: false })
+      if (error) throw error
+      return data as Note[]
+    },
+  })
+}
+
 /** Recharge les listes quand quelqu'un d'autre modifie la flotte. */
 export function useTempsReel() {
   const client = useQueryClient()
@@ -93,6 +109,7 @@ export function useTempsReel() {
       .channel(`embarcations-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'embarcations' }, recharger)
       .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'modeles' }, recharger)
+      .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'notes' }, recharger)
       .subscribe()
     return () => {
       supabase.removeChannel(canal)
@@ -222,6 +239,55 @@ export function enregistrerMutationsEmbarcations(client: QueryClient) {
     onError: annuler,
     onSettled: recharger,
   })
+
+  client.setMutationDefaults(CLES.creerNote, {
+    ...communes,
+    // Envoi refait après une coupure alors que la note était déjà en base : rien à faire.
+    mutationFn: (nouvelle: NouvelleNote) =>
+      executer(db().from('notes').upsert(nouvelle, { onConflict: 'id', ignoreDuplicates: true })),
+    onMutate: (nouvelle: NouvelleNote) =>
+      optimiste<Note>(CLES.notes, nouvelle.id, () => ({
+        embarcation_id: null,
+        statut: 'a_traiter',
+        suivi: null,
+        auteur: null,
+        auteur_nom: null,
+        traitee_le: null,
+        traitee_par_nom: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...nouvelle,
+      }))(),
+    onError: annuler,
+    onSettled: recharger,
+  })
+
+  client.setMutationDefaults(CLES.majNote, {
+    ...communes,
+    mutationFn: ({ id, champs }: VariablesMaj<ChampsNote>) => executer(db().from('notes').update(champs).eq('id', id)),
+    onMutate: ({ id, champs }: VariablesMaj<ChampsNote>) =>
+      optimiste<Note>(CLES.notes, id, (n) => {
+        if (!n) return null
+        const traitee = champs.statut === 'traitee' && n.statut !== 'traitee'
+        return {
+          ...n,
+          ...champs,
+          // Affichage en attendant la base, qui pose les vraies valeurs.
+          ...(traitee ? { traitee_le: new Date().toISOString() } : {}),
+          ...(champs.statut === 'a_traiter' ? { traitee_le: null, traitee_par_nom: null } : {}),
+        }
+      })(),
+    onError: annuler,
+    onSettled: recharger,
+  })
+
+  client.setMutationDefaults(CLES.supprimerNote, {
+    ...communes,
+    mutationFn: (id: string) => executer(db().from('notes').delete().eq('id', id)),
+    onMutate: (id: string) => optimiste<Note>(CLES.notes, id, () => null)(),
+    onError: annuler,
+    onSettled: recharger,
+  })
 }
 
 // Les identifiants sont créés dans le navigateur : une embarcation ajoutée
@@ -229,6 +295,7 @@ export function enregistrerMutationsEmbarcations(client: QueryClient) {
 export type NouvelleEmbarcation = Pick<Embarcation, 'id' | 'modele_id'> &
   Partial<Pick<Embarcation, 'entreprise_utilisation' | 'notes'>>
 export type NouveauModele = Pick<Modele, 'id' | 'type' | 'nom' | 'prefix_id' | 'bouchon'>
+export type NouvelleNote = Pick<Note, 'id' | 'texte'> & Partial<Pick<Note, 'embarcation_id'>>
 
 export function useMajEmbarcation() {
   return useMutation<void, Error, VariablesMaj<ChampsEmbarcation>>({ mutationKey: CLES.majEmbarcation })
@@ -241,4 +308,13 @@ export function useMajModele() {
 }
 export function useCreerModele() {
   return useMutation<void, Error, NouveauModele>({ mutationKey: CLES.creerModele })
+}
+export function useCreerNote() {
+  return useMutation<void, Error, NouvelleNote>({ mutationKey: CLES.creerNote })
+}
+export function useMajNote() {
+  return useMutation<void, Error, VariablesMaj<ChampsNote>>({ mutationKey: CLES.majNote })
+}
+export function useSupprimerNote() {
+  return useMutation<void, Error, string>({ mutationKey: CLES.supprimerNote })
 }

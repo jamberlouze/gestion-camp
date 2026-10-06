@@ -43,3 +43,31 @@ from (values
   ('noah@camp.test', 'Noah Côté', 'coordo')
 ) as v (courriel, nom, role)
 where p.courriel = v.courriel;
+
+-- ------------------------------------------------------------
+-- Embarcations : quelques modèles et embarcations de test, et une
+-- note à trier (numéros attribués par le déclencheur).
+-- ------------------------------------------------------------
+insert into embarcations.modeles (type, nom, prefix_id, bouchon) values
+  ('Canot', 'Prospecteur 16', 'CA', 'Plastique'),
+  ('Kayak', 'Esprit', 'KE', 'Liège'),
+  ('SUP', 'Gonflable 10''6', 'SU', null)
+on conflict do nothing;
+
+insert into embarcations.embarcations (modele_id, entreprise_utilisation, fonctionnel, notes)
+select m.id, e.entreprise, e.fonctionnel, e.notes
+from (values
+  ('CA', 'BPA lac', true, null),
+  ('CA', 'BPA lac', true, null),
+  ('CA', 'BPA rivière', false, 'Fissure à la proue'),
+  ('KE', 'BPA lac', true, null),
+  ('KE', 'BPA lac', true, null),
+  ('SU', 'BPA lac', true, null)
+) as e(prefixe, entreprise, fonctionnel, notes)
+join embarcations.modeles m on m.prefix_id = e.prefixe
+where not exists (select 1 from embarcations.embarcations);
+
+-- Sans auteur : le déclencheur le tire de la session, et le seed n'en a pas.
+insert into embarcations.notes (id, texte)
+values ('7e000000-0000-0000-0000-000000000001', 'Deux pagaies de kayak manquent depuis la sortie de mardi.')
+on conflict do nothing;

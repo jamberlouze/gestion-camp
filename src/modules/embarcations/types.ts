@@ -33,3 +33,23 @@ export type ChampsEmbarcation = Partial<
   Pick<Embarcation, 'fonctionnel' | 'entreprise_utilisation' | 'notes' | 'deleted_at'>
 >
 export type ChampsModele = Partial<Pick<Modele, 'type' | 'nom' | 'prefix_id' | 'bouchon'>>
+
+/** Note à traiter par la direction (ex. « un canot a coulé, on ne sait pas lequel »). */
+export interface Note {
+  id: string
+  texte: string
+  /** Facultatif : on ne sait pas toujours de quelle embarcation il s'agit. */
+  embarcation_id: string | null
+  statut: 'a_traiter' | 'traitee'
+  /** Ce qui a été fait, écrit en marquant la note traitée. */
+  suivi: string | null
+  /** Posés par la base. */
+  auteur: string | null
+  auteur_nom: string | null
+  traitee_le: string | null
+  traitee_par_nom: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ChampsNote = Partial<Pick<Note, 'texte' | 'embarcation_id' | 'statut' | 'suivi'>>
