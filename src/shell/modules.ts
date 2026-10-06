@@ -40,6 +40,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/vehicules',
   },
   {
+    id: 'travaux',
+    nom: 'Travaux',
+    description: 'Réparations et tâches du terrain : signaler, trier, faire',
+    icone: '🛠️',
+    chemin: '/travaux',
+  },
+  {
     id: 'commande',
     nom: 'Cuisine',
     description: 'Menus, commandes et horaire du personnel',
@@ -59,6 +66,13 @@ export const MODULES: DefinitionModule[] = [
     description: "Tâches de l'année, toutes entreprises",
     icone: '✅',
     chemin: '/mastertimeline',
+  },
+  {
+    id: 'achats',
+    nom: 'Achats',
+    description: "Équipement à commander, commandé ou reçu",
+    icone: '🛍️',
+    chemin: '/achats',
   },
   {
     id: 'subventions',

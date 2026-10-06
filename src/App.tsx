@@ -7,6 +7,7 @@ import { Accueil } from '@/shell/Accueil'
 import { useAuth } from '@/shell/auth'
 import { Chargement, GardeAdmin, GardeDirection, GardeModule } from '@/shell/Gardes'
 import { Layout } from '@/shell/Layout'
+import { MODULES } from '@/shell/modules'
 import { PageConnexion } from '@/shell/PageConnexion'
 
 // Chaque module est chargé à la demande : son code n'est téléchargé
@@ -20,6 +21,8 @@ const Vigie = lazy(() => import('@/modules/vigie'))
 const Calendrier = lazy(() => import('@/modules/calendrier'))
 const Temps = lazy(() => import('@/modules/temps'))
 const Vehicules = lazy(() => import('@/modules/vehicules'))
+const Travaux = lazy(() => import('@/modules/travaux'))
+const Achats = lazy(() => import('@/modules/achats'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -41,7 +44,7 @@ export default function App() {
     <Suspense fallback={<Chargement />}>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Accueil />} />
+          <Route index element={<Depart />} />
           <Route path="embarcations/*" element={<GardeModule module="embarcations"><Embarcations /></GardeModule>} />
           <Route path="cuisine/*" element={<GardeModule module="commande"><Cuisine /></GardeModule>} />
           {/* Ancienne adresse du module (favoris). */}
@@ -53,6 +56,8 @@ export default function App() {
           <Route path="calendrier/*" element={<GardeModule module="calendrier"><Calendrier /></GardeModule>} />
           <Route path="temps/*" element={<GardeModule module="temps"><Temps /></GardeModule>} />
           <Route path="vehicules/*" element={<GardeModule module="vehicules"><Vehicules /></GardeModule>} />
+          <Route path="travaux/*" element={<GardeModule module="travaux"><Travaux /></GardeModule>} />
+          <Route path="achats/*" element={<GardeModule module="achats"><Achats /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />
@@ -65,6 +70,16 @@ export default function App() {
       </Routes>
     </Suspense>
   )
+}
+
+/**
+ * Page de départ : une personne qui n'a qu'un module (ex. un compte Terrain,
+ * qui n'a que Travaux) y va directement ; les autres voient l'accueil.
+ */
+function Depart() {
+  const { estDirection, peutLire } = useAuth()
+  const siens = MODULES.filter((m) => peutLire(m.id))
+  return !estDirection && siens.length === 1 ? <Navigate to={siens[0].chemin} replace /> : <Accueil />
 }
 
 /**

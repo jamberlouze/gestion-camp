@@ -10,6 +10,7 @@ connexion, menu, référentiel partagé.
 | 🛒 Commande : menus, recettes, commande Colabor | En service | Ordinateur |
 | 🤡 Animation : horaire des groupes et des animateurs | En service | Ordinateur |
 | ✅ Mastertimeline : tâches de l'année, toutes entreprises | En service | Ordinateur + téléphone (en ligne) |
+| 🛍️ Achats : équipement à commander, commandé ou reçu (direction) | En DEV (sort de Mastertimeline, part en PROD avec Travaux) | Ordinateur (en ligne) |
 | 💰 Subventions : vigie hebdomadaire par Claude, demandes, montants, reddition de compte | En service (secrets à ajouter, voir 8) | Ordinateur, administrateurs seulement pour l'instant |
 | 🔭 Vigie des camps : prix, programmes et activités des camps compétiteurs, par Claude | En service (secrets à ajouter, voir 9) | Ordinateur, administrateurs seulement (pour l'instant) |
 | 🗓️ Calendrier des opérations : séjours (Airtable), événements, qui travaille chaque jour | En service (secret Airtable à ajouter, voir 10) | Téléphone pour consulter, ordinateur pour modifier (en ligne) |
@@ -49,17 +50,20 @@ scripts/migration/  import unique des anciens projets
 - `subventions` : `grant_companies` (entreprises du groupe, critères), `grants` (une subvention : trouvée, validée ou rejetée, puis demandé / accordé / reçu), `grant_feedback` (décisions qui nourrissent la mémoire), `grant_notes`, `grant_time_entries` (heures), `grant_reporting_steps` (reddition de compte), `grant_search_runs` (journal des recherches), `grant_learned_rules` (mémoire), `grant_settings`, `grant_digests` (courriels du lundi). Noms repris de la feuille de route de la Vigie
 - `vigie` : `camps` (proposé / inclus / exclu, compétiteur direct ou référence, membre ACQ ou non), `programmes` (prix et durée ; prix par nuit calculé), `activites` (liste candidate commune : saisons, offerte à la BPA, coûts estimés par Claude), `camps_activites`, `photos` (une par activité et par camp), `maquettes` (3D), `changements` (détectés, à valider), `recherches` (journal), `requetes_ia` (file des appels à Claude), `parametres`. Import du Google Sheets « BPA_Vigie_ Comparatif des camps » le 2026-10-03 (`scripts/migration/vigie.py`)
 - `calendrier` : `sejours` (copie en lecture seule de la base Airtable « Réservation Groupes », écrite par le Worker), `evenements` (ponctuels ou récurrents), `personnel` (direction et terrain), `presences_simples`, vue `v_presence_jour` (qui travaille, quel secteur, fait quoi ; la cuisine vient de `commande.quarts`, l'animation des horaires datés de `horaire.horaires`), `journal` (chaque modification, par déclencheur), `synchros`. Rien n'est effacé (`deleted_at`)
-- `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
+- `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
+- `achats` : `achats` (item, statut à commander → commandé → reçu, quantité, prix estimé à l'unité, entreprise, fournisseur, note). Sorti de Mastertimeline le 2026-10-06 ; entreprises et fournisseurs = ceux de Mastertimeline
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
-un code à 6 chiffres par courriel. Il y a trois rôles, appliqués par la RLS de
-Postgres (et pas seulement dans l'interface) :
+un code à 6 chiffres par courriel. Il y a quatre rôles, appliqués par la RLS de
+Postgres (et pas seulement dans l'interface). Les modules de chaque rôle se
+règlent dans la grille « Accès par rôle » de la page Utilisateurs :
 
 | Rôle | Accès |
 |---|---|
 | `admin` | Tout, y compris la page Utilisateurs |
-| `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation), sauf Subventions et Vigie des camps, réservés aux administrateurs pour l'instant |
-| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions ni Vigie des camps |
+| `direction` | Les modules cochés pour la direction, et le référentiel ; trie les tâches de Travaux |
+| `coordo` | Les modules cochés pour les coordonnateurs (lecture ou écriture) |
+| `terrain` | Aides de camp et équipe d'entretien : les modules cochés pour Terrain (Travaux au départ). **Rôle par défaut à l'invitation** |
 
 ## Hors ligne et installation sur téléphone
 

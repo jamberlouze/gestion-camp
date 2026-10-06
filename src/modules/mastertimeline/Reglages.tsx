@@ -1,12 +1,12 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router'
 import { TableauReferentiel } from '@/core/TableauReferentiel'
 import { useEntreprises } from './donnees'
-import type { Entreprise, Fournisseur, Projet, Responsable } from './types'
+import type { Entreprise, Etiquette, Fournisseur, Projet, Responsable } from './types'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-3 py-1.5 text-sm font-medium ${isActive ? 'bg-pierre-200 text-pierre-900' : 'text-pierre-600 hover:bg-pierre-100'}`
 
-/** Listes du module : responsables, fournisseurs, entreprises, projets. */
+/** Listes du module : responsables, fournisseurs, entreprises, projets, étiquettes. */
 export function Reglages() {
   const entreprises = useEntreprises()
   const optionsEntreprises = (entreprises.data ?? []).map((e) => ({ id: e.id, libelle: e.nom }))
@@ -24,6 +24,9 @@ export function Reglages() {
         </NavLink>
         <NavLink to="/mastertimeline/reglages/projets" className={onglet}>
           Projets
+        </NavLink>
+        <NavLink to="/mastertimeline/reglages/etiquettes" className={onglet}>
+          Étiquettes
         </NavLink>
       </nav>
       <Routes>
@@ -95,8 +98,7 @@ export function Reglages() {
           element={
             <>
               <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
-                Un projet annuel regroupe des tâches qui reviennent chaque année ; un projet ponctuel se termine (il se gère aussi
-                dans l'onglet Projets). Les entreprises cochées sont celles où le projet est offert dans la fiche d'une tâche (aucune
+                Un projet regroupe des tâches qui reviennent chaque année (les chantiers ponctuels sont dans le module Travaux). Les entreprises cochées sont celles où le projet est offert dans la fiche d'une tâche (aucune
                 = toutes). Supprimer un projet ici garde ses tâches, sans projet.
               </p>
               <TableauReferentiel<Projet>
@@ -104,14 +106,35 @@ export function Reglages() {
                 table="projets"
                 tri="ordre"
                 nomLigne={(p) => p.nom}
-                valeursDefaut={{ ordre: 0, ponctuel: false, entreprise_ids: [] }}
+                valeursDefaut={{ ordre: 0, entreprise_ids: [] }}
                 colonnes={[
                   { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
                   { champ: 'entreprise_ids', libelle: 'Entreprises', type: 'choix', options: optionsEntreprises },
                   { champ: 'couleur', libelle: 'Couleur', type: 'couleur' },
                   { champ: 'ordre', libelle: 'Ordre', type: 'nombre' },
-                  { champ: 'ponctuel', libelle: 'Ponctuel', type: 'booleen' },
-                  { champ: 'date_cible', libelle: 'Date cible', type: 'date' },
+                ]}
+              />
+            </>
+          }
+        />
+        <Route
+          path="etiquettes"
+          element={
+            <>
+              <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+                Les étiquettes se posent sur les tâches dans leur fiche (une tâche peut en avoir plusieurs) et servent de filtre dans
+                toutes les vues : Corvée, Woofing… Supprimer une étiquette l'enlève des tâches qui la portaient.
+              </p>
+              <TableauReferentiel<Etiquette>
+                schema="mastertimeline"
+                table="etiquettes"
+                tri="ordre"
+                nomLigne={(e) => e.nom}
+                valeursDefaut={{ ordre: 0 }}
+                colonnes={[
+                  { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
+                  { champ: 'couleur', libelle: 'Couleur', type: 'couleur' },
+                  { champ: 'ordre', libelle: 'Ordre', type: 'nombre' },
                 ]}
               />
             </>

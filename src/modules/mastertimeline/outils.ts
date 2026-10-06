@@ -45,11 +45,12 @@ export interface Filtres {
   projet: string
   /** id, '' (tous) ou 'aucun' (sans responsable). */
   responsable: string
-  corvee: boolean
+  /** id d'une étiquette, ou '' (toutes les tâches). */
+  etiquette: string
 }
 
 const CLE_FILTRES = 'mastertimeline-filtres'
-export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', corvee: false }
+export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', etiquette: '' }
 
 /** Filtres gardés sur l'appareil (préférence personnelle). */
 export function useFiltres() {
@@ -82,7 +83,7 @@ export function garder(t: Tache, f: Filtres) {
   if (f.entreprise && t.entreprise_id !== f.entreprise) return false
   if (f.projet && t.projet_id !== f.projet) return false
   if (f.responsable === 'aucun' ? !!t.responsable_id : f.responsable && t.responsable_id !== f.responsable) return false
-  if (f.corvee && !t.corvee) return false
+  if (f.etiquette && !t.etiquette_ids.includes(f.etiquette)) return false
   return true
 }
 
