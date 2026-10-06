@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
 import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, type Filtres, type Montrer, type Regroupement } from './outils'
@@ -18,7 +18,12 @@ export function BarreFiltres({
   /** Filtres à ne pas montrer (ex. le responsable dans la vue par responsable). */
   sans?: (keyof Filtres)[]
 }) {
-  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.corvee
+  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquette
+  // Étiquette gardée sur l'appareil mais supprimée depuis : le filtre tombe.
+  const etiquetteDisparue = refs.pret && !!filtres.etiquette && !refs.etiquette.has(filtres.etiquette)
+  useEffect(() => {
+    if (etiquetteDisparue) changer({ etiquette: '' })
+  }, [etiquetteDisparue, changer])
   return (
     <div className="flex flex-wrap items-center gap-2">
       {!sans?.includes('entreprise') && (
@@ -62,10 +67,16 @@ export function BarreFiltres({
           <option value="aucun">Sans responsable</option>
         </select>
       )}
-      <label className="inline-flex items-center gap-1.5 rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800">
-        <input type="checkbox" className="accent-foret-700" checked={filtres.corvee} onChange={(e) => changer({ corvee: e.target.checked })} />
-        Corvée
-      </label>
+      {refs.etiquettes.length > 0 && (
+        <select aria-label="Étiquette" className={menu} value={filtres.etiquette} onChange={(e) => changer({ etiquette: e.target.value })}>
+          <option value="">Toutes les étiquettes</option>
+          {refs.etiquettes.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.nom}
+            </option>
+          ))}
+        </select>
+      )}
       {actifs && (
         <button className="text-sm text-pierre-500 underline hover:text-pierre-800" onClick={() => changer(FILTRES_VIDES)}>
           Tout afficher
@@ -98,14 +109,31 @@ export function Pastille({ couleur }: { couleur: string | null }) {
   return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: couleur ?? 'var(--color-pierre-300)' }} aria-hidden />
 }
 
-export function Puce({ children, couleur, ton }: { children: ReactNode; couleur?: string | null; ton?: 'retard' | 'corvee' }) {
-  const fond = ton === 'retard' ? 'bg-red-50 text-red-800' : ton === 'corvee' ? 'bg-amber-50 text-amber-800' : 'bg-pierre-100 text-pierre-700'
+export function Puce({ children, couleur, ton }: { children: ReactNode; couleur?: string | null; ton?: 'retard' }) {
+  const fond = ton === 'retard' ? 'bg-red-50 text-red-800' : 'bg-pierre-100 text-pierre-700'
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${fond}`}>
       {couleur !== undefined && <Pastille couleur={couleur} />}
       {children}
     </span>
   )
+}
+
+/** Étiquettes d'une tâche (Corvée, Woofing…), teintées de leur couleur, dans l'ordre de la liste. */
+export function PucesEtiquettes({ tache, refs }: { tache: Tache; refs: References }) {
+  const liste = refs.etiquettes.filter((e) => tache.etiquette_ids.includes(e.id))
+  return liste.map((e) => {
+    const c = e.couleur ?? 'var(--color-pierre-500)'
+    return (
+      <span
+        key={e.id}
+        className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs"
+        style={{ background: `color-mix(in srgb, ${c} 14%, white)`, color: `color-mix(in srgb, ${c} 70%, black)` }}
+      >
+        {e.nom}
+      </span>
+    )
+  })
 }
 
 /** Case de coche : faite ✓, « pas cette année » –, en retard (bord rouge). */
@@ -185,7 +213,7 @@ export function LigneTache({
           {!annuelle && t.echeance && <Puce ton={etat === 'retard' ? 'retard' : undefined}>{etat === 'retard' ? 'En retard · ' : ''}{dateCourte(t.echeance)}</Puce>}
           {!annuelle && t.priorite && <Puce>{PRIORITES[t.priorite]}</Puce>}
           {montrer.frequence && annuelle && <Puce>{libelleFrequence(t)}</Puce>}
-          {t.corvee && <Puce ton="corvee">Corvée</Puce>}
+          <PucesEtiquettes tache={t} refs={refs} />
           {fournisseur && <Puce>{fournisseur.nom}</Puce>}
           {t.note && <span className="text-xs text-pierre-400" title={t.note}>📝</span>}
         </div>

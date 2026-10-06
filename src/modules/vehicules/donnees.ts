@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
+import { reduireImage } from '@/lib/photos'
 import { supabase } from '@/lib/supabase'
 import { parVehicule } from './outils'
 import type { Entretien, Inspection, Proprietaire, Vehicule } from './types'
@@ -115,28 +116,12 @@ export async function supprimerVehicule(v: Vehicule) {
 
 export const adressePhoto = (chemin: string) => supabase.storage.from(SEAU).getPublicUrl(chemin).data.publicUrl
 
-/** Côté le plus long d'une photo envoyée (les photos de téléphone font plusieurs Mo). */
-const COTE_MAX = 1600
-
-async function reduire(fichier: File): Promise<Blob> {
-  const image = await createImageBitmap(fichier, { imageOrientation: 'from-image' })
-  const echelle = Math.min(1, COTE_MAX / Math.max(image.width, image.height))
-  const canevas = document.createElement('canvas')
-  canevas.width = Math.round(image.width * echelle)
-  canevas.height = Math.round(image.height * echelle)
-  canevas.getContext('2d')!.drawImage(image, 0, 0, canevas.width, canevas.height)
-  image.close()
-  return new Promise((ok, echec) =>
-    canevas.toBlob((b) => (b ? ok(b) : echec(new Error("La photo n'a pas pu être lue."))), 'image/jpeg', 0.85),
-  )
-}
-
 /** Remplace la photo d'un véhicule (l'ancienne est retirée du seau). */
 export async function changerPhoto(v: Vehicule, fichier: File | null) {
   let chemin: string | null = null
   if (fichier) {
     chemin = `${v.id}/${crypto.randomUUID()}.jpg`
-    const { error } = await supabase.storage.from(SEAU).upload(chemin, await reduire(fichier), { contentType: 'image/jpeg' })
+    const { error } = await supabase.storage.from(SEAU).upload(chemin, await reduireImage(fichier), { contentType: 'image/jpeg' })
     if (error) throw error
   }
   const { error } = await db().from('vehicules').update({ photo: chemin }).eq('id', v.id)

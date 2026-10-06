@@ -11,13 +11,17 @@ export interface Projet {
   nom: string
   couleur: string | null
   ordre: number
-  /** false : regroupement de tâches annuelles ; true : chantier qui se termine. */
-  ponctuel: boolean
   /** Entreprises pour lesquelles le projet est offert ; vide = toutes. */
   entreprise_ids: string[]
-  date_cible: string | null
-  termine_le: string | null
   archive: boolean
+}
+
+/** Étiquette (tag) posée sur des tâches : Corvée, Woofing… Liste du module. */
+export interface Etiquette {
+  id: string
+  nom: string
+  couleur: string | null
+  ordre: number
 }
 
 export interface Responsable {
@@ -47,12 +51,16 @@ export interface Tache {
   fournisseur_id: string | null
   /** Note permanente : comment faire la tâche. */
   note: string | null
-  corvee: boolean
-  /** Mois civils (1 = janvier) où la tâche revient ; null = tâche ponctuelle. */
-  mois: number[] | null
+  /** Étiquettes de la tâche (ids de `etiquettes`). */
+  etiquette_ids: string[]
+  /**
+   * Mois civils (1 = janvier) où la tâche revient. Toujours rempli : les
+   * tâches ponctuelles sont dans le module Travaux depuis le 2026-10-06.
+   */
+  mois: number[]
   intervalle_ans: number
   /** Année où commence l'exercice du premier passage (2026 = 2026-27). */
-  exercice_depart: number | null
+  exercice_depart: number
   jour: number | null
   debut: string | null
   echeance: string | null
@@ -73,14 +81,6 @@ export interface Coche {
   note: string | null
   fait_le: string | null
   fait_par: string | null
-}
-
-export interface Achat {
-  id: string
-  item: string
-  fournisseur_id: string | null
-  commande: boolean
-  note: string | null
 }
 
 export const PRIORITES: Record<number, string> = {
