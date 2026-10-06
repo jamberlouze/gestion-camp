@@ -5,6 +5,7 @@ import { confirmer } from '@/lib/Confirmation'
 import { IconeAttention, IconeDeconnexion, IconeFermer, IconeReduireMenu, IconeTroisTraits } from '@/lib/icones'
 import { useAuth } from './auth'
 import { MODULES } from './modules'
+import { CoinPoke, FournisseurPoke } from './Poke'
 
 // Menu réduit (icônes seulement) : retenu sur l'appareil.
 const CLE_REPLIE = 'menu-replie'
@@ -91,7 +92,8 @@ export function Layout() {
   const courant = [...modules, ...gestion].find((m) => pathname === m.chemin || pathname.startsWith(`${m.chemin}/`))
 
   // Contenu du menu, commun au menu latéral (ordinateur) et au tiroir (téléphone).
-  const menu = (reduit: boolean) => {
+  // `tiroir` : le tiroir du téléphone (le coin du poke est alors dans la barre du haut).
+  const menu = (reduit: boolean, tiroir = false) => {
     const lien = ({ isActive }: { isActive: boolean }) =>
       `flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium ${reduit ? 'justify-center' : ''} ${
         isActive ? 'bg-foret-100 text-foret-800' : 'text-pierre-700 hover:bg-pierre-100'
@@ -119,6 +121,7 @@ export function Layout() {
               {profil?.nom ?? profil?.courriel}
             </span>
           )}
+          {!tiroir && <CoinPoke place="menu" />}
           <button
             onClick={seDeconnecter}
             title="Déconnexion"
@@ -140,66 +143,71 @@ export function Layout() {
   )
 
   return (
-    <div className="min-h-dvh lg:pl-(--largeur-menu) print:pl-0">
-      {/* Ordinateur : menu latéral fixe, réductible aux icônes. */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-(--largeur-menu) flex-col border-r border-pierre-200 bg-white lg:flex print:hidden">
-        <div className={`flex h-14 shrink-0 items-center gap-2 border-b border-pierre-200 px-3 ${replie ? 'justify-center' : ''}`}>
-          {!replie && <div className="min-w-0 flex-1">{logo(false)}</div>}
-          <button
-            onClick={basculerReplie}
-            title={replie ? 'Déployer le menu' : 'Réduire le menu'}
-            aria-label={replie ? 'Déployer le menu' : 'Réduire le menu'}
-            className="rounded-lg p-1.5 text-pierre-500 hover:bg-pierre-100 hover:text-pierre-900"
-          >
-            <IconeReduireMenu className={`size-5 ${replie ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-        {menu(replie)}
-      </aside>
+    <FournisseurPoke>
+      <div className="min-h-dvh lg:pl-(--largeur-menu) print:pl-0">
+        {/* Ordinateur : menu latéral fixe, réductible aux icônes. */}
+        <aside className="fixed inset-y-0 left-0 z-20 hidden w-(--largeur-menu) flex-col border-r border-pierre-200 bg-white lg:flex print:hidden">
+          <div className={`flex h-14 shrink-0 items-center gap-2 border-b border-pierre-200 px-3 ${replie ? 'justify-center' : ''}`}>
+            {!replie && <div className="min-w-0 flex-1">{logo(false)}</div>}
+            <button
+              onClick={basculerReplie}
+              title={replie ? 'Déployer le menu' : 'Réduire le menu'}
+              aria-label={replie ? 'Déployer le menu' : 'Réduire le menu'}
+              className="rounded-lg p-1.5 text-pierre-500 hover:bg-pierre-100 hover:text-pierre-900"
+            >
+              <IconeReduireMenu className={`size-5 ${replie ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+          {menu(replie)}
+        </aside>
 
-      {/* Téléphone et tablette : barre du haut + tiroir. */}
-      <header
-        ref={entete}
-        className="sticky top-0 z-10 flex items-center gap-3 border-b border-pierre-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden print:hidden"
-      >
-        <button
-          onClick={() => setOuvert(true)}
-          aria-label="Ouvrir le menu"
-          className="-ml-1.5 rounded-lg p-1.5 text-pierre-700 hover:bg-pierre-100"
+        {/* Téléphone et tablette : barre du haut + tiroir. */}
+        <header
+          ref={entete}
+          className="sticky top-0 z-10 flex items-center gap-3 border-b border-pierre-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden print:hidden"
         >
-          <IconeTroisTraits className="size-5" />
-        </button>
-        {courant ? (
-          <span className="flex min-w-0 items-center gap-2 font-semibold">
-            <span className="text-lg leading-none">{courant.icone}</span>
-            <span className="truncate">{courant.nom}</span>
-          </span>
-        ) : (
-          logo(false)
+          <button
+            onClick={() => setOuvert(true)}
+            aria-label="Ouvrir le menu"
+            className="-ml-1.5 rounded-lg p-1.5 text-pierre-700 hover:bg-pierre-100"
+          >
+            <IconeTroisTraits className="size-5" />
+          </button>
+          {courant ? (
+            <span className="flex min-w-0 items-center gap-2 font-semibold">
+              <span className="text-lg leading-none">{courant.icone}</span>
+              <span className="truncate">{courant.nom}</span>
+            </span>
+          ) : (
+            logo(false)
+          )}
+          <div className="ml-auto">
+            <CoinPoke place="entete" />
+          </div>
+        </header>
+        {ouvert && (
+          <div className="fixed inset-0 z-40 lg:hidden print:hidden">
+            <div className="absolute inset-0 bg-black/30" onClick={() => setOuvert(false)} />
+            <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col bg-white shadow-xl">
+              <div className="flex h-14 shrink-0 items-center gap-2 border-b border-pierre-200 px-3">
+                <div className="min-w-0 flex-1">{logo(false)}</div>
+                <button
+                  onClick={() => setOuvert(false)}
+                  aria-label="Fermer le menu"
+                  className="rounded-lg p-1.5 text-pierre-500 hover:bg-pierre-100 hover:text-pierre-900"
+                >
+                  <IconeFermer className="size-5" />
+                </button>
+              </div>
+              {menu(false, true)}
+            </aside>
+          </div>
         )}
-      </header>
-      {ouvert && (
-        <div className="fixed inset-0 z-40 lg:hidden print:hidden">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOuvert(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col bg-white shadow-xl">
-            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-pierre-200 px-3">
-              <div className="min-w-0 flex-1">{logo(false)}</div>
-              <button
-                onClick={() => setOuvert(false)}
-                aria-label="Fermer le menu"
-                className="rounded-lg p-1.5 text-pierre-500 hover:bg-pierre-100 hover:text-pierre-900"
-              >
-                <IconeFermer className="size-5" />
-              </button>
-            </div>
-            {menu(false)}
-          </aside>
-        </div>
-      )}
 
-      <main className="px-4 py-6 lg:px-6 print:p-0">
-        <Outlet />
-      </main>
-    </div>
+        <main className="px-4 py-6 lg:px-6 print:p-0">
+          <Outlet />
+        </main>
+      </div>
+    </FournisseurPoke>
   )
 }
