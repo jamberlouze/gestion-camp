@@ -6,13 +6,19 @@ export interface DefinitionModule {
   description: string
   icone: string
   chemin: string
-  /** Réservé aux administrateurs et à la direction : jamais offert aux coordonnateurs. */
+  /** Jamais offert aux coordonnateurs (ni par leur rôle, ni en ajout personnel). */
   directionSeulement?: boolean
-  /** Réservé aux administrateurs (pas même la direction), le temps d'un rodage. */
-  adminSeulement?: boolean
+  /** Pas de mode lecture seule dans l'app : la grille n'offre qu'écriture ou rien. */
+  sansLecture?: boolean
+  /** Accès fixe, hors de la grille d'accès par rôle (texte affiché dans la grille). */
+  accesFixe?: string
 }
 
-/** Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx. */
+/**
+ * Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx
+ * (+ le module dans les contraintes de core.acces_roles et core.acces_modules).
+ * Qui voit quoi : grille core.acces_roles (page Utilisateurs), sauf `accesFixe`.
+ */
 export const MODULES: DefinitionModule[] = [
   {
     id: 'calendrier',
@@ -31,7 +37,7 @@ export const MODULES: DefinitionModule[] = [
   {
     id: 'vehicules',
     nom: 'Véhicules',
-    description: 'Minibus, VTT et remorques : immatriculation, assurance, inspections et entretien',
+    description: 'Immatriculation, assurance, inspections et entretien',
     icone: '🚌',
     chemin: '/vehicules',
   },
@@ -59,11 +65,11 @@ export const MODULES: DefinitionModule[] = [
   {
     id: 'subventions',
     nom: 'Subventions',
-    description: 'Vigie hebdomadaire, demandes, montants obtenus et reddition de compte',
+    description: 'Vigie, demandes et reddition de compte',
     icone: '💰',
     chemin: '/subventions',
     directionSeulement: true,
-    adminSeulement: true,
+    sansLecture: true,
   },
   {
     id: 'vigie',
@@ -72,16 +78,16 @@ export const MODULES: DefinitionModule[] = [
     icone: '🔭',
     chemin: '/vigie',
     directionSeulement: true,
-    adminSeulement: true,
   },
   {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
     // base : temps.role_autorise et les politiques du schéma temps).
     id: 'temps',
     nom: 'Feuilles de temps',
-    description: 'Heures par période de paie : régulières, vacances, maladie',
+    description: "Saisie des heures de l'équipe de direction",
     icone: '⏱️',
     chemin: '/temps',
     directionSeulement: true,
+    accesFixe: 'Chacun sa feuille, les admins voient tout. Jamais les coordonnateurs.',
   },
 ]

@@ -13,7 +13,7 @@ export function Accueil() {
       <p className="mt-1 text-sm text-pierre-500">Choisissez un outil.</p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((m) => (
-          <Link key={m.id} to={m.chemin} className={`${ui.carte} p-5 transition hover:border-foret-600`}>
+          <Link key={m.id} to={m.chemin} className={`${ui.carte} p-5 transition hover:border-foret-600 hover:bg-foret-50 focus-visible:border-foret-600 focus-visible:bg-foret-50`}>
             <div className="text-3xl">{m.icone}</div>
             <h2 className="mt-3 font-semibold">{m.nom}</h2>
             <p className="mt-1 text-sm text-pierre-500">{m.description}</p>

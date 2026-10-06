@@ -20,6 +20,13 @@ export interface AccesModule {
   niveau: Niveau
 }
 
+/** Case de la grille d'accès par rôle (absente = aucun accès ; l'admin a tout). */
+export interface AccesRole {
+  role: Exclude<Role, 'admin'>
+  module: ModuleId
+  niveau: Niveau
+}
+
 export interface Groupe {
   id: string
   nom: string

@@ -3,7 +3,8 @@ import { useIsRestoring, useQuery } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { viderCache } from '@/lib/requetes'
 import { supabase } from '@/lib/supabase'
-import type { AccesModule, ModuleId, Profil } from '@/lib/types'
+import type { AccesModule, AccesRole, ModuleId, Profil } from '@/lib/types'
+import { niveauModule } from './acces'
 import { MODULES } from './modules'
 
 interface EtatAuth {
@@ -22,8 +23,13 @@ interface EtatAuth {
 
 const ContexteAuth = createContext<EtatAuth | null>(null)
 
-const directionSeulement = (m: ModuleId) => !!MODULES.find((d) => d.id === m)?.directionSeulement
-const adminSeulement = (m: ModuleId) => !!MODULES.find((d) => d.id === m)?.adminSeulement
+// Droits gardés sur l'appareil avant la grille d'accès par rôle (pas de `roles`) :
+// on applique ce qui valait alors, le temps de relire les droits en ligne.
+const GRILLE_AVANT: AccesRole[] = MODULES.filter((m) => !m.directionSeulement).map((m) => ({
+  role: 'direction',
+  module: m.id,
+  niveau: 'ecriture',
+}))
 
 export function FournisseurAuth({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -44,20 +50,26 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     queryKey: ['droits', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const [profil, acces] = await Promise.all([
+      const [profil, acces, roles] = await Promise.all([
         supabase.schema('core').from('profils').select('*').eq('id', userId!).maybeSingle(),
         supabase.schema('core').from('acces_modules').select('*').eq('user_id', userId!),
+        supabase.schema('core').from('acces_roles').select('*'),
       ])
       if (profil.error) throw profil.error
       if (acces.error) throw acces.error
-      return { profil: profil.data as Profil | null, acces: (acces.data ?? []) as AccesModule[] }
+      if (roles.error) throw roles.error
+      return {
+        profil: profil.data as Profil | null,
+        acces: (acces.data ?? []) as AccesModule[],
+        roles: (roles.data ?? []) as AccesRole[],
+      }
     },
   })
 
   const profil = droits?.profil?.actif ? droits.profil : null
   const estAdmin = profil?.role === 'admin'
   const estDirection = estAdmin || profil?.role === 'direction'
-  const acces = droits?.acces ?? []
+  const niveau = (m: ModuleId) => niveauModule(profil?.role, droits?.roles ?? GRILLE_AVANT, droits?.acces ?? [], m)
 
   const valeur: EtatAuth = {
     session,
@@ -66,12 +78,8 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
-    peutLire: (m) =>
-      adminSeulement(m) ? estAdmin : estDirection || (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m)),
-    peutEcrire: (m) =>
-      adminSeulement(m) ? estAdmin :
-      estDirection ||
-      (!!profil && !directionSeulement(m) && acces.some((a) => a.module === m && a.niveau === 'ecriture')),
+    peutLire: (m) => niveau(m) !== null,
+    peutEcrire: (m) => niveau(m) === 'ecriture',
     deconnexion: async () => {
       await viderCache()
       await supabase.auth.signOut({ scope: 'local' })

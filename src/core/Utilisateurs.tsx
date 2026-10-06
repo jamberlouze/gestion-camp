@@ -2,16 +2,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { messageErreur } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { AccesModule, ModuleId, Niveau, Profil, Role } from '@/lib/types'
+import type { AccesModule, AccesRole, ModuleId, Niveau, Profil, Role } from '@/lib/types'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
+import { niveauModule } from '@/shell/acces'
 import { MODULES } from '@/shell/modules'
 
 const ROLES: { id: Role; libelle: string }[] = [
   { id: 'admin', libelle: 'Administrateur' },
-  { id: 'direction', libelle: 'Direction (tous les modules)' },
-  { id: 'coordo', libelle: 'Coordonnateur (modules choisis)' },
+  { id: 'direction', libelle: 'Direction' },
+  { id: 'coordo', libelle: 'Coordonnateur' },
 ]
+
+const LIBELLE_NIVEAU: Record<Niveau, string> = { lecture: 'Lecture', ecriture: 'Écriture' }
+const selectPetit = 'rounded border border-pierre-300 px-1 py-0.5 text-xs'
 
 /** Gestion des rôles et des accès. Réservé aux administrateurs. */
 export function Utilisateurs() {
@@ -22,13 +26,15 @@ export function Utilisateurs() {
   const { data } = useQuery({
     queryKey: ['utilisateurs'],
     queryFn: async () => {
-      const [profils, acces] = await Promise.all([
+      const [profils, acces, roles] = await Promise.all([
         supabase.schema('core').from('profils').select('*').order('courriel'),
         supabase.schema('core').from('acces_modules').select('*'),
+        supabase.schema('core').from('acces_roles').select('*'),
       ])
       if (profils.error) throw profils.error
       if (acces.error) throw acces.error
-      return { profils: profils.data as Profil[], acces: acces.data as AccesModule[] }
+      if (roles.error) throw roles.error
+      return { profils: profils.data as Profil[], acces: acces.data as AccesModule[], roles: roles.data as AccesRole[] }
     },
   })
 
@@ -60,6 +66,22 @@ export function Utilisateurs() {
     onError: surErreur,
   })
 
+  const majRole = useMutation({
+    mutationFn: async ({ role, module, niveau }: { role: AccesRole['role']; module: ModuleId; niveau: Niveau | '' }) => {
+      const table = supabase.schema('core').from('acces_roles')
+      const { error } = niveau
+        ? await table.upsert({ role, module, niveau })
+        : await table.delete().eq('role', role).eq('module', module)
+      if (error) throw error
+    },
+    onSuccess: rafraichir,
+    onError: surErreur,
+  })
+
+  const roles = data?.roles ?? []
+  const niveauRole = (role: AccesRole['role'], m: ModuleId) =>
+    roles.find((r) => r.role === role && r.module === m)?.niveau ?? ''
+
   return (
     <div>
       <h1 className="text-2xl font-semibold">Utilisateurs</h1>
@@ -77,7 +99,7 @@ export function Utilisateurs() {
               <th className="px-3 py-2 font-medium">Courriel</th>
               <th className="px-3 py-2 font-medium">Nom</th>
               <th className="px-3 py-2 font-medium">Rôle</th>
-              <th className="px-3 py-2 font-medium">Accès (coordonnateurs)</th>
+              <th className="px-3 py-2 font-medium">Accès</th>
               <th className="px-3 py-2 font-medium">Actif</th>
             </tr>
           </thead>
@@ -99,7 +121,7 @@ export function Utilisateurs() {
                   </td>
                   <td className="px-3 py-2">
                     <select
-                      className={ui.champ}
+                      className={`${ui.champ} min-w-36`}
                       value={p.role}
                       disabled={soiMeme}
                       title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
@@ -117,17 +139,18 @@ export function Utilisateurs() {
                       <div className="flex flex-wrap gap-2">
                         {MODULES.filter((m) => !m.directionSeulement).map((m) => {
                           const a = data.acces.find((x) => x.user_id === p.id && x.module === m.id)
+                          const base = niveauRole('coordo', m.id)
                           return (
-                            <label key={m.id} className="flex items-center gap-1 whitespace-nowrap">
+                            <label key={m.id} className="flex items-center gap-1 whitespace-nowrap" title={m.nom}>
                               {m.icone}
                               <select
-                                className="rounded border border-pierre-300 px-1 py-0.5 text-xs"
+                                className={selectPetit}
                                 value={a?.niveau ?? ''}
                                 onChange={(e) =>
                                   majAcces.mutate({ user_id: p.id, module: m.id, niveau: e.target.value as Niveau | '' })
                                 }
                               >
-                                <option value="">Aucun</option>
+                                <option value="">{base ? `${LIBELLE_NIVEAU[base]} (rôle)` : 'Aucun'}</option>
                                 <option value="lecture">Lecture</option>
                                 <option value="ecriture">Écriture</option>
                               </select>
@@ -136,7 +159,13 @@ export function Utilisateurs() {
                         })}
                       </div>
                     ) : (
-                      <span className="text-pierre-500">Tous les modules</span>
+                      <span className="flex flex-wrap gap-1 text-base">
+                        {MODULES.filter((m) => niveauModule(p.role, roles, [], m.id)).map((m) => (
+                          <span key={m.id} title={m.nom}>
+                            {m.icone}
+                          </span>
+                        ))}
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -151,6 +180,58 @@ export function Utilisateurs() {
                 </tr>
               )
             })}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mt-8 text-lg font-semibold">Accès par rôle</h2>
+      <p className="mt-1 text-sm text-pierre-500">
+        Les administrateurs ont accès à tout. Pour un coordonnateur, on peut aussi ajouter des modules à la personne
+        dans la liste ci-dessus : le niveau le plus élevé l'emporte.
+      </p>
+      <div className={`${ui.carte} mt-3 max-w-2xl overflow-x-auto`}>
+        <table className="w-full text-sm">
+          <thead className="border-b border-pierre-200 bg-pierre-50 text-left text-pierre-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Module</th>
+              <th className="px-3 py-2 font-medium">Direction</th>
+              <th className="px-3 py-2 font-medium">Coordonnateurs</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-pierre-100">
+            {MODULES.map((m) => (
+              <tr key={m.id}>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {m.icone} {m.nom}
+                </td>
+                {m.accesFixe ? (
+                  <td colSpan={2} className="px-3 py-2 text-pierre-500">
+                    🔒 {m.accesFixe}
+                  </td>
+                ) : (
+                  (['direction', 'coordo'] as const).map((role) =>
+                    role === 'coordo' && m.directionSeulement ? (
+                      <td key={role} className="px-3 py-2 text-pierre-500">
+                        🔒 Jamais
+                      </td>
+                    ) : (
+                      <td key={role} className="px-3 py-2">
+                        <select
+                          className={ui.champ}
+                          value={niveauRole(role, m.id)}
+                          disabled={!data}
+                          onChange={(e) => majRole.mutate({ role, module: m.id, niveau: e.target.value as Niveau | '' })}
+                        >
+                          <option value="">Aucun</option>
+                          {!m.sansLecture && <option value="lecture">Lecture</option>}
+                          <option value="ecriture">Écriture</option>
+                        </select>
+                      </td>
+                    ),
+                  )
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
