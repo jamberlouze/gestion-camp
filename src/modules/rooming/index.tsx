@@ -30,7 +30,7 @@ export default function ModuleRooming() {
         </NavLink>
         {ecriture && (
           <NavLink to="/rooming/reglages" className={onglet}>
-            Bâtiments et chambres
+            Référence
           </NavLink>
         )}
       </nav>

@@ -107,7 +107,7 @@ export function Plans({ d }: { d: Donnees }) {
                       titre: `Supprimer « ${p.nom} » ?`,
                       message: p.en_vigueur
                         ? "C'est le plan en vigueur : aucun plan ne s'ouvrira par défaut tant qu'un autre ne sera pas mis en vigueur."
-                        : "Ses chiffres et ses noms seront effacés. Les bâtiments et les chambres ne changent pas.",
+                        : 'Ses chiffres et ses noms seront effacés. La référence ne change pas.',
                     })
                     if (ok) faire(() => supprimerPlan(p.id))
                   }}
@@ -159,7 +159,10 @@ export function Plans({ d }: { d: Donnees }) {
                   return probleme
                 }}
               />
-              <p className="mt-1 text-xs text-pierre-500">Le plan part vide. Pour partir d'un plan existant, utilisez plutôt « Copier » sur sa ligne.</p>
+              <p className="mt-1 text-xs text-pierre-500">
+                Le plan part de la référence d'aujourd'hui : ses chambres et leurs lits, sans personne. Pour partir d'un plan existant, utilisez plutôt
+                « Copier » sur sa ligne.
+              </p>
             </div>
           ) : (
             <button className={ui.bouton} onClick={() => setCreation(true)}>

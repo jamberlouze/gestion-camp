@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { Batiment, Chambre, Employe, Occupation, Personne, Plan, Section, TypeChambre, Zone } from './types'
+import type { Chambre, Employe, Lieu, Occupation, Personne, Plan, TypeChambre } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne) : sans réseau,
 // une modification échoue tout de suite (networkMode « always »).
@@ -10,25 +10,21 @@ import type { Batiment, Chambre, Employe, Occupation, Personne, Plan, Section, T
 const S = 'rooming'
 const db = () => supabase.schema(S)
 
-export type TableStructure = 'zones' | 'batiments' | 'sections' | 'chambres'
+export type TableStructure = 'lieux' | 'chambres'
 
 /** Tout le module : structure, plans, occupations et noms de tous les plans (quelques centaines de lignes). */
 export function useRooming() {
-  const zones = useListe<Zone>(S, 'zones', 'ordre')
-  const batiments = useListe<Batiment>(S, 'batiments', 'ordre')
-  const sections = useListe<Section>(S, 'sections', 'ordre')
+  const lieux = useListe<Lieu>(S, 'lieux', 'ordre')
   const chambres = useListe<Chambre>(S, 'chambres', 'ordre')
   const plans = useListe<Plan>(S, 'plans', 'created_at')
   const occupations = useListe<Occupation>(S, 'occupations', 'id')
   const personnes = useListe<Personne>(S, 'personnes', 'created_at')
   const employes = useListe<Employe>('core', 'employes', 'surnom')
   return useMemo(() => {
-    const requetes = [zones, batiments, sections, chambres, plans, occupations, personnes, employes]
+    const requetes = [lieux, chambres, plans, occupations, personnes, employes]
     return {
       structure: {
-        zones: zones.data ?? [],
-        batiments: batiments.data ?? [],
-        sections: sections.data ?? [],
+        lieux: lieux.data ?? [],
         chambres: chambres.data ?? [],
       },
       plans: plans.data ?? [],
@@ -36,15 +32,15 @@ export function useRooming() {
       personnes: personnes.data ?? [],
       employes: employes.data ?? [],
       employe: new Map((employes.data ?? []).map((e) => [e.id, e])),
-      section: new Map((sections.data ?? []).map((x) => [x.id, x])),
+      lieu: new Map((lieux.data ?? []).map((x) => [x.id, x])),
       pret: requetes.every((r) => !!r.data),
       erreur: requetes.find((r) => r.error)?.error ?? null,
     }
     // Les objets de requête changent à chaque rendu : on suit leurs données.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    zones.data, batiments.data, sections.data, chambres.data, plans.data, occupations.data, personnes.data, employes.data,
-    zones.error, batiments.error, sections.error, chambres.error, plans.error, occupations.error, personnes.error, employes.error,
+    lieux.data, chambres.data, plans.data, occupations.data, personnes.data, employes.data,
+    lieux.error, chambres.error, plans.error, occupations.error, personnes.error, employes.error,
   ])
 }
 
@@ -65,7 +61,7 @@ export interface ValeursOccupation {
   chambre_id: string
   type: TypeChambre
   nombre: number
-  lits: number | null
+  lits: number
 }
 
 /**
@@ -127,10 +123,11 @@ export async function copierPlan(source: string, nom: string): Promise<string> {
   return data as string
 }
 
+/** Nouveau plan : photo de la référence d'aujourd'hui (chambres et lits), sans personne. */
 export async function creerPlan(nom: string): Promise<string> {
-  const { data, error } = await db().from('plans').insert({ nom }).select('id').single()
+  const { data, error } = await db().rpc('creer_plan', { p_nom: nom })
   if (error) throw error
-  return (data as { id: string }).id
+  return data as string
 }
 
 export async function mettreEnVigueur(plan: string) {
@@ -145,7 +142,7 @@ export async function supprimerPlan(id: string) {
   await executer(db().from('plans').delete().eq('id', id))
 }
 
-/** Ajoute (sans id) ou modifie une ligne de la structure. */
+/** Ajoute (sans id) ou modifie une ligne de la référence. */
 export async function enregistrerStructure<T extends { id: string }>(table: TableStructure, ligne: Partial<T>) {
   const { id, ...reste } = ligne
   const champs = reste as Record<string, unknown>
@@ -154,6 +151,22 @@ export async function enregistrerStructure<T extends { id: string }>(table: Tabl
 
 export async function supprimerStructure(table: TableStructure, id: string) {
   await executer(db().from(table).delete().eq('id', id))
+}
+
+/**
+ * Retire un lieu de la référence : s'il sert dans un plan, il est seulement
+ * retiré (les anciens plans le gardent) → 'retire' ; sinon il est effacé
+ * avec ce qu'il contient → 'efface'.
+ */
+export async function retirerLieu(id: string): Promise<'retire' | 'efface'> {
+  const { data, error } = await db().rpc('retirer_lieu', { p_lieu: id })
+  if (error) throw error
+  return data as 'retire' | 'efface'
+}
+
+/** Remet un lieu dans la référence, avec ce qu'il contient et ses parents. */
+export async function remettreLieu(id: string) {
+  await executer(db().rpc('remettre_lieu', { p_lieu: id }))
 }
 
 /** Renumérote l'ordre selon la liste d'id. */

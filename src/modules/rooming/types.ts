@@ -6,33 +6,38 @@ export const TYPES: { id: TypeChambre; libelle: string }[] = [
   { id: 'vide', libelle: 'Vide' },
 ]
 
-export interface Zone {
-  id: string
-  nom: string
-  ordre: number
+export type Niveau = 'site' | 'batiment' | 'section' | 'etage'
+
+export const NIVEAUX: Record<Niveau, { libelle: string; enfant: Niveau | null }> = {
+  site: { libelle: 'Site', enfant: 'batiment' },
+  batiment: { libelle: 'Bâtiment', enfant: 'section' },
+  section: { libelle: 'Section', enfant: 'etage' },
+  etage: { libelle: 'Étage', enfant: null },
 }
 
-export interface Batiment {
+/** Un lieu de la référence : site (le Camp) > bâtiment > section > étage ; site, section et étage sont facultatifs. */
+export interface Lieu {
   id: string
-  zone_id: string
+  parent_id: string | null
+  niveau: Niveau
   nom: string
-  ordre: number
-}
-
-export interface Section {
-  id: string
-  batiment_id: string
-  nom: string
+  /** Abréviation affichée devant le numéro de chambre (CH, VFB…). */
+  code: string | null
+  /** false = retiré de la référence (ex. un chalet loué quelques étés) ; les anciens plans le gardent. */
+  actif: boolean
   ordre: number
 }
 
 export interface Chambre {
   id: string
-  section_id: string
+  /** Bâtiment, section ou étage. */
+  lieu_id: string
   numero: string
-  /** Capacité normale ; un plan peut la changer pour lui seul. */
+  /** Lits d'aujourd'hui (référence) ; chaque plan garde sa propre copie. */
   lits: number
   ordre: number
+  /** false = retirée de la référence (les anciens plans la gardent). */
+  actif: boolean
 }
 
 export interface Plan {
@@ -43,15 +48,15 @@ export interface Plan {
   created_at: string
 }
 
-/** Une chambre « touchée » dans un plan ; sans ligne : vide, capacité normale. */
+/** Une chambre dans un plan, copiée de la référence à sa création ; sans ligne, la chambre n'est pas dans le plan. */
 export interface Occupation {
   id: string
   plan_id: string
   chambre_id: string
   type: TypeChambre
   nombre: number
-  /** Capacité propre au plan (null = capacité normale). */
-  lits: number | null
+  /** Lits dans ce plan (0 = fermée). */
+  lits: number
 }
 
 /** Employé clé nommé dans une chambre : un employé de l'app ou un nom libre. */

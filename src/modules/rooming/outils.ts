@@ -1,23 +1,32 @@
-import type { Batiment, Chambre, Employe, Occupation, Personne, Section, TypeChambre, Zone } from './types'
+import type { Chambre, Employe, Lieu, Occupation, Personne, TypeChambre } from './types'
 
-// Fonctions pures : état des chambres d'un plan et totaux à chaque niveau
-// (section, bâtiment, zone, camp), comme la colonne de droite de l'ancien Sheets.
+// Fonctions pures : état des chambres d'un plan et totaux à chaque lieu
+// (étage, section, bâtiment, site), comme la colonne de droite de l'ancien Sheets.
 
 export interface EtatChambre {
-  /** Lits dans ce plan (capacité propre, sinon normale). */
+  /** Lits dans ce plan. */
   lits: number
-  normal: number
-  ajustee: boolean
+  /** Lits d'aujourd'hui dans la référence (null si la chambre en est retirée). */
+  reference: number | null
+  /** Le plan n'a pas les lits de la référence d'aujourd'hui. */
+  differe: boolean
   type: TypeChambre
   nombre: number
   libres: number
 }
 
-export function etatChambre(chambre: Chambre, occ: Occupation | undefined): EtatChambre {
-  const lits = occ?.lits ?? chambre.lits
-  const type = occ?.type ?? 'vide'
-  const nombre = type === 'vide' ? 0 : (occ?.nombre ?? 0)
-  return { lits, normal: chambre.lits, ajustee: lits !== chambre.lits, type, nombre, libres: Math.max(lits - nombre, 0) }
+/** La chambre est-elle dans la référence d'aujourd'hui (voir `dansReference`) ? */
+export function etatChambre(chambre: Chambre, occ: Occupation, enReference: boolean): EtatChambre {
+  const nombre = occ.type === 'vide' ? 0 : occ.nombre
+  const reference = enReference ? chambre.lits : null
+  return {
+    lits: occ.lits,
+    reference,
+    differe: reference !== null && occ.lits !== reference,
+    type: occ.type,
+    nombre,
+    libres: Math.max(occ.lits - nombre, 0),
+  }
 }
 
 export interface Totaux {
@@ -48,69 +57,81 @@ export interface NoeudChambre {
   etat: EtatChambre
   personnes: Personne[]
 }
-export interface NoeudSection {
-  section: Section
-  totaux: Totaux
+
+/** Un lieu dans un plan : ses chambres à lui, ses lieux enfants, et le total de tout ce qu'il contient. */
+export interface NoeudLieu {
+  lieu: Lieu
   chambres: NoeudChambre[]
-}
-export interface NoeudBatiment {
-  batiment: Batiment
+  enfants: NoeudLieu[]
   totaux: Totaux
-  sections: NoeudSection[]
-}
-export interface NoeudZone {
-  zone: Zone
-  totaux: Totaux
-  batiments: NoeudBatiment[]
 }
 
 export interface Structure {
-  zones: Zone[]
-  batiments: Batiment[]
-  sections: Section[]
+  lieux: Lieu[]
   chambres: Chambre[]
 }
 
 const parOrdre = <T extends { ordre: number }>(a: T, b: T) => a.ordre - b.ordre
 
-/** L'arbre zone > bâtiment > section > chambre d'un plan, avec ses totaux. */
+/**
+ * La référence d'aujourd'hui : les lieux actifs dont tous les parents sont
+ * actifs, et leurs chambres actives (mêmes règles que rooming.lieux_actifs).
+ */
+export function dansReference(s: Structure): { lieux: Set<string>; chambres: Set<string> } {
+  const lieux = new Set<string>()
+  const visiter = (parent: string | null) => {
+    for (const l of s.lieux) {
+      if (l.parent_id === parent && l.actif) {
+        lieux.add(l.id)
+        visiter(l.id)
+      }
+    }
+  }
+  visiter(null)
+  return { lieux, chambres: new Set(s.chambres.filter((c) => c.actif && lieux.has(c.lieu_id)).map((c) => c.id)) }
+}
+
+/** Les lieux enfants d'un lieu (ou du haut de l'arbre), dans l'ordre. */
+export const enfantsDe = (lieux: Lieu[], parent: string | null) => lieux.filter((l) => l.parent_id === parent).sort(parOrdre)
+
+/**
+ * L'arbre des lieux d'un plan, avec ses totaux. Seules les chambres du plan
+ * y sont (copiées de la référence à sa création) ; un lieu sans chambre du
+ * plan n'apparaît pas.
+ */
 export function arbrePlan(
   s: Structure,
   occupations: Occupation[],
   personnes: Personne[],
   employes?: Map<string, Employe>,
-): { zones: NoeudZone[]; totaux: Totaux } {
+): { racines: NoeudLieu[]; totaux: Totaux } {
   const occ = new Map(occupations.map((o) => [o.chambre_id, o]))
+  const reference = dansReference(s).chambres
   const noms = new Map<string, Personne[]>()
   for (const p of trierPersonnes(personnes, employes)) {
     noms.set(p.chambre_id, [...(noms.get(p.chambre_id) ?? []), p])
   }
-  const zones = [...s.zones].sort(parOrdre).map((zone): NoeudZone => {
-    const batiments = s.batiments
-      .filter((b) => b.zone_id === zone.id)
+  const noeud = (lieu: Lieu): NoeudLieu | null => {
+    const chambres = s.chambres
+      .filter((c) => c.lieu_id === lieu.id && occ.has(c.id))
       .sort(parOrdre)
-      .map((batiment): NoeudBatiment => {
-        const sections = s.sections
-          .filter((x) => x.batiment_id === batiment.id)
-          .sort(parOrdre)
-          .map((section): NoeudSection => {
-            const chambres = s.chambres
-              .filter((c) => c.section_id === section.id)
-              .sort(parOrdre)
-              .map((chambre) => ({ chambre, etat: etatChambre(chambre, occ.get(chambre.id)), personnes: noms.get(chambre.id) ?? [] }))
-            return { section, chambres, totaux: additionner(chambres.map((c) => totauxChambre(c.etat))) }
-          })
-        return { batiment, sections, totaux: additionner(sections.map((x) => x.totaux)) }
-      })
-    return { zone, batiments, totaux: additionner(batiments.map((b) => b.totaux)) }
-  })
-  return { zones, totaux: additionner(zones.map((z) => z.totaux)) }
+      .map((chambre) => ({ chambre, etat: etatChambre(chambre, occ.get(chambre.id)!, reference.has(chambre.id)), personnes: noms.get(chambre.id) ?? [] }))
+    const enfants = enfantsDe(s.lieux, lieu.id)
+      .map(noeud)
+      .filter((n): n is NoeudLieu => n !== null)
+    if (chambres.length === 0 && enfants.length === 0) return null
+    return { lieu, chambres, enfants, totaux: additionner([...chambres.map((c) => totauxChambre(c.etat)), ...enfants.map((e) => e.totaux)]) }
+  }
+  const racines = enfantsDe(s.lieux, null)
+    .map(noeud)
+    .filter((n): n is NoeudLieu => n !== null)
+  return { racines, totaux: additionner(racines.map((r) => r.totaux)) }
 }
 
-/** « Cèdres haut 2 » ; « 55 TDL » pour un bâtiment d'une seule pièce. */
-export function nomChambre(section: Section | undefined, chambre: Chambre): string {
-  if (!section || section.nom === chambre.numero) return chambre.numero
-  return `${section.nom} ${chambre.numero}`
+/** « CH 2 », « Motel 16 », « Appart » : abréviation (sinon nom) du lieu, puis le numéro, sauf si c'est le même mot. */
+export function nomChambre(lieu: Lieu | undefined, chambre: Chambre): string {
+  if (!lieu || chambre.numero === lieu.nom || chambre.numero === lieu.code) return chambre.numero
+  return `${lieu.code ?? lieu.nom} ${chambre.numero}`
 }
 
 /** Par date d'ajout ; à égalité (import), par ordre alphabétique. */

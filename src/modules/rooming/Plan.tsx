@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { FenetreChambre } from './FenetreChambre'
 import type { Donnees } from './donnees'
-import { arbrePlan, libelleOccupation, nomPersonne, pluriel, type NoeudChambre, type NoeudZone, type Totaux } from './outils'
+import { arbrePlan, libelleOccupation, nomPersonne, pluriel, type NoeudChambre, type NoeudLieu, type Totaux } from './outils'
 import type { Plan as TypePlan } from './types'
 
 /** /rooming : le plan en vigueur, sinon le premier plan actif. */
@@ -27,7 +27,7 @@ export function VuePlan({ d }: { d: Donnees }) {
   const [ouverte, setOuverte] = useState<string | null>(null)
   const plan = d.plans.find((p) => p.id === id)
 
-  const { zones, totaux } = useMemo(
+  const { racines, totaux } = useMemo(
     () =>
       arbrePlan(
         d.structure,
@@ -46,47 +46,81 @@ export function VuePlan({ d }: { d: Donnees }) {
       <Legende />
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="space-y-6">
-          {zones.map((z) => (
-            <section key={z.zone.id}>
-              <h2 className="mb-2 flex items-baseline gap-2 text-sm font-semibold uppercase tracking-wide text-pierre-500">
-                {z.zone.nom}
-                <span className="font-normal normal-case tracking-normal">· {pluriel(z.totaux.lits, 'lit', 'lits')}</span>
-              </h2>
-              <div className="space-y-3">
-                {z.batiments.map((b) => (
-                  <div key={b.batiment.id} className={`${ui.carte} p-3`}>
-                    <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <h3 className="font-semibold">{b.batiment.nom}</h3>
-                      <ResumeTotaux t={b.totaux} />
-                    </div>
-                    <div className="space-y-3">
-                      {b.sections.map((s) => (
-                        <div key={s.section.id}>
-                          {(b.sections.length > 1 || s.section.nom !== b.batiment.nom) && (
-                            <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 text-sm">
-                              <span className="font-medium text-pierre-700">{s.section.nom}</span>
-                              <ResumeTotaux t={s.totaux} petit />
-                            </div>
-                          )}
-                          <div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
-                            {s.chambres.map((n) => (
-                              <Tuile key={n.chambre.id} n={n} d={d} ouvrir={ecriture ? () => setOuverte(n.chambre.id) : undefined} />
-                            ))}
-                          </div>
-                          {s.chambres.length === 0 && <p className="text-sm text-pierre-400">Aucune chambre (voir Réglages).</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+          {racines.map((n) => (
+            <BlocLieu key={n.lieu.id} n={n} d={d} ouvrir={ecriture ? setOuverte : undefined} />
           ))}
-          {zones.length === 0 && <p className="py-8 text-center text-sm text-pierre-500">Aucun bâtiment : la structure se règle dans Réglages.</p>}
+          {racines.length === 0 && <p className="py-8 text-center text-sm text-pierre-500">Ce plan n'a aucune chambre.</p>}
         </div>
-        <PanneauTotaux zones={zones} totaux={totaux} />
+        <PanneauTotaux racines={racines} totaux={totaux} />
       </div>
       {ouverte && <FenetreChambre d={d} plan={plan} chambreId={ouverte} fermer={() => setOuverte(null)} />}
+    </div>
+  )
+}
+
+/**
+ * Un lieu du plan : un site est un titre au-dessus de ses bâtiments ; un
+ * bâtiment, une carte ; une section et un étage, des sous-titres. Les
+ * chambres d'un lieu viennent avant ses lieux enfants.
+ */
+function BlocLieu({ n, d, ouvrir }: { n: NoeudLieu; d: Donnees; ouvrir?: (chambre: string) => void }) {
+  const { lieu } = n
+  const tuiles = n.chambres.length > 0 && (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+      {n.chambres.map((c) => (
+        <Tuile key={c.chambre.id} n={c} d={d} ouvrir={ouvrir ? () => ouvrir(c.chambre.id) : undefined} />
+      ))}
+    </div>
+  )
+  const enfants = n.enfants.map((e) => <BlocLieu key={e.lieu.id} n={e} d={d} ouvrir={ouvrir} />)
+  const titre = (
+    <>
+      {lieu.nom}
+      {lieu.code && lieu.code !== lieu.nom && <span className="ml-1.5 font-normal text-pierre-400">({lieu.code})</span>}
+    </>
+  )
+
+  if (lieu.niveau === 'site') {
+    return (
+      <section>
+        <h2 className="mb-2 flex flex-wrap items-baseline gap-x-3 text-sm font-semibold uppercase tracking-wide text-pierre-500">
+          {lieu.nom}
+          <span className="font-normal normal-case tracking-normal">
+            <ResumeTotaux t={n.totaux} petit />
+          </span>
+        </h2>
+        <div className="space-y-3">
+          {tuiles}
+          {enfants}
+        </div>
+      </section>
+    )
+  }
+  if (lieu.niveau === 'batiment') {
+    return (
+      <div className={`${ui.carte} p-3`}>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h3 className="font-semibold">{titre}</h3>
+          <ResumeTotaux t={n.totaux} />
+        </div>
+        <div className="space-y-3">
+          {tuiles}
+          {enfants}
+        </div>
+      </div>
+    )
+  }
+  const section = lieu.niveau === 'section'
+  return (
+    <div className={section && n.enfants.length > 0 ? 'space-y-2 rounded-lg bg-pierre-50/70 p-2' : ''}>
+      <div className={`mb-1.5 flex flex-wrap items-baseline gap-x-3 ${section ? 'text-sm' : 'text-xs'}`}>
+        <span className={section ? 'font-semibold text-pierre-800' : 'font-medium text-pierre-700'}>{titre}</span>
+        <ResumeTotaux t={n.totaux} petit />
+      </div>
+      <div className="space-y-2">
+        {tuiles}
+        {enfants}
+      </div>
     </div>
   )
 }
@@ -190,7 +224,7 @@ const BARRES = { enfants: 'bg-sky-500', employes: 'bg-amber-500', vide: 'bg-pier
 function Tuile({ n, d, ouvrir }: { n: NoeudChambre; d: Donnees; ouvrir?: () => void }) {
   const { chambre, etat, personnes } = n
   const fermee = etat.lits === 0
-  const ecart = etat.lits - etat.normal
+  const ecart = etat.lits - (etat.reference ?? etat.lits)
   return (
     <button
       type="button"
@@ -205,9 +239,12 @@ function Tuile({ n, d, ouvrir }: { n: NoeudChambre; d: Donnees; ouvrir?: () => v
         <span className="truncate font-semibold" title={chambre.numero}>
           {chambre.numero}
         </span>
-        <span className="shrink-0 text-xs tabular-nums text-pierre-500" title={etat.ajustee ? `Capacité normale : ${etat.normal}` : undefined}>
+        <span
+          className="shrink-0 text-xs tabular-nums text-pierre-500"
+          title={etat.differe ? `Référence d'aujourd'hui : ${pluriel(etat.reference!, 'lit', 'lits')}` : etat.reference === null ? 'Chambre retirée de la référence' : undefined}
+        >
           {pluriel(etat.lits, 'lit', 'lits')}
-          {etat.ajustee && !fermee && <span className="ml-0.5 font-medium text-amber-700">({ecart > 0 ? `+${ecart}` : ecart})</span>}
+          {etat.differe && !fermee && <span className="ml-0.5 font-medium text-amber-700">({ecart > 0 ? `+${ecart}` : `−${-ecart}`})</span>}
         </span>
       </div>
       <div className={`mt-0.5 text-sm font-medium ${fermee || etat.type === 'vide' ? 'text-pierre-400' : 'text-pierre-800'}`}>
@@ -234,17 +271,26 @@ function Tuile({ n, d, ouvrir }: { n: NoeudChambre; d: Donnees; ouvrir?: () => v
   )
 }
 
-/** Totaux de chaque niveau, comme la colonne de droite de l'ancien Sheets. */
-function PanneauTotaux({ zones, totaux }: { zones: NoeudZone[]; totaux: Totaux }) {
-  const ligne = (cle: string, nom: string, t: Totaux, style: string) => (
-    <tr key={cle} className={style}>
-      <td className="py-1 pr-2">{nom}</td>
-      <td className="px-1 text-right tabular-nums">{t.lits}</td>
-      <td className="px-1 text-right tabular-nums text-sky-800">{t.enfants}</td>
-      <td className="px-1 text-right tabular-nums text-amber-800">{t.employes}</td>
-      <td className="pl-1 text-right tabular-nums text-pierre-500">{t.libres}</td>
-    </tr>
-  )
+/** Totaux de chaque lieu, comme la colonne de droite de l'ancien Sheets. */
+function PanneauTotaux({ racines, totaux }: { racines: NoeudLieu[]; totaux: Totaux }) {
+  const STYLES = {
+    site: 'border-t border-pierre-200 font-semibold',
+    batiment: 'font-medium text-pierre-800',
+    section: 'text-pierre-700',
+    etage: 'text-xs text-pierre-500',
+  }
+  const lignes = (n: NoeudLieu, profondeur: number): ReactNode[] => [
+    <tr key={n.lieu.id} className={STYLES[n.lieu.niveau]}>
+      <td className="py-1 pr-2" style={{ paddingLeft: `${profondeur * 0.75}rem` }}>
+        {n.lieu.code ?? n.lieu.nom}
+      </td>
+      <td className="px-1 text-right tabular-nums">{n.totaux.lits}</td>
+      <td className="px-1 text-right tabular-nums text-sky-800">{n.totaux.enfants}</td>
+      <td className="px-1 text-right tabular-nums text-amber-800">{n.totaux.employes}</td>
+      <td className="pl-1 text-right tabular-nums text-pierre-500">{n.totaux.libres}</td>
+    </tr>,
+    ...n.enfants.flatMap((e) => lignes(e, profondeur + 1)),
+  ]
   return (
     <aside className={`${ui.carte} p-3 xl:sticky xl:top-4`}>
       <h2 className="mb-2 text-sm font-semibold">Totaux</h2>
@@ -259,16 +305,14 @@ function PanneauTotaux({ zones, totaux }: { zones: NoeudZone[]; totaux: Totaux }
           </tr>
         </thead>
         <tbody>
-          {zones.flatMap((z) => [
-            ligne(z.zone.id, z.zone.nom, z.totaux, 'border-t border-pierre-200 font-semibold'),
-            ...z.batiments.flatMap((b) => [
-              ligne(b.batiment.id, b.batiment.nom, b.totaux, 'text-pierre-800 [&>td:first-child]:pl-2'),
-              ...(b.sections.length > 1
-                ? b.sections.map((s) => ligne(s.section.id, s.section.nom, s.totaux, 'text-xs text-pierre-500 [&>td:first-child]:pl-5'))
-                : []),
-            ]),
-          ])}
-          {ligne('camp', 'Camp', totaux, 'border-t-2 border-pierre-300 font-semibold')}
+          {racines.flatMap((r) => lignes(r, 0))}
+          <tr className="border-t-2 border-pierre-300 font-semibold">
+            <td className="py-1 pr-2">Total</td>
+            <td className="px-1 text-right tabular-nums">{totaux.lits}</td>
+            <td className="px-1 text-right tabular-nums text-sky-800">{totaux.enfants}</td>
+            <td className="px-1 text-right tabular-nums text-amber-800">{totaux.employes}</td>
+            <td className="pl-1 text-right tabular-nums text-pierre-500">{totaux.libres}</td>
+          </tr>
         </tbody>
       </table>
     </aside>

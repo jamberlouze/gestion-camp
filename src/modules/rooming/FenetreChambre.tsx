@@ -4,7 +4,7 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { dejaPlace, placer, retirerPersonne, useDefinirOccupation, useRelire, type Donnees } from './donnees'
-import { employeNomme, etatChambre, nomChambre, nomPersonne, trierPersonnes } from './outils'
+import { dansReference, employeNomme, etatChambre, nomChambre, nomPersonne, trierPersonnes } from './outils'
 import { TYPES, type Plan, type TypeChambre } from './types'
 
 const MAX_LITS = 50
@@ -21,19 +21,19 @@ export function FenetreChambre({ d, plan, chambreId, fermer }: { d: Donnees; pla
   const [enCours, setEnCours] = useState(false)
 
   const chambre = d.structure.chambres.find((c) => c.id === chambreId)
-  if (!chambre) return null
   const occupation = d.occupations.find((o) => o.plan_id === plan.id && o.chambre_id === chambreId)
-  const etat = etatChambre(chambre, occupation)
+  if (!chambre || !occupation) return null
+  const etat = etatChambre(chambre, occupation, dansReference(d.structure).chambres.has(chambre.id))
   const personnes = trierPersonnes(
     d.personnes.filter((p) => p.plan_id === plan.id && p.chambre_id === chambreId),
     d.employe,
   )
-  const titre = nomChambre(d.section.get(chambre.section_id), chambre)
+  const titre = nomChambre(d.lieu.get(chambre.lieu_id), chambre)
   const minimum = etat.type === 'employes' ? personnes.length : 0
 
-  function envoyer(champs: Partial<{ type: TypeChambre; nombre: number; lits: number | null }>) {
+  function envoyer(champs: Partial<{ type: TypeChambre; nombre: number; lits: number }>) {
     setErreur(null)
-    const v = { plan_id: plan.id, chambre_id: chambre!.id, type: etat.type, nombre: etat.nombre, lits: occupation?.lits ?? null, ...champs }
+    const v = { plan_id: plan.id, chambre_id: chambre!.id, type: etat.type, nombre: etat.nombre, lits: etat.lits, ...champs }
     definir.mutate(v, { onError: (e) => setErreur(messageErreur(e)) })
   }
 
@@ -51,7 +51,7 @@ export function FenetreChambre({ d, plan, chambreId, fermer }: { d: Donnees; pla
     envoyer({ type, nombre: type === 'vide' ? 0 : etat.nombre || etat.lits })
   }
 
-  const changerLits = (lits: number) => envoyer({ lits: lits === chambre.lits ? null : lits })
+  const changerLits = (lits: number) => envoyer({ lits })
 
   async function ajouterNom(e: FormEvent) {
     e.preventDefault()
@@ -141,15 +141,19 @@ export function FenetreChambre({ d, plan, chambreId, fermer }: { d: Donnees; pla
 
         <Ligne libelle="Lits dans ce plan">
           <Compteur valeur={etat.lits} min={etat.nombre} max={MAX_LITS} changer={changerLits} />
-          {etat.ajustee ? (
+          {etat.reference === null ? (
+            <span className="text-sm text-pierre-500">chambre retirée de la référence</span>
+          ) : etat.differe ? (
             <span className="text-sm text-amber-800">
-              normal : {etat.normal}{' '}
-              <button type="button" className="font-medium text-foret-700 hover:underline" onClick={() => changerLits(chambre.lits)} disabled={etat.nombre > chambre.lits}>
-                (revenir)
-              </button>
+              référence d'aujourd'hui : {etat.reference}{' '}
+              {etat.nombre <= etat.reference && (
+                <button type="button" className="font-medium text-foret-700 hover:underline" onClick={() => changerLits(etat.reference!)}>
+                  (reprendre)
+                </button>
+              )}
             </span>
           ) : (
-            <span className="text-sm text-pierre-500">capacité normale</span>
+            <span className="text-sm text-pierre-500">comme la référence</span>
           )}
         </Ligne>
         {etat.lits === 0 && <p className="-mt-2 text-sm text-pierre-500">Chambre fermée dans ce plan.</p>}

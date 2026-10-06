@@ -1,13 +1,14 @@
 -- ============================================================
 -- rooming : les bâtiments, leurs lits et qui dort où.
 --
--- Structure fixe : zone > bâtiment > section > chambre (capacité
--- normale de la chambre). Plans = scénarios nommés sans dates (Été 2026,
--- Classe nature…), un seul « en vigueur ». Dans un plan, une chambre a
--- un type (enfants / employés / vide), un nombre, et au besoin une
--- capacité propre au plan (lit d'appoint, chambre fermée à 0). Des
+-- Référence : [site] > bâtiment > [section] > [étage] > chambre, avec
+-- les lits d'aujourd'hui (la réalité, sans personne). Plans = scénarios nommés
+-- sans dates (Été 2026, Classe nature…), un seul « en vigueur ». Un plan
+-- prend une PHOTO de la référence à sa création (ses chambres et leurs
+-- lits) : changer la référence ensuite ne le touche pas. Dans un plan,
+-- une chambre a un type (enfants / employés / vide) et un nombre. Des
 -- employés clés peuvent être nommés dans une chambre d'employés : ils
--- comptent dans le nombre. On ne dépasse jamais les lits.
+-- comptent dans le nombre. On ne dépasse jamais les lits du plan.
 -- Remplace le Google Sheets « Plan de rooming » (import en bas).
 -- ============================================================
 
@@ -24,51 +25,95 @@ alter table core.acces_modules add constraint acces_modules_module_check
 insert into core.acces_roles (role, module, niveau) values ('direction','rooming','ecriture');
 
 -- ------------------------------------------------------------
--- Structure : zones > bâtiments > sections > chambres. Un niveau qui
--- contient encore quelque chose ne peut pas être supprimé.
+-- Référence : un arbre de lieux, puis les chambres.
+--   site (ex. le Camp, qui regroupe des bâtiments ; facultatif)
+--   > bâtiment (Pavillon principal, Vieille-France, 55 TDL…)
+--   > section (Cèdres, Pins, Motel… ; facultative)
+--   > étage (Cèdres Haut… ; facultatif)
+-- Une chambre est rattachée à un bâtiment, une section ou un étage.
+-- Retirer un lieu (rooming.retirer_lieu) : s'il sert dans un plan, il est
+-- seulement retiré de la référence (actif = false, lui, ce qu'il contient
+-- et ses chambres) et les anciens plans le gardent ; sinon il est effacé.
 -- ------------------------------------------------------------
-create table rooming.zones (
+create table rooming.lieux (
   id uuid primary key default gen_random_uuid(),
-  nom text not null unique check (btrim(nom) <> ''),
-  ordre integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table rooming.batiments (
-  id uuid primary key default gen_random_uuid(),
-  zone_id uuid not null references rooming.zones(id) on delete restrict,
-  nom text not null unique check (btrim(nom) <> ''),
-  ordre integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table rooming.sections (
-  id uuid primary key default gen_random_uuid(),
-  batiment_id uuid not null references rooming.batiments(id) on delete restrict,
+  parent_id uuid references rooming.lieux(id) on delete restrict,
+  niveau text not null check (niveau in ('site','batiment','section','etage')),
   nom text not null check (btrim(nom) <> ''),
+  -- Abréviation affichée devant le numéro de chambre (CH, VFB…).
+  code text check (code is null or btrim(code) <> ''),
+  -- Retiré de la référence (ex. un chalet loué quelques étés) : les
+  -- nouveaux plans ne l'ont plus, les anciens le gardent.
+  actif boolean not null default true,
   ordre integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (batiment_id, nom)
+  unique nulls not distinct (parent_id, nom)
 );
 
 create table rooming.chambres (
   id uuid primary key default gen_random_uuid(),
-  section_id uuid not null references rooming.sections(id) on delete restrict,
+  lieu_id uuid not null references rooming.lieux(id) on delete restrict,
   numero text not null check (btrim(numero) <> ''),
-  -- Capacité normale ; un plan peut la changer pour lui seul.
+  -- Lits d'aujourd'hui (référence). Les plans en gardent leur propre copie.
   lits integer not null default 0 check (lits between 0 and 50),
+  -- Retirée de la référence : les nouveaux plans ne l'ont plus, les
+  -- anciens la gardent.
+  actif boolean not null default true,
   ordre integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (section_id, numero)
+  unique (lieu_id, numero)
 );
 
-create index idx_batiments_zone on rooming.batiments(zone_id);
-create index idx_sections_batiment on rooming.sections(batiment_id);
-create index idx_chambres_section on rooming.chambres(section_id);
+create index idx_lieux_parent on rooming.lieux(parent_id);
+create index idx_chambres_lieu on rooming.chambres(lieu_id);
+
+-- Un site est en haut ; un bâtiment est en haut ou dans un site ; une
+-- section dans un bâtiment ; un étage dans une section. Une chambre n'est
+-- jamais directement dans un site.
+create function rooming.verifier_lieu()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_parent text;
+begin
+  select niveau into v_parent from rooming.lieux where id = new.parent_id;
+  if not (
+    (new.niveau = 'site' and v_parent is null)
+    or (new.niveau = 'batiment' and (v_parent is null or v_parent = 'site'))
+    or (new.niveau = 'section' and v_parent = 'batiment')
+    or (new.niveau = 'etage' and v_parent = 'section')
+  ) then
+    raise exception 'Un lieu de niveau « % » ne peut pas être placé là.', new.niveau using errcode = 'check_violation';
+  end if;
+  if tg_op = 'UPDATE' and new.niveau <> old.niveau then
+    raise exception 'Le niveau d''un lieu ne change pas.' using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_lieux_verifier before insert or update of parent_id, niveau on rooming.lieux
+for each row execute function rooming.verifier_lieu();
+
+create function rooming.verifier_chambre()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select niveau from rooming.lieux where id = new.lieu_id) = 'site' then
+    raise exception 'Une chambre va dans un bâtiment, une section ou un étage, pas directement dans un site.' using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_chambres_verifier before insert or update of lieu_id on rooming.chambres
+for each row execute function rooming.verifier_chambre();
 
 -- ------------------------------------------------------------
 -- Plans
@@ -85,16 +130,17 @@ create table rooming.plans (
 
 create unique index plans_un_seul_en_vigueur on rooming.plans ((true)) where en_vigueur;
 
--- Une ligne par chambre « touchée » dans un plan ; sans ligne : vide,
--- capacité normale.
+-- Les chambres d'un plan et leurs lits, copiés de la référence à la
+-- création du plan (une ligne par chambre ; sans ligne, la chambre ne
+-- fait pas partie du plan).
 create table rooming.occupations (
   id uuid primary key default gen_random_uuid(),
   plan_id uuid not null references rooming.plans(id) on delete cascade,
-  chambre_id uuid not null references rooming.chambres(id) on delete cascade,
+  chambre_id uuid not null references rooming.chambres(id) on delete restrict,
   type text not null default 'vide' check (type in ('enfants','employes','vide')),
   nombre integer not null default 0 check (nombre >= 0),
-  -- Capacité propre au plan (null = capacité normale de la chambre).
-  lits integer check (lits between 0 and 50),
+  -- Lits de la chambre dans ce plan (0 = fermée).
+  lits integer not null check (lits between 0 and 50),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (plan_id, chambre_id),
@@ -122,11 +168,7 @@ create unique index personnes_nom_unique on rooming.personnes(plan_id, lower(btr
 create index idx_personnes_chambre on rooming.personnes(plan_id, chambre_id);
 create index idx_personnes_employe on rooming.personnes(employe_id);
 
-create trigger trg_zones_updated_at before update on rooming.zones
-for each row execute function core.maj_updated_at();
-create trigger trg_batiments_updated_at before update on rooming.batiments
-for each row execute function core.maj_updated_at();
-create trigger trg_sections_updated_at before update on rooming.sections
+create trigger trg_lieux_updated_at before update on rooming.lieux
 for each row execute function core.maj_updated_at();
 create trigger trg_chambres_updated_at before update on rooming.chambres
 for each row execute function core.maj_updated_at();
@@ -139,15 +181,16 @@ for each row execute function core.maj_updated_at();
 -- Règles : jamais plus de monde que de lits ; les noms seulement dans
 -- une chambre d'employés et jamais plus nombreux que le chiffre.
 -- ------------------------------------------------------------
+-- « CH 2 », « Motel 16 », « Appart » : abréviation (sinon nom) du lieu
+-- de la chambre, puis son numéro, sauf si c'est le même mot.
 create function rooming.nom_chambre(p_chambre uuid)
 returns text
 language sql
 stable
 set search_path = ''
 as $$
-  -- « 55 TDL » plutôt que « 55 TDL 55 TDL » (bâtiment d'une seule pièce).
-  select case when s.nom = c.numero then c.numero else s.nom || ' ' || c.numero end
-  from rooming.chambres c join rooming.sections s on s.id = c.section_id
+  select case when c.numero in (l.nom, coalesce(l.code, '')) then c.numero else coalesce(l.code, l.nom) || ' ' || c.numero end
+  from rooming.chambres c join rooming.lieux l on l.id = c.lieu_id
   where c.id = p_chambre
 $$;
 
@@ -157,12 +200,10 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_lits integer;
   v_noms integer;
 begin
-  select coalesce(new.lits, c.lits) into v_lits from rooming.chambres c where c.id = new.chambre_id;
-  if new.nombre > v_lits then
-    raise exception 'La chambre % n''a que % lit(s) dans ce plan.', rooming.nom_chambre(new.chambre_id), v_lits
+  if new.nombre > new.lits then
+    raise exception 'La chambre % n''a que % lit(s) dans ce plan.', rooming.nom_chambre(new.chambre_id), new.lits
       using errcode = 'check_violation';
   end if;
   if new.type = 'employes' then
@@ -225,34 +266,6 @@ $$;
 create trigger trg_personnes_verifier before insert or update on rooming.personnes
 for each row execute function rooming.verifier_personne();
 
--- Baisser la capacité normale d'une chambre : bloqué si un plan qui
--- l'utilise (sans capacité propre) déborderait.
-create function rooming.verifier_capacite()
-returns trigger
-language plpgsql
-set search_path = ''
-as $$
-declare
-  v_plan text;
-  v_nombre integer;
-begin
-  select p.nom, o.nombre into v_plan, v_nombre
-  from rooming.occupations o join rooming.plans p on p.id = o.plan_id
-  where o.chambre_id = new.id and o.lits is null and o.nombre > new.lits
-  order by o.nombre desc
-  limit 1;
-  if found then
-    raise exception 'Le plan « % » loge % personne(s) dans la chambre % : impossible de descendre à % lit(s).', v_plan, v_nombre, rooming.nom_chambre(new.id), new.lits
-      using errcode = 'check_violation';
-  end if;
-  return new;
-end;
-$$;
-
-create trigger trg_chambres_verifier_capacite before update of lits on rooming.chambres
-for each row when (new.lits < old.lits)
-execute function rooming.verifier_capacite();
-
 -- ------------------------------------------------------------
 -- Opérations (droits de la personne : RLS)
 -- ------------------------------------------------------------
@@ -299,7 +312,7 @@ begin
 
   select * into v_occ from rooming.occupations o where o.plan_id = p_plan and o.chambre_id = p_chambre;
   if not found then
-    insert into rooming.occupations (plan_id, chambre_id, type, nombre) values (p_plan, p_chambre, 'employes', 1);
+    raise exception 'La chambre % ne fait pas partie de ce plan.', rooming.nom_chambre(p_chambre) using errcode = 'check_violation';
   elsif v_occ.type = 'enfants' then
     raise exception 'La chambre % est une chambre d''enfants dans ce plan.', rooming.nom_chambre(p_chambre) using errcode = 'check_violation';
   else
@@ -333,7 +346,111 @@ begin
 end;
 $$;
 
--- Copie un plan (chiffres, capacités propres, noms) ; renvoie le nouveau.
+-- Les lieux de la référence d'aujourd'hui : actifs, et tous leurs
+-- parents aussi.
+create function rooming.lieux_actifs()
+returns table (id uuid)
+language sql
+stable
+set search_path = ''
+as $$
+  with recursive actifs as (
+    select id from rooming.lieux where parent_id is null and actif
+    union all
+    select l.id from rooming.lieux l join actifs a on l.parent_id = a.id where l.actif
+  )
+  select id from actifs
+$$;
+
+-- Retire un lieu de la référence. S'il sert dans un plan : le lieu, ce
+-- qu'il contient et ses chambres passent à actif = false (les anciens
+-- plans les gardent) et on renvoie 'retire'. Sinon tout est effacé
+-- (chambres, puis lieux du plus profond au plus haut) : 'efface'.
+create function rooming.retirer_lieu(p_lieu uuid)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_ids uuid[];
+  v_id uuid;
+begin
+  with recursive arbre as (
+    select id, 0 as profondeur from rooming.lieux where id = p_lieu
+    union all
+    select l.id, a.profondeur + 1 from rooming.lieux l join arbre a on l.parent_id = a.id
+  )
+  select array_agg(id order by profondeur desc) into v_ids from arbre;
+  if v_ids is null then
+    return null;
+  end if;
+  if exists (
+    select 1 from rooming.occupations o join rooming.chambres c on c.id = o.chambre_id where c.lieu_id = any (v_ids)
+  ) then
+    update rooming.lieux set actif = false where id = any (v_ids);
+    update rooming.chambres set actif = false where lieu_id = any (v_ids);
+    return 'retire';
+  end if;
+  delete from rooming.chambres where lieu_id = any (v_ids);
+  foreach v_id in array v_ids loop
+    delete from rooming.lieux where id = v_id;
+  end loop;
+  return 'efface';
+end;
+$$;
+
+-- Remet un lieu dans la référence, avec ce qu'il contient et ses chambres,
+-- et ses parents s'ils avaient été retirés.
+create function rooming.remettre_lieu(p_lieu uuid)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  with recursive arbre as (
+    select id from rooming.lieux where id = p_lieu
+    union all
+    select l.id from rooming.lieux l join arbre a on l.parent_id = a.id
+  ), parents as (
+    select parent_id as id from rooming.lieux where id = p_lieu
+    union all
+    select l.parent_id from rooming.lieux l join parents p on l.id = p.id where l.parent_id is not null
+  )
+  update rooming.lieux set actif = true
+  where id in (select id from arbre) or id in (select id from parents);
+  update rooming.chambres set actif = true
+  where lieu_id in (
+    with recursive arbre as (
+      select id from rooming.lieux where id = p_lieu
+      union all
+      select l.id from rooming.lieux l join arbre a on l.parent_id = a.id
+    )
+    select id from arbre
+  );
+end;
+$$;
+
+-- Nouveau plan : photo de la référence d'aujourd'hui (chambres actives
+-- et leurs lits), sans personne ; renvoie le nouveau.
+create function rooming.creer_plan(p_nom text)
+returns uuid
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  insert into rooming.plans (nom) values (btrim(p_nom)) returning id into v_id;
+  insert into rooming.occupations (plan_id, chambre_id, type, nombre, lits)
+  select v_id, c.id, 'vide', 0, c.lits
+  from rooming.chambres c
+  where c.actif and c.lieu_id in (select id from rooming.lieux_actifs());
+  return v_id;
+end;
+$$;
+
+-- Copie un plan (ses chambres, ses lits, ses chiffres et ses noms) ;
+-- renvoie le nouveau.
 create function rooming.copier_plan(p_source uuid, p_nom text)
 returns uuid
 language plpgsql
@@ -371,22 +488,14 @@ grant select, insert, update, delete on all tables in schema rooming to authenti
 revoke execute on all functions in schema rooming from public, anon;
 grant execute on all functions in schema rooming to authenticated, service_role;
 
-alter table rooming.zones enable row level security;
-alter table rooming.batiments enable row level security;
-alter table rooming.sections enable row level security;
+alter table rooming.lieux enable row level security;
 alter table rooming.chambres enable row level security;
 alter table rooming.plans enable row level security;
 alter table rooming.occupations enable row level security;
 alter table rooming.personnes enable row level security;
 
-create policy "Lire zones" on rooming.zones for select to authenticated using (core.peut_lire('rooming'));
-create policy "Écrire zones" on rooming.zones for all to authenticated
-  using (core.peut_ecrire('rooming')) with check (core.peut_ecrire('rooming'));
-create policy "Lire bâtiments" on rooming.batiments for select to authenticated using (core.peut_lire('rooming'));
-create policy "Écrire bâtiments" on rooming.batiments for all to authenticated
-  using (core.peut_ecrire('rooming')) with check (core.peut_ecrire('rooming'));
-create policy "Lire sections" on rooming.sections for select to authenticated using (core.peut_lire('rooming'));
-create policy "Écrire sections" on rooming.sections for all to authenticated
+create policy "Lire lieux" on rooming.lieux for select to authenticated using (core.peut_lire('rooming'));
+create policy "Écrire lieux" on rooming.lieux for all to authenticated
   using (core.peut_ecrire('rooming')) with check (core.peut_ecrire('rooming'));
 create policy "Lire chambres" on rooming.chambres for select to authenticated using (core.peut_lire('rooming'));
 create policy "Écrire chambres" on rooming.chambres for all to authenticated
@@ -402,95 +511,109 @@ create policy "Écrire personnes" on rooming.personnes for all to authenticated
   using (core.peut_ecrire('rooming')) with check (core.peut_ecrire('rooming'));
 
 alter publication supabase_realtime add table
-  rooming.zones, rooming.batiments, rooming.sections, rooming.chambres,
+  rooming.lieux, rooming.chambres,
   rooming.plans, rooming.occupations, rooming.personnes;
 
 -- ============================================================
 -- Import du Google Sheets « Plan de rooming » (2026-10-06)
 -- ============================================================
-insert into rooming.zones (nom, ordre) values ('Zone 1', 1), ('Zone 2', 2);
 
-insert into rooming.batiments (zone_id, nom, ordre)
-select z.id, b.nom, b.ordre from (values
-  ('Zone 1', 'Cèdres', 1),
-  ('Zone 1', 'Pins', 2),
-  ('Zone 2', 'Vieille France', 3),
-  ('Zone 2', 'Motel', 4),
-  ('Zone 2', '55 TDL', 5),
-  ('Zone 2', '100 TDL', 6)
-) as b(zone, nom, ordre) join rooming.zones z on z.nom = b.zone;
+insert into rooming.lieux (parent_id, niveau, nom, code, ordre)
+select pa.id, l.niveau, l.nom, l.code, l.ordre from (values
+  ('Camp', 'site', null, null, null, 1)
+) as l(nom, niveau, code, parent_nom, parent_niveau, ordre)
+left join rooming.lieux pa on pa.nom = l.parent_nom and pa.niveau = l.parent_niveau;
 
-insert into rooming.sections (batiment_id, nom, ordre)
-select b.id, s.nom, s.ordre from (values
-  ('Cèdres', 'Cèdres haut', 1),
-  ('Cèdres', 'Cèdres bas', 2),
-  ('Pins', 'Pins bas', 1),
-  ('Pins', 'Pins haut', 2),
-  ('Pins', 'Bout du bâtiment', 3),
-  ('Vieille France', 'Vieille France bas', 1),
-  ('Vieille France', 'Vieille France haut', 2),
-  ('Motel', 'Motel', 1),
-  ('55 TDL', '55 TDL', 1),
-  ('100 TDL', '100 TDL', 1)
-) as s(batiment, nom, ordre) join rooming.batiments b on b.nom = s.batiment;
+insert into rooming.lieux (parent_id, niveau, nom, code, ordre)
+select pa.id, l.niveau, l.nom, l.code, l.ordre from (values
+  ('Pavillon principal', 'batiment', null, 'Camp', 'site', 1),
+  ('Vieille-France', 'batiment', null, 'Camp', 'site', 2),
+  ('55 chemin du Tour du Lac', 'batiment', '55 TDL', null, null, 2),
+  ('100 chemin du Tour du Lac', 'batiment', '100 TDL', null, null, 3)
+) as l(nom, niveau, code, parent_nom, parent_niveau, ordre)
+left join rooming.lieux pa on pa.nom = l.parent_nom and pa.niveau = l.parent_niveau;
 
-insert into rooming.chambres (section_id, numero, lits, ordre)
-select s.id, c.numero, c.lits, c.ordre from (values
-  ('Cèdres haut', '1', 4, 1),
-  ('Cèdres haut', '2', 6, 2),
-  ('Cèdres haut', '3', 6, 3),
-  ('Cèdres haut', '4', 6, 4),
-  ('Cèdres haut', '5', 4, 5),
-  ('Cèdres haut', '6', 4, 6),
-  ('Cèdres haut', '7', 6, 7),
-  ('Cèdres bas', '8', 4, 1),
-  ('Cèdres bas', '9', 6, 2),
-  ('Cèdres bas', '10', 6, 3),
-  ('Cèdres bas', '11', 8, 4),
-  ('Cèdres bas', '12', 4, 5),
-  ('Pins bas', '1', 4, 1),
-  ('Pins bas', '2', 4, 2),
-  ('Pins bas', '3', 4, 3),
-  ('Pins bas', '4', 4, 4),
-  ('Pins bas', '5', 4, 5),
-  ('Pins bas', '6', 4, 6),
-  ('Pins bas', '7', 4, 7),
-  ('Pins bas', '8', 9, 8),
-  ('Pins haut', '9', 4, 1),
-  ('Pins haut', '10', 4, 2),
-  ('Pins haut', '11', 4, 3),
-  ('Pins haut', '12', 4, 4),
-  ('Pins haut', '13', 4, 5),
-  ('Pins haut', '14', 4, 6),
-  ('Pins haut', '15', 4, 7),
-  ('Pins haut', '16', 4, 8),
-  ('Bout du bâtiment', '17', 2, 1),
-  ('Bout du bâtiment', '18', 8, 2),
-  ('Vieille France bas', '1', 3, 1),
-  ('Vieille France bas', '2', 4, 2),
-  ('Vieille France bas', '3', 4, 3),
-  ('Vieille France bas', '4', 4, 4),
-  ('Vieille France bas', '5', 4, 5),
-  ('Vieille France bas', '6', 4, 6),
-  ('Vieille France haut', '7', 4, 1),
-  ('Vieille France haut', '8', 4, 2),
-  ('Vieille France haut', '9', 4, 3),
-  ('Vieille France haut', '10', 4, 4),
-  ('Vieille France haut', '11', 4, 5),
-  ('Vieille France haut', '12', 4, 6),
-  ('Vieille France haut', '13', 4, 7),
-  ('Vieille France haut', '14', 4, 8),
-  ('Vieille France haut', '15', 4, 9),
-  ('Motel', '16', 4, 1),
-  ('Motel', '17', 6, 2),
-  ('Motel', '18', 4, 3),
-  ('Motel', '19', 3, 4),
-  ('Motel', '20', 6, 5),
-  ('Motel', '20 3/4', 2, 6),
-  ('Motel', 'Appart', 3, 7),
-  ('55 TDL', '55 TDL', 3, 1),
-  ('100 TDL', '100 TDL', 5, 1)
-) as c(section, numero, lits, ordre) join rooming.sections s on s.nom = c.section;
+insert into rooming.lieux (parent_id, niveau, nom, code, ordre)
+select pa.id, l.niveau, l.nom, l.code, l.ordre from (values
+  ('Cèdres', 'section', null, 'Pavillon principal', 'batiment', 1),
+  ('Pins', 'section', null, 'Pavillon principal', 'batiment', 2),
+  ('Vieille-France', 'section', null, 'Vieille-France', 'batiment', 1),
+  ('Motel', 'section', null, 'Vieille-France', 'batiment', 2),
+  ('Appart', 'section', null, 'Vieille-France', 'batiment', 3)
+) as l(nom, niveau, code, parent_nom, parent_niveau, ordre)
+left join rooming.lieux pa on pa.nom = l.parent_nom and pa.niveau = l.parent_niveau;
+
+insert into rooming.lieux (parent_id, niveau, nom, code, ordre)
+select pa.id, l.niveau, l.nom, l.code, l.ordre from (values
+  ('Cèdres Haut', 'etage', 'CH', 'Cèdres', 'section', 1),
+  ('Cèdres Bas', 'etage', 'CB', 'Cèdres', 'section', 2),
+  ('Pins Bas', 'etage', 'PB', 'Pins', 'section', 1),
+  ('Pins Haut', 'etage', 'PH', 'Pins', 'section', 2),
+  ('Bout du bâtiment', 'etage', null, 'Pins', 'section', 3),
+  ('Vieille-France Bas', 'etage', 'VFB', 'Vieille-France', 'section', 1),
+  ('Vieille-France Haut', 'etage', 'VFH', 'Vieille-France', 'section', 2)
+) as l(nom, niveau, code, parent_nom, parent_niveau, ordre)
+left join rooming.lieux pa on pa.nom = l.parent_nom and pa.niveau = l.parent_niveau;
+
+-- Référence = l'onglet 2026 ; « 20 3/4 » et le chalet du 100 TDL (loué
+-- quelques étés, 2025 seulement) sont retirés.
+insert into rooming.chambres (lieu_id, numero, lits, ordre, actif)
+select l.id, c.numero, c.lits, c.ordre, c.actif from (values
+  ('Cèdres Haut', 'etage', '1', 4, 1, true),
+  ('Cèdres Haut', 'etage', '2', 6, 2, true),
+  ('Cèdres Haut', 'etage', '3', 6, 3, true),
+  ('Cèdres Haut', 'etage', '4', 6, 4, true),
+  ('Cèdres Haut', 'etage', '5', 4, 5, true),
+  ('Cèdres Haut', 'etage', '6', 4, 6, true),
+  ('Cèdres Haut', 'etage', '7', 6, 7, true),
+  ('Cèdres Bas', 'etage', '8', 4, 1, true),
+  ('Cèdres Bas', 'etage', '9', 6, 2, true),
+  ('Cèdres Bas', 'etage', '10', 6, 3, true),
+  ('Cèdres Bas', 'etage', '11', 8, 4, true),
+  ('Cèdres Bas', 'etage', '12', 4, 5, true),
+  ('Pins Bas', 'etage', '1', 4, 1, true),
+  ('Pins Bas', 'etage', '2', 4, 2, true),
+  ('Pins Bas', 'etage', '3', 4, 3, true),
+  ('Pins Bas', 'etage', '4', 4, 4, true),
+  ('Pins Bas', 'etage', '5', 4, 5, true),
+  ('Pins Bas', 'etage', '6', 4, 6, true),
+  ('Pins Bas', 'etage', '7', 4, 7, true),
+  ('Pins Bas', 'etage', '8', 9, 8, true),
+  ('Pins Haut', 'etage', '9', 4, 1, true),
+  ('Pins Haut', 'etage', '10', 4, 2, true),
+  ('Pins Haut', 'etage', '11', 4, 3, true),
+  ('Pins Haut', 'etage', '12', 4, 4, true),
+  ('Pins Haut', 'etage', '13', 4, 5, true),
+  ('Pins Haut', 'etage', '14', 4, 6, true),
+  ('Pins Haut', 'etage', '15', 4, 7, true),
+  ('Pins Haut', 'etage', '16', 4, 8, true),
+  ('Bout du bâtiment', 'etage', '17', 2, 1, true),
+  ('Bout du bâtiment', 'etage', '18', 8, 2, true),
+  ('Vieille-France Bas', 'etage', '1', 3, 1, true),
+  ('Vieille-France Bas', 'etage', '2', 4, 2, true),
+  ('Vieille-France Bas', 'etage', '3', 4, 3, true),
+  ('Vieille-France Bas', 'etage', '4', 4, 4, true),
+  ('Vieille-France Bas', 'etage', '5', 4, 5, true),
+  ('Vieille-France Bas', 'etage', '6', 4, 6, true),
+  ('Vieille-France Haut', 'etage', '7', 4, 1, true),
+  ('Vieille-France Haut', 'etage', '8', 4, 2, true),
+  ('Vieille-France Haut', 'etage', '9', 4, 3, true),
+  ('Vieille-France Haut', 'etage', '10', 4, 4, true),
+  ('Vieille-France Haut', 'etage', '11', 4, 5, true),
+  ('Vieille-France Haut', 'etage', '12', 4, 6, true),
+  ('Vieille-France Haut', 'etage', '13', 4, 7, true),
+  ('Vieille-France Haut', 'etage', '14', 4, 8, true),
+  ('Vieille-France Haut', 'etage', '15', 4, 9, true),
+  ('Motel', 'section', '16', 4, 1, true),
+  ('Motel', 'section', '17', 6, 2, true),
+  ('Motel', 'section', '18', 4, 3, true),
+  ('Motel', 'section', '19', 3, 4, true),
+  ('Motel', 'section', '20', 6, 5, true),
+  ('Motel', 'section', '20 3/4', 2, 6, false),
+  ('Appart', 'section', 'Appart', 3, 1, true),
+  ('55 chemin du Tour du Lac', 'batiment', '55 TDL', 3, 1, true),
+  ('100 chemin du Tour du Lac', 'batiment', '100 TDL', 5, 1, false)
+) as c(lieu, niveau, numero, lits, ordre, actif) join rooming.lieux l on l.nom = c.lieu and l.niveau = c.niveau;
 
 insert into rooming.plans (nom, en_vigueur, archive) values
   ('Été 2026', true, false),
@@ -502,555 +625,555 @@ insert into rooming.plans (nom, en_vigueur, archive) values
   ('2025 – Scénario 3', false, true),
   ('2025 – Scénario 4', false, true);
 
+update rooming.lieux set actif = false where nom = '100 chemin du Tour du Lac';
+
+-- Chaque plan : ses chambres (celles de son onglet) et leurs lits.
 insert into rooming.occupations (plan_id, chambre_id, type, nombre, lits)
 select p.id, c.id, o.type, o.nombre, o.lits from (values
-  ('Été 2026', 'Cèdres haut', '1', 'employes', 4, null),
-  ('Été 2026', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('Été 2026', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('Été 2026', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('Été 2026', 'Cèdres haut', '5', 'employes', 4, null),
-  ('Été 2026', 'Cèdres haut', '6', 'enfants', 4, null),
-  ('Été 2026', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('Été 2026', 'Cèdres bas', '8', 'enfants', 4, null),
-  ('Été 2026', 'Cèdres bas', '9', 'enfants', 6, null),
-  ('Été 2026', 'Cèdres bas', '10', 'employes', 6, null),
-  ('Été 2026', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('Été 2026', 'Cèdres bas', '12', 'employes', 4, null),
-  ('Été 2026', 'Pins bas', '1', 'employes', 4, null),
-  ('Été 2026', 'Pins bas', '2', 'enfants', 4, null),
-  ('Été 2026', 'Pins bas', '3', 'enfants', 4, null),
-  ('Été 2026', 'Pins bas', '4', 'enfants', 4, null),
-  ('Été 2026', 'Pins bas', '5', 'enfants', 4, null),
-  ('Été 2026', 'Pins bas', '6', 'enfants', 4, null),
-  ('Été 2026', 'Pins bas', '7', 'employes', 4, null),
-  ('Été 2026', 'Pins bas', '8', 'enfants', 9, null),
-  ('Été 2026', 'Pins haut', '9', 'employes', 4, null),
-  ('Été 2026', 'Pins haut', '10', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '11', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '12', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '13', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '14', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '15', 'enfants', 4, null),
-  ('Été 2026', 'Pins haut', '16', 'employes', 4, null),
-  ('Été 2026', 'Bout du bâtiment', '17', 'employes', 2, null),
-  ('Été 2026', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('Été 2026', 'Vieille France bas', '1', 'employes', 3, null),
-  ('Été 2026', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '7', 'employes', 4, null),
-  ('Été 2026', 'Vieille France haut', '8', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('Été 2026', 'Vieille France haut', '15', 'employes', 4, null),
-  ('Été 2026', 'Motel', '16', 'employes', 1, null),
-  ('Été 2026', 'Motel', '17', 'employes', 4, null),
-  ('Été 2026', 'Motel', '18', 'employes', 1, null),
-  ('Été 2026', 'Motel', '19', 'employes', 2, null),
-  ('Été 2026', 'Motel', '20', 'employes', 1, null),
-  ('Été 2026', 'Motel', 'Appart', 'employes', 1, null),
-  ('Été 2026', '55 TDL', '55 TDL', 'employes', 2, null),
-  ('Été 2026', 'Motel', '20 3/4', 'vide', 0, 0),
-  ('Été 2026', '100 TDL', '100 TDL', 'vide', 0, 0),
-  ('Classe nature', 'Cèdres haut', '1', 'enfants', 4, null),
-  ('Classe nature', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres haut', '5', 'enfants', 4, null),
-  ('Classe nature', 'Cèdres haut', '6', 'employes', 4, null),
-  ('Classe nature', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres bas', '8', 'employes', 4, null),
-  ('Classe nature', 'Cèdres bas', '9', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('Classe nature', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('Classe nature', 'Cèdres bas', '12', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '1', 'employes', 4, null),
-  ('Classe nature', 'Pins bas', '2', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '3', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '4', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '5', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '6', 'enfants', 4, null),
-  ('Classe nature', 'Pins bas', '8', 'enfants', 9, null),
-  ('Classe nature', 'Pins haut', '9', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '10', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '11', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '12', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '13', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '14', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '15', 'enfants', 4, null),
-  ('Classe nature', 'Pins haut', '16', 'enfants', 4, null),
-  ('Classe nature', 'Bout du bâtiment', '17', 'employes', 2, null),
-  ('Classe nature', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('Classe nature', 'Vieille France bas', '1', 'employes', 3, null),
-  ('Classe nature', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '8', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('Classe nature', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('Classe nature', 'Motel', '16', 'employes', 3, null),
-  ('Classe nature', 'Motel', '17', 'employes', 1, null),
-  ('Classe nature', 'Motel', '18', 'employes', 3, null),
-  ('Classe nature', 'Motel', '19', 'employes', 4, 6),
-  ('Classe nature', 'Motel', '20', 'employes', 4, null),
-  ('Classe nature', 'Motel', 'Appart', 'employes', 2, 2),
-  ('Classe nature', '55 TDL', '55 TDL', 'vide', 0, 0),
-  ('Classe nature', 'Motel', '20 3/4', 'vide', 0, 0),
-  ('Classe nature', '100 TDL', '100 TDL', 'vide', 0, 0),
-  ('2025 – Pré-camp', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Pré-camp', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Pré-camp', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Pré-camp', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Pré-camp', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Pré-camp', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Pré-camp', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Pré-camp', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Pré-camp', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Pré-camp', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Pré-camp', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Pré-camp', 'Motel', 'Appart', 'employes', 2, null),
-  ('2025 – Pré-camp', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Pré-camp', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'employes', 5, null),
-  ('2025 – Classes nature', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Classes nature', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Classes nature', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Classes nature', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Classes nature', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Classes nature', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Classes nature', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Classes nature', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Classes nature', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Classes nature', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Classes nature', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Classes nature', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Classes nature', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Classes nature', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Classes nature', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Classes nature', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Classes nature', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Classes nature', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Classes nature', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Classes nature', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Classes nature', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Classes nature', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Classes nature', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Classes nature', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Classes nature', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Classes nature', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Classes nature', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Classes nature', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Classes nature', 'Motel', 'Appart', 'employes', 2, null),
-  ('2025 – Classes nature', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Classes nature', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Classes nature', '100 TDL', '100 TDL', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Scénario 1', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Scénario 1', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Scénario 1', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Scénario 1', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Scénario 1', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Scénario 1', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Scénario 1', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Scénario 1', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Scénario 1', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Scénario 1', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Scénario 1', 'Motel', 'Appart', 'employes', 2, null),
-  ('2025 – Scénario 1', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Scénario 1', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Scénario 1', '100 TDL', '100 TDL', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Scénario 2', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Scénario 2', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Scénario 2', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Scénario 2', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Scénario 2', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Scénario 2', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Scénario 2', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Scénario 2', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Scénario 2', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Scénario 2', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Scénario 2', 'Motel', 'Appart', 'employes', 2, null),
-  ('2025 – Scénario 2', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Scénario 2', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Scénario 2', '100 TDL', '100 TDL', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Scénario 3', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Scénario 3', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Scénario 3', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Scénario 3', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Scénario 3', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Scénario 3', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Scénario 3', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Scénario 3', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Scénario 3', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Scénario 3', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Scénario 3', 'Motel', 'Appart', 'employes', 2, null),
-  ('2025 – Scénario 3', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Scénario 3', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'employes', 5, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '1', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '2', 'enfants', 6, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '3', 'enfants', 6, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '4', 'enfants', 6, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '5', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '6', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Cèdres haut', '7', 'enfants', 6, null),
-  ('2025 – Scénario 4', 'Cèdres bas', '8', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Cèdres bas', '9', 'employes', 6, null),
-  ('2025 – Scénario 4', 'Cèdres bas', '10', 'enfants', 6, null),
-  ('2025 – Scénario 4', 'Cèdres bas', '11', 'enfants', 8, null),
-  ('2025 – Scénario 4', 'Cèdres bas', '12', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '1', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Pins bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins bas', '7', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Pins bas', '8', 'enfants', 9, null),
-  ('2025 – Scénario 4', 'Pins haut', '9', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Pins haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Pins haut', '15', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Pins haut', '16', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Bout du bâtiment', '17', 'employes', 1, null),
-  ('2025 – Scénario 4', 'Bout du bâtiment', '18', 'employes', 8, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '1', 'employes', 2, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '2', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '3', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '4', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '5', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France bas', '6', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '7', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '8', 'employes', 3, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '9', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '10', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '11', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '12', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '13', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '14', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Vieille France haut', '15', 'enfants', 4, null),
-  ('2025 – Scénario 4', 'Motel', '16', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Motel', '17', 'employes', 4, null),
-  ('2025 – Scénario 4', 'Motel', '18', 'employes', 5, 5),
-  ('2025 – Scénario 4', 'Motel', '19', 'employes', 2, 6),
-  ('2025 – Scénario 4', 'Motel', '20', 'employes', 1, 1),
-  ('2025 – Scénario 4', 'Motel', 'Appart', 'employes', 3, null),
-  ('2025 – Scénario 4', '55 TDL', '55 TDL', 'employes', 1, null),
-  ('2025 – Scénario 4', 'Motel', '20 3/4', 'employes', 5, 5),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'employes', 5, null)
-) as o(plan, section, numero, type, nombre, lits)
+  ('Été 2026', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('Été 2026', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('Été 2026', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('Été 2026', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('Été 2026', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('Été 2026', 'Cèdres Haut', 'etage', '6', 'enfants', 4, 4),
+  ('Été 2026', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('Été 2026', 'Cèdres Bas', 'etage', '8', 'enfants', 4, 4),
+  ('Été 2026', 'Cèdres Bas', 'etage', '9', 'enfants', 6, 6),
+  ('Été 2026', 'Cèdres Bas', 'etage', '10', 'employes', 6, 6),
+  ('Été 2026', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('Été 2026', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '1', 'employes', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '7', 'employes', 4, 4),
+  ('Été 2026', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('Été 2026', 'Pins Haut', 'etage', '9', 'employes', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '15', 'enfants', 4, 4),
+  ('Été 2026', 'Pins Haut', 'etage', '16', 'employes', 4, 4),
+  ('Été 2026', 'Bout du bâtiment', 'etage', '17', 'employes', 2, 2),
+  ('Été 2026', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '1', 'employes', 3, 3),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '7', 'employes', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '8', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('Été 2026', 'Vieille-France Haut', 'etage', '15', 'employes', 4, 4),
+  ('Été 2026', 'Motel', 'section', '16', 'employes', 1, 4),
+  ('Été 2026', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('Été 2026', 'Motel', 'section', '18', 'employes', 1, 4),
+  ('Été 2026', 'Motel', 'section', '19', 'employes', 2, 3),
+  ('Été 2026', 'Motel', 'section', '20', 'employes', 1, 6),
+  ('Été 2026', 'Appart', 'section', 'Appart', 'employes', 1, 3),
+  ('Été 2026', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 2, 3),
+  ('Classe nature', 'Cèdres Haut', 'etage', '1', 'enfants', 4, 4),
+  ('Classe nature', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Haut', 'etage', '5', 'enfants', 4, 4),
+  ('Classe nature', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('Classe nature', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('Classe nature', 'Cèdres Bas', 'etage', '9', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('Classe nature', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('Classe nature', 'Cèdres Bas', 'etage', '12', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '1', 'employes', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '7', 'vide', 0, 4),
+  ('Classe nature', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('Classe nature', 'Pins Haut', 'etage', '9', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '15', 'enfants', 4, 4),
+  ('Classe nature', 'Pins Haut', 'etage', '16', 'enfants', 4, 4),
+  ('Classe nature', 'Bout du bâtiment', 'etage', '17', 'employes', 2, 2),
+  ('Classe nature', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '1', 'employes', 3, 3),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '7', 'vide', 0, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '8', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('Classe nature', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('Classe nature', 'Motel', 'section', '16', 'employes', 3, 4),
+  ('Classe nature', 'Motel', 'section', '17', 'employes', 1, 6),
+  ('Classe nature', 'Motel', 'section', '18', 'employes', 3, 4),
+  ('Classe nature', 'Motel', 'section', '19', 'employes', 4, 6),
+  ('Classe nature', 'Motel', 'section', '20', 'employes', 4, 6),
+  ('Classe nature', 'Appart', 'section', 'Appart', 'employes', 2, 2),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Pré-camp', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Pré-camp', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Pré-camp', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Pré-camp', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Pré-camp', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Pré-camp', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Pré-camp', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Pré-camp', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Pré-camp', 'Appart', 'section', 'Appart', 'employes', 2, 3),
+  ('2025 – Pré-camp', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Pré-camp', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 5, 5),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Classes nature', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Classes nature', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Classes nature', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Classes nature', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Classes nature', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Classes nature', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Classes nature', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Classes nature', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Classes nature', 'Appart', 'section', 'Appart', 'employes', 2, 3),
+  ('2025 – Classes nature', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Classes nature', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Classes nature', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 3, 5),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Scénario 1', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Scénario 1', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Scénario 1', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Scénario 1', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Scénario 1', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Scénario 1', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Scénario 1', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Scénario 1', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Scénario 1', 'Appart', 'section', 'Appart', 'employes', 2, 3),
+  ('2025 – Scénario 1', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Scénario 1', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Scénario 1', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 4, 5),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Scénario 2', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Scénario 2', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Scénario 2', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Scénario 2', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Scénario 2', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Scénario 2', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Scénario 2', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Scénario 2', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Scénario 2', 'Appart', 'section', 'Appart', 'employes', 2, 3),
+  ('2025 – Scénario 2', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Scénario 2', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Scénario 2', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 3, 5),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Scénario 3', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Scénario 3', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Scénario 3', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Scénario 3', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Scénario 3', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Scénario 3', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Scénario 3', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Scénario 3', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Scénario 3', 'Appart', 'section', 'Appart', 'employes', 2, 3),
+  ('2025 – Scénario 3', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Scénario 3', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 5, 5),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '1', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '2', 'enfants', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '3', 'enfants', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '4', 'enfants', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '5', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '6', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Cèdres Haut', 'etage', '7', 'enfants', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Bas', 'etage', '8', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Cèdres Bas', 'etage', '9', 'employes', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Bas', 'etage', '10', 'enfants', 6, 6),
+  ('2025 – Scénario 4', 'Cèdres Bas', 'etage', '11', 'enfants', 8, 8),
+  ('2025 – Scénario 4', 'Cèdres Bas', 'etage', '12', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '1', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Pins Bas', 'etage', '8', 'enfants', 9, 9),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '9', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '15', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Pins Haut', 'etage', '16', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Bout du bâtiment', 'etage', '17', 'employes', 1, 2),
+  ('2025 – Scénario 4', 'Bout du bâtiment', 'etage', '18', 'employes', 8, 8),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '1', 'employes', 2, 3),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '2', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '3', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '4', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '5', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Bas', 'etage', '6', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '7', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '8', 'employes', 3, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '9', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '10', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '11', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '12', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '13', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '14', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Vieille-France Haut', 'etage', '15', 'enfants', 4, 4),
+  ('2025 – Scénario 4', 'Motel', 'section', '16', 'employes', 4, 4),
+  ('2025 – Scénario 4', 'Motel', 'section', '17', 'employes', 4, 6),
+  ('2025 – Scénario 4', 'Motel', 'section', '18', 'employes', 5, 5),
+  ('2025 – Scénario 4', 'Motel', 'section', '19', 'employes', 2, 6),
+  ('2025 – Scénario 4', 'Motel', 'section', '20', 'employes', 1, 1),
+  ('2025 – Scénario 4', 'Appart', 'section', 'Appart', 'employes', 3, 3),
+  ('2025 – Scénario 4', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'employes', 1, 3),
+  ('2025 – Scénario 4', 'Motel', 'section', '20 3/4', 'employes', 5, 5),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'employes', 5, 5)
+) as o(plan, lieu, niveau, numero, type, nombre, lits)
 join rooming.plans p on p.nom = o.plan
-join rooming.sections s on s.nom = o.section
-join rooming.chambres c on c.section_id = s.id and c.numero = o.numero;
+join rooming.lieux l on l.nom = o.lieu and l.niveau = o.niveau
+join rooming.chambres c on c.lieu_id = l.id and c.numero = o.numero;
 
 -- Un nom qui est le surnom d'un employé actif est lié à sa fiche ; les
 -- autres (direction, invités…) restent des noms libres.
 insert into rooming.personnes (plan_id, chambre_id, employe_id, nom)
-select p.id, c.id, e.id, case when e.id is null then n.nom end from (values
-  ('Été 2026', 'Motel', '16', 'Vickie'),
-  ('Été 2026', 'Motel', '17', 'Galaxie'),
-  ('Été 2026', 'Motel', '17', 'Spag'),
-  ('Été 2026', 'Motel', '17', 'Fiji'),
-  ('Été 2026', 'Motel', '17', 'Sriracha'),
-  ('Été 2026', 'Motel', '18', 'Younes'),
-  ('Été 2026', 'Motel', '19', 'Sylvie'),
-  ('Été 2026', 'Motel', '19', 'Maxime'),
-  ('Été 2026', 'Motel', 'Appart', 'Charlotte'),
-  ('Été 2026', '55 TDL', '55 TDL', 'Marco'),
-  ('Été 2026', '55 TDL', '55 TDL', 'Vincent'),
-  ('2025 – Pré-camp', 'Motel', '16', 'Cliff'),
-  ('2025 – Pré-camp', 'Motel', '16', 'Whippet'),
-  ('2025 – Pré-camp', 'Motel', '16', 'Maxime'),
-  ('2025 – Pré-camp', 'Motel', '17', 'Link'),
-  ('2025 – Pré-camp', 'Motel', '17', 'Galaxie'),
-  ('2025 – Pré-camp', 'Motel', '17', 'Samya'),
-  ('2025 – Pré-camp', 'Motel', '18', 'Rémi'),
-  ('2025 – Pré-camp', 'Motel', '19', 'Sylvie'),
-  ('2025 – Pré-camp', 'Motel', '19', 'Papachat'),
-  ('2025 – Pré-camp', 'Motel', '20', 'Steve'),
-  ('2025 – Pré-camp', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'Isabel'),
-  ('2025 – Pré-camp', '100 TDL', '100 TDL', 'Audrey'),
-  ('2025 – Classes nature', 'Motel', '18', 'Rémi'),
-  ('2025 – Classes nature', 'Motel', '19', 'Sylvie'),
-  ('2025 – Classes nature', 'Motel', '19', 'Papachat'),
-  ('2025 – Classes nature', 'Motel', '20', 'Steve'),
-  ('2025 – Classes nature', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Classes nature', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Classes nature', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Classes nature', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Scénario 1', 'Motel', '16', 'Fiji'),
-  ('2025 – Scénario 1', 'Motel', '16', 'Loukia'),
-  ('2025 – Scénario 1', 'Motel', '17', 'Cliff'),
-  ('2025 – Scénario 1', 'Motel', '17', 'Whippet'),
-  ('2025 – Scénario 1', 'Motel', '17', 'Glitch'),
-  ('2025 – Scénario 1', 'Motel', '18', 'Link'),
-  ('2025 – Scénario 1', 'Motel', '18', 'Galaxie'),
-  ('2025 – Scénario 1', 'Motel', '19', 'Sylvie'),
-  ('2025 – Scénario 1', 'Motel', '19', 'Papachat'),
-  ('2025 – Scénario 1', 'Motel', '20', 'Steve / Chef'),
-  ('2025 – Scénario 1', 'Motel', 'Appart', 'Audrey'),
-  ('2025 – Scénario 1', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Scénario 1', 'Motel', '20 3/4', 'Gecko'),
-  ('2025 – Scénario 1', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Scénario 1', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Scénario 1', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Scénario 1', '100 TDL', '100 TDL', 'Isabel'),
-  ('2025 – Scénario 2', 'Motel', '16', 'Fiji'),
-  ('2025 – Scénario 2', 'Motel', '16', 'Loukia'),
-  ('2025 – Scénario 2', 'Motel', '17', 'Cliff'),
-  ('2025 – Scénario 2', 'Motel', '17', 'Whippet'),
-  ('2025 – Scénario 2', 'Motel', '17', 'Glitch'),
-  ('2025 – Scénario 2', 'Motel', '18', 'Link'),
-  ('2025 – Scénario 2', 'Motel', '18', 'Galaxie'),
-  ('2025 – Scénario 2', 'Motel', '19', 'Sylvie'),
-  ('2025 – Scénario 2', 'Motel', '19', 'Papachat'),
-  ('2025 – Scénario 2', 'Motel', '20', 'Isabel'),
-  ('2025 – Scénario 2', 'Motel', 'Appart', 'Audrey'),
-  ('2025 – Scénario 2', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Scénario 2', 'Motel', '20 3/4', 'Gecko'),
-  ('2025 – Scénario 2', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Scénario 2', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Scénario 2', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Scénario 3', 'Motel', '16', 'Link'),
-  ('2025 – Scénario 3', 'Motel', '16', 'Galaxie'),
-  ('2025 – Scénario 3', 'Motel', '17', 'Cliff'),
-  ('2025 – Scénario 3', 'Motel', '17', 'Whippet'),
-  ('2025 – Scénario 3', 'Motel', '17', 'Glitch'),
-  ('2025 – Scénario 3', 'Motel', '18', 'Rémi'),
-  ('2025 – Scénario 3', 'Motel', '19', 'Sylvie'),
-  ('2025 – Scénario 3', 'Motel', '19', 'Papachat'),
-  ('2025 – Scénario 3', 'Motel', '20', 'Steve'),
-  ('2025 – Scénario 3', 'Motel', 'Appart', 'Fiji'),
-  ('2025 – Scénario 3', 'Motel', 'Appart', 'Loukia'),
-  ('2025 – Scénario 3', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Scénario 3', 'Motel', '20 3/4', 'Gecko'),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'Isabel'),
-  ('2025 – Scénario 3', '100 TDL', '100 TDL', 'Audrey'),
-  ('2025 – Scénario 4', 'Motel', '16', 'Link'),
-  ('2025 – Scénario 4', 'Motel', '16', 'Galaxie'),
-  ('2025 – Scénario 4', 'Motel', '17', 'Cliff'),
-  ('2025 – Scénario 4', 'Motel', '17', 'Whippet'),
-  ('2025 – Scénario 4', 'Motel', '17', 'Glitch'),
-  ('2025 – Scénario 4', 'Motel', '18', 'Rémi'),
-  ('2025 – Scénario 4', 'Motel', '19', 'Sylvie'),
-  ('2025 – Scénario 4', 'Motel', '19', 'Papachat'),
-  ('2025 – Scénario 4', 'Motel', '20', 'Steve'),
-  ('2025 – Scénario 4', 'Motel', 'Appart', 'Fiji'),
-  ('2025 – Scénario 4', 'Motel', 'Appart', 'Sriracha'),
-  ('2025 – Scénario 4', 'Motel', 'Appart', 'Gecko'),
-  ('2025 – Scénario 4', '55 TDL', '55 TDL', 'Marco'),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'Charlotte'),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'Amélie'),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'Vickie'),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'Isabel'),
-  ('2025 – Scénario 4', '100 TDL', '100 TDL', 'Audrey')
-) as n(plan, section, numero, nom)
-join rooming.plans p on p.nom = n.plan
-join rooming.sections s on s.nom = n.section
-join rooming.chambres c on c.section_id = s.id and c.numero = n.numero
+select p.id, c.id, e.id, case when e.id is null then o.nom end from (values
+  ('Été 2026', 'Motel', 'section', '16', 'Vickie'),
+  ('Été 2026', 'Motel', 'section', '17', 'Galaxie'),
+  ('Été 2026', 'Motel', 'section', '17', 'Spag'),
+  ('Été 2026', 'Motel', 'section', '17', 'Fiji'),
+  ('Été 2026', 'Motel', 'section', '17', 'Sriracha'),
+  ('Été 2026', 'Motel', 'section', '18', 'Younes'),
+  ('Été 2026', 'Motel', 'section', '19', 'Sylvie'),
+  ('Été 2026', 'Motel', 'section', '19', 'Maxime'),
+  ('Été 2026', 'Appart', 'section', 'Appart', 'Charlotte'),
+  ('Été 2026', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('Été 2026', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Vincent'),
+  ('2025 – Pré-camp', 'Motel', 'section', '16', 'Cliff'),
+  ('2025 – Pré-camp', 'Motel', 'section', '16', 'Whippet'),
+  ('2025 – Pré-camp', 'Motel', 'section', '16', 'Maxime'),
+  ('2025 – Pré-camp', 'Motel', 'section', '17', 'Link'),
+  ('2025 – Pré-camp', 'Motel', 'section', '17', 'Galaxie'),
+  ('2025 – Pré-camp', 'Motel', 'section', '17', 'Samya'),
+  ('2025 – Pré-camp', 'Motel', 'section', '18', 'Rémi'),
+  ('2025 – Pré-camp', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Pré-camp', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Pré-camp', 'Motel', 'section', '20', 'Steve'),
+  ('2025 – Pré-camp', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Isabel'),
+  ('2025 – Pré-camp', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Audrey'),
+  ('2025 – Classes nature', 'Motel', 'section', '18', 'Rémi'),
+  ('2025 – Classes nature', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Classes nature', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Classes nature', 'Motel', 'section', '20', 'Steve'),
+  ('2025 – Classes nature', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Classes nature', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Classes nature', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Classes nature', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Scénario 1', 'Motel', 'section', '16', 'Fiji'),
+  ('2025 – Scénario 1', 'Motel', 'section', '16', 'Loukia'),
+  ('2025 – Scénario 1', 'Motel', 'section', '17', 'Cliff'),
+  ('2025 – Scénario 1', 'Motel', 'section', '17', 'Whippet'),
+  ('2025 – Scénario 1', 'Motel', 'section', '17', 'Glitch'),
+  ('2025 – Scénario 1', 'Motel', 'section', '18', 'Link'),
+  ('2025 – Scénario 1', 'Motel', 'section', '18', 'Galaxie'),
+  ('2025 – Scénario 1', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Scénario 1', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Scénario 1', 'Motel', 'section', '20', 'Steve / Chef'),
+  ('2025 – Scénario 1', 'Appart', 'section', 'Appart', 'Audrey'),
+  ('2025 – Scénario 1', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Scénario 1', 'Motel', 'section', '20 3/4', 'Gecko'),
+  ('2025 – Scénario 1', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Scénario 1', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Scénario 1', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Scénario 1', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Isabel'),
+  ('2025 – Scénario 2', 'Motel', 'section', '16', 'Fiji'),
+  ('2025 – Scénario 2', 'Motel', 'section', '16', 'Loukia'),
+  ('2025 – Scénario 2', 'Motel', 'section', '17', 'Cliff'),
+  ('2025 – Scénario 2', 'Motel', 'section', '17', 'Whippet'),
+  ('2025 – Scénario 2', 'Motel', 'section', '17', 'Glitch'),
+  ('2025 – Scénario 2', 'Motel', 'section', '18', 'Link'),
+  ('2025 – Scénario 2', 'Motel', 'section', '18', 'Galaxie'),
+  ('2025 – Scénario 2', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Scénario 2', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Scénario 2', 'Motel', 'section', '20', 'Isabel'),
+  ('2025 – Scénario 2', 'Appart', 'section', 'Appart', 'Audrey'),
+  ('2025 – Scénario 2', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Scénario 2', 'Motel', 'section', '20 3/4', 'Gecko'),
+  ('2025 – Scénario 2', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Scénario 2', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Scénario 2', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Scénario 3', 'Motel', 'section', '16', 'Link'),
+  ('2025 – Scénario 3', 'Motel', 'section', '16', 'Galaxie'),
+  ('2025 – Scénario 3', 'Motel', 'section', '17', 'Cliff'),
+  ('2025 – Scénario 3', 'Motel', 'section', '17', 'Whippet'),
+  ('2025 – Scénario 3', 'Motel', 'section', '17', 'Glitch'),
+  ('2025 – Scénario 3', 'Motel', 'section', '18', 'Rémi'),
+  ('2025 – Scénario 3', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Scénario 3', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Scénario 3', 'Motel', 'section', '20', 'Steve'),
+  ('2025 – Scénario 3', 'Appart', 'section', 'Appart', 'Fiji'),
+  ('2025 – Scénario 3', 'Appart', 'section', 'Appart', 'Loukia'),
+  ('2025 – Scénario 3', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Scénario 3', 'Motel', 'section', '20 3/4', 'Gecko'),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Isabel'),
+  ('2025 – Scénario 3', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Audrey'),
+  ('2025 – Scénario 4', 'Motel', 'section', '16', 'Link'),
+  ('2025 – Scénario 4', 'Motel', 'section', '16', 'Galaxie'),
+  ('2025 – Scénario 4', 'Motel', 'section', '17', 'Cliff'),
+  ('2025 – Scénario 4', 'Motel', 'section', '17', 'Whippet'),
+  ('2025 – Scénario 4', 'Motel', 'section', '17', 'Glitch'),
+  ('2025 – Scénario 4', 'Motel', 'section', '18', 'Rémi'),
+  ('2025 – Scénario 4', 'Motel', 'section', '19', 'Sylvie'),
+  ('2025 – Scénario 4', 'Motel', 'section', '19', 'Papachat'),
+  ('2025 – Scénario 4', 'Motel', 'section', '20', 'Steve'),
+  ('2025 – Scénario 4', 'Appart', 'section', 'Appart', 'Fiji'),
+  ('2025 – Scénario 4', 'Appart', 'section', 'Appart', 'Sriracha'),
+  ('2025 – Scénario 4', 'Appart', 'section', 'Appart', 'Gecko'),
+  ('2025 – Scénario 4', '55 chemin du Tour du Lac', 'batiment', '55 TDL', 'Marco'),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Charlotte'),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Amélie'),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Vickie'),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Isabel'),
+  ('2025 – Scénario 4', '100 chemin du Tour du Lac', 'batiment', '100 TDL', 'Audrey')
+) as o(plan, lieu, niveau, numero, nom)
+join rooming.plans p on p.nom = o.plan
+join rooming.lieux l on l.nom = o.lieu and l.niveau = o.niveau
+join rooming.chambres c on c.lieu_id = l.id and c.numero = o.numero
 left join lateral (
-  select e.id from core.employes e where e.actif and lower(e.surnom) = lower(n.nom) limit 1
+  select e.id from core.employes e where e.actif and lower(e.surnom) = lower(o.nom) limit 1
 ) e on true;
