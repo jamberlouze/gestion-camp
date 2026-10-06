@@ -183,3 +183,39 @@ left join travaux.categories c on c.nom = v.categorie;
 insert into travaux.commentaires (tache_id, auteur, texte)
 select id, '00000000-0000-0000-0000-000000000006', 'J''ai vérifié : il en reste un neuf dans le local d''entretien.'
 from travaux.taches where titre = 'Remplacer l''extincteur de la cuisine';
+
+-- ------------------------------------------------------------
+-- Achats : la liste réelle de PROD (2026-10-06), avec quelques statuts,
+-- quantités, prix et entreprises de test.
+-- ------------------------------------------------------------
+insert into achats.achats (item, statut, quantite, prix_unitaire, entreprise_id, note)
+select v.item, v.statut, v.quantite::integer, v.prix::numeric, e.id, v.note
+from (values
+  ('Disques de disque golf', 'commande', 8, 24.99, 'GBPA+', null),
+  ('Tables à picnique +10', 'a_commander', 10, 189.0, 'GBPA+', null),
+  ('Poudre color run', 'a_commander', null, null, null, null),
+  ('Pagaies', 'recu', 12, 45.5, 'Aquabounga', null),
+  ('Bâtons ballon-balais', 'a_commander', 6, null, 'GBPA+', null),
+  ('Brassards pour hiver (groupes ski)', 'a_commander', null, null, null, null),
+  ('Hamac', 'a_commander', null, null, null, null),
+  ('Quai Rabaska', 'commande', 1, 1200.0, 'Rouge & Diable', null),
+  ('container - voir ami FRED - abris VFI', 'a_commander', null, null, null, null),
+  ('Toile Projecteur', 'a_commander', null, null, null, null),
+  ('Autres crash pad JoJo', 'a_commander', null, null, null, null),
+  ('Gear de grandeur nature', 'a_commander', null, null, null, null),
+  ('VFI ( bleu Aquabounga, BPA vert)', 'a_commander', 20, 62.0, 'Aquabounga', null),
+  ('Traineau (à voir)', 'a_commander', null, null, null, null),
+  ('Arcs de tag-à-l''arc', 'a_commander', 15, 18.75, 'GBPA+', null),
+  ('Slack lines', 'a_commander', null, null, null, null),
+  ('Gaga pit', 'a_commander', null, null, null, null),
+  ('Bâtons de hockey', 'a_commander', null, null, null, null),
+  ('Arcs de tir-à-l''arc', 'recu', 4, 79.99, 'GBPA+', null),
+  ('Paniers Disque golf', 'a_commander', null, null, null, null),
+  ('Modules Aquabounga', 'a_commander', null, null, null, null),
+  ('Baril d''expé + support pour porter le baril', 'a_commander', null, null, null, null),
+  ('Épée et bouclier', 'a_commander', null, null, null, null),
+  ('Masque tag à l''arc', 'a_commander', null, null, null, null),
+  ('Speaker Trembloc', 'a_commander', null, null, null, null),
+  ('Gants et casque (accrobranche)', 'a_commander', null, null, null, 'Noté à la fermeture de l''accrobranche (Mastertimeline 2025-26).')
+) as v(item, statut, quantite, prix, entreprise, note)
+left join mastertimeline.entreprises e on e.nom = v.entreprise;

@@ -4,7 +4,7 @@ import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { Profil } from '@/lib/types'
 import { bornesExercice, exerciceDeCle, indexer, UNIQUE } from './calendrier'
-import type { Achat, Coche, Entreprise, Fournisseur, Projet, Responsable, Tache } from './types'
+import type { Coche, Entreprise, Fournisseur, Projet, Responsable, Tache } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne, contrairement
 // à Embarcations) : sans réseau, une modification échoue tout de suite
@@ -17,7 +17,6 @@ export const useEntreprises = () => useListe<Entreprise>(S, 'entreprises', 'ordr
 export const useProjets = () => useListe<Projet>(S, 'projets', 'ordre')
 export const useResponsables = () => useListe<Responsable>(S, 'responsables', 'nom')
 export const useFournisseurs = () => useListe<Fournisseur>(S, 'fournisseurs', 'nom')
-export const useAchats = () => useListe<Achat>(S, 'achats', 'created_at')
 /** Qui a coché : la direction voit tous les profils, les autres seulement le leur. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 

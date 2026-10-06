@@ -68,6 +68,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/mastertimeline',
   },
   {
+    id: 'achats',
+    nom: 'Achats',
+    description: "Équipement à commander, commandé ou reçu",
+    icone: '🛍️',
+    chemin: '/achats',
+  },
+  {
     id: 'subventions',
     nom: 'Subventions',
     description: 'Vigie, demandes et reddition de compte',

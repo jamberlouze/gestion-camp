@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Route, Routes } from 'react-router'
+import { Navigate, NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
-import { Achats } from './Achats'
 import { Annee } from './Annee'
 import { ContexteFiche, type DemandeFiche } from './outils'
 import { FicheTache } from './FicheTache'
@@ -34,9 +33,6 @@ export default function ModuleMastertimeline() {
         <NavLink to="/mastertimeline/responsables" className={onglet}>
           Responsables
         </NavLink>
-        <NavLink to="/mastertimeline/achats" className={onglet}>
-          Achats
-        </NavLink>
         <NavLink to="/mastertimeline/reglages" className={onglet}>
           Réglages
         </NavLink>
@@ -48,8 +44,9 @@ export default function ModuleMastertimeline() {
         <Route path="projets" element={<Projets />} />
         <Route path="projets/:id" element={<Projets />} />
         <Route path="responsables" element={<Responsables />} />
-        <Route path="achats" element={<Achats />} />
         <Route path="reglages/*" element={<Reglages />} />
+        {/* Les achats ont leur propre module depuis le 2026-10-06. */}
+        <Route path="achats" element={<Navigate to="/achats" replace />} />
       </Routes>
       {/* La clé remonte la fiche à chaque ouverture (brouillon neuf). */}
       {fiche && <FicheTache key={`${fiche.tache?.id ?? 'nouvelle'}|${fiche.periode ?? ''}`} demande={fiche} fermer={() => setFiche(null)} />}

@@ -74,14 +74,6 @@ export interface Coche {
   fait_par: string | null
 }
 
-export interface Achat {
-  id: string
-  item: string
-  fournisseur_id: string | null
-  commande: boolean
-  note: string | null
-}
-
 export const PRIORITES: Record<number, string> = {
   1: 'Urgent',
   2: 'Prioritaire',
