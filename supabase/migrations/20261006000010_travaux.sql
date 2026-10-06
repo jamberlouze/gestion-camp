@@ -95,8 +95,8 @@ create table travaux.taches (
   categorie_id uuid references travaux.categories(id) on delete set null,
   chantier_id uuid references travaux.chantiers(id) on delete set null,
   assigne_a uuid references core.profils(id) on delete set null,
-  -- 1 = urgent, 2 = normal, 3 = quand possible
-  priorite smallint not null default 2 check (priorite between 1 and 3),
+  -- 1 = urgent, 2 = prioritaire, 3 = normal (par défaut)
+  priorite smallint not null default 3 check (priorite between 1 and 3),
   echeance date,
   heures_prevues numeric check (heures_prevues >= 0),
   fournisseur_id uuid references mastertimeline.fournisseurs(id) on delete set null,
@@ -444,8 +444,8 @@ insert into travaux.categories (nom, ordre) values
 -- ------------------------------------------------------------
 -- Déplacement des projets ponctuels de Mastertimeline.
 -- Lieu = celui du chantier (sauf quelques tâches ailleurs) ; catégorie
--- d'après le titre ; priorité 1 → urgent, 2 → normal, 3-4 → quand
--- possible ; responsable → le compte du même nom, sinon nom gardé dans
+-- d'après le titre ; priorité 1 → urgent, 2 → prioritaire, 3-4 ou vide
+-- → normal ; responsable → le compte du même nom, sinon nom gardé dans
 -- la description ; note permanente → description ; coche faite ou
 -- abandonnée → terminée ; note de l'année → commentaire.
 -- ------------------------------------------------------------
@@ -521,7 +521,7 @@ select
   cat.id,
   ch.id,
   moi.id,
-  case when t.priorite = 1 then 1 when t.priorite in (3, 4) then 3 else 2 end,
+  case when t.priorite in (1, 2) then t.priorite else 3 end,
   t.echeance,
   t.heures_prevues,
   t.fournisseur_id,

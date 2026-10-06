@@ -62,7 +62,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
       description: description.trim() || null,
       lieu_id: lieu,
       categorie_id: categorie || null,
-      priorite: urgent ? 1 : 2,
+      priorite: urgent ? 1 : 3,
       signale_par: droits.moi,
       ...(droits.trieur
         ? {
@@ -154,7 +154,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
             <label className="block">
               <span className={ui.etiquette}>Assigner à</span>
               <select className={ui.champ} value={assigne} onChange={(e) => setAssigne(e.target.value)}>
-                <option value="">Personne (libre)</option>
+                <option value="">À assigner</option>
                 {d.personnes
                   .filter((p) => p.peut_assigner)
                   .map((p) => (

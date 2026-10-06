@@ -82,8 +82,15 @@ export type Priorite = 1 | 2 | 3
 
 export const PRIORITES: Record<Priorite, string> = {
   1: 'Urgent',
-  2: 'Normal',
-  3: 'Quand possible',
+  2: 'Prioritaire',
+  3: 'Normal',
+}
+
+/** Couleur de chaque niveau (pastille des groupes par urgence). */
+export const COULEURS_PRIORITE: Record<Priorite, string> = {
+  1: '#dc2626',
+  2: '#ea580c',
+  3: '#a8a29e',
 }
 
 export const STATUTS: Record<Statut, string> = {

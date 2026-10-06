@@ -266,7 +266,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
         categorie_id: null,
         chantier_id: null,
         assigne_a: null,
-        priorite: 2,
+        priorite: 3,
         echeance: null,
         heures_prevues: null,
         fournisseur_id: null,
