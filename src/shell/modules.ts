@@ -29,7 +29,7 @@ export const MODULES: DefinitionModule[] = [
     id: 'embarcations',
     nom: 'Embarcations',
     description: 'État de la flotte et réparations',
-    icone: '🚣',
+    icone: '🛶',
     chemin: '/embarcations',
   },
   {
