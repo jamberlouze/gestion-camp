@@ -43,3 +43,10 @@ from (values
   ('noah@camp.test', 'Noah Côté', 'coordo')
 ) as v (courriel, nom, role)
 where p.courriel = v.courriel;
+
+-- Pokes : un reçu aujourd'hui (pas vu) et un d'hier (vu), pour l'admin.
+insert into core.pokes (de, a, emoji, jour, vu_le, created_at) values
+  ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', '🦆',
+    (now() at time zone 'America/Toronto')::date, null, now() - interval '1 hour'),
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', '🔥',
+    (now() at time zone 'America/Toronto')::date - 1, now() - interval '1 day', now() - interval '1 day');
