@@ -6,8 +6,6 @@ export interface DefinitionModule {
   description: string
   icone: string
   chemin: string
-  /** Jamais offert aux coordonnateurs (ni par leur rôle, ni en ajout personnel). */
-  directionSeulement?: boolean
   /** Pas de mode lecture seule dans l'app : la grille n'offre qu'écriture ou rien. */
   sansLecture?: boolean
   /** Accès fixe, hors de la grille d'accès par rôle (texte affiché dans la grille). */
@@ -68,7 +66,6 @@ export const MODULES: DefinitionModule[] = [
     description: 'Vigie, demandes et reddition de compte',
     icone: '💰',
     chemin: '/subventions',
-    directionSeulement: true,
     sansLecture: true,
   },
   {
@@ -77,7 +74,6 @@ export const MODULES: DefinitionModule[] = [
     description: 'Prix, programmes et activités des camps compétiteurs',
     icone: '🔭',
     chemin: '/vigie',
-    directionSeulement: true,
   },
   {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
@@ -87,7 +83,6 @@ export const MODULES: DefinitionModule[] = [
     description: "Saisie des heures de l'équipe de direction",
     icone: '⏱️',
     chemin: '/temps',
-    directionSeulement: true,
     accesFixe: 'Chacun sa feuille, les admins voient tout. Jamais les coordonnateurs.',
   },
 ]

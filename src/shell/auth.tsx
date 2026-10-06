@@ -25,7 +25,7 @@ const ContexteAuth = createContext<EtatAuth | null>(null)
 
 // Droits gardés sur l'appareil avant la grille d'accès par rôle (pas de `roles`) :
 // on applique ce qui valait alors, le temps de relire les droits en ligne.
-const GRILLE_AVANT: AccesRole[] = MODULES.filter((m) => !m.directionSeulement).map((m) => ({
+const GRILLE_AVANT: AccesRole[] = MODULES.filter((m) => !m.accesFixe && m.id !== 'subventions' && m.id !== 'vigie').map((m) => ({
   role: 'direction',
   module: m.id,
   niveau: 'ecriture',

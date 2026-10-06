@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { messageErreur } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, AccesRole, ModuleId, Niveau, Profil, Role } from '@/lib/types'
@@ -78,7 +78,9 @@ export function Utilisateurs() {
     onError: surErreur,
   })
 
+  const [ouvert, setOuvert] = useState<string | null>(null)
   const roles = data?.roles ?? []
+  const persoDe = (userId: string) => data?.acces.filter((a) => a.user_id === userId) ?? []
   const niveauRole = (role: AccesRole['role'], m: ModuleId) =>
     roles.find((r) => r.role === role && r.module === m)?.niveau ?? ''
 
@@ -107,77 +109,105 @@ export function Utilisateurs() {
             {data?.profils.map((p) => {
               const soiMeme = p.id === moi?.id
               return (
-                <tr key={p.id}>
-                  <td className="px-3 py-2">{p.courriel}</td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={`${ui.champ} min-w-36`}
-                      defaultValue={p.nom ?? ''}
-                      onBlur={(e) => {
-                        const nom = e.target.value.trim() || null
-                        if (nom !== p.nom) majProfil.mutate({ id: p.id, nom })
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      className={`${ui.champ} min-w-36`}
-                      value={p.role}
-                      disabled={soiMeme}
-                      title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
-                      onChange={(e) => majProfil.mutate({ id: p.id, role: e.target.value as Role })}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.libelle}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    {p.role === 'coordo' ? (
-                      <div className="flex flex-wrap gap-2">
-                        {MODULES.filter((m) => !m.directionSeulement).map((m) => {
-                          const a = data.acces.find((x) => x.user_id === p.id && x.module === m.id)
-                          const base = niveauRole('coordo', m.id)
-                          return (
-                            <label key={m.id} className="flex items-center gap-1 whitespace-nowrap" title={m.nom}>
-                              {m.icone}
-                              <select
-                                className={selectPetit}
-                                value={a?.niveau ?? ''}
-                                onChange={(e) =>
-                                  majAcces.mutate({ user_id: p.id, module: m.id, niveau: e.target.value as Niveau | '' })
-                                }
-                              >
-                                <option value="">{base ? `${LIBELLE_NIVEAU[base]} (rôle)` : 'Aucun'}</option>
-                                <option value="lecture">Lecture</option>
-                                <option value="ecriture">Écriture</option>
-                              </select>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <span className="flex flex-wrap gap-1 text-base">
-                        {MODULES.filter((m) => niveauModule(p.role, roles, [], m.id)).map((m) => (
-                          <span key={m.id} title={m.nom}>
-                            {m.icone}
-                          </span>
+                <Fragment key={p.id}>
+                  <tr>
+                    <td className="px-3 py-2">{p.courriel}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        className={`${ui.champ} min-w-36`}
+                        defaultValue={p.nom ?? ''}
+                        onBlur={(e) => {
+                          const nom = e.target.value.trim() || null
+                          if (nom !== p.nom) majProfil.mutate({ id: p.id, nom })
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className={`${ui.champ} min-w-36`}
+                        value={p.role}
+                        disabled={soiMeme}
+                        title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
+                        onChange={(e) => majProfil.mutate({ id: p.id, role: e.target.value as Role })}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.libelle}
+                          </option>
                         ))}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-foret-700"
-                      checked={p.actif}
-                      disabled={soiMeme}
-                      onChange={(e) => majProfil.mutate({ id: p.id, actif: e.target.checked })}
-                    />
-                  </td>
-                </tr>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      {p.role === 'admin' ? (
+                        <span className="text-pierre-500">Tous les modules</span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="flex flex-wrap gap-1 text-base">
+                            {MODULES.map((m) => ({ m, n: niveauModule(p.role, roles, persoDe(p.id), m.id) }))
+                              .filter(({ n }) => n)
+                              .map(({ m, n }) => (
+                                <span key={m.id} title={`${m.nom} : ${LIBELLE_NIVEAU[n!].toLowerCase()}`}>
+                                  {m.icone}
+                                </span>
+                              ))}
+                          </span>
+                          <button
+                            type="button"
+                            className="whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-foret-700 hover:bg-foret-50"
+                            onClick={() => setOuvert(ouvert === p.id ? null : p.id)}
+                          >
+                            {ouvert === p.id
+                              ? 'Fermer'
+                              : persoDe(p.id).length
+                                ? `Ajouts personnels (${persoDe(p.id).length})`
+                                : '+ Ajouter un module'}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-foret-700"
+                        checked={p.actif}
+                        disabled={soiMeme}
+                        onChange={(e) => majProfil.mutate({ id: p.id, actif: e.target.checked })}
+                      />
+                    </td>
+                  </tr>
+                  {ouvert === p.id && p.role !== 'admin' && (
+                    <tr className="bg-pierre-50">
+                      <td colSpan={5} className="px-3 py-3">
+                        <p className="text-xs text-pierre-500">
+                          Modules en plus de ceux du rôle {p.role === 'direction' ? 'Direction' : 'Coordonnateur'}. Le
+                          niveau le plus élevé l'emporte.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                          {MODULES.filter((m) => !m.accesFixe).map((m) => {
+                            const a = persoDe(p.id).find((x) => x.module === m.id)
+                            const base = niveauRole(p.role as AccesRole['role'], m.id)
+                            return (
+                              <label key={m.id} className="flex items-center gap-1.5 whitespace-nowrap">
+                                {m.icone} {m.nom}
+                                <select
+                                  className={selectPetit}
+                                  value={a?.niveau ?? ''}
+                                  onChange={(e) =>
+                                    majAcces.mutate({ user_id: p.id, module: m.id, niveau: e.target.value as Niveau | '' })
+                                  }
+                                >
+                                  <option value="">{base ? `Rôle : ${LIBELLE_NIVEAU[base].toLowerCase()}` : 'Aucun'}</option>
+                                  {!m.sansLecture && <option value="lecture">Lecture</option>}
+                                  <option value="ecriture">Écriture</option>
+                                </select>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>
@@ -186,8 +216,8 @@ export function Utilisateurs() {
 
       <h2 className="mt-8 text-lg font-semibold">Accès par rôle</h2>
       <p className="mt-1 text-sm text-pierre-500">
-        Les administrateurs ont accès à tout. Pour un coordonnateur, on peut aussi ajouter des modules à la personne
-        dans la liste ci-dessus : le niveau le plus élevé l'emporte.
+        Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : « Ajouter un
+        module » sur sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
       </p>
       <div className={`${ui.carte} mt-3 max-w-2xl overflow-x-auto`}>
         <table className="w-full text-sm">
@@ -209,26 +239,20 @@ export function Utilisateurs() {
                     🔒 {m.accesFixe}
                   </td>
                 ) : (
-                  (['direction', 'coordo'] as const).map((role) =>
-                    role === 'coordo' && m.directionSeulement ? (
-                      <td key={role} className="px-3 py-2 text-pierre-500">
-                        🔒 Jamais
-                      </td>
-                    ) : (
-                      <td key={role} className="px-3 py-2">
-                        <select
-                          className={ui.champ}
-                          value={niveauRole(role, m.id)}
-                          disabled={!data}
-                          onChange={(e) => majRole.mutate({ role, module: m.id, niveau: e.target.value as Niveau | '' })}
-                        >
-                          <option value="">Aucun</option>
-                          {!m.sansLecture && <option value="lecture">Lecture</option>}
-                          <option value="ecriture">Écriture</option>
-                        </select>
-                      </td>
-                    ),
-                  )
+                  (['direction', 'coordo'] as const).map((role) => (
+                    <td key={role} className="px-3 py-2">
+                      <select
+                        className={ui.champ}
+                        value={niveauRole(role, m.id)}
+                        disabled={!data}
+                        onChange={(e) => majRole.mutate({ role, module: m.id, niveau: e.target.value as Niveau | '' })}
+                      >
+                        <option value="">Aucun</option>
+                        {!m.sansLecture && <option value="lecture">Lecture</option>}
+                        <option value="ecriture">Écriture</option>
+                      </select>
+                    </td>
+                  ))
                 )}
               </tr>
             ))}
