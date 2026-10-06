@@ -1,9 +1,10 @@
-export type TypeVehicule = 'minibus' | 'vtt' | 'remorque' | 'autre'
+export type TypeVehicule = 'minibus' | 'voiture' | 'vtt' | 'remorque' | 'autre'
 export type Statut = 'en_circulation' | 'remise'
 export type Resultat = 'conforme' | 'mineures' | 'majeures'
 
 export const TYPES: { id: TypeVehicule; libelle: string; pluriel: string }[] = [
   { id: 'minibus', libelle: 'Minibus', pluriel: 'Minibus' },
+  { id: 'voiture', libelle: 'Voiture', pluriel: 'Voitures' },
   { id: 'vtt', libelle: 'VTT', pluriel: 'VTT' },
   { id: 'remorque', libelle: 'Remorque', pluriel: 'Remorques' },
   { id: 'autre', libelle: 'Autre', pluriel: 'Autres' },

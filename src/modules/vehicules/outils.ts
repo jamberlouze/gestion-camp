@@ -109,9 +109,9 @@ export function delaiLisible(date: string, jour: string) {
 const formatArgent = new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' })
 export const argent = (n: number | null) => (n == null ? '' : formatArgent.format(n))
 
-/** Unité du compteur : kilomètres pour un minibus, heures pour un VTT. */
+/** Unité du compteur : kilomètres pour un minibus ou une voiture, heures pour un VTT. */
 export function uniteCompteur(type: TypeVehicule): 'km' | 'h' | null {
-  if (type === 'minibus' || type === 'autre') return 'km'
+  if (type === 'minibus' || type === 'voiture' || type === 'autre') return 'km'
   if (type === 'vtt') return 'h'
   return null
 }
@@ -129,7 +129,7 @@ export function lireNombre(texte: string): number | null | undefined {
 
 /** Tri de la flotte : par type (ordre de TYPES), puis ordre, puis surnom. */
 export function trierFlotte(vehicules: Vehicule[]) {
-  const rang: Record<TypeVehicule, number> = { minibus: 0, vtt: 1, remorque: 2, autre: 3 }
+  const rang: Record<TypeVehicule, number> = { minibus: 0, voiture: 1, vtt: 2, remorque: 3, autre: 4 }
   return [...vehicules].sort(
     (a, b) => rang[a.type] - rang[b.type] || a.ordre - b.ordre || a.surnom.localeCompare(b.surnom, 'fr'),
   )

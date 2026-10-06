@@ -41,7 +41,7 @@ export function BadgeStatut({ statut }: { statut: Statut }) {
   )
 }
 
-const ICONES: Record<TypeVehicule, string> = { minibus: '🚐', vtt: '🏍️', remorque: '🛞', autre: '🚗' }
+const ICONES: Record<TypeVehicule, string> = { minibus: '🚌', voiture: '🚗', vtt: '🏍️', remorque: '🛞', autre: '🚙' }
 
 /** Photo du véhicule, ou l'icône de son type sur fond gris. */
 export function Photo({ chemin, type, className = '' }: { chemin: string | null; type: TypeVehicule; className?: string }) {
