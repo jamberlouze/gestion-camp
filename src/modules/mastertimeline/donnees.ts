@@ -157,14 +157,6 @@ export async function reassigner(de: string, vers: string | null) {
   return count ?? 0
 }
 
-/** Supprime (archive) un projet ponctuel et ses tâches. */
-export async function supprimerProjet(id: string) {
-  const r1 = await db().from('projets').update({ archive: true }).eq('id', id)
-  if (r1.error) throw r1.error
-  const r2 = await db().from('taches').update({ archivee: true }).eq('projet_id', id)
-  if (r2.error) throw r2.error
-}
-
 /** Entreprises, projets, responsables et fournisseurs, indexés par id. */
 export function useReferences() {
   const entreprises = useEntreprises()

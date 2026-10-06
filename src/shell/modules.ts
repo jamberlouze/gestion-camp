@@ -40,6 +40,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/vehicules',
   },
   {
+    id: 'travaux',
+    nom: 'Travaux',
+    description: 'Réparations et tâches du terrain : signaler, trier, faire',
+    icone: '🛠️',
+    chemin: '/travaux',
+  },
+  {
     id: 'commande',
     nom: 'Cuisine',
     description: 'Menus, commandes et horaire du personnel',

@@ -52,14 +52,16 @@ scripts/migration/  import unique des anciens projets
 - `mastertimeline` : `taches` (la liste qui sert d'une année à l'autre), `coches` (un passage par mois : faite, « pas cette année », note de l'année), `projets`, `entreprises`, `responsables`, `fournisseurs`, `achats`. Reprise de la base Airtable « Mastertimeline - LÜTRA » le 2026-09-30 (`scripts/migration/mastertimeline.mjs`)
 
 **Accès** : seules les personnes invitées peuvent se connecter. Elles reçoivent
-un code à 6 chiffres par courriel. Il y a trois rôles, appliqués par la RLS de
-Postgres (et pas seulement dans l'interface) :
+un code à 6 chiffres par courriel. Il y a quatre rôles, appliqués par la RLS de
+Postgres (et pas seulement dans l'interface). Les modules de chaque rôle se
+règlent dans la grille « Accès par rôle » de la page Utilisateurs :
 
 | Rôle | Accès |
 |---|---|
 | `admin` | Tout, y compris la page Utilisateurs |
-| `direction` | Tous les modules et le référentiel (rôle par défaut à l'invitation), sauf Subventions et Vigie des camps, réservés aux administrateurs pour l'instant |
-| `coordo` | Seulement les modules cochés dans la page Utilisateurs (lecture ou écriture) ; jamais Subventions ni Vigie des camps |
+| `direction` | Les modules cochés pour la direction, et le référentiel ; trie les tâches de Travaux |
+| `coordo` | Les modules cochés pour les coordonnateurs (lecture ou écriture) |
+| `terrain` | Aides de camp et équipe d'entretien : les modules cochés pour Terrain (Travaux au départ). **Rôle par défaut à l'invitation** |
 
 ## Hors ligne et installation sur téléphone
 

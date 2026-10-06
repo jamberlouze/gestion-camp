@@ -1,6 +1,8 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { defaultShouldDehydrateQuery, QueryClient, type Query } from '@tanstack/react-query'
 import { enregistrerMutationsEmbarcations } from '@/modules/embarcations/donnees'
+import { enregistrerMutationsTravaux } from '@/modules/travaux/donnees'
+import { oublierToutesLesPhotos } from '@/modules/travaux/photosLocales'
 
 /** Durée de conservation du cache sur l'appareil (lecture hors ligne). */
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000
@@ -18,6 +20,7 @@ export const clientRequetes = new QueryClient({
 // Doit précéder la restauration du cache : les envois restés en attente
 // retrouvent ainsi leur fonction d'envoi.
 enregistrerMutationsEmbarcations(clientRequetes)
+enregistrerMutationsTravaux(clientRequetes)
 
 /**
  * Cache conservé dans le navigateur : données lues et modifications pas
@@ -44,4 +47,5 @@ export async function viderCache() {
   clientRequetes.getMutationCache().clear()
   clientRequetes.clear()
   await persistance.persister.removeClient()
+  await oublierToutesLesPhotos()
 }

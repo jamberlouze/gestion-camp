@@ -7,7 +7,6 @@ import { useAuth } from '@/shell/auth'
 import {
   cleAujourdhui,
   dateCourte,
-  estAnnuelle,
   exerciceDeCle,
   jourAujourdhui,
   libelleFrequence,
@@ -19,9 +18,9 @@ import {
 } from './calendrier'
 import { offertPour, useEcriture, type DemandeFiche } from './outils'
 import { useCocher, useCoches, useProfils, useReferences } from './donnees'
-import { PRIORITES, type Statut, type Tache } from './types'
+import type { Statut, Tache } from './types'
 
-type Brouillon = Omit<Tache, 'id' | 'created_at' | 'archivee'> & { id?: string }
+type Brouillon = Omit<Tache, 'id' | 'created_at' | 'archivee' | 'exercice_depart'> & { id?: string; exercice_depart: number | null }
 
 const VIDE: Brouillon = {
   titre: '',
@@ -58,7 +57,6 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
     return { ...VIDE, ...demande.defauts }
   })
   const changer = (champs: Partial<Brouillon>) => setB((x) => ({ ...x, ...champs }))
-  const annuelle = estAnnuelle(b)
 
   // Passage regardé : sa coche et sa note de l'année.
   const periode = demande.tache ? demande.periode : undefined
@@ -76,14 +74,14 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
     e.preventDefault()
     const titre = b.titre.trim()
     if (!titre) return setErreur('Donne un titre à la tâche.')
-    if (annuelle && !b.mois?.length) return setErreur('Choisis au moins un mois.')
+    if (!b.mois.length) return setErreur('Choisis au moins un mois.')
     const ligne: Partial<Tache> = {
       ...b,
       titre,
       note: b.note?.trim() || null,
-      ...(annuelle
-        ? { exercice_depart: b.exercice_depart ?? exerciceCourant, debut: null, echeance: null }
-        : { mois: null, intervalle_ans: 1, exercice_depart: null, jour: null }),
+      exercice_depart: b.exercice_depart ?? exerciceCourant,
+      debut: null,
+      echeance: null,
     }
     try {
       await enregistrer.mutateAsync(ligne)
@@ -127,7 +125,7 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
   }
 
   const basculerMois = (m: number) => {
-    const mois = b.mois ?? []
+    const mois = b.mois
     changer({ mois: mois.includes(m) ? mois.filter((x) => x !== m) : [...mois, m] })
   }
   const quiAFait = coche?.fait_par ? profils.data?.find((p) => p.id === coche.fait_par) : null
@@ -209,78 +207,25 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
         </div>
 
         <div>
-          <span className={ui.etiquette}>Quand</span>
-          <div className="inline-flex rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" role="group">
-            <button
-              type="button"
-              disabled={!ecriture}
-              className={`rounded-md px-2.5 py-1 ${annuelle ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600'}`}
-              onClick={() => !annuelle && changer({ mois: [Number(cleAujourdhui().slice(5))] })}
-            >
-              Revient chaque année
-            </button>
-            <button
-              type="button"
-              disabled={!ecriture}
-              className={`rounded-md px-2.5 py-1 ${!annuelle ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600'}`}
-              onClick={() => annuelle && changer({ mois: null })}
-            >
-              Une seule fois
-            </button>
-          </div>
-
-          {annuelle ? (
-            <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Mois">
-                {MOIS_EXERCICE.map((m) => {
-                  const choisi = b.mois?.includes(m)
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      disabled={!ecriture}
-                      aria-pressed={choisi}
-                      className={`rounded-md border px-1 py-1.5 text-xs ${choisi ? 'border-foret-700 bg-foret-700 text-white' : 'border-pierre-300 bg-white text-pierre-700 hover:border-foret-600'}`}
-                      onClick={() => basculerMois(m)}
-                    >
-                      {NOMS_MOIS_COURTS[m - 1]}
-                    </button>
-                  )
-                })}
-              </div>
-              {!!b.mois?.length && <p className="text-xs text-pierre-500">{libelleFrequence(b)}</p>}
-            </div>
-          ) : (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Champ libelle="Échéance">
-                <input type="date" className={ui.champ} value={b.echeance ?? ''} disabled={!ecriture} onChange={(e) => changer({ echeance: e.target.value || null })} />
-              </Champ>
-              <Champ libelle="Début prévu">
-                <input type="date" className={ui.champ} value={b.debut ?? ''} disabled={!ecriture} onChange={(e) => changer({ debut: e.target.value || null })} />
-              </Champ>
-              <Champ libelle="Priorité">
-                <select className={ui.champ} value={b.priorite ?? ''} disabled={!ecriture} onChange={(e) => changer({ priorite: e.target.value ? Number(e.target.value) : null })}>
-                  <option value="">—</option>
-                  {Object.entries(PRIORITES).map(([n, nom]) => (
-                    <option key={n} value={n}>
-                      {n} · {nom}
-                    </option>
-                  ))}
-                </select>
-              </Champ>
-              <Champ libelle="Heures prévues">
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  className={ui.champ}
-                  value={b.heures_prevues ?? ''}
+          <span className={ui.etiquette}>Revient en</span>
+          <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Mois">
+            {MOIS_EXERCICE.map((m) => {
+              const choisi = b.mois.includes(m)
+              return (
+                <button
+                  key={m}
+                  type="button"
                   disabled={!ecriture}
-                  onChange={(e) => changer({ heures_prevues: e.target.value ? Number(e.target.value) : null })}
-                />
-              </Champ>
-            </div>
-          )}
+                  aria-pressed={choisi}
+                  className={`rounded-md border px-1 py-1.5 text-xs ${choisi ? 'border-foret-700 bg-foret-700 text-white' : 'border-pierre-300 bg-white text-pierre-700 hover:border-foret-600'}`}
+                  onClick={() => basculerMois(m)}
+                >
+                  {NOMS_MOIS_COURTS[m - 1]}
+                </button>
+              )
+            })}
+          </div>
+          {b.mois.length > 0 && <p className="mt-2 text-xs text-pierre-500">{libelleFrequence(b)}</p>}
         </div>
 
         <div>
