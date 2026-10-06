@@ -5,6 +5,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
+import { SurLeCamp } from './SurLeCamp'
 import { trierNoms, useEcrireQuart, useLireQuarts, useQuarts, useReglagesHoraire, useRemplacerQuarts, useTable } from './donnees'
 import {
   JOURS,
@@ -78,7 +79,7 @@ interface Poignee {
 const cleCase = (personneId: string, jour: string) => `${personneId}|${jour}`
 
 export function HoraireCuisine() {
-  const { peutEcrire } = useAuth()
+  const { peutEcrire, peutLire } = useAuth()
   const ecriture = peutEcrire('commande')
   const [params, setParams] = useSearchParams()
   const aujourdhui = versIso(new Date())
@@ -284,6 +285,8 @@ export function HoraireCuisine() {
         </>,
       )}
       <style>{IMPRESSION}</style>
+      {/* Groupes et événements de la semaine (Calendrier des opérations), pour bâtir l'horaire. */}
+      {peutLire('calendrier') && <SurLeCamp jours={jours} />}
       {/* Données déjà affichées mais une mise à jour a échoué : on garde la grille. */}
       {erreur && (
         <p className={`${ui.erreur} mb-3 print:hidden`}>
