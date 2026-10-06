@@ -47,6 +47,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/travaux',
   },
   {
+    id: 'rooming',
+    nom: 'Rooming',
+    description: 'Bâtiments, lits et qui dort où',
+    icone: '🛏️',
+    chemin: '/rooming',
+  },
+  {
     id: 'commande',
     nom: 'Cuisine',
     description: 'Menus, commandes et horaire du personnel',
