@@ -14,10 +14,10 @@ import {
   type Poke,
 } from './pokes'
 
-// Pokes : un petit 👉 discret dans un coin (menu sur ordinateur, barre du haut
-// sur téléphone) pour envoyer ; un cadeau à ouvrir au milieu de l'écran quand
-// on en reçoit un (l'émoji explose partout). Fermer sans ouvrir : le cadeau
-// attend dans le coin.
+// Pokes : tout se passe dans un coin (pied du menu sur ordinateur, barre du
+// haut sur téléphone). Un petit 👉 discret pour envoyer ; quand on en reçoit
+// un, il devient 🎁 ; un clic sur le cadeau fait exploser l'émoji partout et
+// ouvre un petit modal (qui t'a poké).
 
 const mouvementReduit = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -77,54 +77,42 @@ function useTremousser<T extends HTMLElement>(actif: boolean) {
 }
 
 // ------------------------------------------------------------
-// État partagé : le cadeau (au milieu ou reporté dans le coin) et la
-// petite fenêtre d'envoi (avec, au besoin, la personne choisie d'avance).
+// État partagé (le coin existe deux fois : menu et barre du haut) :
+// la petite fenêtre d'envoi et le modal du poke ouvert.
 // ------------------------------------------------------------
-interface Fenetre {
-  ouverte: boolean
-  pour: string | null
-}
-
 interface EtatPoke {
-  /** Pokes reçus pas encore ouverts. */
+  /** Pokes reçus pas encore ouverts : le 👉 du coin devient 🎁. */
   nonVus: Poke[]
-  /** Le cadeau a été fermé sans l'ouvrir : il attend dans le coin. */
-  reporte: boolean
-  rouvrirCadeau: () => void
-  fenetre: Fenetre
-  ouvrirFenetre: (pour?: string | null) => void
-  fermerFenetre: () => void
+  /** Ouvre le cadeau : explosion depuis (x, y), modal, pokes marqués vus. */
+  ouvrirCadeau: (x: number, y: number) => void
+  fenetreOuverte: boolean
+  setFenetreOuverte: (ouverte: boolean) => void
 }
 
 const ContextePoke = createContext<EtatPoke | null>(null)
 
-/** Monté par le Layout : temps réel des pokes et cadeau au milieu de l'écran. */
+/** Monté par le Layout : temps réel des pokes et modal du poke ouvert. */
 export function FournisseurPoke({ children }: { children: ReactNode }) {
   useTempsReelPokes()
   const nonVus = usePokesNonVus()
-  // Pokes dont le cadeau a été fermé sans l'ouvrir (un nouveau poke le refait apparaître).
-  const [reportes, setReportes] = useState<string[]>([])
-  const [fenetre, setFenetre] = useState<Fenetre>({ ouverte: false, pour: null })
-  const reporte = nonVus.length > 0 && nonVus.every((p) => reportes.includes(p.id))
+  const marquerVus = useMarquerPokesVus()
+  const [fenetreOuverte, setFenetreOuverte] = useState(false)
+  // Pokes ouverts : gardés ici, la liste des non vus se vide dès qu'ils sont marqués.
+  const [ouverts, setOuverts] = useState<Poke[] | null>(null)
 
-  const valeur: EtatPoke = {
-    nonVus,
-    reporte,
-    rouvrirCadeau: () => setReportes([]),
-    fenetre,
-    ouvrirFenetre: (pour = null) => setFenetre({ ouverte: true, pour }),
-    fermerFenetre: () => setFenetre({ ouverte: false, pour: null }),
+  const ouvrirCadeau = (x: number, y: number) => {
+    const portee = Math.max(window.innerWidth, window.innerHeight) * 0.6
+    const emojis = nonVus.map((p) => p.emoji)
+    exploser(emojis, x, y, 70, portee)
+    setTimeout(() => exploser(emojis, x, y, 40, portee * 0.8), 250)
+    setOuverts(nonVus)
+    marquerVus.mutate()
   }
 
   return (
-    <ContextePoke.Provider value={valeur}>
+    <ContextePoke.Provider value={{ nonVus, ouvrirCadeau, fenetreOuverte, setFenetreOuverte }}>
       {children}
-      <Cadeau
-        pokes={nonVus}
-        visible={nonVus.length > 0 && !reporte}
-        onReporter={() => setReportes(nonVus.map((p) => p.id))}
-        onPokerEnRetour={(id) => setFenetre({ ouverte: true, pour: id })}
-      />
+      {ouverts && <PokeOuvert pokes={ouverts} onFermer={() => setOuverts(null)} />}
     </ContextePoke.Provider>
   )
 }
@@ -135,203 +123,119 @@ function usePoke() {
   return ctx
 }
 
-// ------------------------------------------------------------
-// Le cadeau : au milieu de l'écran ; on clique, il éclate.
-// ------------------------------------------------------------
-function Cadeau({
-  pokes,
-  visible,
-  onReporter,
-  onPokerEnRetour,
-}: {
-  pokes: Poke[]
-  visible: boolean
-  onReporter: () => void
-  onPokerEnRetour: (id: string) => void
-}) {
-  const { profil } = useAuth()
+/** Petit modal : qui t'a poké. */
+function PokeOuvert({ pokes, onFermer }: { pokes: Poke[]; onFermer: () => void }) {
   const { data: collegues } = useCollegues()
-  const { data: tous } = usePokes()
-  const marquerVus = useMarquerPokesVus()
-  // Pokes ouverts : gardés ici, la liste des non vus se vide dès qu'ils sont marqués.
-  const [ouverts, setOuverts] = useState<Poke[] | null>(null)
-  const boite = useTremousser<HTMLButtonElement>(visible && !ouverts)
 
   useEffect(() => {
-    if (!visible && !ouverts) return
-    const touche = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (ouverts) setOuverts(null)
-      else onReporter()
-    }
+    const touche = (e: KeyboardEvent) => e.key === 'Escape' && onFermer()
     window.addEventListener('keydown', touche)
     return () => window.removeEventListener('keydown', touche)
-  }, [visible, ouverts, onReporter])
-
-  if (!ouverts && !visible) return null
+  }, [onFermer])
 
   const nomDe = (id: string) => collegues?.find((c) => c.id === id)?.nom ?? "Quelqu'un"
-  const fermer = () => setOuverts(null)
-
-  if (ouverts) {
-    const recus = [...new Map(ouverts.map((p) => [p.de, p])).values()]
-    const envoye = tous?.some((p) => p.de === profil?.id && p.jour === aujourdhui())
-    const retour = recus.length === 1 && !envoye && collegues?.some((c) => c.id === recus[0].de) ? recus[0].de : null
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 print:hidden" onClick={fermer}>
-        <div
-          className={`${ui.carte} w-full max-w-xs p-6 text-center shadow-xl`}
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label="Poke reçu"
-        >
-          <div className="text-6xl leading-none">{recus.map((p) => p.emoji).join('')}</div>
-          <p className="mt-4 text-lg font-semibold">
-            {recus.length === 1
-              ? `${nomDe(recus[0].de)} t'a poké !`
-              : `${recus.map((p) => nomDe(p.de).split(/\s+/)[0]).join(', ')} t'ont poké !`}
-          </p>
-          <div className="mt-5 flex justify-center gap-2">
-            {retour && (
-              <button
-                className={ui.bouton}
-                onClick={() => {
-                  fermer()
-                  onPokerEnRetour(retour)
-                }}
-              >
-                Poker en retour
-              </button>
-            )}
-            <button className={ui.boutonSecondaire} onClick={fermer}>
-              Fermer
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const expediteurs = [...new Set(pokes.map((p) => p.de))]
-  const ouvrir = () => {
-    const r = boite.current?.getBoundingClientRect()
-    const x = r ? r.left + r.width / 2 : window.innerWidth / 2
-    const y = r ? r.top + r.height / 2 : window.innerHeight / 2
-    const emojis = pokes.map((p) => p.emoji)
-    const portee = Math.max(window.innerWidth, window.innerHeight) * 0.6
-    exploser(emojis, x, y, 70, portee)
-    setTimeout(() => exploser(emojis, x, y, 40, portee * 0.8), 250)
-    setOuverts(pokes)
-    marquerVus.mutate()
-  }
+  const recus = [...new Map(pokes.map((p) => [p.de, p])).values()]
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/50 p-4 print:hidden"
-      onClick={onReporter}
-    >
-      <button
-        ref={boite}
-        onClick={(e) => {
-          e.stopPropagation()
-          ouvrir()
-        }}
-        className="cursor-pointer text-[7rem] leading-none drop-shadow-lg select-none sm:text-[9rem]"
-        aria-label="Ouvrir le cadeau"
-      >
-        🎁
-      </button>
-      <p
-        className="mt-6 rounded-full bg-white px-4 py-2 text-center text-sm font-medium text-pierre-800 shadow"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4 print:hidden" onClick={onFermer}>
+      <div
+        className={`${ui.carte} w-full max-w-xs p-6 text-center shadow-xl`}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Poke reçu"
       >
-        {expediteurs.length === 1
-          ? `${nomDe(expediteurs[0])} t'a envoyé quelque chose`
-          : `${expediteurs.length} personnes t'ont envoyé quelque chose`}
-        <span className="text-pierre-500"> · ouvre-le !</span>
-      </p>
-      <button className="mt-3 text-sm text-white underline underline-offset-2" onClick={onReporter}>
-        Plus tard
-      </button>
+        <div className="text-5xl leading-none">{recus.map((p) => p.emoji).join('')}</div>
+        <p className="mt-4 font-semibold">
+          {recus.length === 1
+            ? `${nomDe(recus[0].de)} t'a poké !`
+            : `${recus.map((p) => nomDe(p.de).split(/\s+/)[0]).join(', ')} t'ont poké !`}
+        </p>
+        <button className={`${ui.boutonSecondaire} mt-5`} onClick={onFermer}>
+          Fermer
+        </button>
+      </div>
     </div>
   )
 }
 
 // ------------------------------------------------------------
-// Le coin : 👉 discret (ou le cadeau reporté) + petite fenêtre d'envoi.
+// Le coin : 👉 discret, ou 🎁 quand un poke attend ; petite fenêtre d'envoi.
 // ------------------------------------------------------------
 export function CoinPoke({ place }: { place: 'menu' | 'entete' }) {
   const { profil } = useAuth()
-  const { nonVus, reporte, rouvrirCadeau, fenetre, ouvrirFenetre, fermerFenetre } = usePoke()
+  const { nonVus, ouvrirCadeau, fenetreOuverte, setFenetreOuverte } = usePoke()
   const { data: pokes } = usePokes()
   const { data: collegues } = useCollegues()
-  const cadeau = useTremousser<HTMLSpanElement>(reporte)
+  const cadeau = useTremousser<HTMLSpanElement>(nonVus.length > 0)
   const zone = useRef<HTMLDivElement>(null)
 
   // Fermer la fenêtre : clic ailleurs ou Échap.
   useEffect(() => {
-    if (!fenetre.ouverte) return
+    if (!fenetreOuverte) return
     const clic = (e: MouseEvent) => {
       // Le coin existe deux fois (menu et barre du haut) : seul celui qui est affiché écoute.
       const el = zone.current
-      if (el && el.getClientRects().length > 0 && !el.contains(e.target as Node)) fermerFenetre()
+      if (el && el.getClientRects().length > 0 && !el.contains(e.target as Node)) setFenetreOuverte(false)
     }
-    const touche = (e: KeyboardEvent) => e.key === 'Escape' && fermerFenetre()
+    const touche = (e: KeyboardEvent) => e.key === 'Escape' && setFenetreOuverte(false)
     document.addEventListener('mousedown', clic)
     window.addEventListener('keydown', touche)
     return () => {
       document.removeEventListener('mousedown', clic)
       window.removeEventListener('keydown', touche)
     }
-  }, [fenetre.ouverte, fermerFenetre])
+  }, [fenetreOuverte, setFenetreOuverte])
 
   if (!profil || !pokes || !collegues || collegues.length === 0) return null
   const envoye = pokes.find((p) => p.de === profil.id && p.jour === aujourdhui())
 
   return (
     <div ref={zone} className="relative">
-      {reporte && nonVus.length > 0 ? (
+      {nonVus.length > 0 ? (
         <button
-          onClick={rouvrirCadeau}
-          title="Un cadeau t'attend"
-          aria-label="Un cadeau t'attend"
-          className="relative flex size-8 items-center justify-center rounded-lg text-lg leading-none hover:bg-pierre-100"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setFenetreOuverte(false)
+            ouvrirCadeau(r.left + r.width / 2, r.top + r.height / 2)
+          }}
+          title="Quelqu'un t'a poké"
+          aria-label="Ouvrir le poke reçu"
+          className="flex size-8 items-center justify-center rounded-lg text-base leading-none hover:bg-pierre-100"
         >
           <span ref={cadeau} className="inline-block">
             🎁
           </span>
-          <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-red-500 ring-2 ring-white" />
         </button>
       ) : (
         <button
-          onClick={() => (fenetre.ouverte ? fermerFenetre() : ouvrirFenetre())}
+          onClick={() => setFenetreOuverte(!fenetreOuverte)}
           title={envoye ? 'Poke du jour envoyé' : "Poker quelqu'un"}
           aria-label="Poke du jour"
-          aria-expanded={fenetre.ouverte}
+          aria-expanded={fenetreOuverte}
           className={`flex size-8 items-center justify-center rounded-lg text-base leading-none transition hover:bg-pierre-100 hover:opacity-100 ${
-            fenetre.ouverte ? 'bg-pierre-100 opacity-100' : envoye ? 'opacity-35 grayscale' : 'opacity-60'
+            fenetreOuverte ? 'bg-pierre-100 opacity-100' : envoye ? 'opacity-35 grayscale' : 'opacity-60'
           }`}
         >
           👉
         </button>
       )}
-      {fenetre.ouverte && (
+      {fenetreOuverte && nonVus.length === 0 && (
         <div
           className={`absolute z-30 w-76 ${place === 'menu' ? 'bottom-full left-0 mb-2' : 'top-full right-0 mt-2'} ${ui.carte} p-3 shadow-lg`}
         >
-          <FenetrePoke key={fenetre.pour ?? ''} envoye={envoye} pour={fenetre.pour} />
+          <FenetrePoke envoye={envoye} />
         </div>
       )}
     </div>
   )
 }
 
-function FenetrePoke({ envoye, pour }: { envoye: Poke | undefined; pour: string | null }) {
+function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
   const { profil } = useAuth()
   const { data: pokes } = usePokes()
   const { data: collegues } = useCollegues()
   const poker = usePoker()
-  const [choisi, setChoisi] = useState<string | null>(pour)
+  const [choisi, setChoisi] = useState<string | null>(null)
   const [emoji, setEmoji] = useState<string>(EMOJIS_POKE[0])
   const [filtre, setFiltre] = useState('')
   const [erreur, setErreur] = useState('')
