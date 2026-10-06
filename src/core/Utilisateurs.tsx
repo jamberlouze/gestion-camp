@@ -154,13 +154,12 @@ export function Utilisateurs() {
                           </span>
                           <button
                             type="button"
-                            className={`rounded-md p-1.5 text-foret-700 hover:bg-foret-50 ${ouvert === p.id ? 'bg-foret-100' : ''}`}
+                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-foret-700 hover:bg-foret-50 ${ouvert === p.id ? 'bg-foret-100' : ''}`}
                             title="Ajouter un module à cette personne"
-                            aria-label="Ajouter un module à cette personne"
                             aria-expanded={ouvert === p.id}
                             onClick={() => setOuvert(ouvert === p.id ? null : p.id)}
                           >
-                            <IconeRenommer />
+                            Modifier <IconeRenommer className="size-3.5" />
                           </button>
                         </div>
                       )}
@@ -216,8 +215,8 @@ export function Utilisateurs() {
 
       <h2 className="mt-8 text-lg font-semibold">Accès par rôle</h2>
       <p className="mt-1 text-sm text-pierre-500">
-        Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : le crayon sur
-        sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
+        Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : « Modifier »
+        sur sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
       </p>
       <div className={`${ui.carte} mt-3 max-w-2xl overflow-x-auto`}>
         <table className="w-full text-sm">
