@@ -65,9 +65,9 @@ insert into core.pokes (de, a, emoji, jour, vu_le, created_at) values
 -- ------------------------------------------------------------
 insert into core.entreprises (id, nom, couleur, ordre) values
   ('d5c57473-f9b8-58b9-8312-11c3e45fb07a', 'GBPA+', '#19774a', 1),
-  ('635cb5aa-a46d-551f-a54e-de440410c09f', 'Opikawa', '#567E96', 2),
-  ('d2aebea0-e2b0-59ed-b584-40052859f4fb', 'BPA inc.', '#8A7B62', 3),
-  ('f6a2d2eb-e4ea-52ff-8bd5-075e1b6e2950', 'Aquabounga', '#2b8cc4', 4),
+  ('635cb5aa-a46d-551f-a54e-de440410c09f', 'Opikawa', '#e67e22', 2),
+  ('d2aebea0-e2b0-59ed-b584-40052859f4fb', 'BPA inc.', '#7f8c8d', 3),
+  ('f6a2d2eb-e4ea-52ff-8bd5-075e1b6e2950', 'Aquabounga', '#f1c40f', 4),
   ('b057c513-f0d2-5299-8620-7749ee2047a7', 'Rouge & Diable', '#c0392b', 5);
 
 insert into mastertimeline.projets (id, nom, couleur, ordre, entreprise_ids) values

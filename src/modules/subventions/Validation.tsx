@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
-import { messageErreur } from '@/lib/donnees'
+import { messageErreur, useListe } from '@/lib/donnees'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import type { Entreprise as Compagnie } from '@/lib/types'
 import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType } from './commun'
@@ -31,11 +33,15 @@ export function Validation() {
     [subventions.data, statut, entreprise, type],
   )
 
+  const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre')
   const erreur = subventions.error ?? entreprises.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!subventions.data || !entreprises.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const nomEntreprise = new Map(entreprises.data.map((e) => [e.id, e.name]))
+  // Compagnie du référentiel de chaque recherche (pour la couleur de son étiquette).
+  const compagnieDe = new Map(
+    entreprises.data.map((e) => [e.id, (compagnies.data ?? []).find((c) => c.id === e.entreprise_id) ?? { nom: e.name, couleur: null }]),
+  )
   const nbNotes = (id: string) => (notes.data ?? []).filter((n) => n.grant_id === id).length
 
   return (
@@ -77,7 +83,13 @@ export function Validation() {
 
       <div className="space-y-3">
         {liste.map((g) => (
-          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} nomEntreprise={nomEntreprise} nbNotes={nbNotes(g.id)} />
+          <CarteValidation
+            key={g.id}
+            g={g}
+            entreprises={entreprises.data}
+            compagnie={compagnieDe.get(g.target_company_id)}
+            nbNotes={nbNotes(g.id)}
+          />
         ))}
       </div>
 
@@ -89,12 +101,12 @@ export function Validation() {
 function CarteValidation({
   g,
   entreprises,
-  nomEntreprise,
+  compagnie,
   nbNotes,
 }: {
   g: Subvention
   entreprises: Entreprise[]
-  nomEntreprise: Map<string, string>
+  compagnie: { nom: string; couleur: string | null } | undefined
   nbNotes: number
 }) {
   const enregistrer = useEnregistrer<Subvention>('grants')
@@ -107,7 +119,7 @@ function CarteValidation({
     <article className={`${ui.carte} p-4`}>
       <div className="flex flex-wrap items-center gap-1.5">
         <PastilleType type={g.grant_type} />
-        <Pastille>{nomEntreprise.get(g.target_company_id) ?? '—'}</Pastille>
+        {compagnie ? <PuceCompagnie compagnie={compagnie} /> : <Pastille>—</Pastille>}
         {g.status === 'a_valider' && <PastilleStatut statut="a_valider" />}
         {g.previous_grant_id && <Pastille classe="bg-sky-50 text-sky-800">Programme récurrent</Pastille>}
         <span className="ml-auto text-xs text-pierre-500">

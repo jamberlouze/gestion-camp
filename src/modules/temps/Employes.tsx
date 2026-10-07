@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { IconeTableur } from '@/lib/icones'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { ChoixPeriode } from './commun'
@@ -286,9 +287,7 @@ export function FeuilleEmployes() {
                           </span>
                           <span className="flex items-center gap-1.5 text-xs text-pierre-500">
                             {l.entreprise ? (
-                              <span title={l.entreprise.nom} className="rounded-full bg-foret-100 px-1.5 py-px font-medium text-foret-800">
-                                {l.entreprise.abreviation ?? l.entreprise.nom}
-                              </span>
+                              <PuceCompagnie compagnie={l.entreprise} court className="px-1.5! py-px!" />
                             ) : (
                               <Link to="/referentiel/employes" className="rounded-full bg-amber-100 px-1.5 py-px font-medium text-amber-800 print:hidden">
                                 Aucune compagnie

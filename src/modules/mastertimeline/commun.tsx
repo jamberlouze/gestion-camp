@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
 import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, type Filtres, type Montrer, type Regroupement } from './outils'
@@ -203,7 +204,7 @@ export function LigneTache({
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {montrer.mois && annuelle && <Puce ton={etat === 'retard' ? 'retard' : undefined}>{moisCourt(periode)}</Puce>}
           {etat === 'sautee' && <Puce>Pas cette année</Puce>}
-          {montrer.entreprise && entreprise && <Puce couleur={entreprise.couleur}>{entreprise.nom}</Puce>}
+          {montrer.entreprise && entreprise && <PuceCompagnie compagnie={entreprise} className="font-normal" />}
           {montrer.projet && projet && <Puce couleur={projet.couleur}>{projet.nom}</Puce>}
           {responsableModifiable ? (
             <ChoixResponsable tache={t} refs={refs} />

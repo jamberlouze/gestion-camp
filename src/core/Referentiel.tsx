@@ -56,7 +56,7 @@ export function Groupes() {
 export function Employes() {
   // Compagnies de l'employé : une ligne par compagnie dans la feuille des employés (Feuilles de temps).
   const entreprises = useListe<Entreprise>('core', 'entreprises', 'ordre')
-  const options = (entreprises.data ?? []).filter((e) => e.actif).map((e) => ({ id: e.id, libelle: e.nom }))
+  const options = (entreprises.data ?? []).filter((e) => e.actif).map((e) => ({ id: e.id, libelle: e.nom, couleur: e.couleur }))
   return (
     <>
       <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">

@@ -190,7 +190,7 @@ export default function ModuleAchats() {
 
       {voitFournisseurs && (
         <p className="text-xs text-pierre-500">
-          Les entreprises et les fournisseurs viennent de Mastertimeline :{' '}
+          Les entreprises sont les compagnies du référentiel ; les fournisseurs viennent de Mastertimeline :{' '}
           <Link to="/mastertimeline/reglages/fournisseurs" className="text-foret-700 underline">
             gérer les fournisseurs
           </Link>

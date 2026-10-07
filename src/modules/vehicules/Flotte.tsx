@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeAttention, IconePlus } from '@/lib/icones'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { BadgeStatut, DateEcheance, PastilleEtat, Photo } from './commun'
@@ -168,7 +169,7 @@ function ASurveiller({ echeances, jour }: { echeances: ReturnType<typeof aSurvei
 }
 
 function CarteVehicule({ v, flotte, jour }: { v: Vehicule; flotte: DonneesFlotte; jour: string }) {
-  const proprietaire = v.proprietaire_id ? flotte.proprietaire.get(v.proprietaire_id)?.nom : null
+  const proprietaire = v.proprietaire_id ? flotte.proprietaire.get(v.proprietaire_id) : null
   const description = [v.marque, v.modele, v.annee].filter(Boolean).join(' ')
   const echeances = echeancesDe(v, flotte.inspections.get(v.id) ?? [], jour)
   const remise = v.statut === 'remise'
@@ -183,9 +184,9 @@ function CarteVehicule({ v, flotte, jour }: { v: Vehicule; flotte: DonneesFlotte
           <h3 className="truncate font-semibold">{v.surnom}</h3>
           {remise && <BadgeStatut statut={v.statut} />}
         </div>
-        <p className="truncate text-xs text-pierre-500">
-          {description || 'Marque et modèle à préciser'}
-          {proprietaire && ` · ${proprietaire}`}
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-pierre-500">
+          <span className="truncate">{description || 'Marque et modèle à préciser'}</span>
+          {proprietaire && <PuceCompagnie compagnie={proprietaire} court className="px-1.5! py-px!" />}
         </p>
         <dl className="mt-2 space-y-0.5 text-xs">
           {echeances.map((e) => (

@@ -25,6 +25,7 @@ export const RESULTATS: { id: Resultat; libelle: string }[] = [
 export interface Proprietaire {
   id: string
   nom: string
+  couleur: string | null
   ordre: number
   actif: boolean
 }

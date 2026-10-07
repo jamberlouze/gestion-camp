@@ -2,6 +2,7 @@ import { Fragment, useState, type FormEvent } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer, useListe, useSupprimer } from '@/lib/donnees'
 import type { Schema } from '@/lib/supabase'
+import { teinte } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 
 type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'specialites' | 'choix'
@@ -9,6 +10,8 @@ type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'speciali
 export interface Option {
   id: string
   libelle: string
+  /** Teinte de la pastille (ex. couleur d'une compagnie). */
+  couleur?: string | null
 }
 
 export interface Colonne<T> {
@@ -199,11 +202,18 @@ function Affichage<T>({ colonne, valeur }: { colonne: Colonne<T>; valeur: unknow
       const options = colonne.options ?? SPECIALITES
       return (
         <span className="flex flex-wrap gap-1">
-          {((valeur as string[]) ?? []).map((s) => (
-            <span key={s} className="rounded-full bg-foret-100 px-2 py-0.5 text-xs text-foret-800">
-              {options.find((x) => x.id === s)?.libelle ?? s}
-            </span>
-          ))}
+          {((valeur as string[]) ?? []).map((s) => {
+            const o = options.find((x) => x.id === s)
+            return (
+              <span
+                key={s}
+                className={`rounded-full px-2 py-0.5 text-xs ${o?.couleur ? '' : 'bg-foret-100 text-foret-800'}`}
+                style={o?.couleur ? teinte(o.couleur) : undefined}
+              >
+                {o?.libelle ?? s}
+              </span>
+            )
+          })}
         </span>
       )
     }

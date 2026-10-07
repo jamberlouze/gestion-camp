@@ -1,3 +1,4 @@
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, moisCourt } from './calendrier'
 import { CaseCoche, ChoixResponsable, Pastille, Puce, PucesEtiquettes } from './commun'
 import type { References } from './donnees'
@@ -98,12 +99,7 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
       )}
       {colonnes.entreprise && (
         <td className={`px-2 py-2 ${secondaire}`}>
-          {entreprise && (
-            <span className="flex items-center gap-1.5">
-              <Pastille couleur={entreprise.couleur} />
-              <span className="truncate">{entreprise.nom}</span>
-            </span>
-          )}
+          {entreprise && <PuceCompagnie compagnie={entreprise} className="font-normal" />}
         </td>
       )}
       {colonnes.projet && (

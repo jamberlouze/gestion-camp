@@ -133,3 +133,19 @@ create trigger trg_renommer_compagnie after update of nom on core.entreprises
 for each row when (old.nom is distinct from new.nom) execute function core.renommer_compagnie();
 
 revoke execute on function subventions.nom_compagnie(), core.renommer_compagnie() from public, anon;
+
+-- ============================================================
+-- Couleur de chaque compagnie (Maxime, 2026-10-07) : ses étiquettes en
+-- prennent la teinte dans tous les modules.
+-- ============================================================
+update core.entreprises e
+   set couleur = v.couleur
+  from (values
+    ('GBPA+', '#19774a'),          -- vert
+    ('Opikawa', '#e67e22'),        -- orange
+    ('Aquabounga', '#f1c40f'),     -- jaune
+    ('Rouge & Diable', '#c0392b'), -- rouge
+    ('Trembloc', '#8b5a2b'),       -- brun
+    ('BPA inc.', '#7f8c8d')        -- gris
+  ) as v(nom, couleur)
+ where e.nom = v.nom;

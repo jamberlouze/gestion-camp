@@ -30,6 +30,7 @@ export interface Entreprise {
   id: string
   nom: string
   abreviation: string | null
+  couleur: string | null
   ordre: number
   actif: boolean
 }
