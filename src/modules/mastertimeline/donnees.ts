@@ -49,6 +49,15 @@ function useTempsReel(table: string) {
   }, [table, client])
 }
 
+/**
+ * Complète les tâches gardées dans le cache du navigateur avant l'ajout d'une
+ * colonne : sans ça, une copie d'avant les étiquettes (2026-10-06) fait planter
+ * la page avant même qu'elle puisse relire les tâches.
+ */
+function completer(taches: Tache[]): Tache[] {
+  return taches.some((t) => !t.etiquette_ids) ? taches.map((t) => ({ ...t, etiquette_ids: t.etiquette_ids ?? [] })) : taches
+}
+
 /** Toutes les tâches non supprimées. Clé [S, 'taches'] : la même que useEnregistrer. */
 export function useTaches() {
   useTempsReel('taches')
@@ -56,6 +65,7 @@ export function useTaches() {
     queryKey: [S, 'taches'],
     queryFn: () =>
       toutLire<Tache>((a, b) => db().from('taches').select('*').eq('archivee', false).order('created_at').order('id').range(a, b)),
+    select: completer,
   })
 }
 
