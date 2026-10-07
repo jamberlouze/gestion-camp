@@ -254,3 +254,15 @@ where not exists (select 1 from embarcations.embarcations);
 insert into embarcations.notes (id, texte)
 values ('7e000000-0000-0000-0000-000000000001', 'Deux pagaies de kayak manquent depuis la sortie de mardi.')
 on conflict do nothing;
+
+-- Employés fictifs (feuille des employés des Feuilles de temps, Animation…).
+insert into core.employes (surnom, nom_complet, poste, secteur) values
+  ('Manitou', 'Tremblay, Louis', 'Cuisinier', 'Cuisine'),
+  ('Sriracha', 'Gagné, Sophie', 'Cuisinière', 'Cuisine'),
+  ('Marteau', 'Pelletier, Dominique', 'Entretien', 'Entretien'),
+  ('Koda', 'Fortin, Marie', 'Animatrice', 'Animation'),
+  ('Moutic', 'Lévesque, Gabriel', 'Animateur', 'Animation'),
+  ('Galaxie', 'Ouellet, Emma', 'Animatrice', 'Animation'),
+  ('Cliff', 'Girard, Thomas', 'Coordo Opi', 'Administration'),
+  ('Brindille', null, 'Aide de camp', null)
+on conflict (surnom) do nothing;

@@ -39,7 +39,7 @@ export interface Membre {
 export const nomDe = (m: Pick<Membre, 'nom' | 'courriel'> | undefined | null) => m?.nom || m?.courriel || 'Personne inconnue'
 
 /** Lit toutes les lignes par tranches de 1000 (limite de l'API). */
-async function toutLire<T>(tranche: (debut: number, fin: number) => PromiseLike<{ data: unknown; error: unknown }>) {
+export async function toutLire<T>(tranche: (debut: number, fin: number) => PromiseLike<{ data: unknown; error: unknown }>) {
   const lignes: T[] = []
   for (let debut = 0; ; debut += 1000) {
     const { data, error } = await tranche(debut, debut + 999)

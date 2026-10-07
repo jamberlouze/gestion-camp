@@ -155,17 +155,27 @@ function Semaine({
   )
 }
 
-/** Une case : « 7,5 », « 7h30 »… enregistrée en quittant la case (Entrée, Tab ou clic ailleurs). */
-function Case({
+/**
+ * Une case : « 7,5 », « 7h30 »… enregistrée en quittant la case (Entrée, Tab
+ * ou clic ailleurs). Dans une grille (`ligne` et `colonne` donnés), Entrée
+ * passe à la case du dessous, comme dans un tableur.
+ */
+export function Case({
   valeur,
   modifiable,
   libelle,
   onSaisir,
+  ligne,
+  colonne,
+  etroite = false,
 }: {
   valeur: number
   modifiable: boolean
   libelle: string
   onSaisir: (heures: number | null) => void
+  ligne?: number
+  colonne?: number
+  etroite?: boolean
 }) {
   const affiche = valeur ? formatHeures(valeur) : ''
   const [texte, setTexte] = useState(affiche)
@@ -179,7 +189,8 @@ function Case({
     if (!enSaisie) setTexte(affiche)
   }
 
-  if (!modifiable) return <span className="inline-block w-14 tabular-nums">{affiche}</span>
+  const largeur = etroite ? 'w-11' : 'w-14'
+  if (!modifiable) return <span className={`inline-block ${largeur} tabular-nums`}>{affiche}</span>
 
   const valider = () => {
     setEnSaisie(false)
@@ -200,7 +211,9 @@ function Case({
         aria-invalid={!!erreur}
         title={erreur ?? undefined}
         inputMode="decimal"
-        className={`w-14 rounded-md border px-1 py-1 text-center tabular-nums focus:outline-none focus:ring-2 ${
+        data-ligne={ligne}
+        data-colonne={colonne}
+        className={`${largeur} rounded-md border px-1 py-1 text-center tabular-nums focus:outline-none focus:ring-2 ${
           erreur
             ? 'border-red-400 bg-red-50 focus:ring-red-300'
             : 'border-pierre-200 bg-white hover:border-pierre-300 focus:border-foret-600 focus:ring-foret-600/20'
@@ -213,7 +226,16 @@ function Case({
         onChange={(e) => setTexte(e.target.value)}
         onBlur={valider}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Enter') {
+            const dessous =
+              ligne == null
+                ? null
+                : e.currentTarget
+                    .closest('table')
+                    ?.querySelector<HTMLInputElement>(`input[data-ligne="${ligne + 1}"][data-colonne="${colonne}"]`)
+            if (dessous) dessous.focus()
+            else e.currentTarget.blur()
+          }
           if (e.key === 'Escape') {
             setTexte(affiche)
             setErreur(null)

@@ -5,6 +5,7 @@ import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { usePeriode } from './outils'
 import { nomDe, useMembres } from './donnees'
+import { FeuilleEmployes } from './Employes'
 import { Feuille } from './Feuille'
 import { TableauDeBord } from './TableauDeBord'
 
@@ -17,6 +18,8 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
  * Feuilles de temps de la direction. Chacun ne voit que la sienne ; les
  * admins ont en plus le tableau de bord et les feuilles de tous. La base
  * applique la même règle (schéma temps) : l'app ne fait que suivre.
+ * Onglet Employés : feuille partagée des heures des employés (hors
+ * direction), que toute la direction remplit.
  */
 export default function ModuleTemps() {
   const { estAdmin } = useAuth()
@@ -32,6 +35,9 @@ export default function ModuleTemps() {
         <NavLink to={`/temps${suffixe}`} end className={onglet}>
           Ma feuille
         </NavLink>
+        <NavLink to={`/temps/employes${suffixe}`} className={onglet}>
+          Employés
+        </NavLink>
         {estAdmin && (
           <NavLink to={`/temps/tableau${suffixe}`} className={onglet}>
             Tableau de bord
@@ -41,6 +47,7 @@ export default function ModuleTemps() {
       <BandeauErreurs racine="temps" />
       <Routes>
         <Route index element={<MaFeuille />} />
+        <Route path="employes" element={<FeuilleEmployes />} />
         <Route path="tableau" element={estAdmin ? <TableauDeBord /> : <Navigate to="/temps" replace />} />
         <Route path="personne/:id" element={estAdmin ? <FeuillePersonne /> : <Navigate to="/temps" replace />} />
         <Route path="*" element={<Navigate to="/temps" replace />} />

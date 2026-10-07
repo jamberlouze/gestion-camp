@@ -43,6 +43,7 @@ export interface Employe {
   nom_complet: string | null
   courriel: string | null
   poste: string | null
+  secteur: string | null
   specialites: Specialite[]
   actif: boolean
   airtable_id: string | null

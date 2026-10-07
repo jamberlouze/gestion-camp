@@ -67,6 +67,7 @@ export function Employes() {
           { champ: 'nom_complet', libelle: 'Nom complet', type: 'texte' },
           { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
           { champ: 'poste', libelle: 'Poste', type: 'texte' },
+          { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
           { champ: 'specialites', libelle: 'Spécialités', type: 'specialites' },
           { champ: 'actif', libelle: 'Actif', type: 'booleen' },
         ]}
