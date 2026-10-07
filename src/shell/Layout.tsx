@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { IconeAttention, IconeDeconnexion, IconeFermer, IconeReduireMenu, IconeTroisTraits } from '@/lib/icones'
 import { useAuth } from './auth'
-import { MODULES } from './modules'
+import { estEntree, MODULES } from './modules'
 import { CoinPoke, FournisseurPoke } from './Poke'
 
 // Menu réduit (icônes seulement) : retenu sur l'appareil.
@@ -84,7 +84,7 @@ export function Layout() {
     deconnexion()
   }
 
-  const modules: Entree[] = MODULES.filter((m) => peutLire(m.id))
+  const modules: Entree[] = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
   const gestion: Entree[] = [
     ...(estDirection ? [{ chemin: '/referentiel', nom: 'Référentiel', icone: '🗂️' }] : []),
     ...(estAdmin ? [{ chemin: '/utilisateurs', nom: 'Utilisateurs', icone: '👥' }] : []),

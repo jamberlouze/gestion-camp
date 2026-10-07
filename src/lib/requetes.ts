@@ -35,10 +35,10 @@ export const persistance = {
   }),
   maxAge: TRENTE_JOURS,
   buster: 'v1',
-  // Feuilles de temps et petite caisse : jamais gardées sur l'appareil
-  // (renseignements personnels, argent et noms des clients).
+  // Feuilles de temps, petite caisse et coût par assiette : jamais gardés sur
+  // l'appareil (renseignements personnels, argent, noms des clients, salaires).
   dehydrateOptions: {
-    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && q.queryKey[0] !== 'temps' && q.queryKey[0] !== 'caisse',
+    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && !['temps', 'caisse', 'cuisine-couts'].includes(String(q.queryKey[0])),
   },
 }
 

@@ -7,7 +7,7 @@ import { Accueil } from '@/shell/Accueil'
 import { useAuth } from '@/shell/auth'
 import { Chargement, GardeAdmin, GardeDirection, GardeModule } from '@/shell/Gardes'
 import { Layout } from '@/shell/Layout'
-import { MODULES } from '@/shell/modules'
+import { estEntree, MODULES } from '@/shell/modules'
 import { PageConnexion } from '@/shell/PageConnexion'
 
 // Chaque module est chargé à la demande : son code n'est téléchargé
@@ -83,7 +83,7 @@ export default function App() {
  */
 function Depart() {
   const { estDirection, peutLire } = useAuth()
-  const siens = MODULES.filter((m) => peutLire(m.id))
+  const siens = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
   return !estDirection && siens.length === 1 ? <Navigate to={siens[0].chemin} replace /> : <Accueil />
 }
 

@@ -1,11 +1,11 @@
 import { Link } from 'react-router'
 import { ui } from '@/lib/ui'
 import { useAuth } from './auth'
-import { MODULES } from './modules'
+import { estEntree, MODULES } from './modules'
 
 export function Accueil() {
   const { profil, peutLire } = useAuth()
-  const modules = MODULES.filter((m) => peutLire(m.id))
+  const modules = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
 
   return (
     <div>

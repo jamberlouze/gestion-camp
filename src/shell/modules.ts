@@ -10,7 +10,15 @@ export interface DefinitionModule {
   sansLecture?: boolean
   /** Accès fixe, hors de la grille d'accès par rôle (texte affiché dans la grille). */
   accesFixe?: string
+  /**
+   * Partie d'un autre module (un espace de ce module, pas une entrée du menu
+   * ni de l'accueil) qui a son propre accès dans la grille.
+   */
+  parent?: ModuleId
 }
+
+/** Modules du menu et de l'accueil (sans les parties d'un autre module). */
+export const estEntree = (m: DefinitionModule) => !m.parent
 
 /**
  * Registre des mini-apps. Ajouter un module = une entrée ici + une route dans App.tsx
@@ -59,6 +67,16 @@ export const MODULES: DefinitionModule[] = [
     description: 'Menus, commandes et horaire du personnel',
     icone: '🍳',
     chemin: '/cuisine',
+  },
+  {
+    // Espace de Cuisine qui montre les salaires : admins au départ (aucune
+    // ligne dans la grille), plus Frédérique en ajout personnel.
+    id: 'cuisine_couts',
+    nom: 'Cuisine › Coût par assiette',
+    description: 'Nourriture, salaires et assiettes servies, par période',
+    icone: '🧾',
+    chemin: '/cuisine/couts',
+    parent: 'commande',
   },
   {
     id: 'horaire',

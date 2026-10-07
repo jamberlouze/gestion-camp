@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
-import { IconeDossier, IconeMenu, IconeModele, IconePersonnel, IconePlus, IconeRecettes } from '@/lib/icones'
+import { IconeDossier, IconeMenu, IconeModele, IconePersonnel, IconePlus, IconeRecettes, IconeRecu } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
+import { GardeModule } from '@/shell/Gardes'
 import { Ajouts } from './Ajouts'
 import { Commande } from './Commande'
 import { ContexteMenu, type MenuOuvert } from './contexte'
 import { PageDossiers } from './Dossiers'
+import { EspaceCouts } from './couts'
 import { useDossiers, useMenus, useTempsReelCommande } from './donnees'
 import type { DemandeNouveau } from './emplacements'
 import { Equipe } from './Equipe'
@@ -34,12 +36,13 @@ const lireMenuActif = () => {
 /** Menu le plus récemment modifié. */
 const plusRecent = (menus: Menu[]) => menus.reduce<Menu | undefined>((a, m) => (!a || m.updated_at > a.updated_at ? m : a), undefined)
 
-type Espace = 'menu' | 'dossiers' | 'recettes' | 'horaire'
+type Espace = 'menu' | 'dossiers' | 'recettes' | 'horaire' | 'couts'
 
 function espaceDe(chemin: string): Espace {
   if (chemin.startsWith('/cuisine/dossiers')) return 'dossiers'
   if (chemin.startsWith('/cuisine/recettes') || chemin.startsWith('/cuisine/ingredients')) return 'recettes'
   if (chemin.startsWith('/cuisine/horaire') || chemin.startsWith('/cuisine/equipe')) return 'horaire'
+  if (chemin.startsWith('/cuisine/couts')) return 'couts'
   return 'menu'
 }
 
@@ -118,6 +121,14 @@ export default function ModuleCuisine() {
           <Route path="equipe" element={<Equipe />} />
         </Route>
         <Route
+          path="couts/*"
+          element={
+            <GardeModule module="cuisine_couts">
+              <EspaceCouts />
+            </GardeModule>
+          }
+        />
+        <Route
           path="*"
           element={
             attente ?? (
@@ -174,14 +185,16 @@ export default function ModuleCuisine() {
 /**
  * En-tête du module : le titre, et à droite les espaces de la cuisine — le
  * menu ouvert, le rangement (dossiers et modèles), les recettes, l'horaire
- * du personnel.
+ * du personnel et, pour qui y a accès, le coût par assiette.
  */
 function EnteteModule({ espace, modeleOuvert }: { espace: Espace; modeleOuvert: boolean }) {
+  const { peutLire } = useAuth()
   const espaces = [
     { espace: 'menu' as const, chemin: '/cuisine', libelle: modeleOuvert ? 'Modèle ouvert' : 'Menu', icone: modeleOuvert ? <IconeModele /> : <IconeMenu /> },
     { espace: 'dossiers' as const, chemin: '/cuisine/dossiers', libelle: 'Dossiers et modèles', icone: <IconeDossier /> },
     { espace: 'recettes' as const, chemin: '/cuisine/recettes', libelle: 'Recettes', icone: <IconeRecettes /> },
     { espace: 'horaire' as const, chemin: '/cuisine/horaire', libelle: 'Horaire du personnel', icone: <IconePersonnel /> },
+    ...(peutLire('cuisine_couts') ? [{ espace: 'couts' as const, chemin: '/cuisine/couts', libelle: 'Coût par assiette', icone: <IconeRecu /> }] : []),
   ]
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">

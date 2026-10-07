@@ -121,6 +121,14 @@ export const IconeRecettes = (p: Props) => (
   </Icone>
 )
 
+/** Reçu (coût par assiette). */
+export const IconeRecu = (p: Props) => (
+  <Icone {...p}>
+    <path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-2-2Z" />
+    <path d="M9 8h6M9 12h6M9 16h3" />
+  </Icone>
+)
+
 export const IconePersonnel = (p: Props) => (
   <Icone {...p}>
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
