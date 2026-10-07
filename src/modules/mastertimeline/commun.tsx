@@ -20,11 +20,19 @@ export function BarreFiltres({
   sans?: (keyof Filtres)[]
 }) {
   const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquette
-  // Étiquette gardée sur l'appareil mais supprimée depuis : le filtre tombe.
-  const etiquetteDisparue = refs.pret && !!filtres.etiquette && !refs.etiquette.has(filtres.etiquette)
+  // Choix gardé sur l'appareil mais supprimé depuis (ex. compagnie en double
+  // fusionnée) : le filtre tombe, sinon il cache tout en affichant « Toutes ».
+  const disparus: Partial<Filtres> = {}
+  if (refs.pret) {
+    if (filtres.entreprise && !refs.entreprise.has(filtres.entreprise)) disparus.entreprise = ''
+    if (filtres.projet && !refs.projet.has(filtres.projet)) disparus.projet = ''
+    if (filtres.responsable && filtres.responsable !== 'aucun' && !refs.responsable.has(filtres.responsable)) disparus.responsable = ''
+    if (filtres.etiquette && !refs.etiquette.has(filtres.etiquette)) disparus.etiquette = ''
+  }
+  const cleDisparus = Object.keys(disparus).join()
   useEffect(() => {
-    if (etiquetteDisparue) changer({ etiquette: '' })
-  }, [etiquetteDisparue, changer])
+    if (cleDisparus) changer(Object.fromEntries(cleDisparus.split(',').map((k) => [k, ''])))
+  }, [cleDisparus, changer])
   return (
     <div className="flex flex-wrap items-center gap-2">
       {!sans?.includes('entreprise') && (
