@@ -14,9 +14,10 @@ const S = 'vehicules'
 const db = () => supabase.schema(S)
 const SEAU = 'vehicules-photos'
 
-type Table = 'proprietaires' | 'vehicules' | 'inspections' | 'entretiens'
+type Table = 'vehicules' | 'inspections' | 'entretiens'
 
-export const useProprietaires = () => useListe<Proprietaire>(S, 'proprietaires', 'ordre')
+// Compagnies propriétaires : compagnies du référentiel commun (core.entreprises), gérées dans Référentiel › Compagnies.
+export const useProprietaires = () => useListe<Proprietaire>('core', 'entreprises', 'ordre')
 export const useVehicules = () => useListe<Vehicule>(S, 'vehicules', 'ordre')
 export const useInspections = () => useListe<Inspection>(S, 'inspections', 'date')
 export const useEntretiens = () => useListe<Entretien>(S, 'entretiens', 'date')

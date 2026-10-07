@@ -13,7 +13,8 @@ import type { Coche, Entreprise, Etiquette, Fournisseur, Projet, Responsable, Ta
 const S = 'mastertimeline'
 const db = () => supabase.schema(S)
 
-export const useEntreprises = () => useListe<Entreprise>(S, 'entreprises', 'ordre')
+// Compagnies : liste commune du référentiel (core.entreprises), gérée dans Référentiel › Compagnies.
+export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
 export const useProjets = () => useListe<Projet>(S, 'projets', 'ordre')
 export const useResponsables = () => useListe<Responsable>(S, 'responsables', 'nom')
 export const useFournisseurs = () => useListe<Fournisseur>(S, 'fournisseurs', 'nom')

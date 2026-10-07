@@ -63,7 +63,7 @@ insert into core.pokes (de, a, emoji, jour, vu_le, created_at) values
 -- Généré par Claude ; les noms de lieux et catégories viennent de la
 -- migration 20261006000010_travaux.sql.
 -- ------------------------------------------------------------
-insert into mastertimeline.entreprises (id, nom, couleur, ordre) values
+insert into core.entreprises (id, nom, couleur, ordre) values
   ('d5c57473-f9b8-58b9-8312-11c3e45fb07a', 'GBPA+', '#19774a', 1),
   ('635cb5aa-a46d-551f-a54e-de440410c09f', 'Opikawa', '#567E96', 2),
   ('d2aebea0-e2b0-59ed-b584-40052859f4fb', 'BPA inc.', '#8A7B62', 3),
@@ -225,7 +225,7 @@ from (values
   ('Speaker Trembloc', 'a_commander', null, null, null, null),
   ('Gants et casque (accrobranche)', 'a_commander', null, null, null, 'Noté à la fermeture de l''accrobranche (Mastertimeline 2025-26).')
 ) as v(item, statut, quantite, prix, entreprise, note)
-left join mastertimeline.entreprises e on e.nom = v.entreprise;
+left join core.entreprises e on e.nom = v.entreprise;
 
 -- ------------------------------------------------------------
 -- Embarcations : quelques modèles et embarcations de test, et une
@@ -256,13 +256,18 @@ values ('7e000000-0000-0000-0000-000000000001', 'Deux pagaies de kayak manquent 
 on conflict do nothing;
 
 -- Employés fictifs (feuille des employés des Feuilles de temps, Animation…).
-insert into core.employes (surnom, nom_complet, poste, secteur) values
-  ('Manitou', 'Tremblay, Louis', 'Cuisinier', 'Cuisine'),
-  ('Sriracha', 'Gagné, Sophie', 'Cuisinière', 'Cuisine'),
-  ('Marteau', 'Pelletier, Dominique', 'Entretien', 'Entretien'),
-  ('Koda', 'Fortin, Marie', 'Animatrice', 'Animation'),
-  ('Moutic', 'Lévesque, Gabriel', 'Animateur', 'Animation'),
-  ('Galaxie', 'Ouellet, Emma', 'Animatrice', 'Animation'),
-  ('Cliff', 'Girard, Thomas', 'Coordo Opi', 'Administration'),
-  ('Brindille', null, 'Aide de camp', null)
-on conflict (surnom) do nothing;
+-- Compagnies par nom (liste de Mastertimeline) ; Cliff travaille pour deux.
+insert into core.employes (surnom, nom_complet, poste, secteur, entreprise_ids)
+select v.surnom, v.nom_complet, v.poste, v.secteur,
+       array(select e.id from core.entreprises e where e.nom = any (v.entreprises))
+  from (values
+    ('Manitou', 'Tremblay, Louis', 'Cuisinier', 'Cuisine', array['GBPA+']),
+    ('Sriracha', 'Gagné, Sophie', 'Cuisinière', 'Cuisine', array['GBPA+']),
+    ('Marteau', 'Pelletier, Dominique', 'Entretien', 'Entretien', array['GBPA+']),
+    ('Koda', 'Fortin, Marie', 'Animatrice', 'Animation', array['GBPA+']),
+    ('Moutic', 'Lévesque, Gabriel', 'Animateur', 'Animation', array['GBPA+']),
+    ('Galaxie', 'Ouellet, Emma', 'Animatrice', 'Animation', array['Aquabounga']),
+    ('Cliff', 'Girard, Thomas', 'Coordo Opi', 'Administration', array['Opikawa', 'GBPA+']),
+    ('Brindille', null, 'Aide de camp', null, array[]::text[])
+  ) as v(surnom, nom_complet, poste, secteur, entreprises)
+on conflict (surnom) do update set secteur = excluded.secteur, entreprise_ids = excluded.entreprise_ids;

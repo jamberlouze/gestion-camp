@@ -21,7 +21,7 @@ export interface Achat {
   created_at: string
 }
 
-/** Listes de Mastertimeline, lues seulement ici. */
+/** Compagnie (référentiel commun, core.entreprises), lue seulement ici. */
 export interface Entreprise {
   id: string
   nom: string

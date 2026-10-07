@@ -16,6 +16,8 @@ export type StatutEtape = 'a_faire' | 'en_cours' | 'complete'
 export interface Entreprise {
   id: string
   slug: string
+  /** Compagnie du référentiel (core.entreprises) ; `name` en est une copie tenue à jour par la base. */
+  entreprise_id: string
   name: string
   specific_criteria: string | null
   legal_status: string | null

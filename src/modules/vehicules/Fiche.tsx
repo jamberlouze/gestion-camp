@@ -137,7 +137,9 @@ function FicheVehicule({ v, flotte }: { v: Vehicule; flotte: Flotte }) {
                 onChange={(e) => maj({ proprietaire_id: e.target.value || null })}
               >
                 <option value="">À préciser</option>
-                {flotte.proprietaires.map((p) => (
+                {flotte.proprietaires
+                  .filter((p) => p.actif || p.id === v.proprietaire_id)
+                  .map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nom}
                   </option>

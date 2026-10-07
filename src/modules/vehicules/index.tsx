@@ -1,10 +1,8 @@
-import { NavLink, Route, Routes, useLocation } from 'react-router'
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
-import { useAuth } from '@/shell/auth'
 import { Fiche } from './Fiche'
 import { Flotte } from './Flotte'
 import { Registre } from './Registre'
-import { Reglages } from './Reglages'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
@@ -14,7 +12,6 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 export default function ModuleVehicules() {
   // Une fiche fait partie de la flotte : l'onglet reste actif.
   const surFiche = useLocation().pathname.startsWith('/vehicules/fiche/')
-  const ecriture = useAuth().peutEcrire('vehicules')
   return (
     <div>
       <h1 className="text-2xl font-semibold">Véhicules</h1>
@@ -26,18 +23,14 @@ export default function ModuleVehicules() {
         <NavLink to="/vehicules/entretiens" className={onglet}>
           Registre d'entretien
         </NavLink>
-        {ecriture && (
-          <NavLink to="/vehicules/reglages" className={onglet}>
-            Réglages
-          </NavLink>
-        )}
       </nav>
       <BandeauErreurs racine="vehicules" />
       <Routes>
         <Route index element={<Flotte />} />
         <Route path="fiche/:id" element={<Fiche />} />
         <Route path="entretiens" element={<Registre />} />
-        <Route path="reglages" element={<Reglages />} />
+        {/* Les compagnies propriétaires sont dans Référentiel › Compagnies (2026-10-07). */}
+        <Route path="reglages" element={<Navigate to="/vehicules" replace />} />
       </Routes>
     </div>
   )

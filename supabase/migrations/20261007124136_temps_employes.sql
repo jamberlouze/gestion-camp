@@ -2,9 +2,15 @@
 -- temps : heures des employés (hors direction), saisies par la direction.
 --
 -- Remplace le Google Sheets « Feuille de temps - BPA/Opikawa/R&D/
--- Aquabounga » : une ligne par employé, les 14 jours de la période de paie,
--- une note de paie par employé et par période. Pas de types d'heures
--- (régulières, vacances, maladie) : un seul nombre par jour.
+-- Aquabounga » : une ligne par employé ET par compagnie, les 14 jours de la
+-- période de paie, une note de paie par ligne et par période. Pas de types
+-- d'heures (régulières, vacances, maladie) : un seul nombre par jour.
+--
+-- Compagnies : la liste commune du référentiel, core.entreprises (GBPA+,
+-- Opikawa, BPA inc.…, gérée dans Référentiel › Compagnies).
+-- Un employé est assigné à une ou plusieurs compagnies
+-- (core.employes.entreprise_ids) ; celui qui a des heures pour deux
+-- compagnies dans la même paie a deux lignes distinctes.
 --
 -- Qui (décision de la direction, 2026-10-07) : une feuille PARTAGÉE. Toute
 -- personne qui entre dans le module (temps.a_acces : admin et direction)
@@ -22,37 +28,45 @@
 alter table core.employes add column secteur text
   check (secteur is null or (secteur = btrim(secteur) and secteur <> ''));
 
+-- Compagnies de l'employé (core.entreprises), une ligne de la feuille par
+-- compagnie. Tableau sans clé étrangère, comme
+-- mastertimeline.projets.entreprise_ids : une compagnie retirée de la liste
+-- est simplement ignorée.
+alter table core.employes add column entreprise_ids uuid[] not null default '{}';
+
 -- ------------------------------------------------------------
--- Heures : une ligne par employé et par jour (jamais 0 : on supprime).
+-- Heures : une ligne par employé, compagnie et jour (jamais 0 : on supprime).
 -- ------------------------------------------------------------
 create table temps.heures_employes (
   id uuid primary key default gen_random_uuid(),
   -- restrict : registres de paie, on désactive un employé au lieu de le
   -- supprimer.
   employe_id uuid not null references core.employes(id) on delete restrict,
+  entreprise_id uuid not null references core.entreprises(id) on delete restrict,
   jour date not null check (jour >= temps.premiere_periode()),
   -- Au quart d'heure près, au plus 24 h.
   heures numeric(4,2) not null check (heures > 0 and heures <= 24 and heures * 4 = trunc(heures * 4)),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users(id) on delete set null,
-  unique (employe_id, jour)
+  unique (employe_id, entreprise_id, jour)
 );
 
 create index heures_employes_jour on temps.heures_employes (jour);
 
 -- ------------------------------------------------------------
--- Note de paie d'un employé pour une période (ex. « EN BANQUE »).
+-- Note de paie d'une ligne (employé + compagnie) pour une période (ex. « EN BANQUE »).
 -- ------------------------------------------------------------
 create table temps.notes_employes (
   id uuid primary key default gen_random_uuid(),
   employe_id uuid not null references core.employes(id) on delete restrict,
+  entreprise_id uuid not null references core.entreprises(id) on delete restrict,
   debut date not null check (debut >= temps.premiere_periode() and debut = temps.debut_periode(debut)),
   note text not null check (note = btrim(note) and note <> ''),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users(id) on delete set null,
-  unique (employe_id, debut)
+  unique (employe_id, entreprise_id, debut)
 );
 
 -- Auteur et heure de chaque modification, posés par la base.
@@ -70,6 +84,26 @@ $$;
 
 create trigger trg_signer before insert or update on temps.heures_employes
 for each row execute function temps.signer();
+
+-- Au plus 24 heures par jour pour un employé, toutes compagnies confondues.
+create function temps.verifier_heures_employe()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select coalesce(sum(h.heures), 0) from temps.heures_employes h
+       where h.employe_id = new.employe_id and h.jour = new.jour and h.entreprise_id <> new.entreprise_id)
+     + new.heures > 24 then
+    raise exception 'Plus de 24 heures le % (toutes compagnies).', to_char(new.jour, 'YYYY-MM-DD')
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_verifier before insert or update on temps.heures_employes
+for each row execute function temps.verifier_heures_employe();
 create trigger trg_signer before insert or update on temps.notes_employes
 for each row execute function temps.signer();
 
@@ -78,7 +112,7 @@ for each row execute function temps.signer();
 -- ------------------------------------------------------------
 grant select, insert, update, delete on temps.heures_employes, temps.notes_employes to authenticated;
 grant all on temps.heures_employes, temps.notes_employes to service_role;
-revoke execute on function temps.signer() from public, anon;
+revoke execute on function temps.signer(), temps.verifier_heures_employe() from public, anon;
 
 alter table temps.heures_employes enable row level security;
 alter table temps.notes_employes enable row level security;

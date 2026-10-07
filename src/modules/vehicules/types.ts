@@ -21,10 +21,12 @@ export const RESULTATS: { id: Resultat; libelle: string }[] = [
   { id: 'majeures', libelle: 'Défectuosités majeures' },
 ]
 
+/** Compagnie propriétaire (référentiel commun, core.entreprises). */
 export interface Proprietaire {
   id: string
   nom: string
   ordre: number
+  actif: boolean
 }
 
 export interface Vehicule {

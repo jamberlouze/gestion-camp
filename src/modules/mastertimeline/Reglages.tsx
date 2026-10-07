@@ -1,7 +1,7 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router'
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router'
 import { TableauReferentiel } from '@/core/TableauReferentiel'
 import { useEntreprises } from './donnees'
-import type { Entreprise, Etiquette, Fournisseur, Projet, Responsable } from './types'
+import type { Etiquette, Fournisseur, Projet, Responsable } from './types'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-3 py-1.5 text-sm font-medium ${isActive ? 'bg-pierre-200 text-pierre-900' : 'text-pierre-600 hover:bg-pierre-100'}`
@@ -78,19 +78,13 @@ export function Reglages() {
         <Route
           path="entreprises"
           element={
-            <TableauReferentiel<Entreprise>
-              schema="mastertimeline"
-              table="entreprises"
-              tri="ordre"
-              nomLigne={(e) => e.nom}
-              valeursDefaut={{ ordre: 0, actif: true }}
-              colonnes={[
-                { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
-                { champ: 'couleur', libelle: 'Couleur', type: 'couleur' },
-                { champ: 'ordre', libelle: 'Ordre', type: 'nombre' },
-                { champ: 'actif', libelle: 'Active', type: 'booleen' },
-              ]}
-            />
+            <p className="rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+              Les entreprises sont maintenant les compagnies du référentiel commun, partagées par plusieurs modules :{' '}
+              <Link to="/referentiel/compagnies" className="text-foret-700 underline">
+                Référentiel › Compagnies
+              </Link>{' '}
+              (direction).
+            </p>
           }
         />
         <Route

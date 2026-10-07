@@ -44,9 +44,22 @@ export interface Employe {
   courriel: string | null
   poste: string | null
   secteur: string | null
+  /** Compagnies (mastertimeline.entreprises) : une ligne par compagnie dans la feuille des employés. */
+  entreprise_ids: string[]
   specialites: Specialite[]
   actif: boolean
   airtable_id: string | null
+}
+
+/** Compagnie du groupe (core.entreprises : Mastertimeline, Achats, Feuilles de temps…). */
+export interface Entreprise {
+  id: string
+  nom: string
+  abreviation: string | null
+  description: string | null
+  couleur: string | null
+  ordre: number
+  actif: boolean
 }
 
 export interface Semaine {

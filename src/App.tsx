@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router'
-import { Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
+import { Compagnies, Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
 import { Utilisateurs } from '@/core/Utilisateurs'
 import { configManquante } from '@/lib/supabase'
 import { Accueil } from '@/shell/Accueil'
@@ -64,6 +64,7 @@ export default function App() {
             <Route index element={<Navigate to="groupes" replace />} />
             <Route path="groupes" element={<Groupes />} />
             <Route path="employes" element={<Employes />} />
+            <Route path="compagnies" element={<Compagnies />} />
             <Route path="semaines" element={<Semaines />} />
           </Route>
           <Route path="utilisateurs" element={<GardeAdmin><Utilisateurs /></GardeAdmin>} />

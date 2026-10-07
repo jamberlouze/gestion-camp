@@ -13,7 +13,7 @@ const table = () => supabase.schema('achats').from('achats')
 
 export const useAchats = () => useListe<Achat>('achats', 'achats', 'created_at')
 /** Entreprises et fournisseurs : ceux de Mastertimeline (modifiés là-bas). */
-export const useEntreprises = () => useListe<Entreprise>('mastertimeline', 'entreprises', 'ordre')
+export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
 export const useFournisseurs = () => useListe<Fournisseur>('mastertimeline', 'fournisseurs', 'nom')
 
 export function useAjouterAchat() {

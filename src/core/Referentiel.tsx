@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router'
-import type { Employe, Groupe, Semaine } from '@/lib/types'
+import { useListe } from '@/lib/donnees'
+import type { Employe, Entreprise, Groupe, Semaine } from '@/lib/types'
 import { TableauReferentiel } from './TableauReferentiel'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -19,6 +20,9 @@ export function Referentiel() {
         </NavLink>
         <NavLink to="employes" className={onglet}>
           Employés
+        </NavLink>
+        <NavLink to="compagnies" className={onglet}>
+          Compagnies
         </NavLink>
         <NavLink to="semaines" className={onglet}>
           Semaines de camp
@@ -50,6 +54,9 @@ export function Groupes() {
 }
 
 export function Employes() {
+  // Compagnies de l'employé : une ligne par compagnie dans la feuille des employés (Feuilles de temps).
+  const entreprises = useListe<Entreprise>('core', 'entreprises', 'ordre')
+  const options = (entreprises.data ?? []).filter((e) => e.actif).map((e) => ({ id: e.id, libelle: e.nom }))
   return (
     <>
       <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
@@ -61,18 +68,40 @@ export function Employes() {
         table="employes"
         tri="surnom"
         nomLigne={(e) => e.surnom}
-        valeursDefaut={{ specialites: [], actif: true }}
+        valeursDefaut={{ specialites: [], entreprise_ids: [], actif: true }}
         colonnes={[
           { champ: 'surnom', libelle: 'Surnom', type: 'texte', requis: true },
           { champ: 'nom_complet', libelle: 'Nom complet', type: 'texte' },
           { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
           { champ: 'poste', libelle: 'Poste', type: 'texte' },
           { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
+          { champ: 'entreprise_ids', libelle: 'Compagnies', type: 'choix', options },
           { champ: 'specialites', libelle: 'Spécialités', type: 'specialites' },
           { champ: 'actif', libelle: 'Actif', type: 'booleen' },
         ]}
       />
     </>
+  )
+}
+
+/** Compagnies du groupe, partagées par Mastertimeline, Achats et les Feuilles de temps. */
+export function Compagnies() {
+  return (
+    <TableauReferentiel<Entreprise>
+      schema="core"
+      table="entreprises"
+      tri="ordre"
+      nomLigne={(e) => e.nom}
+      valeursDefaut={{ ordre: 0, actif: true }}
+      colonnes={[
+        { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
+        { champ: 'abreviation', libelle: 'Abréviation', type: 'texte' },
+        { champ: 'description', libelle: 'Description', type: 'texte' },
+        { champ: 'couleur', libelle: 'Couleur', type: 'couleur' },
+        { champ: 'ordre', libelle: 'Ordre', type: 'nombre' },
+        { champ: 'actif', libelle: 'Active', type: 'booleen' },
+      ]}
+    />
   )
 }
 
