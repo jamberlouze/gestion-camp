@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Etiquettes'
+import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
@@ -209,6 +210,7 @@ export function LigneTache({
           <PucesEtiquettes tache={t} refs={refs} />
           {fournisseur && <Puce>{fournisseur.nom}</Puce>}
           {t.note && <span className="text-xs text-pierre-400" title={t.note}>📝</span>}
+          <CompteurPieces pieces={refs.fichiers.get(t.id)} className="text-xs text-pierre-400" />
         </div>
         {coche?.note && (
           <button type="button" className="mt-1 block whitespace-pre-line text-left text-xs italic text-pierre-500" onClick={ouvrirFiche}>

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { ui } from '@/lib/ui'
 import { Puce } from './commun'
-import { useMajTache, useSupprimerTache, type Donnees } from './donnees'
-import { GaleriePhotos } from './Photos'
+import { useAdressePhoto, useMajTache, useSupprimerTache, type Donnees } from './donnees'
+import { GaleriePieces } from '@/lib/PiecesJointes'
 import { dateCourte, useDroits, useOuvrir } from './outils'
 import { PRIORITES, type Priorite, type Tache } from './types'
 
@@ -74,7 +74,7 @@ function CarteTri({ tache: t, d, trieur }: { tache: Tache; d: Donnees; trieur: b
           </p>
           {photos.length > 0 && (
             <div className="mt-2">
-              <GaleriePhotos photos={photos} />
+              <GaleriePieces pieces={photos} useAdresse={useAdressePhoto} />
             </div>
           )}
         </div>

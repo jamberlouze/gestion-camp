@@ -1,3 +1,15 @@
+/** Photo ou PDF joint à une tâche (seau privé mastertimeline-fichiers). */
+export interface Fichier {
+  id: string
+  tache_id: string
+  /** Chemin dans le seau : <tache_id>/<id>.jpg ou .pdf */
+  chemin: string
+  /** Nom d'origine d'un PDF (null pour une photo). */
+  nom: string | null
+  ajoute_par: string | null
+  created_at: string
+}
+
 /** Compagnie (référentiel commun, core.entreprises). */
 export interface Entreprise {
   id: string

@@ -51,8 +51,10 @@ export interface Tache {
 export interface Photo {
   id: string
   tache_id: string
-  /** Chemin dans le seau travaux-photos. */
+  /** Chemin dans le seau travaux-photos : <tache_id>/<id>.jpg ou .pdf */
   chemin: string
+  /** Nom d'origine d'un PDF (null pour une photo). */
+  nom: string | null
   ajoutee_par: string | null
   created_at: string
 }

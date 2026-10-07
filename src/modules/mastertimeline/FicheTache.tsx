@@ -1,9 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer } from '@/lib/donnees'
 import { Dialogue } from '@/lib/Dialogue'
 import { ChoixEtiquettes } from '@/lib/Etiquettes'
+import { BoutonAjouterPiece, GaleriePieces } from '@/lib/PiecesJointes'
+import { preparerFichier } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import {
@@ -19,8 +22,8 @@ import {
   cleCoche,
 } from './calendrier'
 import { offertPour, useEcriture, type DemandeFiche } from './outils'
-import { useCocher, useCoches, useProfils, useReferences } from './donnees'
-import type { Statut, Tache } from './types'
+import { ajouterFichier, retirerFichier, useAdresseFichier, useCocher, useCoches, useProfils, useReferences } from './donnees'
+import type { Fichier, Statut, Tache } from './types'
 
 type Brouillon = Omit<Tache, 'id' | 'created_at' | 'archivee' | 'exercice_depart'> & { id?: string; exercice_depart: number | null }
 
@@ -237,6 +240,12 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
           <textarea id="note" className={ui.champ} rows={3} value={b.note ?? ''} disabled={!ecriture} onChange={(e) => changer({ note: e.target.value })} />
         </div>
 
+        {demande.tache ? (
+          <Fichiers tacheId={demande.tache.id} fichiers={refs.fichiers.get(demande.tache.id) ?? []} ecriture={ecriture} />
+        ) : (
+          ecriture && <p className="text-xs text-pierre-500">Photos et PDF : ajoute la tâche, puis rouvre-la pour en joindre.</p>
+        )}
+
         {refs.etiquettes.length > 0 && (
           <div>
             <span className={ui.etiquette}>Étiquettes</span>
@@ -269,6 +278,50 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
         </div>
       </form>
     </Dialogue>
+  )
+}
+
+/** Photos et PDF de la tâche (valables toutes les années), envoyés tout de suite. */
+function Fichiers({ tacheId, fichiers, ecriture }: { tacheId: string; fichiers: Fichier[]; ecriture: boolean }) {
+  const client = useQueryClient()
+  const [lecture, setLecture] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const relire = () => client.invalidateQueries({ queryKey: ['mastertimeline', 'fichiers'] })
+
+  async function choisir(liste: File[]) {
+    if (!liste.length) return
+    setLecture(true)
+    setErreur(null)
+    try {
+      for (const f of liste) await ajouterFichier(tacheId, await preparerFichier(f))
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setLecture(false)
+      relire()
+    }
+  }
+
+  async function retirer(f: Fichier) {
+    if (!(await confirmer({ titre: f.nom ? `Retirer « ${f.nom} » ?` : 'Retirer cette photo ?', libelleOk: 'Retirer', danger: true }))) return
+    try {
+      await retirerFichier(f)
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      relire()
+    }
+  }
+
+  if (!fichiers.length && !ecriture) return null
+  return (
+    <div>
+      <span className={ui.etiquette}>Photos et PDF</span>
+      <GaleriePieces pieces={fichiers} useAdresse={useAdresseFichier} retirer={ecriture ? (f) => () => retirer(f) : undefined}>
+        {ecriture && <BoutonAjouterPiece lecture={lecture} choisir={choisir} />}
+      </GaleriePieces>
+      {erreur && <p className="mt-1 text-xs text-red-700">{erreur}</p>}
+    </div>
   )
 }
 

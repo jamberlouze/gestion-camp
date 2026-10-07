@@ -5,14 +5,15 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ChoixEtiquettes, PucesEtiquettes } from '@/lib/Etiquettes'
-import { reduireImage } from '@/lib/photos'
+import { BoutonAjouterPiece, GaleriePieces } from '@/lib/PiecesJointes'
+import { preparerFichier } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Annualiser } from './Annualiser'
-import { GaleriePhotos } from './Photos'
 import { CaseTache, Puce } from './commun'
 import {
   useAjouterCommentaire,
+  useAdressePhoto,
   useAjouterPhoto,
   useMajTache,
   useSupprimerCommentaire,
@@ -65,7 +66,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
     const rejet = t.signale_par !== droits.moi
     const ok = await confirmer({
       titre: rejet ? `Rejeter « ${t.titre} » ?` : `Retirer « ${t.titre} » ?`,
-      message: 'La tâche, ses photos et ses commentaires seront effacés.',
+      message: 'La tâche, ses photos, ses PDF et ses commentaires seront effacés.',
       libelleOk: rejet ? 'Rejeter' : 'Retirer',
       danger: true,
     })
@@ -264,14 +265,14 @@ function Photos({ tache: t, photos }: { tache: Tache; photos: Photo[] }) {
   const [lecture, setLecture] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
-  async function choisir(fichiers: FileList | null) {
-    if (!fichiers?.length) return
+  async function choisir(fichiers: File[]) {
+    if (!fichiers.length) return
     setLecture(true)
     setErreur(null)
     try {
-      for (const f of fichiers) await ajouter(t.id, await reduireImage(f), droits.moi)
-    } catch {
-      setErreur("Une photo n'a pas pu être lue.")
+      for (const f of fichiers) await ajouter(t.id, await preparerFichier(f), droits.moi)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Un fichier n'a pas pu être lu.")
     } finally {
       setLecture(false)
     }
@@ -280,25 +281,21 @@ function Photos({ tache: t, photos }: { tache: Tache; photos: Photo[] }) {
   if (!photos.length && !droits.ecriture) return null
   return (
     <div>
-      <span className={ui.etiquette}>Photos</span>
-      <GaleriePhotos
-        photos={photos}
+      <span className={ui.etiquette}>Photos et PDF</span>
+      <GaleriePieces
+        pieces={photos}
+        useAdresse={useAdressePhoto}
         retirer={(p) =>
           droits.trieur || (droits.ecriture && p.ajoutee_par === droits.moi)
             ? async () => {
-                if (await confirmer({ titre: 'Retirer cette photo ?', libelleOk: 'Retirer', danger: true })) supprimer.mutate({ id: p.id, chemin: p.chemin })
+                const titre = p.nom ? `Retirer « ${p.nom} » ?` : 'Retirer cette photo ?'
+                if (await confirmer({ titre, libelleOk: 'Retirer', danger: true })) supprimer.mutate({ id: p.id, chemin: p.chemin })
               }
             : undefined
         }
       >
-        {droits.ecriture && (
-          <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-pierre-300 text-xs text-pierre-500 hover:border-foret-600 hover:text-foret-700">
-            <span className="text-xl">📷</span>
-            {lecture ? '…' : 'Ajouter'}
-            <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => choisir(e.target.files)} />
-          </label>
-        )}
-      </GaleriePhotos>
+        {droits.ecriture && <BoutonAjouterPiece lecture={lecture} choisir={choisir} />}
+      </GaleriePieces>
       {erreur && <p className="mt-1 text-xs text-red-700">{erreur}</p>}
     </div>
   )

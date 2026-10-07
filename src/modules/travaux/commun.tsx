@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { PucesEtiquettes } from '@/lib/Etiquettes'
+import { CompteurPieces } from '@/lib/PiecesJointes'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useMajTache, type Donnees } from './donnees'
@@ -80,7 +81,6 @@ export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true
   const chantier = t.chantier_id ? d.chantier.get(t.chantier_id) : null
   const assigne = t.assigne_a ? d.personne.get(t.assigne_a) : null
   const fait = t.fait_par ? d.personne.get(t.fait_par) : null
-  const nbPhotos = d.photos.get(t.id)?.length ?? 0
   const nbCommentaires = d.commentaires.get(t.id)?.length ?? 0
 
   return (
@@ -111,7 +111,7 @@ export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true
               {fait ? ` par ${fait.nom}` : ''}
             </span>
           )}
-          {nbPhotos > 0 && <span className="text-xs text-pierre-500">📷 {nbPhotos}</span>}
+          <CompteurPieces pieces={d.photos.get(t.id)} />
           {nbCommentaires > 0 && <span className="text-xs text-pierre-500">💬 {nbCommentaires}</span>}
         </div>
       </div>
@@ -220,7 +220,6 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
   const chantier = t.chantier_id ? d.chantier.get(t.chantier_id) : null
   const assigne = t.assigne_a ? d.personne.get(t.assigne_a) : null
   const fait = t.fait_par ? d.personne.get(t.fait_par) : null
-  const nbPhotos = d.photos.get(t.id)?.length ?? 0
   const nbCommentaires = d.commentaires.get(t.id)?.length ?? 0
   const secondaire = faite ? 'text-pierre-400' : 'text-pierre-600'
 
@@ -249,7 +248,7 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
               {fait ? ` par ${fait.nom}` : ''}
             </span>
           )}
-          {nbPhotos > 0 && <span className="text-xs text-pierre-500">📷 {nbPhotos}</span>}
+          <CompteurPieces pieces={d.photos.get(t.id)} />
           {nbCommentaires > 0 && <span className="text-xs text-pierre-500">💬 {nbCommentaires}</span>}
         </div>
       </td>

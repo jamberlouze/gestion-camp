@@ -1,5 +1,6 @@
 import { useMutation, useMutationState, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
+import { estPdf, type FichierJoint } from '@/lib/photos'
 import { supabase } from '@/lib/supabase'
 import { estErreurReseau } from '@/modules/embarcations/donnees'
 import { garderPhoto, lirePhoto, oublierPhoto } from './photosLocales'
@@ -238,7 +239,8 @@ export interface VariablesSuppression {
   chemins: string[]
 }
 export type NouveauCommentaire = Pick<Commentaire, 'id' | 'tache_id' | 'texte' | 'auteur'>
-export type NouvellePhoto = Pick<Photo, 'id' | 'tache_id' | 'chemin' | 'ajoutee_par'>
+// `nom` facultatif : un envoi mis en attente avant les PDF (2026-10-07) ne l'a pas.
+export type NouvellePhoto = Pick<Photo, 'id' | 'tache_id' | 'chemin' | 'ajoutee_par'> & { nom?: string | null }
 
 /** Ligne déjà en base (envoi refait après une coupure) : rien à faire. */
 const sansDoublon = { onConflict: 'id', ignoreDuplicates: true }
@@ -351,7 +353,9 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
     mutationFn: async (p: NouvellePhoto) => {
       const fichier = await lirePhoto(p.id)
       if (fichier) {
-        const { error } = await supabase.storage.from(SEAU).upload(p.chemin, fichier, { contentType: 'image/jpeg' })
+        const { error } = await supabase.storage.from(SEAU).upload(p.chemin, fichier, {
+          contentType: estPdf(p.chemin) ? 'application/pdf' : 'image/jpeg',
+        })
         // Déjà envoyé avant une coupure : on continue.
         if (error && !/exist|duplicate/i.test(error.message)) throw error
       }
@@ -360,7 +364,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
       await executer(db().from('photos').upsert(p, sansDoublon))
       await oublierPhoto(p.id)
     },
-    onMutate: (p: NouvellePhoto) => optimiste<Photo>(CLES.photos, p.id, () => ({ created_at: maintenant(), ...p }))(),
+    onMutate: (p: NouvellePhoto) => optimiste<Photo>(CLES.photos, p.id, () => ({ created_at: maintenant(), ...p, nom: p.nom ?? null }))(),
     onError: annuler,
     onSettled: recharger,
   })
@@ -386,15 +390,15 @@ export const useSupprimerCommentaire = () => useMutation<void, Error, string>({ 
 export const useSupprimerPhoto = () => useMutation<void, Error, Pick<Photo, 'id' | 'chemin'>>({ mutationKey: CLES.supprimerPhoto })
 
 /**
- * Ajoute une photo à une tâche : le fichier (réduit) est gardé sur
- * l'appareil, puis envoyé par la file hors ligne.
+ * Ajoute une photo (réduite) ou un PDF à une tâche : le fichier est gardé
+ * sur l'appareil, puis envoyé par la file hors ligne.
  */
 export function useAjouterPhoto() {
   const mutation = useMutation<void, Error, NouvellePhoto>({ mutationKey: CLES.ajouterPhoto })
-  return async (tacheId: string, fichier: Blob, auteur: string | null) => {
+  return async (tacheId: string, { fichier, extension, nom }: FichierJoint, auteur: string | null) => {
     const id = crypto.randomUUID()
     await garderPhoto(id, fichier)
-    mutation.mutate({ id, tache_id: tacheId, chemin: `${tacheId}/${id}.jpg`, ajoutee_par: auteur })
+    mutation.mutate({ id, tache_id: tacheId, chemin: `${tacheId}/${id}.${extension}`, nom, ajoutee_par: auteur })
   }
 }
 

@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
+import type { FichierJoint } from '@/lib/photos'
 import type { Profil } from '@/lib/types'
 import { bornesExercice, exerciceDeCle, indexer, UNIQUE } from './calendrier'
-import type { Coche, Entreprise, Etiquette, Fournisseur, Projet, Responsable, Tache } from './types'
+import type { Coche, Entreprise, Etiquette, Fichier, Fournisseur, Projet, Responsable, Tache } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne, contrairement
 // à Embarcations) : sans réseau, une modification échoue tout de suite
@@ -19,6 +20,7 @@ export const useProjets = () => useListe<Projet>(S, 'projets', 'ordre')
 export const useResponsables = () => useListe<Responsable>(S, 'responsables', 'nom')
 export const useFournisseurs = () => useListe<Fournisseur>(S, 'fournisseurs', 'nom')
 export const useEtiquettes = () => useListe<Etiquette>(S, 'etiquettes', 'ordre')
+export const useFichiers = () => useListe<Fichier>(S, 'fichiers', 'created_at')
 /** Qui a coché : la direction voit tous les profils, les autres seulement le leur. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 
@@ -168,15 +170,18 @@ export async function reassigner(de: string, vers: string | null) {
   return count ?? 0
 }
 
-/** Entreprises, projets, responsables, fournisseurs et étiquettes, indexés par id. */
+/** Entreprises, projets, responsables, fournisseurs et étiquettes, indexés par id ; fichiers par tâche. */
 export function useReferences() {
   const entreprises = useEntreprises()
   const projets = useProjets()
   const responsables = useResponsables()
   const fournisseurs = useFournisseurs()
   const etiquettes = useEtiquettes()
+  const fichiers = useFichiers()
   return useMemo(() => {
     const parId = <T extends { id: string }>(l: T[] | undefined) => new Map((l ?? []).map((x) => [x.id, x]))
+    const fichiersParTache = new Map<string, Fichier[]>()
+    for (const f of fichiers.data ?? []) fichiersParTache.set(f.tache_id, [...(fichiersParTache.get(f.tache_id) ?? []), f])
     return {
       entreprises: entreprises.data ?? [],
       projets: (projets.data ?? []).filter((p) => !p.archive),
@@ -188,13 +193,59 @@ export function useReferences() {
       responsable: parId(responsables.data),
       fournisseur: parId(fournisseurs.data),
       etiquette: parId(etiquettes.data),
+      fichiers: fichiersParTache,
       pret: !!entreprises.data && !!projets.data && !!responsables.data && !!fournisseurs.data && !!etiquettes.data,
       erreur: entreprises.error ?? projets.error ?? responsables.error ?? fournisseurs.error ?? etiquettes.error,
     }
   }, [
-    entreprises.data, projets.data, responsables.data, fournisseurs.data, etiquettes.data,
+    entreprises.data, projets.data, responsables.data, fournisseurs.data, etiquettes.data, fichiers.data,
     entreprises.error, projets.error, responsables.error, fournisseurs.error, etiquettes.error,
   ])
 }
 
 export type References = ReturnType<typeof useReferences>
+
+// ------------------------------------------------------------------
+// Photos et PDF joints aux tâches (seau privé : adresses signées)
+// ------------------------------------------------------------------
+
+const SEAU = 'mastertimeline-fichiers'
+/** Durée d'une adresse signée ; relue avant d'expirer. */
+const DUREE_ADRESSE = 3600
+
+/** Adresse signée d'un fichier (jamais gardée sur l'appareil : voir requetes.ts). */
+export function useAdresseFichier(f: Pick<Fichier, 'chemin'>) {
+  return (
+    useQuery({
+      queryKey: ['mastertimeline-adresses', f.chemin],
+      queryFn: async () => {
+        const { data, error } = await supabase.storage.from(SEAU).createSignedUrl(f.chemin, DUREE_ADRESSE)
+        if (error) throw error
+        return data.signedUrl
+      },
+      staleTime: (DUREE_ADRESSE - 600) * 1000,
+      refetchInterval: (DUREE_ADRESSE - 600) * 1000,
+    }).data ?? null
+  )
+}
+
+/** Envoie une photo (déjà réduite) ou un PDF, puis l'inscrit sur la tâche. */
+export async function ajouterFichier(tacheId: string, { fichier, extension, nom }: FichierJoint) {
+  const id = crypto.randomUUID()
+  const chemin = `${tacheId}/${id}.${extension}`
+  const envoi = await supabase.storage
+    .from(SEAU)
+    .upload(chemin, fichier, { contentType: extension === 'pdf' ? 'application/pdf' : 'image/jpeg' })
+  if (envoi.error) throw envoi.error
+  const { error } = await db().from('fichiers').insert({ id, tache_id: tacheId, chemin, nom })
+  if (error) {
+    await supabase.storage.from(SEAU).remove([chemin])
+    throw error
+  }
+}
+
+export async function retirerFichier(f: Pick<Fichier, 'id' | 'chemin'>) {
+  const { error } = await db().from('fichiers').delete().eq('id', f.id)
+  if (error) throw error
+  await supabase.storage.from(SEAU).remove([f.chemin])
+}

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { ChoixEtiquettes } from '@/lib/Etiquettes'
-import { reduireImage } from '@/lib/photos'
+import { BoutonAjouterPiece } from '@/lib/PiecesJointes'
+import { preparerFichier, type FichierJoint } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAjouterPhoto, useCreerTache, type Donnees, type NouvelleTache } from './donnees'
 import { useDroits } from './outils'
@@ -9,7 +10,7 @@ import type { Tache } from './types'
 
 /**
  * Signaler un problème (ou, pour la direction, ajouter une tâche déjà triée).
- * Marche hors ligne : la tâche et ses photos partent au retour du réseau.
+ * Marche hors ligne : la tâche, ses photos et ses PDF partent au retour du réseau.
  */
 export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial<Tache>; fermer: () => void }) {
   const droits = useDroits()
@@ -24,7 +25,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
   const [chantier, setChantier] = useState(defauts?.chantier_id ?? '')
   const [echeance, setEcheance] = useState('')
   const [etiquettes, setEtiquettes] = useState<string[]>(defauts?.etiquette_ids ?? [])
-  const [photos, setPhotos] = useState<{ cle: string; fichier: Blob; url: string }[]>([])
+  const [photos, setPhotos] = useState<{ cle: string; joint: FichierJoint; url: string }[]>([])
   const [lecture, setLecture] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -32,22 +33,22 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
   const apercus = useRef<string[]>([])
   useEffect(() => () => apercus.current.forEach((u) => URL.revokeObjectURL(u)), [])
 
-  async function choisirPhotos(fichiers: FileList | null) {
-    if (!fichiers?.length) return
+  async function choisirPhotos(fichiers: File[]) {
+    if (!fichiers.length) return
     setLecture(true)
     setErreur(null)
     try {
       const lues = await Promise.all(
         [...fichiers].map(async (f) => {
-          const fichier = await reduireImage(f)
-          const url = URL.createObjectURL(fichier)
+          const joint = await preparerFichier(f)
+          const url = URL.createObjectURL(joint.fichier)
           apercus.current.push(url)
-          return { cle: crypto.randomUUID(), fichier, url }
+          return { cle: crypto.randomUUID(), joint, url }
         }),
       )
       setPhotos((p) => [...p, ...lues])
-    } catch {
-      setErreur("Une photo n'a pas pu être lue.")
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Un fichier n'a pas pu être lu.")
     } finally {
       setLecture(false)
     }
@@ -79,9 +80,9 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
     }
     creer.mutate(nouvelle)
     try {
-      for (const p of photos) await ajouterPhoto(id, p.fichier, droits.moi)
+      for (const p of photos) await ajouterPhoto(id, p.joint, droits.moi)
     } catch {
-      return setErreur("La tâche est créée, mais une photo n'a pas pu être gardée sur l'appareil.")
+      return setErreur("La tâche est créée, mais un fichier n'a pas pu être gardé sur l'appareil.")
     }
     fermer()
   }
@@ -123,14 +124,21 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
         </label>
 
         <div>
-          <span className={ui.etiquette}>Photos</span>
+          <span className={ui.etiquette}>Photos et PDF</span>
           <div className="flex flex-wrap gap-2">
             {photos.map((p) => (
               <div key={p.cle} className="relative">
-                <img src={p.url} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                {p.joint.nom ? (
+                  <div title={p.joint.nom} className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-pierre-200 bg-pierre-50 px-1.5 text-center">
+                    <span className="text-2xl leading-none">📄</span>
+                    <span className="line-clamp-2 break-all text-[10px] leading-tight text-pierre-600">{p.joint.nom}</span>
+                  </div>
+                ) : (
+                  <img src={p.url} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                )}
                 <button
                   type="button"
-                  aria-label="Retirer la photo"
+                  aria-label="Retirer le fichier"
                   className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-pierre-800 text-xs text-white"
                   onClick={() => setPhotos(photos.filter((x) => x.cle !== p.cle))}
                 >
@@ -138,11 +146,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
                 </button>
               </div>
             ))}
-            <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-pierre-300 text-xs text-pierre-500 hover:border-foret-600 hover:text-foret-700">
-              <span className="text-xl">📷</span>
-              {lecture ? '…' : 'Ajouter'}
-              <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => choisirPhotos(e.target.files)} />
-            </label>
+            <BoutonAjouterPiece lecture={lecture} choisir={choisirPhotos} />
           </div>
         </div>
 

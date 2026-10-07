@@ -1,3 +1,4 @@
+import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, moisCourt } from './calendrier'
 import { CaseCoche, ChoixResponsable, Pastille, Puce, PucesEtiquettes } from './commun'
@@ -87,6 +88,7 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
               📝
             </span>
           )}
+          <CompteurPieces pieces={refs.fichiers.get(t.id)} className="text-xs text-pierre-400" />
         </div>
         {coche?.note && (
           <button type="button" className="mt-1 block whitespace-pre-line text-left text-xs italic text-pierre-500" onClick={ouvrirFiche}>
