@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
@@ -260,9 +261,7 @@ export function FicheEvenement({
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <div className="flex flex-wrap gap-1">
             {evenement && (
-              <button type="button" className={ui.boutonDanger} onClick={supprimer}>
-                {evenement.regle_recurrence ? 'Supprimer la série' : 'Supprimer'}
-              </button>
+              <BoutonSupprimer onClick={supprimer}>{evenement.regle_recurrence ? 'Supprimer la série' : 'Supprimer'}</BoutonSupprimer>
             )}
             {evenement?.regle_recurrence && occurrence && (
               <button type="button" className={ui.boutonDanger} onClick={retirerOccurrence} title={dateLongue(occurrence)}>

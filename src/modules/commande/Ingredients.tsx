@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { BoutonModifier } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
@@ -80,9 +81,7 @@ export function Ingredients() {
                 <td className="px-3 py-1.5 text-right tabular-nums text-pierre-500">{utilisations.get(p.id)?.length ?? 0}</td>
                 {ecriture && (
                   <td className="px-3 py-1.5 text-right">
-                    <button className="text-foret-700 hover:underline" onClick={() => setEdition(p)}>
-                      Modifier
-                    </button>
+                    <BoutonModifier onClick={() => setEdition(p)} />
                   </td>
                 )}
               </tr>

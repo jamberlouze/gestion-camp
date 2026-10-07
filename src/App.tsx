@@ -63,7 +63,7 @@ export default function App() {
           <Route path="rooming/*" element={<GardeModule module="rooming"><Rooming /></GardeModule>} />
           <Route path="petite-caisse/*" element={<GardeModule module="caisse"><Caisse /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
-            <Route index element={<Navigate to="groupes" replace />} />
+            <Route index element={<Navigate to="employes" replace />} />
             <Route path="groupes" element={<Groupes />} />
             <Route path="employes" element={<Employes />} />
             <Route path="compagnies" element={<Compagnies />} />

@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useState } from 'react'
+import { BoutonModifier } from '@/lib/BoutonsAction'
 import { messageErreur } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, AccesRole, ModuleId, Niveau, Profil, Role } from '@/lib/types'
-import { IconeRenommer } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { niveauModule } from '@/shell/acces'
@@ -158,15 +158,12 @@ export function Utilisateurs() {
                                 </span>
                               ))}
                           </span>
-                          <button
-                            type="button"
-                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-foret-700 hover:bg-foret-50 ${ouvert === p.id ? 'bg-foret-100' : ''}`}
+                          <BoutonModifier
+                            className={ouvert === p.id ? 'bg-foret-100!' : ''}
                             title="Ajouter un module à cette personne"
                             aria-expanded={ouvert === p.id}
                             onClick={() => setOuvert(ouvert === p.id ? null : p.id)}
-                          >
-                            Modifier <IconeRenommer className="size-3.5" />
-                          </button>
+                          />
                         </div>
                       )}
                     </td>

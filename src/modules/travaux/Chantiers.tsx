@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
@@ -147,17 +148,14 @@ function DetailChantier({ id, d }: { id: string; d: Donnees }) {
         </div>
         {droits.trieur && (
           <div className="flex flex-wrap gap-2">
-            <button className={ui.boutonSecondaire} onClick={() => setModifier(true)}>
-              Modifier
-            </button>
+            <BoutonModifier onClick={() => setModifier(true)} />
             <button
               className={ui.boutonSecondaire}
               onClick={() => action(() => enregistrerListe<Chantier>('chantiers', { id: c.id, termine_le: c.termine_le ? null : new Date().toISOString() }))}
             >
               {c.termine_le ? 'Rouvrir le chantier' : 'Terminer le chantier'}
             </button>
-            <button
-              className={ui.boutonDanger}
+            <BoutonSupprimer
               onClick={async () => {
                 if (
                   !(await confirmer({
@@ -171,9 +169,7 @@ function DetailChantier({ id, d }: { id: string; d: Donnees }) {
                   navigate('/travaux/chantiers')
                 })
               }}
-            >
-              Supprimer
-            </button>
+            />
             <button
               className={ui.bouton}
               onClick={() => ouvrir({ type: 'signaler', defauts: { chantier_id: c.id, lieu_id: c.lieu_id, position: prochainePosition } })}

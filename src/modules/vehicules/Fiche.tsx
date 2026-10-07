@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -537,9 +538,7 @@ function Suppression({ v }: { v: Vehicule }) {
 
   return (
     <div className="mt-8 border-t border-pierre-200 pt-4">
-      <button className={ui.boutonDanger} onClick={supprimer}>
-        Supprimer ce véhicule
-      </button>
+      <BoutonSupprimer onClick={supprimer}>Supprimer ce véhicule</BoutonSupprimer>
       {erreur && <p className={`${ui.erreur} mt-2`}>{erreur}</p>}
     </div>
   )

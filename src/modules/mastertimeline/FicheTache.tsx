@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer } from '@/lib/donnees'
 import { Dialogue } from '@/lib/Dialogue'
@@ -273,9 +274,9 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
                 Annuler
               </button>
               {demande.tache && (
-                <button type="button" className={`${ui.boutonDanger} ml-auto`} onClick={supprimer}>
+                <BoutonSupprimer className="ml-auto" onClick={supprimer}>
                   Supprimer la tâche
-                </button>
+                </BoutonSupprimer>
               )}
             </>
           ) : (

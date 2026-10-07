@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import { useSearchParams } from 'react-router'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeDossier, IconeModele, IconePlus, IconeRenommer } from '@/lib/icones'
@@ -228,9 +229,7 @@ export function PageDossiers({
               <button className={ui.boutonSecondaire} onClick={() => setRenommage(vue.dossier!.id)}>
                 <IconeRenommer /> Renommer
               </button>
-              <button className={ui.boutonDanger} onClick={() => retirerDossier(vue.dossier!, vue.menus)}>
-                <IconeCorbeille className="mr-1.5 size-4" /> Supprimer le dossier
-              </button>
+              <BoutonSupprimer onClick={() => retirerDossier(vue.dossier!, vue.menus)}>Supprimer le dossier</BoutonSupprimer>
             </>
           )}
           {ecriture && (

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -107,9 +108,7 @@ export function FicheActivite() {
           ))}
         </div>
         {ecriture && (
-          <button className={`${ui.boutonDanger} ml-auto`} onClick={supprimer}>
-            <IconeCorbeille /> Supprimer
-          </button>
+          <BoutonSupprimer className="ml-auto" onClick={supprimer} />
         )}
       </div>
       <TexteLibre valeur={activite.description} desactive={!ecriture} enregistrer={(description) => maj({ description })} placeholder="Description" />

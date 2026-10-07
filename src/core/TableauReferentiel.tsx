@@ -1,17 +1,20 @@
 import { Fragment, useState, type FormEvent } from 'react'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer, useListe, useSupprimer } from '@/lib/donnees'
 import type { Schema } from '@/lib/supabase'
 import { teinte } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 
-type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'specialites' | 'choix'
+type TypeChamp = 'texte' | 'nombre' | 'couleur' | 'date' | 'booleen' | 'choix'
 
 export interface Option {
   id: string
   libelle: string
   /** Teinte de la pastille (ex. couleur d'une compagnie). */
   couleur?: string | null
+  /** Texte court de la pastille dans le tableau (ex. abréviation) ; le libellé complet reste dans la saisie. */
+  court?: string | null
 }
 
 export interface Colonne<T> {
@@ -22,12 +25,6 @@ export interface Colonne<T> {
   /** Type « choix » : liste de cases à cocher, valeur = tableau d'id. */
   options?: Option[]
 }
-
-const SPECIALITES: Option[] = [
-  { id: 'escalade', libelle: 'Escalade' },
-  { id: 'transport', libelle: 'Transport' },
-  { id: 'sauveteur', libelle: 'Sauveteur' },
-]
 
 interface Props<T> {
   schema: Schema
@@ -144,17 +141,8 @@ export function TableauReferentiel<T extends { id: string }>({
                     </td>
                   ))}
                   <td className="whitespace-nowrap px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-foret-700 hover:bg-foret-50"
-                      onClick={() => commencer(ligne)}
-                      disabled={!!edition}
-                    >
-                      Modifier
-                    </button>
-                    <button type="button" className={ui.boutonDanger} onClick={() => retirer(ligne)}>
-                      Supprimer
-                    </button>
+                    <BoutonModifier onClick={() => commencer(ligne)} disabled={!!edition} />
+                    <BoutonSupprimer className="ml-1.5" onClick={() => retirer(ligne)} />
                   </td>
                 </tr>
               ),
@@ -197,9 +185,8 @@ function Affichage<T>({ colonne, valeur }: { colonne: Colonne<T>; valeur: unknow
       return valeur ? (
         <span>{new Date(`${valeur}T12:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       ) : null
-    case 'specialites':
     case 'choix': {
-      const options = colonne.options ?? SPECIALITES
+      const options = colonne.options ?? []
       return (
         <span className="flex flex-wrap gap-1">
           {((valeur as string[]) ?? []).map((s) => {
@@ -207,10 +194,11 @@ function Affichage<T>({ colonne, valeur }: { colonne: Colonne<T>; valeur: unknow
             return (
               <span
                 key={s}
-                className={`rounded-full px-2 py-0.5 text-xs ${o?.couleur ? '' : 'bg-foret-100 text-foret-800'}`}
+                title={o?.court ? o.libelle : undefined}
+                className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${o?.couleur ? '' : 'bg-foret-100 text-foret-800'}`}
                 style={o?.couleur ? teinte(o.couleur) : undefined}
               >
-                {o?.libelle ?? s}
+                {o ? o.court || o.libelle : s}
               </span>
             )
           })}
@@ -270,12 +258,11 @@ function Saisie<T>({
           onChange={(e) => onChange(e.target.checked)}
         />
       )
-    case 'specialites':
     case 'choix': {
       const choisies = (valeur as string[]) ?? []
       return (
         <div className="flex flex-col gap-1 pt-1">
-          {(colonne.options ?? SPECIALITES).map((s) => (
+          {(colonne.options ?? []).map((s) => (
             <label key={s.id} className="flex items-center gap-1.5 whitespace-nowrap">
               <input
                 type="checkbox"

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
@@ -358,9 +359,7 @@ function Boutons({ occupe, fermer, supprimer }: { occupe: boolean; fermer: () =>
   return (
     <div className="flex items-center gap-2 pt-2">
       {supprimer && (
-        <button type="button" className={ui.boutonDanger} onClick={supprimer} disabled={occupe}>
-          Supprimer
-        </button>
+        <BoutonSupprimer onClick={supprimer} disabled={occupe} />
       )}
       <button type="button" className={`${ui.boutonSecondaire} ml-auto`} onClick={fermer}>
         Annuler

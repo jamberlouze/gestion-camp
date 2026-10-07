@@ -4,7 +4,6 @@
 export type Role = 'admin' | 'direction' | 'coordo' | 'terrain'
 export type ModuleId = 'embarcations' | 'commande' | 'horaire' | 'mastertimeline' | 'subventions' | 'vigie' | 'calendrier' | 'temps' | 'vehicules' | 'travaux' | 'achats' | 'rooming' | 'caisse'
 export type Niveau = 'lecture' | 'ecriture'
-export type Specialite = 'escalade' | 'transport' | 'sauveteur'
 
 export interface Profil {
   id: string
@@ -40,13 +39,15 @@ export interface Groupe {
 export interface Employe {
   id: string
   surnom: string
+  prenom: string | null
+  nom_famille: string | null
+  /** « Nom, Prénom », posé par la base à partir de prenom et nom_famille (lecture seulement). */
   nom_complet: string | null
   courriel: string | null
   poste: string | null
   secteur: string | null
   /** Compagnies (mastertimeline.entreprises) : une ligne par compagnie dans la feuille des employés. */
   entreprise_ids: string[]
-  specialites: Specialite[]
   actif: boolean
   airtable_id: string | null
 }

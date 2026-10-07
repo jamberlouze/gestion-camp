@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
-import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useCreerNote, useMajNote, useNotes, useSupprimerNote } from './donnees'
 import type { Ligne } from './outils'
@@ -131,21 +131,15 @@ function LigneNote({ note, flotte, ecriture }: { note: Note; flotte: Ligne[]; ec
           <button className={ui.bouton} onClick={() => setMode('traiter')}>
             ✓ Traitée
           </button>
-          <button className={ui.boutonSecondaire} onClick={() => setMode('modifier')}>
-            Modifier
-          </button>
-          <button
-            className="rounded-lg p-2 text-pierre-400 hover:bg-red-50 hover:text-red-700"
+          <BoutonModifier onClick={() => setMode('modifier')} />
+          <BoutonSupprimer
             aria-label="Supprimer la note"
-            title="Supprimer"
             onClick={async () => {
               if (await confirmer({ titre: 'Supprimer cette note ?', message: note.texte, libelleOk: 'Supprimer', danger: true })) {
                 supprimer.mutate(note.id)
               }
             }}
-          >
-            <IconeCorbeille />
-          </button>
+          />
         </div>
       )}
     </li>

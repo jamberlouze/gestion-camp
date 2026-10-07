@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
@@ -37,9 +38,7 @@ function Boutons({ fermer, enCours, supprimer, valide = true }: { fermer: () => 
   return (
     <div className="flex items-center gap-2 pt-1">
       {supprimer && (
-        <button type="button" className={ui.boutonDanger} onClick={supprimer}>
-          Supprimer
-        </button>
+        <BoutonSupprimer onClick={supprimer} />
       )}
       <button type="button" className={`${ui.boutonSecondaire} ml-auto`} onClick={fermer}>
         Annuler

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
@@ -103,9 +104,7 @@ export function Recettes() {
                   </span>
                 </span>
                 {ecriture && (
-                  <button className="text-sm text-foret-700 hover:underline" onClick={() => setEditionConso(c)}>
-                    Modifier
-                  </button>
+                  <BoutonModifier onClick={() => setEditionConso(c)} />
                 )}
               </li>
             ))}
@@ -166,9 +165,7 @@ function DetailRecette({ recette, modifier }: { recette: Recette; modifier?: () 
           </h2>
         </div>
         {modifier && (
-          <button className={ui.bouton} onClick={modifier}>
-            Modifier
-          </button>
+          <BoutonModifier onClick={modifier} />
         )}
       </div>
       <h3 className="mb-2 mt-5 text-sm font-semibold text-pierre-700">Ingrédients — quantités par portion</h3>
@@ -438,18 +435,14 @@ function DialogueRecette({
           <div className="flex gap-2">
             {existante && (
               <>
-                <button
-                  type="button"
-                  className={ui.boutonDanger}
+                <BoutonSupprimer
                   onClick={async () => {
                     if (await confirmer({ titre: `Supprimer la recette « ${recette.name} » ?` })) {
                       supprimer.mutate(recette.id)
                       fermer()
                     }
                   }}
-                >
-                  Supprimer
-                </button>
+                />
                 <button type="button" className={ui.boutonSecondaire} onClick={copier} disabled={!nom.trim()}>
                   Dupliquer
                 </button>
@@ -616,18 +609,14 @@ function DialogueConsommable({ consommable, fermer }: { consommable: Consommable
         </div>
         <div className="flex justify-between gap-2 pt-2">
           {consommable.id ? (
-            <button
-              type="button"
-              className={ui.boutonDanger}
+            <BoutonSupprimer
               onClick={async () => {
                 if (await confirmer({ titre: `Supprimer « ${consommable.name} » ?` })) {
                   supprimer.mutate(consommable.id)
                   fermer()
                 }
               }}
-            >
-              Supprimer
-            </button>
+            />
           ) : (
             <span />
           )}

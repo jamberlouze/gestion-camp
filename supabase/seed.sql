@@ -259,19 +259,19 @@ on conflict do nothing;
 
 -- Employés fictifs (feuille des employés des Feuilles de temps, Animation…).
 -- Compagnies par nom (liste de Mastertimeline) ; Cliff travaille pour deux.
-insert into core.employes (surnom, nom_complet, poste, secteur, entreprise_ids)
-select v.surnom, v.nom_complet, v.poste, v.secteur,
+insert into core.employes (surnom, prenom, nom_famille, poste, secteur, entreprise_ids)
+select v.surnom, v.prenom, v.nom_famille, v.poste, v.secteur,
        array(select e.id from core.entreprises e where e.nom = any (v.entreprises))
   from (values
-    ('Manitou', 'Tremblay, Louis', 'Cuisinier', 'Cuisine', array['GBPA+']),
-    ('Sriracha', 'Gagné, Sophie', 'Cuisinière', 'Cuisine', array['GBPA+']),
-    ('Marteau', 'Pelletier, Dominique', 'Entretien', 'Entretien', array['GBPA+']),
-    ('Koda', 'Fortin, Marie', 'Animatrice', 'Animation', array['GBPA+']),
-    ('Moutic', 'Lévesque, Gabriel', 'Animateur', 'Animation', array['GBPA+']),
-    ('Galaxie', 'Ouellet, Emma', 'Animatrice', 'Animation', array['Aquabounga']),
-    ('Cliff', 'Girard, Thomas', 'Coordo Opi', 'Administration', array['Opikawa', 'GBPA+']),
-    ('Brindille', null, 'Aide de camp', null, array[]::text[])
-  ) as v(surnom, nom_complet, poste, secteur, entreprises)
+    ('Manitou', 'Louis', 'Tremblay', 'Cuisinier', 'Cuisine', array['GBPA+']),
+    ('Sriracha', 'Sophie', 'Gagné', 'Cuisinière', 'Cuisine', array['GBPA+']),
+    ('Marteau', 'Dominique', 'Pelletier', 'Entretien', 'Entretien', array['GBPA+']),
+    ('Koda', 'Marie', 'Fortin', 'Animatrice', 'Animation', array['GBPA+']),
+    ('Moutic', 'Gabriel', 'Lévesque', 'Animateur', 'Animation', array['GBPA+']),
+    ('Galaxie', 'Emma', 'Ouellet', 'Animatrice', 'Animation', array['Aquabounga']),
+    ('Cliff', 'Thomas', 'Girard', 'Coordo Opi', 'Administration', array['Opikawa', 'GBPA+']),
+    ('Brindille', null, null, 'Aide de camp', null, array[]::text[])
+  ) as v(surnom, prenom, nom_famille, poste, secteur, entreprises)
 on conflict (surnom) do update set secteur = excluded.secteur, entreprise_ids = excluded.entreprise_ids;
 
 -- ------------------------------------------------------------

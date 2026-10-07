@@ -15,14 +15,14 @@ export function Referentiel() {
       <h1 className="text-2xl font-semibold">Référentiel commun</h1>
       <p className="mt-1 text-sm text-pierre-500">Données partagées par tous les modules.</p>
       <nav className="mb-5 mt-4 flex gap-6 border-b border-pierre-200">
-        <NavLink to="groupes" className={onglet}>
-          Groupes de campeurs
-        </NavLink>
         <NavLink to="employes" className={onglet}>
           Employés
         </NavLink>
         <NavLink to="compagnies" className={onglet}>
           Compagnies
+        </NavLink>
+        <NavLink to="groupes" className={onglet}>
+          Groupes de campeurs
         </NavLink>
         <NavLink to="semaines" className={onglet}>
           Semaines de camp
@@ -56,7 +56,7 @@ export function Groupes() {
 export function Employes() {
   // Compagnies de l'employé : une ligne par compagnie dans la feuille des employés (Feuilles de temps).
   const entreprises = useListe<Entreprise>('core', 'entreprises', 'ordre')
-  const options = (entreprises.data ?? []).filter((e) => e.actif).map((e) => ({ id: e.id, libelle: e.nom, couleur: e.couleur }))
+  const options = (entreprises.data ?? []).filter((e) => e.actif).map((e) => ({ id: e.id, libelle: e.nom, court: e.abreviation, couleur: e.couleur }))
   return (
     <>
       <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
@@ -68,15 +68,15 @@ export function Employes() {
         table="employes"
         tri="surnom"
         nomLigne={(e) => e.surnom}
-        valeursDefaut={{ specialites: [], entreprise_ids: [], actif: true }}
+        valeursDefaut={{ entreprise_ids: [], actif: true }}
         colonnes={[
-          { champ: 'surnom', libelle: 'Surnom', type: 'texte', requis: true },
-          { champ: 'nom_complet', libelle: 'Nom complet', type: 'texte' },
-          { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
-          { champ: 'poste', libelle: 'Poste', type: 'texte' },
-          { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
+          { champ: 'surnom', libelle: 'Nom de camp', type: 'texte', requis: true },
+          { champ: 'prenom', libelle: 'Prénom', type: 'texte' },
+          { champ: 'nom_famille', libelle: 'Nom de famille', type: 'texte' },
           { champ: 'entreprise_ids', libelle: 'Compagnies', type: 'choix', options },
-          { champ: 'specialites', libelle: 'Spécialités', type: 'specialites' },
+          { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
+          { champ: 'poste', libelle: 'Poste', type: 'texte' },
+          { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
           { champ: 'actif', libelle: 'Actif', type: 'booleen' },
         ]}
       />

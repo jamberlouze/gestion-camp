@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
@@ -234,9 +235,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
           </button>
         )}
         {droits.supprimer(t) && t.statut !== 'a_trier' && (
-          <button type="button" className={`${ui.boutonDanger} ml-auto`} onClick={retirer}>
-            Supprimer
-          </button>
+          <BoutonSupprimer className="ml-auto" onClick={retirer} />
         )}
         {droits.supprimer(t) && t.statut === 'a_trier' && !trieur && (
           <button type="button" className={`${ui.boutonDanger} ml-auto`} onClick={retirer}>
