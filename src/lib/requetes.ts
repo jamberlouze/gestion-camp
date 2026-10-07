@@ -35,10 +35,10 @@ export const persistance = {
   }),
   maxAge: TRENTE_JOURS,
   buster: 'v1',
-  // Feuilles de temps : jamais gardées sur l'appareil (renseignements
-  // personnels ; un admin lit celles de toute la direction).
+  // Feuilles de temps et petite caisse : jamais gardées sur l'appareil
+  // (renseignements personnels, argent et noms des clients).
   dehydrateOptions: {
-    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && q.queryKey[0] !== 'temps',
+    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && q.queryKey[0] !== 'temps' && q.queryKey[0] !== 'caisse',
   },
 }
 

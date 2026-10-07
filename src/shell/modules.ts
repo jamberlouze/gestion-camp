@@ -82,6 +82,14 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/achats',
   },
   {
+    // Admins seulement au départ (aucune ligne dans la grille).
+    id: 'caisse',
+    nom: 'Petite caisse',
+    description: 'Argent comptant reçu et sorti, par compagnie',
+    icone: '💵',
+    chemin: '/petite-caisse',
+  },
+  {
     id: 'subventions',
     nom: 'Subventions',
     description: 'Vigie, demandes et reddition de compte',

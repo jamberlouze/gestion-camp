@@ -68,7 +68,9 @@ insert into core.entreprises (id, nom, couleur, ordre) values
   ('635cb5aa-a46d-551f-a54e-de440410c09f', 'Opikawa', '#e67e22', 2),
   ('d2aebea0-e2b0-59ed-b584-40052859f4fb', 'BPA inc.', '#7f8c8d', 3),
   ('f6a2d2eb-e4ea-52ff-8bd5-075e1b6e2950', 'Aquabounga', '#f1c40f', 4),
-  ('b057c513-f0d2-5299-8620-7749ee2047a7', 'Rouge & Diable', '#c0392b', 5);
+  ('b057c513-f0d2-5299-8620-7749ee2047a7', 'Rouge & Diable', '#c0392b', 5)
+-- Quatre d'entre elles sont déjà créées par la migration de la petite caisse.
+on conflict (id) do update set nom = excluded.nom, couleur = excluded.couleur, ordre = excluded.ordre;
 
 insert into mastertimeline.projets (id, nom, couleur, ordre, entreprise_ids) values
   ('d98fd836-7983-53d5-8472-764189def71c', 'Planification', '#7A6AA8', 1, '{635cb5aa-a46d-551f-a54e-de440410c09f,b057c513-f0d2-5299-8620-7749ee2047a7,d5c57473-f9b8-58b9-8312-11c3e45fb07a,f6a2d2eb-e4ea-52ff-8bd5-075e1b6e2950}'),
@@ -271,3 +273,10 @@ select v.surnom, v.nom_complet, v.poste, v.secteur,
     ('Brindille', null, 'Aide de camp', null, array[]::text[])
   ) as v(surnom, nom_complet, poste, secteur, entreprises)
 on conflict (surnom) do update set secteur = excluded.secteur, entreprise_ids = excluded.entreprise_ids;
+
+-- ------------------------------------------------------------
+-- Petite caisse : l'historique vient de la migration (import du Sheets) ;
+-- la poche de Maxime est liée au compte admin de test pour essayer
+-- « Payé de ma poche ».
+-- ------------------------------------------------------------
+update caisse.poches set profil_id = '00000000-0000-0000-0000-000000000001' where nom = 'Maxime';
