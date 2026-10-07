@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { estErreurReseau } from '@/modules/embarcations/donnees'
 import { garderPhoto, lirePhoto, oublierPhoto } from './photosLocales'
-import type { Categorie, Chantier, Commentaire, Fournisseur, Lieu, Personne, Photo, Tache } from './types'
+import type { Categorie, Chantier, Commentaire, Etiquette, Fournisseur, Lieu, Personne, Photo, Tache } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne (comme Embarcations, voir CLAUDE.md)
@@ -33,6 +33,7 @@ export const CLES = {
   chantiers: [RACINE, 'chantiers'],
   personnes: [RACINE, 'personnes'],
   fournisseurs: [RACINE, 'fournisseurs'],
+  etiquettes: [RACINE, 'etiquettes'],
   creerTache: [RACINE, 'creer-tache'],
   majTache: [RACINE, 'maj-tache'],
   supprimerTache: [RACINE, 'supprimer-tache'],
@@ -66,7 +67,16 @@ async function toutLire<T>(tranche: (debut: number, fin: number) => PromiseLike<
 const lister = <T,>(table: string, tri: string) => () =>
   toutLire<T>((a, b) => db().from(table).select('*').order(tri).order('id').range(a, b))
 
-export const useTaches = () => useQuery({ queryKey: CLES.taches, queryFn: lister<Tache>('taches', 'created_at') })
+/**
+ * Complète les tâches gardées sur l'appareil avant l'ajout d'une colonne
+ * (étiquettes, 2026-10-07) : sinon une copie plus ancienne fait planter la
+ * page avant qu'elle puisse relire les tâches (voir Mastertimeline).
+ */
+function completer(taches: Tache[]): Tache[] {
+  return taches.some((t) => !t.etiquette_ids) ? taches.map((t) => ({ ...t, etiquette_ids: t.etiquette_ids ?? [] })) : taches
+}
+
+export const useTaches = () => useQuery({ queryKey: CLES.taches, queryFn: lister<Tache>('taches', 'created_at'), select: completer })
 const usePhotos = () => useQuery({ queryKey: CLES.photos, queryFn: lister<Photo>('photos', 'created_at') })
 const useCommentaires = () => useQuery({ queryKey: CLES.commentaires, queryFn: lister<Commentaire>('commentaires', 'created_at') })
 const useLieux = () => useQuery({ queryKey: CLES.lieux, queryFn: lister<Lieu>('lieux', 'ordre') })
@@ -89,6 +99,17 @@ const useFournisseurs = () =>
       const { data, error } = await supabase.schema('mastertimeline').from('fournisseurs').select('id, nom, telephone').order('nom')
       if (error) throw error
       return data as Fournisseur[]
+    },
+  })
+
+/** Étiquettes de Mastertimeline (liste commune, lue seulement). */
+const useEtiquettes = () =>
+  useQuery({
+    queryKey: CLES.etiquettes,
+    queryFn: async () => {
+      const { data, error } = await supabase.schema('mastertimeline').from('etiquettes').select('id, nom, couleur').order('ordre')
+      if (error) throw error
+      return data as Etiquette[]
     },
   })
 
@@ -133,6 +154,7 @@ export function useDonnees() {
   const chantiers = useChantiers().data
   const personnes = usePersonnes().data
   const fournisseurs = useFournisseurs().data
+  const etiquettes = useEtiquettes().data
   const erreur = useQueryClient()
     .getQueryCache()
     .findAll({ queryKey: [RACINE] })
@@ -145,6 +167,7 @@ export function useDonnees() {
       chantiers: chantiers ?? [],
       personnes: personnes ?? [],
       fournisseurs: fournisseurs ?? [],
+      etiquettes: etiquettes ?? [],
       tache: parId(taches),
       lieu: parId(lieux),
       categorie: parId(categories),
@@ -153,9 +176,11 @@ export function useDonnees() {
       fournisseur: parId(fournisseurs),
       photos: parTache(photos),
       commentaires: parTache(commentaires),
+      // Sans les étiquettes : un appareil hors ligne dont le cache date d'avant
+      // elles (2026-10-07) doit quand même ouvrir le module.
       pret: !!(taches && photos && commentaires && lieux && categories && chantiers && personnes && fournisseurs),
     }),
-    [taches, photos, commentaires, lieux, categories, chantiers, personnes, fournisseurs],
+    [taches, photos, commentaires, lieux, categories, chantiers, personnes, fournisseurs, etiquettes],
   )
   return { ...donnees, erreur: erreur ?? null }
 }
@@ -275,6 +300,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
         fait_le: null,
         fait_par: null,
         annualisee_vers: null,
+        etiquette_ids: [],
         created_at: maintenant(),
         updated_at: maintenant(),
         ...t,

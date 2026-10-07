@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Etiquettes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
@@ -19,7 +20,7 @@ export function BarreFiltres({
   /** Filtres à ne pas montrer (ex. le responsable dans la vue par responsable). */
   sans?: (keyof Filtres)[]
 }) {
-  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquette
+  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquettes.length > 0
   // Choix gardé sur l'appareil mais supprimé depuis (ex. compagnie en double
   // fusionnée) : le filtre tombe, sinon il cache tout en affichant « Toutes ».
   const disparus: Partial<Filtres> = {}
@@ -27,11 +28,13 @@ export function BarreFiltres({
     if (filtres.entreprise && !refs.entreprise.has(filtres.entreprise)) disparus.entreprise = ''
     if (filtres.projet && !refs.projet.has(filtres.projet)) disparus.projet = ''
     if (filtres.responsable && filtres.responsable !== 'aucun' && !refs.responsable.has(filtres.responsable)) disparus.responsable = ''
-    if (filtres.etiquette && !refs.etiquette.has(filtres.etiquette)) disparus.etiquette = ''
   }
-  const cleDisparus = Object.keys(disparus).join()
+  const etiquettesGardees = refs.pret ? filtres.etiquettes.filter((id) => refs.etiquette.has(id)) : filtres.etiquettes
+  if (etiquettesGardees.length < filtres.etiquettes.length) disparus.etiquettes = etiquettesGardees
+  const cleDisparus = JSON.stringify(disparus)
   useEffect(() => {
-    if (cleDisparus) changer(Object.fromEntries(cleDisparus.split(',').map((k) => [k, ''])))
+    const champs = JSON.parse(cleDisparus) as Partial<Filtres>
+    if (Object.keys(champs).length) changer(champs)
   }, [cleDisparus, changer])
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -76,15 +79,8 @@ export function BarreFiltres({
           <option value="aucun">Sans responsable</option>
         </select>
       )}
-      {refs.etiquettes.length > 0 && (
-        <select aria-label="Étiquette" className={menu} value={filtres.etiquette} onChange={(e) => changer({ etiquette: e.target.value })}>
-          <option value="">Toutes les étiquettes</option>
-          {refs.etiquettes.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.nom}
-            </option>
-          ))}
-        </select>
+      {refs.etiquettes.length > 0 && !sans?.includes('etiquettes') && (
+        <ChoixEtiquettes petit libelle="Filtrer par étiquette" liste={refs.etiquettes} choisies={filtres.etiquettes} changer={(ids) => changer({ etiquettes: ids })} />
       )}
       {actifs && (
         <button className="text-sm text-pierre-500 underline hover:text-pierre-800" onClick={() => changer(FILTRES_VIDES)}>
@@ -130,19 +126,7 @@ export function Puce({ children, couleur, ton }: { children: ReactNode; couleur?
 
 /** Étiquettes d'une tâche (Corvée, Woofing…), teintées de leur couleur, dans l'ordre de la liste. */
 export function PucesEtiquettes({ tache, refs }: { tache: Tache; refs: References }) {
-  const liste = refs.etiquettes.filter((e) => tache.etiquette_ids.includes(e.id))
-  return liste.map((e) => {
-    const c = e.couleur ?? 'var(--color-pierre-500)'
-    return (
-      <span
-        key={e.id}
-        className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs"
-        style={{ background: `color-mix(in srgb, ${c} 14%, white)`, color: `color-mix(in srgb, ${c} 70%, black)` }}
-      >
-        {e.nom}
-      </span>
-    )
-  })
+  return <PucesEtiquettesLib ids={tache.etiquette_ids} liste={refs.etiquettes} />
 }
 
 /** Case de coche : faite ✓, « pas cette année » –, en retard (bord rouge). */

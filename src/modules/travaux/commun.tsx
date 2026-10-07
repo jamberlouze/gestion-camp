@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { PucesEtiquettes } from '@/lib/Etiquettes'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useMajTache, type Donnees } from './donnees'
@@ -102,6 +103,7 @@ export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true
           {montrer.categorie && categorie && <Puce>{categorie.nom}</Puce>}
           {montrer.chantier && chantier && <Puce couleur={chantier.couleur}>{chantier.nom}</Puce>}
           {montrer.personne && t.statut === 'a_faire' && (assigne ? <Puce>👤 {assigne.nom}</Puce> : <Puce ton="libre">À assigner</Puce>)}
+          <PucesEtiquettes ids={t.etiquette_ids} liste={d.etiquettes} />
           {faite && t.annualisee_vers && <Puce>↻ Dans Mastertimeline</Puce>}
           {faite && !t.annualisee_vers && t.fait_le && (
             <span className="text-xs text-pierre-500">
@@ -239,6 +241,7 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
           {!faite && t.priorite === 1 && <Puce ton="urgent">Urgent</Puce>}
           {!faite && t.priorite === 2 && <Puce ton="prioritaire">{PRIORITES[2]}</Puce>}
           {!faite && t.echeance && <Puce ton={retard ? 'retard' : undefined}>{retard ? 'En retard · ' : ''}{dateCourte(t.echeance)}</Puce>}
+          <PucesEtiquettes ids={t.etiquette_ids} liste={d.etiquettes} />
           {faite && t.annualisee_vers && <Puce>↻ Dans Mastertimeline</Puce>}
           {faite && !t.annualisee_vers && t.fait_le && (
             <span className="text-xs text-pierre-400">

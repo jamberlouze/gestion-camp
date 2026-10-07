@@ -3,6 +3,7 @@ import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur, useEnregistrer } from '@/lib/donnees'
 import { Dialogue } from '@/lib/Dialogue'
+import { ChoixEtiquettes } from '@/lib/Etiquettes'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import {
@@ -239,26 +240,7 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
         {refs.etiquettes.length > 0 && (
           <div>
             <span className={ui.etiquette}>Étiquettes</span>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Étiquettes">
-              {refs.etiquettes.map((e) => {
-                const choisie = b.etiquette_ids.includes(e.id)
-                const c = e.couleur ?? 'var(--color-pierre-500)'
-                return (
-                  <button
-                    key={e.id}
-                    type="button"
-                    disabled={!ecriture}
-                    aria-pressed={choisie}
-                    className={`rounded-full border px-3 py-1 text-xs ${choisie ? 'font-medium' : 'border-pierre-300 bg-white text-pierre-600 hover:border-pierre-400'}`}
-                    style={choisie ? { borderColor: c, background: `color-mix(in srgb, ${c} 14%, white)`, color: `color-mix(in srgb, ${c} 70%, black)` } : undefined}
-                    onClick={() => changer({ etiquette_ids: choisie ? b.etiquette_ids.filter((x) => x !== e.id) : [...b.etiquette_ids, e.id] })}
-                  >
-                    {choisie ? '✓ ' : ''}
-                    {e.nom}
-                  </button>
-                )
-              })}
-            </div>
+            <ChoixEtiquettes liste={refs.etiquettes} choisies={b.etiquette_ids} desactive={!ecriture} changer={(ids) => changer({ etiquette_ids: ids })} />
           </div>
         )}
 

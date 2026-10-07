@@ -45,18 +45,21 @@ export interface Filtres {
   projet: string
   /** id, '' (tous) ou 'aucun' (sans responsable). */
   responsable: string
-  /** id d'une étiquette, ou '' (toutes les tâches). */
-  etiquette: string
+  /** Étiquettes allumées : tâches qui portent l'une d'elles ; vide = toutes les tâches. */
+  etiquettes: string[]
 }
 
 const CLE_FILTRES = 'mastertimeline-filtres'
-export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', etiquette: '' }
+export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', etiquettes: [] }
 
 /** Filtres gardés sur l'appareil (préférence personnelle). */
 export function useFiltres() {
   const [filtres, setFiltres] = useState<Filtres>(() => {
     try {
-      return { ...FILTRES_VIDES, ...JSON.parse(localStorage.getItem(CLE_FILTRES) ?? '{}') }
+      // Avant le 2026-10-07 : une seule étiquette (`etiquette`, texte).
+      const { etiquette, etiquettes, ...reste } = JSON.parse(localStorage.getItem(CLE_FILTRES) ?? '{}')
+      const liste = Array.isArray(etiquettes) ? etiquettes : etiquette ? [etiquette] : []
+      return { ...FILTRES_VIDES, ...reste, etiquettes: liste.filter((x: unknown) => typeof x === 'string') }
     } catch {
       return FILTRES_VIDES
     }
@@ -83,7 +86,7 @@ export function garder(t: Tache, f: Filtres) {
   if (f.entreprise && t.entreprise_id !== f.entreprise) return false
   if (f.projet && t.projet_id !== f.projet) return false
   if (f.responsable === 'aucun' ? !!t.responsable_id : f.responsable && t.responsable_id !== f.responsable) return false
-  if (f.etiquette && !t.etiquette_ids.includes(f.etiquette)) return false
+  if (f.etiquettes.length && !f.etiquettes.some((id) => t.etiquette_ids.includes(id))) return false
   return true
 }
 

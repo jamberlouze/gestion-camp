@@ -4,6 +4,7 @@ import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
+import { ChoixEtiquettes, PucesEtiquettes } from '@/lib/Etiquettes'
 import { reduireImage } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
@@ -199,10 +200,17 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
             changer={(v) => modifier({ chantier_id: v })}
           />
           <Choix libelle="Fournisseur" valeur={t.fournisseur_id} options={d.fournisseurs} modifiable changer={(v) => modifier({ fournisseur_id: v })} />
+          {d.etiquettes.length > 0 && (
+            <div className="sm:col-span-2">
+              <span className={ui.etiquette}>Étiquettes</span>
+              <ChoixEtiquettes liste={d.etiquettes} choisies={t.etiquette_ids} changer={(ids) => modifier({ etiquette_ids: ids })} />
+            </div>
+          )}
         </fieldset>
       ) : (
-        (t.priorite !== 3 || t.echeance || chantier || fournisseur || t.heures_prevues) && (
+        (t.priorite !== 3 || t.echeance || chantier || fournisseur || t.heures_prevues || t.etiquette_ids.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
+            <PucesEtiquettes ids={t.etiquette_ids} liste={d.etiquettes} />
             {t.priorite === 1 && <Puce ton="urgent">Urgent</Puce>}
             {t.priorite === 2 && <Puce ton="prioritaire">{PRIORITES[2]}</Puce>}
             {t.echeance && <Puce ton={enRetard(t) ? 'retard' : undefined}>Échéance {dateCourte(t.echeance)}</Puce>}

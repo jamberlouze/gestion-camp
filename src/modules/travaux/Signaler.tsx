@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
+import { ChoixEtiquettes } from '@/lib/Etiquettes'
 import { reduireImage } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAjouterPhoto, useCreerTache, type Donnees, type NouvelleTache } from './donnees'
@@ -22,6 +23,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
   const [assigne, setAssigne] = useState('')
   const [chantier, setChantier] = useState(defauts?.chantier_id ?? '')
   const [echeance, setEcheance] = useState('')
+  const [etiquettes, setEtiquettes] = useState<string[]>(defauts?.etiquette_ids ?? [])
   const [photos, setPhotos] = useState<{ cle: string; fichier: Blob; url: string }[]>([])
   const [lecture, setLecture] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -71,6 +73,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
             chantier_id: chantier || null,
             echeance: echeance || null,
             position: defauts?.position ?? null,
+            etiquette_ids: etiquettes,
           }
         : { statut: 'a_trier' }),
     }
@@ -181,6 +184,12 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
                   ))}
               </select>
             </label>
+            {d.etiquettes.length > 0 && (
+              <div className="sm:col-span-2">
+                <span className={ui.etiquette}>Étiquettes</span>
+                <ChoixEtiquettes liste={d.etiquettes} choisies={etiquettes} changer={setEtiquettes} />
+              </div>
+            )}
           </fieldset>
         )}
 

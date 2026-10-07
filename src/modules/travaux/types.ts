@@ -42,6 +42,8 @@ export interface Tache {
   fait_par: string | null
   /** Tâche annuelle de Mastertimeline créée à partir de celle-ci. */
   annualisee_vers: string | null
+  /** Étiquettes (liste de Mastertimeline : Corvée, Woofing…), posées par la direction. */
+  etiquette_ids: string[]
   created_at: string
   updated_at: string
 }
@@ -76,6 +78,13 @@ export interface Fournisseur {
   id: string
   nom: string
   telephone: string | null
+}
+
+/** Étiquette de la liste de Mastertimeline (lue seulement). */
+export interface Etiquette {
+  id: string
+  nom: string
+  couleur: string | null
 }
 
 export type Priorite = 1 | 2 | 3

@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Navigate, NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { Annee } from './Annee'
+import { useEtiquettes } from './donnees'
 import { ContexteFiche, type DemandeFiche } from './outils'
 import { FicheTache } from './FicheTache'
 import { Mois } from './Mois'
 import { Projets } from './Projets'
 import { Reglages } from './Reglages'
 import { Responsables } from './Responsables'
+import { VueEtiquette } from './VueEtiquette'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
@@ -16,6 +18,8 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 export default function ModuleMastertimeline() {
   const [fiche, setFiche] = useState<DemandeFiche | null>(null)
+  // Un onglet par étiquette (Corvée, Woofing…) : Mastertimeline + Travaux.
+  const etiquettes = useEtiquettes().data ?? []
   return (
     <ContexteFiche.Provider value={setFiche}>
       <h1 className="text-2xl font-semibold">Mastertimeline</h1>
@@ -33,6 +37,11 @@ export default function ModuleMastertimeline() {
         <NavLink to="/mastertimeline/responsables" className={onglet}>
           Responsables
         </NavLink>
+        {etiquettes.map((e) => (
+          <NavLink key={e.id} to={`/mastertimeline/etiquette/${e.id}`} className={onglet}>
+            {e.nom}
+          </NavLink>
+        ))}
         <NavLink to="/mastertimeline/reglages" className={onglet}>
           Réglages
         </NavLink>
@@ -44,6 +53,7 @@ export default function ModuleMastertimeline() {
         <Route path="projets" element={<Projets />} />
         <Route path="projets/:id" element={<Projets />} />
         <Route path="responsables" element={<Responsables />} />
+        <Route path="etiquette/:id" element={<VueEtiquette />} />
         <Route path="reglages/*" element={<Reglages />} />
         {/* Les achats ont leur propre module depuis le 2026-10-06. */}
         <Route path="achats" element={<Navigate to="/achats" replace />} />
