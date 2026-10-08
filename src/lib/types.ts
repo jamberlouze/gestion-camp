@@ -2,7 +2,7 @@
 // (npm run db:types) une fois le projet Supabase lié.
 
 export type Role = 'admin' | 'direction' | 'coordo' | 'terrain'
-export type ModuleId = 'embarcations' | 'commande' | 'horaire' | 'mastertimeline' | 'subventions' | 'vigie' | 'calendrier' | 'temps' | 'vehicules' | 'travaux' | 'achats' | 'rooming' | 'caisse' | 'cuisine_couts'
+export type ModuleId = 'embarcations' | 'commande' | 'horaire' | 'mastertimeline' | 'subventions' | 'vigie' | 'calendrier' | 'temps' | 'vehicules' | 'travaux' | 'achats' | 'rooming' | 'caisse' | 'cuisine_couts' | 'ameliorations' | 'reunions'
 export type Niveau = 'lecture' | 'ecriture'
 
 export interface Profil {

@@ -10,6 +10,8 @@ export interface DefinitionModule {
   sansLecture?: boolean
   /** Accès fixe, hors de la grille d'accès par rôle (texte affiché dans la grille). */
   accesFixe?: string
+  /** Réservé aux admins (avec `accesFixe` pour le texte de la grille). */
+  adminsSeulement?: true
   /**
    * Partie d'un autre module (un espace de ce module, pas une entrée du menu
    * ni de l'accueil) qui a son propre accès dans la grille.
@@ -26,6 +28,13 @@ export const estEntree = (m: DefinitionModule) => !m.parent
  * Qui voit quoi : grille core.acces_roles (page Utilisateurs), sauf `accesFixe`.
  */
 export const MODULES: DefinitionModule[] = [
+  {
+    id: 'reunions',
+    nom: 'Réunions',
+    description: 'Ordre du jour de la direction, réunions spéciales et suivis',
+    icone: '🗣️',
+    chemin: '/reunions',
+  },
   {
     id: 'calendrier',
     nom: 'Calendrier',
@@ -134,5 +143,15 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/temps',
     accesFixe:
       'Chacun sa feuille, les admins voient tout. Jamais les coordonnateurs, sauf un employé coché « Remplit sa feuille » (sa feuille seulement).',
+  },
+  {
+    // La liste de Maxime pour faire avancer l'app (RLS : core.est_admin).
+    id: 'ameliorations',
+    nom: 'Améliorations',
+    description: "Nouveaux modules, fonctionnalités à ajouter et commentaires de l'équipe",
+    icone: '💡',
+    chemin: '/ameliorations',
+    accesFixe: 'Admins seulement.',
+    adminsSeulement: true,
   },
 ]

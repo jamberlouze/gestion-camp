@@ -20,6 +20,7 @@ export function niveauModule(
   if (!role) return null
   if (role === 'admin') return 'ecriture'
   const def = definition(m)
+  if (def?.adminsSeulement) return null
   if (def?.accesFixe) return role === 'direction' || (m === 'temps' && employeTemps) ? 'ecriture' : null
   const niveaux = [
     ...roles.filter((r) => r.role === role && r.module === m),
