@@ -134,7 +134,11 @@ function PokeOuvert({ pokes, onFermer }: { pokes: Poke[]; onFermer: () => void }
   }, [onFermer])
 
   const nomDe = (id: string) => collegues?.find((c) => c.id === id)?.nom ?? "Quelqu'un"
-  const recus = [...new Map(pokes.map((p) => [p.de, p])).values()]
+  // Du plus ancien au plus récent : chaque émoji différent une fois (même s'il vient
+  // de la même personne), chaque personne une fois.
+  const dansLOrdre = [...pokes].reverse()
+  const emojis = [...new Set(dansLOrdre.map((p) => p.emoji))]
+  const envoyeurs = [...new Set(dansLOrdre.map((p) => p.de))]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4 print:hidden" onClick={onFermer}>
@@ -144,11 +148,11 @@ function PokeOuvert({ pokes, onFermer }: { pokes: Poke[]; onFermer: () => void }
         role="dialog"
         aria-label="Poke reçu"
       >
-        <div className="text-5xl leading-none">{recus.map((p) => p.emoji).join('')}</div>
+        <div className="text-5xl leading-none">{emojis.join('')}</div>
         <p className="mt-4 font-semibold">
-          {recus.length === 1
-            ? `${nomDe(recus[0].de)} t'a poké !`
-            : `${new Intl.ListFormat('fr', { type: 'conjunction' }).format(recus.map((p) => nomDe(p.de).split(/\s+/)[0]))} t'ont poké !`}
+          {envoyeurs.length === 1
+            ? `${nomDe(envoyeurs[0])} t'a poké !`
+            : `${new Intl.ListFormat('fr', { type: 'conjunction' }).format(envoyeurs.map((id) => nomDe(id).split(/\s+/)[0]))} t'ont poké !`}
         </p>
         <button className={`${ui.boutonSecondaire} mt-5`} onClick={onFermer}>
           Fermer
