@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
+import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { appliquerPourcentages, arrondi4, exerciceDe, libelleExercice, lignesAuto, totaux, type LigneCalculee } from './calcul'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
+import { garderEstime, ouvrirPdf, pdfDeLEstime } from './productionPdf'
 import { argent, champPetit, dateLongue } from './format'
 import { useChangerEstime, useEnregistrerEstime, useEstimes, useLignes, type LigneAEcrire } from './donnees'
 import { CATEGORIES, UNITES, type Estime as TEstime, type Reservation, type StatutEstime } from './types'
@@ -80,7 +82,8 @@ function PremierEstime({ r }: { r: Reservation }) {
 }
 
 function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choisir: (id: string) => void }) {
-  const { catalogue, produits, parCode, prixDe, ecriture } = useDonnees()
+  const { catalogue, produits, parCode, prixDe, ecriture, sources } = useDonnees()
+  const [pdf, setPdf] = useState<string | null>(null)
   const lignesDb = useLignes(estime.id)
   const enregistrer = useEnregistrerEstime()
   const changerEtat = useChangerEstime()
@@ -147,13 +150,23 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
     if (a === 'envoyer') {
       const ok = await confirmer({
         titre: `Marquer l'estimé v${estime.version} comme envoyé ?`,
-        message: "Il sera figé : pour le changer ensuite, on en fait une nouvelle version. (L'envoi du PDF au client viendra à la phase 2.)",
+        message: "Il sera figé et son PDF gardé dans les documents : pour le changer ensuite, on en fait une nouvelle version. (L'envoi par courriel au client viendra plus tard.)",
         libelleOk: 'Marquer envoyé',
         danger: false,
       })
       if (!ok) return
     }
-    const go = () => changerEtat.mutate({ estime, action: a }, { onSuccess: (id) => a === 'nouvelle_version' && choisir(id) })
+    const go = () =>
+      changerEtat.mutate(
+        { estime, action: a },
+        {
+          onSuccess: (id) => {
+            if (a === 'nouvelle_version') choisir(id)
+            // L'estimé envoyé est gardé en PDF (preuve de ce que le client a reçu).
+            if (a === 'envoyer') garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' }).catch((e) => setPdf(messageErreur(e)))
+          },
+        },
+      )
     if (sale && modifiable) sauver(go)
     else go()
   }
@@ -331,6 +344,17 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
               </button>
             </>
           )}
+          <button
+            className={ui.boutonSecondaire}
+            disabled={avecMontants.length === 0}
+            onClick={() =>
+              pdfDeLEstime(sources(r), modifiable ? { ...estime, ...t } : estime, modifiable ? avecMontants : undefined)
+                .then(ouvrirPdf)
+                .catch((e) => setPdf(messageErreur(e)))
+            }
+          >
+            Aperçu PDF
+          </button>
           {ecriture && estime.statut === 'envoye' && (
             <>
               <button className={ui.bouton} onClick={() => action('accepter')}>
@@ -359,6 +383,7 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
         </dl>
       </div>
       {modifiable && sale && <p className="text-xs text-amber-700">Modifications non enregistrées.</p>}
+      {pdf && <p className={ui.erreur}>{pdf}</p>}
     </div>
   )
 }

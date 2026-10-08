@@ -8,9 +8,20 @@ import { useAuth } from '@/shell/auth'
 import { aujourdhui } from '@/shell/pokes'
 import { Catalogue } from './Catalogue'
 import { ContexteReservations, fabriquerPrixDe, lireReglages, type Donnees } from './contexte'
-import { useCompagnies, useEtages, usePrix, useProduits, useReglages, useReservations, useResponsables } from './donnees'
+import {
+  useCompagnies,
+  useCompagniesFacture,
+  useEtages,
+  useModeles,
+  usePrix,
+  useProduits,
+  useReglages,
+  useReservations,
+  useResponsables,
+} from './donnees'
 import { Fiche } from './Fiche'
 import { Liste } from './Liste'
+import { Modeles } from './Modeles'
 import { Reglages } from './Reglages'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -30,6 +41,8 @@ export default function ModuleReservations() {
   const compagnies = useCompagnies()
   const responsables = useResponsables()
   const etages = useEtages()
+  const compagniesFacture = useCompagniesFacture()
+  const modeles = useModeles()
   const surFiche = useLocation().pathname.startsWith('/reservations/r/')
   const auj = aujourdhui()
 
@@ -44,13 +57,19 @@ export default function ModuleReservations() {
       !contacts.data ||
       !compagnies.data ||
       !responsables.data ||
-      !etages.data
+      !etages.data ||
+      !compagniesFacture.data ||
+      !modeles.data
     )
       return null
     const r = lireReglages(reglages.data)
     const prixDe = fabriquerPrixDe(produits.data, prix.data)
     const parCode = new Map(produits.data.map((p) => [p.code, p]))
     const noms = new Map(responsables.data.map((x) => [x.id, x.nom]))
+    const orgParId = new Map(organisations.data.map((o) => [o.id, o]))
+    const contactParId = new Map(contacts.data.map((c) => [c.id, c]))
+    const lesEtages = etages.data
+    const lesCompagnies = compagniesFacture.data
     return {
       reservations: reservations.data,
       parId: new Map(reservations.data.map((x) => [x.id, x])),
@@ -67,14 +86,17 @@ export default function ModuleReservations() {
       },
       reglages: r,
       organisations: organisations.data,
-      orgParId: new Map(organisations.data.map((o) => [o.id, o])),
+      orgParId,
       contacts: contacts.data,
-      contactParId: new Map(contacts.data.map((c) => [c.id, c])),
+      contactParId,
       compagnies: compagnies.data,
       compagnieDefaut: compagnies.data.find((c) => c.nom === 'GBPA+') ?? compagnies.data[0],
       responsables: responsables.data,
       nomResponsable: (id) => (id ? (noms.get(id) ?? 'Ancien compte') : null),
       etages: etages.data,
+      compagniesFacture: lesCompagnies,
+      modeles: modeles.data,
+      sources: (r) => ({ r, compagnies: lesCompagnies, orgParId, contactParId, etages: lesEtages }),
       ecriture: peutEcrire('reservations'),
       moi: profil,
       auj,
@@ -90,6 +112,8 @@ export default function ModuleReservations() {
     compagnies.data,
     responsables.data,
     etages.data,
+    compagniesFacture.data,
+    modeles.data,
     peutEcrire,
     auj,
   ])
@@ -103,7 +127,9 @@ export default function ModuleReservations() {
     contacts.error ??
     compagnies.error ??
     responsables.error ??
-    etages.error
+    etages.error ??
+    compagniesFacture.error ??
+    modeles.error
 
   return (
     <div>
@@ -115,6 +141,9 @@ export default function ModuleReservations() {
         </NavLink>
         <NavLink to="/reservations/catalogue" className={onglet}>
           Catalogue et prix
+        </NavLink>
+        <NavLink to="/reservations/modeles" className={onglet}>
+          Modèles et compagnies
         </NavLink>
         <NavLink to="/reservations/reglages" className={onglet}>
           Réglages
@@ -132,6 +161,7 @@ export default function ModuleReservations() {
             <Route index element={<Liste />} />
             <Route path="r/:id" element={<Fiche />} />
             <Route path="catalogue" element={<Catalogue />} />
+            <Route path="modeles" element={<Modeles />} />
             <Route path="reglages" element={<Reglages />} />
             <Route path="*" element={<Navigate to="/reservations" replace />} />
           </Routes>

@@ -29,6 +29,8 @@ const Ameliorations = lazy(() => import('@/modules/ameliorations'))
 const Reunions = lazy(() => import('@/modules/reunions'))
 const Crm = lazy(() => import('@/modules/crm'))
 const Reservations = lazy(() => import('@/modules/reservations'))
+// Page publique (client sans compte) : signature d'un contrat.
+const SignaturePublique = lazy(() => import('@/modules/reservations/public/SignaturePublique'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -41,6 +43,13 @@ export default function App() {
       </div>
     )
   }
+  // Pages publiques : ni connexion ni menu (le client n'a pas de compte).
+  if (window.location.pathname.startsWith('/signer/'))
+    return (
+      <Suspense fallback={<Chargement />}>
+        <SignaturePublique />
+      </Suspense>
+    )
   if (chargement) return <Chargement />
   if (!session) return <PageConnexion />
   if (erreurProfil) return <ProfilIndisponible />

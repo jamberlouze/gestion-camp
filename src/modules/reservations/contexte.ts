@@ -2,8 +2,9 @@ import { createContext, useContext } from 'react'
 import type { Profil } from '@/lib/types'
 import type { Contact, Organisation } from '@/modules/crm/types'
 import type { Catalogue, HeuresRepas } from './calcul'
-import type { Compagnie } from './donnees'
-import type { EtageRooming, Forfait, Prix, Produit, Ratio, Reglage, Reservation, Responsable } from './types'
+import type { Entreprise } from './donnees'
+import type { Sources } from './productionPdf'
+import type { Compagnie, EtageRooming, Forfait, Modele, Prix, Produit, Ratio, Reglage, Reservation, Responsable } from './types'
 
 export interface Reglages {
   heuresNormales: Record<string, [string, string]>
@@ -29,11 +30,16 @@ export interface Donnees {
   orgParId: Map<string, Organisation>
   contacts: Contact[]
   contactParId: Map<string, Contact>
-  compagnies: Compagnie[]
-  compagnieDefaut: Compagnie | undefined
+  compagnies: Entreprise[]
+  compagnieDefaut: Entreprise | undefined
   responsables: Responsable[]
   nomResponsable: (id: string | null) => string | null
   etages: EtageRooming[]
+  /** Coordonnées imprimées des compagnies qui facturent. */
+  compagniesFacture: Compagnie[]
+  modeles: Modele[]
+  /** Données d'une réservation pour produire ses documents. */
+  sources: (r: Reservation) => Sources
   ecriture: boolean
   moi: Profil
   auj: string

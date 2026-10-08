@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { EntreeJournal, Estime, EtageRooming, Ligne, Prix, Produit, Reglage, Reservation, Responsable } from './types'
+import type { Compagnie, DocumentPdf, EntreeJournal, Estime, EtageRooming, Ligne, Modele, Prix, Produit, Reglage, Reservation, Responsable, Signature } from './types'
 
 // Module en ligne seulement (networkMode « always »). Modifications
 // optimistes ; une modification refusée remet la ligne d'avant et va dans
@@ -114,7 +114,7 @@ export function useEtages() {
   })
 }
 
-export interface Compagnie {
+export interface Entreprise {
   id: string
   nom: string
   abreviation: string | null
@@ -124,7 +124,7 @@ export interface Compagnie {
 /** Compagnies qui facturent les groupes (référentiel). */
 export function useCompagnies() {
   return useQuery({
-    queryKey: ['reservations', 'compagnies'],
+    queryKey: ['reservations', 'entreprises'],
     queryFn: async () => {
       const { data, error } = await supabase
         .schema('core')
@@ -133,7 +133,7 @@ export function useCompagnies() {
         .in('nom', ['GBPA+', 'Opikawa'])
         .order('ordre')
       if (error) throw error
-      return data as Compagnie[]
+      return data as Entreprise[]
     },
   })
 }
@@ -298,3 +298,51 @@ export function useChangerEstime() {
     },
   })
 }
+
+// ------------------------------------------------------------------
+// Documents (phase 2)
+// ------------------------------------------------------------------
+
+export const useCompagniesFacture = () => useTable<Compagnie>('compagnies', 'nom_court')
+export const useModeles = () => useTable<Modele>('modeles', 'genre')
+
+export function useDocuments(reservationId: string) {
+  const cle = ['reservations', 'documents', reservationId]
+  useTempsReel('documents', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('documents').select('*').eq('reservation_id', reservationId).order('cree_le', { ascending: false })
+      if (error) throw error
+      return data as DocumentPdf[]
+    },
+  })
+}
+
+export function useSignatures(reservationId: string) {
+  const cle = ['reservations', 'signatures', reservationId]
+  useTempsReel('signatures', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('signatures').select('*').eq('reservation_id', reservationId).order('envoye_le', { ascending: false })
+      if (error) throw error
+      return data as Signature[]
+    },
+  })
+}
+
+export function useModifierCompagnie() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations', 'compagnies', 'modifier'],
+    networkMode: 'always',
+    mutationFn: async ({ id, champs }: { id: string; champs: Partial<Compagnie> }) => {
+      const { error } = await db().from('compagnies').update(champs).eq('entreprise_id', id)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'compagnies'] }),
+  })
+}
+
+export const useModifierModele = () => useModifier<Modele>('modeles', ['reservations', 'modeles'])

@@ -319,3 +319,84 @@ export const SALLES: { code: string; nom: string; batiment: string }[] = [
 
 /** Étages réservables (codes de Rooming), dans l'ordre des contrats. */
 export const ETAGES = ['CH', 'CB', 'PB', 'PH', 'VFB', 'VFH'] as const
+
+// ------------------------------------------------------------------
+// Documents (phase 2)
+// ------------------------------------------------------------------
+
+/** Annexe imprimée en dernière page du contrat (fichier du seau privé). */
+export interface Annexe {
+  titre: string
+  chemin: string
+}
+
+/** Compagnie qui facture : ce qui s'imprime sur les documents. */
+export interface Compagnie {
+  entreprise_id: string
+  raison_sociale: string
+  nom_court: string
+  adresse: string
+  courriel: string
+  telephone: string
+  tps: string | null
+  tvq: string | null
+  reponse_interac: string
+  signataire: string
+  logo: string
+  consignes_paiement: string
+  annexes: Annexe[]
+}
+
+export type GenreModele = 'contrat' | 'pre_arrivee'
+
+export interface Modele {
+  id: string
+  genre: GenreModele
+  forfait: Forfait
+  titre: string
+  contenu: string
+  updated_at: string
+  updated_by_nom: string | null
+}
+
+export type GenreDocument = 'estime' | 'contrat' | 'contrat_signe' | 'pre_arrivee'
+
+/** Position de la case de signature du client dans le PDF du contrat. */
+export interface CaseSignature {
+  page: number
+  x: number
+  y: number
+  largeur: number
+  hauteur: number
+}
+
+export interface DocumentPdf {
+  id: string
+  reservation_id: string
+  genre: GenreDocument
+  estime_id: string | null
+  titre: string
+  chemin: string
+  empreinte: string
+  meta: { signature?: CaseSignature }
+  cree_le: string
+  cree_par_nom: string | null
+}
+
+export interface Signature {
+  id: string
+  reservation_id: string
+  document_id: string
+  jeton: string
+  statut: 'en_attente' | 'signe' | 'annule'
+  envoye_le: string
+  echeance: string
+  adresse_pdf: string
+  signe_le: string | null
+  nom_signataire: string | null
+  fonction_signataire: string | null
+  image: string | null
+  adresse_ip: string | null
+  navigateur: string | null
+  document_signe_id: string | null
+}

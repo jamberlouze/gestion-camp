@@ -28,6 +28,7 @@
     "@tanstack/query-sync-storage-persister": "^5.104.0",
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-query-persist-client": "^5.104.0",
+    "pdf-lib": "^1.17.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0",

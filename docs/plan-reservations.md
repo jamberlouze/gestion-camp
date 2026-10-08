@@ -406,7 +406,12 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - tables, catalogue et prix 2026-27, réservations, étapes et vues, CRM intégré, estimés en versions ;
    - calcul de l'estimé vérifié contre 163 onglets réels du chiffrier et les PDF 27-G-083, 27-G-014 et 27-G-002 (`npm run test:calcul`) ;
    - import d'essai en DEV : 385 réservations (2026-27 et 2025-26), 1 324 notes devenues des échanges datés, 304 estimés. Contrôle : les contrats signés 2026-27 font 354 627,19 $, comme le Sheets.
-2. **Documents PDF** : estimé, contrat, pré-arrivée ; versions ; **démo de la signature électronique** à essayer par Maxime.
+2. **Documents PDF** — **bâtie en DEV le 2026-10-08**, pas en PROD :
+   - estimé, contrat (pré-signé par la direction, estimé accepté et annexes de la compagnie à la fin) et pré-arrivée en PDF, produits dans le navigateur ;
+   - modèles de contrat et de pré-arrivée modifiables dans l'app (onglet Modèles et compagnies), avec les corrections du §5 et du §16 ;
+   - fiches des deux compagnies qui facturent (GBPA+, Opikawa) : logo, taxes, consignes de paiement, spécimens de chèque en annexe ;
+   - **signature électronique** : lien secret envoyé au client, page publique sans compte (contrat, case « J'accepte », nom, signature au doigt ou à la souris), réservation confirmée, contrat signé avec certificat (date, IP, navigateur, empreinte SHA-256 du contrat envoyé). Essai complet réussi en DEV.
+   - Reste pour plus tard : l'envoi du lien par courriel (phase 5) et la production automatique du contrat signé (pour l'instant, un bouton dans la fiche).
 3. **Formulaire public + page client** : acceptation, signature, factures QBO, fiches participants.
 4. **QuickBooks Online** (§6) :
    - compagnie d'essai QBO d'abord ;
