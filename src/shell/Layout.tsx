@@ -6,6 +6,7 @@ import { IconeAttention, IconeDeconnexion, IconeFermer, IconeReduireMenu, IconeT
 import { useAuth } from './auth'
 import { estEntree, MODULES } from './modules'
 import { CoinPoke, FournisseurPoke } from './Poke'
+import { voitNouvelAccueil } from './accueil/outils'
 
 // Menu réduit (icônes seulement) : retenu sur l'appareil.
 const CLE_REPLIE = 'menu-replie'
@@ -84,7 +85,11 @@ export function Layout() {
     deconnexion()
   }
 
-  const modules: Entree[] = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
+  const modules: Entree[] = [
+    // Nouvel accueil à l'essai : une entrée « Accueil » en tête du menu.
+    ...(voitNouvelAccueil(profil?.courriel) ? [{ chemin: '/', nom: 'Accueil', icone: '🏠' }] : []),
+    ...MODULES.filter((m) => estEntree(m) && peutLire(m.id)),
+  ]
   const gestion: Entree[] = [
     ...(estDirection ? [{ chemin: '/referentiel', nom: 'Référentiel', icone: '🗂️' }] : []),
     ...(estAdmin ? [{ chemin: '/utilisateurs', nom: 'Utilisateurs', icone: '👥' }] : []),
@@ -99,7 +104,7 @@ export function Layout() {
         isActive ? 'bg-foret-100 text-foret-800' : 'text-pierre-700 hover:bg-pierre-100'
       }`
     const entree = (m: Entree) => (
-      <NavLink key={m.chemin} to={m.chemin} className={lien} title={reduit ? m.nom : undefined}>
+      <NavLink key={m.chemin} to={m.chemin} end={m.chemin === '/'} className={lien} title={reduit ? m.nom : undefined}>
         <span className="w-5 shrink-0 text-center text-base leading-none">{m.icone}</span>
         {!reduit && <span className="truncate">{m.nom}</span>}
       </NavLink>

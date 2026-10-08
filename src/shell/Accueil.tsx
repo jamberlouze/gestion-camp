@@ -2,9 +2,13 @@ import { Link } from 'react-router'
 import { ui } from '@/lib/ui'
 import { useAuth } from './auth'
 import { estEntree, MODULES } from './modules'
+import { NouvelAccueil } from './accueil/NouvelAccueil'
+import { voitNouvelAccueil } from './accueil/outils'
 
 export function Accueil() {
   const { profil, peutLire } = useAuth()
+  // Nouvel accueil à l'essai : seulement les comptes d'essai (voir accueil/outils.ts).
+  if (voitNouvelAccueil(profil?.courriel)) return <NouvelAccueil />
   const modules = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
 
   return (
