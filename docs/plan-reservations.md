@@ -73,6 +73,17 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
   - essais : jamais sur le vrai calendrier VF depuis la DEV (calendrier d'essai à part), sinon Airbnb bloquerait de vraies dates.
 - Demande d'ajouter la portée Agenda au jeton Google déjà utilisé pour Gmail (voir actions).
 
+## 5b. Réservations Airbnb de la Vieille-France (réponse de Maxime à Q7, 2026-10-08)
+
+Une réservation Airbnb **bloque la VF dans l'app** et **apparaît dans l'app comme un groupe à gérer**.
+
+- **Lecture** : l'app lit le calendrier exporté par Airbnb (adresse iCal privée, gardée en secret Cloudflare) toutes les 15 minutes, comme la synchro Airtable actuelle. Lecture seule : l'app n'écrit jamais dans Airbnb.
+- **Ce que donne Airbnb** : les dates, le code de réservation et le lien vers la réservation. **Pas** le nom du voyageur ni le nombre de personnes. Chaque nouvelle réservation Airbnb arrive donc dans l'app comme réservation « Airbnb » **confirmée, à compléter** (nom, nombre de personnes, repas, etc.), avec un lien vers Airbnb. Plus tard, si utile : lire le courriel de confirmation d'Airbnb (API Gmail déjà en place) pour remplir le nom et le nombre de voyageurs tout seul.
+- **Dans l'app** : une réservation Airbnb est une réservation comme les autres (même table, `source = 'airbnb'`, hébergement = VF), donc visible dans le Calendrier et plus tard dans Cuisine, Rooming, etc. Pas d'estimé, de facture ni de courriel au client : Airbnb s'en occupe.
+- **Blocage** : un groupe qui chevauche une réservation Airbnb sur la VF est signalé dès la saisie, et ne peut pas être confirmé sur la VF.
+- **Changements** : dates modifiées sur Airbnb → mises à jour dans l'app ; réservation disparue d'Airbnb → marquée annulée (jamais effacée, pour garder ce qui a été complété).
+- **Pas de boucle** : une réservation Airbnb n'est jamais écrite dans le calendrier « Confirmée VF » (Airbnb la bloque déjà) ; les simples blocages « Not available » de l'export Airbnb sont ignorés (ce sont souvent nos propres groupes renvoyés par Airbnb).
+
 ## 6. Fiches participants (données de santé)
 
 - Les champs actuels : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments, matricule. Formulaire public par réservation ; la question de la diète est masquée si la réservation n'a pas de service repas (comme ton lien Airtable).
@@ -92,11 +103,11 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
 2. Estimés et factures PDF : numérotation, taxes, versions.
 3. Formulaire public + page client : approbation, signature, factures, fiches participants.
 4. Courriels automatisés : modèles, déclencheurs, rappels, suivis, journal.
-5. Synchro Google Agenda.
+5. Synchro Google Agenda + lecture du calendrier Airbnb (§5b).
 6. Bascule : CRM et Calendrier branchés sur les réservations, synchro Airtable retirée, base Airtable en lecture seule.
 
 ## 9. Questions ouvertes
 
 Voir le message de Claude du 2026-10-08 (Q1 à Q6).
 
-- **Q7** (ajoutée le 2026-10-08) : la synchro va-t-elle aussi dans l'autre sens ? Une réservation Airbnb de la Vieille-France doit-elle apparaître dans l'app et empêcher d'y mettre un groupe aux mêmes dates ? Si oui, l'app lirait le calendrier iCal d'Airbnb (lecture seule).
+- ~~Q7~~ : **réglée le 2026-10-08** — oui, les réservations Airbnb bloquent la VF et apparaissent dans l'app comme groupe à gérer (voir §5b).
