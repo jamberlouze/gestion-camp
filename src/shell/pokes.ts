@@ -6,8 +6,42 @@ import { useAuth } from './auth'
 
 // Pokes : un envoi par personne et par jour (journée de Montréal), avec un
 // émoji. La base décide (core.poker, contrainte unique (de, jour)) ; l'app
-// ne fait qu'afficher. Liste d'émojis : la même que la contrainte de core.pokes.
-export const EMOJIS_POKE = ['👉', '🦆', '🔥', '🌲', '☕', '🛶', '😂', '💚'] as const
+// ne fait qu'afficher. Émojis : choix de l'app, par catégories ; la base
+// vérifie seulement que c'est un court émoji (on peut allonger la liste sans migration).
+export const EMOJI_POKE_DEFAUT = '👉'
+
+export const CATEGORIES_EMOJIS: { nom: string; icone: string; emojis: string[] }[] = [
+  {
+    nom: 'Salut',
+    icone: '👋',
+    emojis: ['👉', '👋', '🙌', '👏', '🤝', '🫶', '👍', '💪', '🤙', '✌️', '🤞', '🫡', '🙏', '🤘', '👊', '✋', '🫵', '👀'],
+  },
+  {
+    nom: 'Visages',
+    icone: '😂',
+    emojis: ['😂', '🤣', '😄', '😊', '😍', '🥰', '😎', '🤩', '🥳', '😜', '🤪', '😇', '🤗', '🤭', '😴', '🤯', '😱', '🥹'],
+  },
+  {
+    nom: 'Camp',
+    icone: '🌲',
+    emojis: ['🌲', '🏕️', '⛺', '🛶', '🔥', '🌊', '☀️', '🌈', '⭐', '🌙', '🦆', '🦫', '🐻', '🦌', '🐿️', '🦉', '🐸', '🍁'],
+  },
+  {
+    nom: 'Bouffe',
+    icone: '☕',
+    emojis: ['☕', '🍕', '🌭', '🍔', '🍟', '🌮', '🥞', '🧇', '🍩', '🍪', '🧁', '🍦', '🍫', '🍿', '🍓', '🍉', '🥤', '🍺'],
+  },
+  {
+    nom: 'Fête',
+    icone: '🎉',
+    emojis: ['🎉', '🎊', '🎈', '🏆', '🥇', '🎯', '🚀', '💯', '✨', '💥', '🎶', '🎸', '⚽', '🏀', '🎣', '🧗', '🚴', '🏊'],
+  },
+  {
+    nom: 'Cœurs',
+    icone: '💚',
+    emojis: ['💚', '❤️', '🧡', '💛', '💙', '💜', '🖤', '🤍', '💖', '💘', '💝', '💐', '🌻', '🌷', '🌸', '🍀', '🌼', '🦋'],
+  },
+]
 
 export interface Poke {
   id: string
