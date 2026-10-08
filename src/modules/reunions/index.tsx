@@ -5,7 +5,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { ContexteReunions, type Donnees } from './contexte'
-import { useEntreprises, usePoints, useRecurrents, useReunions } from './donnees'
+import { useEntreprises, useJoursSans, usePoints, useRecurrents, useReunions } from './donnees'
 import { Odj } from './Odj'
 import { joursDeReunion } from './outils'
 import { Reglages } from './Reglages'
@@ -24,22 +24,24 @@ export default function ModuleReunions() {
   const reunions = useReunions()
   const recurrents = useRecurrents()
   const entreprises = useEntreprises()
+  const joursSans = useJoursSans()
   const surSpeciale = useLocation().pathname.startsWith('/reunions/speciales')
 
   const donnees = useMemo<Donnees | null>(() => {
-    if (!profil || !points.data || !reunions.data || !recurrents.data || !entreprises.data) return null
+    if (!profil || !points.data || !reunions.data || !recurrents.data || !entreprises.data || !joursSans.data) return null
     return {
       points: points.data,
       reunions: reunions.data,
       recurrents: recurrents.data,
+      joursSans: new Set(joursSans.data.map((j) => j.jour)),
       entreprises: entreprises.data,
       jours: joursDeReunion(points.data),
       ecriture: peutEcrire('reunions'),
       moi: profil,
     }
-  }, [profil, points.data, reunions.data, recurrents.data, entreprises.data, peutEcrire])
+  }, [profil, points.data, reunions.data, recurrents.data, entreprises.data, joursSans.data, peutEcrire])
 
-  const erreur = points.error ?? reunions.error ?? recurrents.error ?? entreprises.error
+  const erreur = points.error ?? reunions.error ?? recurrents.error ?? entreprises.error ?? joursSans.error
 
   return (
     <div>
@@ -71,8 +73,8 @@ export default function ModuleReunions() {
             <Route path="semaine" element={<Semaine />} />
             <Route path="speciales" element={<Speciales />} />
             <Route path="speciales/:id" element={<Speciale />} />
-            <Route path="*" element={<Navigate to="/reunions" replace />} />
             <Route path="reglages" element={<Reglages />} />
+            <Route path="*" element={<Navigate to="/reunions" replace />} />
           </Routes>
         </ContexteReunions.Provider>
       )}

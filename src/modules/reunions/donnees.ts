@@ -150,3 +150,30 @@ export function useAjouterPoints() {
     onSettled: () => client.invalidateQueries({ queryKey: clePoints }),
   })
 }
+
+/** Jours marqués « Pas de réunion ». */
+export function useJoursSans() {
+  return useListe<{ jour: string }>('reunions', 'jours_sans', 'jour')
+}
+
+/** Coche ou décoche « Pas de réunion » pour un jour. */
+export function useBasculerJourSans() {
+  const client = useQueryClient()
+  const cle = ['reunions', 'jours_sans']
+  return useMutation({
+    mutationKey: ['reunions', 'jours_sans'],
+    networkMode: 'always',
+    mutationFn: async ({ jour, sans }: { jour: string; sans: boolean }) => {
+      const { error } = sans ? await db().from('jours_sans').upsert({ jour }) : await db().from('jours_sans').delete().eq('jour', jour)
+      if (error) throw error
+    },
+    onMutate: async ({ jour, sans }) => {
+      await client.cancelQueries({ queryKey: cle })
+      const avant = client.getQueryData<{ jour: string }[]>(cle)
+      client.setQueryData<{ jour: string }[]>(cle, (l) => (l ? (sans ? [...l.filter((x) => x.jour !== jour), { jour }] : l.filter((x) => x.jour !== jour)) : l))
+      return { avant }
+    },
+    onError: (_e, _v, ctx) => ctx?.avant && client.setQueryData(cle, ctx.avant),
+    onSettled: () => client.invalidateQueries({ queryKey: cle }),
+  })
+}

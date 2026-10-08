@@ -102,9 +102,13 @@ export function CartePoint({
   const envoyerVers = (reunion: string | null) => modifier.mutate({ id: point.id, champs: { reunion_id: reunion, pour_le: null, ordre: ordreEnFin() } })
   const autres = reunionsAVenir(reunions).filter((r) => r.id !== point.reunion_id)
 
+  const mentions =
+    (reports > 0 && ouvert) || (ouvert && point.pour_le && point.pour_le > auj && !masquerPourLe) || (afficherJour && point.traite_jour)
+
   return (
-    <li className={`rounded-xl border border-pierre-200 px-3 py-2.5 ${ouvert ? 'bg-white' : 'bg-pierre-50/60'}`}>
-      <div className="flex items-start gap-2.5">
+    <li className={`rounded-xl border border-pierre-200 px-3 py-2 ${ouvert ? 'bg-white' : 'bg-pierre-50/60'}`}>
+      {/* Une seule ligne alignée : pastille, nom du point, Traité, ⋯ */}
+      <div className="flex items-center gap-2.5">
         {point.recurrent_id ? (
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-pierre-100 text-sm text-pierre-500" title="Point fixe">
             ↻
@@ -112,38 +116,13 @@ export function CartePoint({
         ) : (
           <Auteur nom={point.auteur_nom} />
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <button
-              type="button"
-              className={`text-left text-[15px] leading-snug ${ouvert ? 'font-medium text-pierre-900' : 'text-pierre-700'} ${actif ? 'hover:underline' : 'cursor-default'}`}
-              onClick={() => actif && setFiche(true)}
-            >
-              {point.texte}
-            </button>
-            {reports > 0 && ouvert && (
-              <span className="rounded-full bg-pierre-100 px-1.5 py-0.5 text-xs text-pierre-600" title="Réunions où il était à l’ordre du jour sans être traité">
-                reporté {reports}×
-              </span>
-            )}
-            {ouvert && point.pour_le && point.pour_le > auj && !masquerPourLe && (
-              <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">pour le {jourLisible(point.pour_le, auj)}</span>
-            )}
-            {afficherJour && point.traite_jour && <span className="text-xs text-pierre-500">{jourLisible(point.traite_jour, auj)}</span>}
-          </div>
-          {point.details && <p className="mt-0.5 whitespace-pre-line text-sm text-pierre-600">{point.details}</p>}
-          {point.decision && (
-            <p className="mt-1 text-sm text-pierre-800">
-              <span className="font-medium text-foret-800">→ </span>
-              {point.decision}
-            </p>
-          )}
-          {!ouvert && !afficherJour && point.traite_le && (
-            <p className="mt-0.5 text-xs text-pierre-400">
-              Traité{point.traite_par_nom && ` par ${point.traite_par_nom}`} · {jourLisible(jourDe(point.traite_le), auj)}
-            </p>
-          )}
-        </div>
+        <button
+          type="button"
+          className={`min-w-0 flex-1 text-left text-[15px] leading-snug ${ouvert ? 'font-medium text-pierre-900' : 'text-pierre-700'} ${actif ? 'hover:underline' : 'cursor-default'}`}
+          onClick={() => actif && setFiche(true)}
+        >
+          {point.texte}
+        </button>
         {actif && (
           <div className="flex shrink-0 items-center gap-0.5">
             {avantActions}
@@ -176,6 +155,29 @@ export function CartePoint({
           </div>
         )}
       </div>
+      {(point.details || mentions || (!ouvert && !afficherJour && point.traite_le)) && (
+        <div className="pl-[2.375rem]">
+          {point.details && <p className="whitespace-pre-line text-sm text-pierre-600">{point.details}</p>}
+          {mentions && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {reports > 0 && ouvert && (
+                <span className="rounded-full bg-pierre-100 px-1.5 py-0.5 text-xs text-pierre-600" title="Réunions où il était à l’ordre du jour sans être traité">
+                  reporté {reports}×
+                </span>
+              )}
+              {ouvert && point.pour_le && point.pour_le > auj && !masquerPourLe && (
+                <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">pour le {jourLisible(point.pour_le, auj)}</span>
+              )}
+              {afficherJour && point.traite_jour && <span className="text-xs text-pierre-500">{jourLisible(point.traite_jour, auj)}</span>}
+            </div>
+          )}
+          {!ouvert && !afficherJour && point.traite_le && (
+            <p className="mt-0.5 text-xs text-pierre-400">
+              Traité{point.traite_par_nom && ` par ${point.traite_par_nom}`} · {jourLisible(jourDe(point.traite_le), auj)}
+            </p>
+          )}
+        </div>
+      )}
       {fiche && <FenetrePoint point={point} fermer={() => setFiche(false)} />}
     </li>
   )
@@ -185,12 +187,11 @@ function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
   const modifier = useModifierPoint()
   const [texte, setTexte] = useState(point.texte)
   const [details, setDetails] = useState(point.details ?? '')
-  const [decision, setDecision] = useState(point.decision ?? '')
   const auj = aujourdhui()
 
   const enregistrer = () => {
     if (!texte.trim()) return
-    modifier.mutate({ id: point.id, champs: { texte: texte.trim(), details: details.trim() || null, decision: decision.trim() || null } })
+    modifier.mutate({ id: point.id, champs: { texte: texte.trim(), details: details.trim() || null } })
     fermer()
   }
 
@@ -208,12 +209,8 @@ function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
           <input className={ui.champ} value={texte} onChange={(e) => setTexte(e.target.value)} required autoFocus />
         </label>
         <label className="block">
-          <span className={ui.etiquette}>Détails</span>
+          <span className={ui.etiquette}>Note</span>
           <textarea className={ui.champ} rows={3} value={details} onChange={(e) => setDetails(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className={ui.etiquette}>Ce qu'on retient</span>
-          <input className={ui.champ} value={decision} onChange={(e) => setDecision(e.target.value)} placeholder="Décision, prochaine étape… (facultatif)" />
         </label>
         <p className="text-xs text-pierre-500">
           Ajouté par {point.auteur_nom ?? '?'} le {jourLisible(jourDe(point.created_at), auj)}
@@ -230,51 +227,88 @@ function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
   )
 }
 
-/** Ajout d'un point : une ligne, Entrée. */
+/**
+ * Barre d'ajout d'un point, la même partout (Ordre du jour, Semaine,
+ * réunions spéciales) : le point et sa note (facultative).
+ */
 export function AjoutPoint({
   reunionId = null,
   ordre = 0,
   pourLe = null,
   placeholder,
-  compact,
+  autoFocus,
+  fini,
 }: {
   reunionId?: string | null
   ordre?: number
   /** Quotidien : jour où le point apparaîtra à l'ordre du jour (null = tout de suite). */
   pourLe?: string | null
   placeholder?: string
-  compact?: boolean
+  autoFocus?: boolean
+  /** Appelé après un ajout ou Échap (fermer la barre). */
+  fini?: () => void
 }) {
   const { moi } = useDonnees()
   const ajouter = useAjouterPoint()
   const [texte, setTexte] = useState('')
+  const [note, setNote] = useState('')
+  const champ = useRef<HTMLInputElement>(null)
 
   const envoyer = () => {
     if (!texte.trim()) return
-    const p = nouveauPoint({ texte: texte.trim(), reunion_id: reunionId, ordre, pour_le: pourLe }, moi)
+    const p = nouveauPoint({ texte: texte.trim(), details: note.trim() || null, reunion_id: reunionId, ordre, pour_le: pourLe }, moi)
     ajouter.mutate({ ligne: aEnvoyer(p), affiche: p })
     setTexte('')
+    setNote('')
+    champ.current?.focus()
   }
 
   return (
     <form
-      className="flex items-center gap-2"
+      className={`${ui.carte} p-2.5`}
       onSubmit={(e) => {
         e.preventDefault()
         envoyer()
       }}
+      onKeyDown={(e) => e.key === 'Escape' && fini?.()}
     >
-      {!compact && <Auteur nom={moi.nom ?? moi.courriel} />}
-      <input
-        className={`min-w-0 flex-1 rounded-lg border border-pierre-300 bg-white px-3 focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20 ${compact ? 'py-1.5 text-sm' : 'py-2 text-[15px]'}`}
-        placeholder={placeholder ?? 'Ajouter un point à l’ordre du jour…'}
-        value={texte}
-        onChange={(e) => setTexte(e.target.value)}
-        aria-label="Nouveau point"
-      />
-      <button className={compact ? ui.boutonSecondaire + ' !py-1.5' : ui.bouton} disabled={!texte.trim()}>
-        Ajouter
-      </button>
+      <div className="flex items-center gap-2.5">
+        <Auteur nom={moi.nom ?? moi.courriel} />
+        <input
+          ref={champ}
+          autoFocus={autoFocus}
+          className="min-w-0 flex-1 rounded-lg border border-pierre-300 bg-white px-3 py-2 text-[15px] focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20"
+          placeholder={placeholder ?? 'Ajouter un point à l’ordre du jour…'}
+          value={texte}
+          onChange={(e) => setTexte(e.target.value)}
+          aria-label="Nouveau point"
+        />
+        <button className={ui.bouton} disabled={!texte.trim()}>
+          Ajouter
+        </button>
+        {fini && (
+          <button type="button" className="rounded-md px-1.5 py-1 text-pierre-400 hover:bg-pierre-100 hover:text-pierre-800" onClick={fini} aria-label="Fermer">
+            ✕
+          </button>
+        )}
+      </div>
+      <div className="mt-2 pl-[2.375rem]">
+        <textarea
+          className="block w-full resize-y rounded-lg border border-pierre-200 bg-white px-3 py-1.5 text-sm placeholder:text-pierre-400 focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20"
+          rows={2}
+          placeholder="Note (facultatif)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            // ⌘/Ctrl + Entrée ajoute aussi depuis la note.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              envoyer()
+            }
+          }}
+          aria-label="Note"
+        />
+      </div>
     </form>
   )
 }

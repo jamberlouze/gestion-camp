@@ -11,6 +11,8 @@ export interface Donnees {
   points: Point[]
   reunions: Reunion[]
   recurrents: Recurrent[]
+  /** Jours marqués « Pas de réunion ». */
+  joursSans: Set<string>
   entreprises: Entreprise[]
   /** Jours de réunion du quotidien → heure du dernier point traité. */
   jours: Map<string, string>

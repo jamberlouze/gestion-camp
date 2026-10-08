@@ -10,7 +10,7 @@ import type { Recurrent } from './types'
 
 /** Ordre du jour continu du quotidien de direction (accueil du module). */
 export function Odj() {
-  const { points, recurrents, reunions, jours, ecriture } = useDonnees()
+  const { points, recurrents, reunions, jours, joursSans, ecriture } = useDonnees()
   const auj = aujourdhui()
   const [plusTardOuvert, setPlusTardOuvert] = useState(false)
 
@@ -33,6 +33,10 @@ export function Odj() {
             Semaine du {jourLisible(lundi(auj), auj, true)} · {total} point{total > 1 ? 's' : ''} à l'ordre du jour
           </p>
         </div>
+
+        {joursSans.has(auj) && (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">❌ Pas de réunion aujourd'hui (marqué dans Semaine)</p>
+        )}
 
         {ecriture && <AjoutPoint />}
 
