@@ -23,7 +23,7 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
 
 ## 2. Règles d'affaires reprises de tes scripts (à l'identique)
 
-- **Numéro** : `AA-G-n` (année d'arrivée sur 2 chiffres + compteur), ex. 26-G-54.
+- **Numéro** : `AA-G-nnn` (année d'arrivée sur 2 chiffres + compteur **toujours sur 3 chiffres**, demande de Maxime du 2026-10-08), ex. 26-G-054.
 - **Nom de l'événement** (Agenda) : `PP:Client (participants+accompagnateurs🍽️) N🤡`.
 - **Jours / nuits** : nuits = écart de dates (heure de Montréal) ; jours = nuits + 1. Recalculés dès qu'une date change.
 - **Heures** : Location de salle → heures du type de location (sinon celles du formulaire). Autres types : « heure normale convient » = Oui → heures normales du type de séjour, sinon heures du formulaire.
@@ -65,6 +65,12 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
 - L'app est la seule source ; elle écrit dans Google, jamais l'inverse. Une modification faite dans Google Agenda serait écrasée.
 - On reprend tes 5 calendriers existants : Demande, Estimé, Contrat, Confirmée PP, Confirmée VF. Une réservation confirmée qui touche PP et VF apparaît dans les deux. Closed lost → retirée.
 - Chaque changement d'état, de date ou d'hébergement déplace ou met à jour l'événement.
+- **Le calendrier Confirmée VF bloque Airbnb** (synchro automatique de Maxime, 2026-10-08) : tout événement de ce calendrier rend la Vieille-France indisponible sur Airbnb. Conséquences :
+  - n'y va **que** ce qui occupe vraiment la Vieille-France (réservation confirmée qui l'utilise) ; une demande ou un estimé n'y va jamais ;
+  - l'événement couvre exactement le séjour : de la date d'arrivée à la date de départ, au format attendu par Airbnb (journée entière, fin exclusive) ;
+  - un changement de dates, un retrait de la VF ou un passage à « Closed lost » met à jour ou retire l'événement **tout de suite**, sinon la VF reste bloquée sur Airbnb pour rien ;
+  - Airbnb relit le calendrier avec un délai (souvent quelques heures) : une réservation confirmée à la dernière minute peut entrer en conflit avec une réservation Airbnb faite entre-temps ;
+  - essais : jamais sur le vrai calendrier VF depuis la DEV (calendrier d'essai à part), sinon Airbnb bloquerait de vraies dates.
 - Demande d'ajouter la portée Agenda au jeton Google déjà utilisé pour Gmail (voir actions).
 
 ## 6. Fiches participants (données de santé)
@@ -81,7 +87,7 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
 
 ## 8. Ordre de construction (chaque phase testée en DEV, puis mise en ligne à ton go)
 
-0. **Finir et mettre en ligne le CRM** (en DEV en ce moment) : les réservations s'appuient sur ses organisations et contacts.
+0. ~~Finir et mettre en ligne le CRM~~ : **fait le 2026-10-08**. Le CRM est en PROD, **privé aux admins** pendant les essais (pas dans la grille d'accès) ; organisations et contacts importés de Copper (266 organisations, 260 contacts). Les réservations s'appuient sur ses organisations et contacts.
 1. Fondation : catalogue, prix, types, réservations, lignes, calculs (§2), saisie interne, Réglages, import de la liste de prix.
 2. Estimés et factures PDF : numérotation, taxes, versions.
 3. Formulaire public + page client : approbation, signature, factures, fiches participants.
@@ -92,3 +98,5 @@ Remplace la base Airtable « Réservation Groupes - GLITCH » (appJLHSRSayvzzSST
 ## 9. Questions ouvertes
 
 Voir le message de Claude du 2026-10-08 (Q1 à Q6).
+
+- **Q7** (ajoutée le 2026-10-08) : la synchro va-t-elle aussi dans l'autre sens ? Une réservation Airbnb de la Vieille-France doit-elle apparaître dans l'app et empêcher d'y mettre un groupe aux mêmes dates ? Si oui, l'app lirait le calendrier iCal d'Airbnb (lecture seule).
