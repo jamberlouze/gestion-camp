@@ -5,54 +5,47 @@ import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { demandePourClaude, jour, normaliser, texteIdee, useAjouterIdee, useIdees, useModifierIdee, useSupprimerIdee } from './donnees'
-import { CIBLES, cible, genre, GENRES, STATUTS, type Genre, type Idee, type Statut } from './types'
-
-type VueStatut = Statut | 'tous'
-const VUES_STATUT: { id: VueStatut; nom: string }[] = [...STATUTS.map((s) => ({ id: s.id as VueStatut, nom: s.nom })), { id: 'tous', nom: 'Tout' }]
+import { demandePourClaude, jour, useAjouterIdee, useIdees, useModifierIdee, useSupprimerIdee } from './donnees'
+import { CIBLES, cible, genre, GENRES, STATUTS, type Genre, type Idee } from './types'
 
 const segment = (actif: boolean) =>
   `rounded-md px-2.5 py-1 ${actif ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`
 const groupe = 'inline-flex flex-wrap rounded-lg border border-pierre-300 bg-white p-0.5 text-sm'
-const petitChoix = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800'
+
+/** Groupe d'une idée complétée : son module, sinon « Nouveaux modules » ou « L'app en général ». */
+const GROUPE_NOUVEAUX = '-nouveaux'
+const GROUPE_APP = '-app'
+const groupeDe = (i: Idee) => i.module ?? (i.genre === 'module' ? GROUPE_NOUVEAUX : GROUPE_APP)
+const titreGroupe = (cle: string) =>
+  cle === GROUPE_NOUVEAUX ? `${genre('module').icone} Nouveaux modules` : cle === GROUPE_APP ? "L'app en général" : `${cible(cle).icone} ${cible(cle).nom}`
+const ORDRE_GROUPES = [...CIBLES.map((c) => c.id), GROUPE_NOUVEAUX, GROUPE_APP]
+const rangGroupe = (cle: string) => (ORDRE_GROUPES.includes(cle) ? ORDRE_GROUPES.indexOf(cle) : ORDRE_GROUPES.length)
 
 /** Améliorations : la liste de Maxime pour faire avancer l'app (admins). */
 export default function ModuleAmeliorations() {
   const idees = useIdees()
-  const [vueGenre, setVueGenre] = useState<Genre | ''>('')
-  const [vueStatut, setVueStatut] = useState<VueStatut>('a_faire')
-  const [vueModule, setVueModule] = useState('')
-  const [recherche, setRecherche] = useState('')
   const [ouverte, setOuverte] = useState<string | null>(null)
 
   const calcul = useMemo(() => {
-    const mot = normaliser(recherche.trim())
-    const base = (idees.data ?? [])
-      .filter((i) => !vueModule || (vueModule === '-' ? !i.module : i.module === vueModule))
-      .filter((i) => !mot || texteIdee(i).includes(mot))
-    const dansStatut = base.filter((i) => vueStatut === 'tous' || i.statut === vueStatut)
-    const compteGenre = (g: Genre | '') => dansStatut.filter((i) => !g || i.genre === g).length
-    const compteStatut = (s: VueStatut) => base.filter((i) => (!vueGenre || i.genre === vueGenre) && (s === 'tous' || i.statut === s)).length
-    // Importantes d'abord, puis les plus récentes ; fermées : les dernières fermées d'abord.
-    const liste = dansStatut
-      .filter((i) => !vueGenre || i.genre === vueGenre)
-      .sort(
-        (a, b) =>
-          Number(a.statut !== 'a_faire') - Number(b.statut !== 'a_faire') ||
-          Number(b.important) - Number(a.important) ||
-          (b.ferme_le ?? b.created_at).localeCompare(a.ferme_le ?? a.created_at),
-      )
-    // Modules qui ont des idées, pour le filtre (dans l'ordre du menu).
-    const utilises = new Set((idees.data ?? []).map((i) => i.module).filter(Boolean) as string[])
-    return { liste, compteGenre, compteStatut, utilises }
-  }, [idees.data, vueGenre, vueStatut, vueModule, recherche])
+    const tout = idees.data ?? []
+    // À faire : importantes d'abord, puis les plus récentes.
+    const aFaire = tout
+      .filter((i) => i.statut === 'a_faire')
+      .sort((a, b) => Number(b.important) - Number(a.important) || b.created_at.localeCompare(a.created_at))
+    // Complétées (faites ou écartées), regroupées par module ; les dernières fermées d'abord.
+    const parGroupe = new Map<string, Idee[]>()
+    for (const i of tout.filter((i) => i.statut !== 'a_faire')) parGroupe.set(groupeDe(i), [...(parGroupe.get(groupeDe(i)) ?? []), i])
+    const completees = [...parGroupe.entries()]
+      .sort(([a], [b]) => rangGroupe(a) - rangGroupe(b))
+      .map(([cle, liste]) => ({ cle, liste: liste.sort((a, b) => (b.ferme_le ?? b.created_at).localeCompare(a.ferme_le ?? a.created_at)) }))
+    return { aFaire, completees, nbCompletees: tout.length - aFaire.length }
+  }, [idees.data])
 
   if (idees.error) return <p className={ui.erreur}>{messageErreur(idees.error)}</p>
   if (!idees.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const { liste, compteGenre, compteStatut, utilises } = calcul
+  const { aFaire, completees, nbCompletees } = calcul
   const ideeOuverte = ouverte ? idees.data.find((i) => i.id === ouverte) : undefined
-  const filtreActif = !!(vueModule || recherche)
 
   return (
     <div className="space-y-4">
@@ -65,64 +58,34 @@ export default function ModuleAmeliorations() {
 
       <BandeauErreurs racine="ameliorations" />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className={groupe} role="group" aria-label="Genre">
-          <button className={segment(vueGenre === '')} onClick={() => setVueGenre('')}>
-            Tout <span className="tabular-nums text-pierre-400">{compteGenre('')}</span>
-          </button>
-          {GENRES.map((g) => (
-            <button key={g.id} className={segment(vueGenre === g.id)} onClick={() => setVueGenre(g.id)}>
-              {g.icone} {g.pluriel} <span className="tabular-nums text-pierre-400">{compteGenre(g.id)}</span>
-            </button>
-          ))}
-        </div>
-        <div className={groupe} role="group" aria-label="Statut">
-          {VUES_STATUT.map((s) => (
-            <button key={s.id} className={segment(vueStatut === s.id)} onClick={() => setVueStatut(s.id)}>
-              {s.nom} <span className="tabular-nums text-pierre-400">{compteStatut(s.id)}</span>
-            </button>
-          ))}
-        </div>
-        <select aria-label="Module" className={petitChoix} value={vueModule} onChange={(e) => setVueModule(e.target.value)}>
-          <option value="">Tous les modules</option>
-          <option value="-">L'app en général</option>
-          {CIBLES.filter((c) => utilises.has(c.id)).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.icone} {c.nom}
-            </option>
-          ))}
-        </select>
-        <input
-          type="search"
-          aria-label="Rechercher"
-          placeholder="Rechercher…"
-          className={`${petitChoix} w-44`}
-          value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
-        />
-        {filtreActif && (
-          <button
-            className="text-sm text-foret-700 underline"
-            onClick={() => {
-              setVueModule('')
-              setRecherche('')
-            }}
-          >
-            Effacer les filtres
-          </button>
-        )}
-      </div>
-
       <div className={`${ui.carte} divide-y divide-pierre-100`}>
-        {liste.map((i) => (
+        {aFaire.map((i) => (
           <Rangee key={i.id} idee={i} ouvrir={() => setOuverte(i.id)} />
         ))}
-        {liste.length === 0 && (
+        {aFaire.length === 0 && (
           <p className="px-3 py-8 text-center text-sm text-pierre-500">
-            {idees.data.length === 0 ? 'Rien encore. Note ta première idée ci-dessus.' : 'Rien ici.'}
+            {idees.data.length === 0 ? 'Rien encore. Note ta première idée ci-dessus.' : 'Tout est complété.'}
           </p>
         )}
       </div>
+
+      {nbCompletees > 0 && (
+        <section className="space-y-3 pt-2">
+          <h2 className="text-lg font-semibold">
+            Complété <span className="tabular-nums text-pierre-400">{nbCompletees}</span>
+          </h2>
+          {completees.map(({ cle, liste }) => (
+            <div key={cle}>
+              <h3 className="mb-1 text-sm font-medium text-pierre-700">{titreGroupe(cle)}</h3>
+              <div className={`${ui.carte} divide-y divide-pierre-100`}>
+                {liste.map((i) => (
+                  <Rangee key={i.id} idee={i} ouvrir={() => setOuverte(i.id)} sansModule />
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {ideeOuverte && <Fiche key={ideeOuverte.id} idee={ideeOuverte} fermer={() => setOuverte(null)} />}
     </div>
@@ -205,7 +168,8 @@ function Ajout() {
   )
 }
 
-function Rangee({ idee: i, ouvrir }: { idee: Idee; ouvrir: () => void }) {
+/** `sansModule` : la rangée est déjà sous le titre de son module. */
+function Rangee({ idee: i, ouvrir, sansModule }: { idee: Idee; ouvrir: () => void; sansModule?: boolean }) {
   const modifier = useModifierIdee()
   const changer = (champs: Partial<Idee>) => modifier.mutate({ id: i.id, champs })
   const g = genre(i.genre)
@@ -237,7 +201,7 @@ function Rangee({ idee: i, ouvrir }: { idee: Idee; ouvrir: () => void }) {
             {g.icone}
             <span className="hidden sm:inline"> {g.nom}</span>
           </span>
-          {i.module && (
+          {i.module && !sansModule && (
             <span className="rounded-full border border-pierre-200 bg-white px-2 py-px text-xs text-pierre-700">
               {cible(i.module).icone} {cible(i.module).nom}
             </span>

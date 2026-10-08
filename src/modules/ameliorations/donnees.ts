@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import { cible, genre, type Idee } from './types'
+import { cible, type Idee } from './types'
 
 // Module en ligne seulement (networkMode « always ») : affichage mis à jour
 // d'avance ; si la base refuse, la ligne d'avant revient et le bandeau du
@@ -88,16 +88,6 @@ export function demandePourClaude(i: Idee): string {
         : `Commentaire${i.de_qui ? ` de ${i.de_qui}` : " de l'équipe"}${ou ? ` sur ${ou}` : " sur l'app"} : ${i.titre}`
   return [entete, i.details?.trim()].filter(Boolean).join('\n\n')
 }
-
-/** Recherche sans accents ni majuscules. */
-export const normaliser = (t: string) =>
-  t
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-
-export const texteIdee = (i: Idee) =>
-  normaliser([i.titre, i.details, i.de_qui, i.module && cible(i.module).nom, genre(i.genre).nom].filter(Boolean).join(' '))
 
 const formatJour = new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' })
 export const jour = (iso: string) => formatJour.format(new Date(iso))
