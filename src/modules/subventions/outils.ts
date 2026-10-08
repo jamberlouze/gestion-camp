@@ -120,6 +120,18 @@ export function trierAValider(a: Subvention, b: Subvention) {
   )
 }
 
+const sansAccents = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+/** Chaque mot cherché (sans égard aux accents) se trouve dans le nom, l'organisme, la description, la justification ou l'adresse. */
+export function correspond(g: Subvention, recherche: string) {
+  const mots = sansAccents(recherche).split(/\s+/).filter(Boolean)
+  if (!mots.length) return true
+  const texte = sansAccents(
+    [g.program_name, g.organisme, g.description, g.relevance_justification, g.source_url].filter(Boolean).join(' '),
+  )
+  return mots.every((m) => texte.includes(m))
+}
+
 /** Entreprise qui porte la subvention : celle qui dépose, sinon celle pour qui elle a été trouvée. */
 export const entrepriseDe = (g: Subvention) => g.applicant_company_id ?? g.target_company_id
 

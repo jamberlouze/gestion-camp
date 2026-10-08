@@ -8,7 +8,7 @@ import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType } from './commun'
 import { useDecider, useEnregistrer, useEntreprises, useNotes, useSubventions } from './donnees'
-import { CATEGORIES, cleProgramme, dateCourte, joursAvant, montantsPotentiels, trierAValider, TYPES } from './outils'
+import { CATEGORIES, cleProgramme, correspond, dateCourte, joursAvant, montantsPotentiels, trierAValider, TYPES } from './outils'
 import type { CategorieRejet, Entreprise, Subvention, TypeSubvention } from './types'
 
 type FiltreStatut = 'tous' | 'nouveau' | 'a_valider'
@@ -21,17 +21,26 @@ export function Validation() {
   const [entreprise, setEntreprise] = useState('')
   const [type, setType] = useState('')
   const [statut, setStatut] = useState<FiltreStatut>('tous')
+  const [recherche, setRecherche] = useState('')
   const [nouvelle, setNouvelle] = useState(false)
 
-  const liste = useMemo(
+  const filtrees = useMemo(
     () =>
       (subventions.data ?? [])
-        .filter((g) => (statut === 'tous' ? g.status === 'nouveau' || g.status === 'a_valider' : g.status === statut))
         .filter((g) => !entreprise || g.target_company_id === entreprise)
         .filter((g) => !type || g.grant_type === type)
-        .sort(trierAValider),
-    [subventions.data, statut, entreprise, type],
+        .filter((g) => correspond(g, recherche)),
+    [subventions.data, entreprise, type, recherche],
   )
+  const liste = filtrees
+    .filter((g) => (statut === 'tous' ? g.status === 'nouveau' || g.status === 'a_valider' : g.status === statut))
+    .sort(trierAValider)
+  // En cherchant, on montre aussi les subventions déjà décidées : « Claude l'a-t-il déjà trouvée ? »
+  const dejaDecidees = recherche.trim()
+    ? filtrees
+        .filter((g) => g.status !== 'nouveau' && g.status !== 'a_valider')
+        .sort((a, b) => b.discovered_at.localeCompare(a.discovered_at))
+    : []
 
   const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre')
   const erreur = subventions.error ?? entreprises.error
@@ -48,6 +57,14 @@ export function Validation() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            className={`${menu} w-56`}
+            placeholder="Chercher un programme…"
+            aria-label="Chercher un programme"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
           <select aria-label="Entreprise" className={menu} value={entreprise} onChange={(e) => setEntreprise(e.target.value)}>
             <option value="">Toutes les entreprises</option>
             {entreprises.data.map((e) => (
@@ -76,7 +93,11 @@ export function Validation() {
       </div>
 
       <p className="text-sm text-pierre-500">
-        {liste.length === 0
+        {recherche.trim()
+          ? liste.length === 0
+            ? `Aucune subvention à valider ne correspond à « ${recherche.trim()} ».`
+            : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à valider correspond${liste.length > 1 ? 'ent' : ''} à « ${recherche.trim()} ».`
+          : liste.length === 0
           ? 'Rien à valider. La prochaine recherche a lieu lundi matin ; vous pouvez aussi en lancer une dans l’onglet Recherches.'
           : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à regarder — salariales d’abord, puis date limite la plus proche.`}
       </p>
@@ -92,6 +113,38 @@ export function Validation() {
           />
         ))}
       </div>
+
+      {recherche.trim() && (
+        <section className="space-y-2 border-t border-pierre-200 pt-4">
+          <h3 className="text-sm font-semibold text-pierre-700">
+            Déjà décidées{dejaDecidees.length ? ` (${dejaDecidees.length})` : ''}
+          </h3>
+          {dejaDecidees.length === 0 ? (
+            <p className="text-sm text-pierre-500">Aucune subvention retenue, rejetée ou terminée ne correspond.</p>
+          ) : (
+            <ul className={`${ui.carte} divide-y divide-pierre-100`}>
+              {dejaDecidees.map((g) => {
+                const compagnie = compagnieDe.get(g.target_company_id)
+                return (
+                  <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                    <Link to={`/subventions/fiche/${g.id}`} className="font-medium hover:underline">
+                      {g.program_name}
+                    </Link>
+                    {g.organisme && <span className="text-pierre-500">{g.organisme}</span>}
+                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                      {compagnie && <PuceCompagnie compagnie={compagnie} />}
+                      <PastilleStatut statut={g.status} />
+                      <span className="text-xs text-pierre-500">
+                        {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)}
+                      </span>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       {nouvelle && <DialogueNouvelle entreprises={entreprises.data} fermer={() => setNouvelle(false)} />}
     </div>
