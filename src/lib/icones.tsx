@@ -41,6 +41,22 @@ export const IconeRenommer = (p: Props) => (
   </Icone>
 )
 
+/** Accès en lecture (grille des accès). */
+export const IconeOeil = (p: Props) => (
+  <Icone {...p}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icone>
+)
+
+/** Aucun accès (grille des accès). */
+export const IconeInterdit = (p: Props) => (
+  <Icone {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m5.6 5.6 12.8 12.8" />
+  </Icone>
+)
+
 export const IconeDossier = (p: Props) => (
   <Icone {...p}>
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />

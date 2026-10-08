@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useState } from 'react'
 import { BoutonModifier } from '@/lib/BoutonsAction'
 import { messageErreur } from '@/lib/donnees'
+import { IconeInterdit, IconeOeil, IconeRenommer } from '@/lib/icones'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, AccesRole, ModuleId, Niveau, Profil, Role } from '@/lib/types'
 import { ui } from '@/lib/ui'
@@ -21,7 +22,57 @@ const LIBELLE_ROLE = Object.fromEntries(ROLES.map((r) => [r.id, r.libelle])) as 
 const ROLES_GRILLE: AccesRole['role'][] = ['direction', 'coordo', 'terrain']
 
 const LIBELLE_NIVEAU: Record<Niveau, string> = { lecture: 'Lecture', ecriture: 'Écriture' }
-const selectPetit = 'rounded border border-pierre-300 px-1 py-0.5 text-xs'
+
+/** Icône et couleur de chaque niveau : aucun (interdit), lecture (œil), écriture (crayon). */
+const STYLE_NIVEAU: Record<Niveau | '', { Icone: typeof IconeOeil; icone: string; fond: string }> = {
+  '': { Icone: IconeInterdit, icone: 'text-pierre-400', fond: 'bg-white text-pierre-500' },
+  lecture: { Icone: IconeOeil, icone: 'text-sky-700', fond: 'bg-sky-50 text-sky-900' },
+  ecriture: { Icone: IconeRenommer, icone: 'text-foret-700', fond: 'bg-foret-50 text-foret-800' },
+}
+
+/**
+ * Choix du niveau d'accès d'un module, avec l'icône du niveau devant.
+ * `niveauIcone` : niveau illustré quand il diffère de la valeur (accès
+ * personnel vide = niveau du rôle).
+ */
+function ChoixNiveau({
+  valeur,
+  niveauIcone = valeur,
+  libelleVide = 'Aucun',
+  sansLecture,
+  petit,
+  disabled,
+  changer,
+}: {
+  valeur: Niveau | ''
+  niveauIcone?: Niveau | ''
+  libelleVide?: string
+  sansLecture?: boolean
+  petit?: boolean
+  disabled?: boolean
+  changer: (n: Niveau | '') => void
+}) {
+  const { Icone, icone, fond } = STYLE_NIVEAU[niveauIcone]
+  return (
+    <span className={`relative ${petit ? 'inline-block' : 'block'}`}>
+      <Icone
+        className={`pointer-events-none absolute top-1/2 -translate-y-1/2 ${petit ? 'left-1.5 size-3.5' : 'left-2.5 size-4'} ${icone}`}
+      />
+      <select
+        className={`rounded-lg border border-pierre-300 focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20 disabled:opacity-50 ${fond} ${
+          petit ? 'py-0.5 pr-1 pl-6 text-xs' : 'w-full py-2 pr-3 pl-8 text-sm'
+        }`}
+        value={valeur}
+        disabled={disabled}
+        onChange={(e) => changer(e.target.value as Niveau | '')}
+      >
+        <option value="">{libelleVide}</option>
+        {!sansLecture && <option value="lecture">Lecture</option>}
+        <option value="ecriture">Écriture</option>
+      </select>
+    </span>
+  )
+}
 
 /** Gestion des rôles et des accès. Réservé aux administrateurs. */
 export function Utilisateurs() {
@@ -190,17 +241,14 @@ export function Utilisateurs() {
                             return (
                               <label key={m.id} className="flex items-center gap-1.5 whitespace-nowrap">
                                 {m.icone} {m.nom}
-                                <select
-                                  className={selectPetit}
-                                  value={a?.niveau ?? ''}
-                                  onChange={(e) =>
-                                    majAcces.mutate({ user_id: p.id, module: m.id, niveau: e.target.value as Niveau | '' })
-                                  }
-                                >
-                                  <option value="">{base ? `Rôle : ${LIBELLE_NIVEAU[base].toLowerCase()}` : 'Aucun'}</option>
-                                  {!m.sansLecture && <option value="lecture">Lecture</option>}
-                                  <option value="ecriture">Écriture</option>
-                                </select>
+                                <ChoixNiveau
+                                  petit
+                                  valeur={a?.niveau ?? ''}
+                                  niveauIcone={a?.niveau ?? base}
+                                  libelleVide={base ? `Rôle : ${LIBELLE_NIVEAU[base].toLowerCase()}` : 'Aucun'}
+                                  sansLecture={m.sansLecture}
+                                  changer={(niveau) => majAcces.mutate({ user_id: p.id, module: m.id, niveau })}
+                                />
                               </label>
                             )
                           })}
@@ -221,7 +269,13 @@ export function Utilisateurs() {
         sur sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
       </p>
       <div className={`${ui.carte} mt-3 max-w-3xl overflow-x-auto`}>
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-60" />
+            {ROLES_GRILLE.map((role) => (
+              <col key={role} />
+            ))}
+          </colgroup>
           <thead className="border-b border-pierre-200 bg-pierre-50 text-left text-pierre-500">
             <tr>
               <th className="px-3 py-2 font-medium">Module</th>
@@ -233,7 +287,7 @@ export function Utilisateurs() {
           <tbody className="divide-y divide-pierre-100">
             {MODULES.map((m) => (
               <tr key={m.id}>
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className="truncate px-3 py-2 whitespace-nowrap" title={m.nom}>
                   {m.icone} {m.nom}
                 </td>
                 {m.accesFixe ? (
@@ -243,16 +297,12 @@ export function Utilisateurs() {
                 ) : (
                   ROLES_GRILLE.map((role) => (
                     <td key={role} className="px-3 py-2">
-                      <select
-                        className={ui.champ}
-                        value={niveauRole(role, m.id)}
+                      <ChoixNiveau
+                        valeur={niveauRole(role, m.id)}
+                        sansLecture={m.sansLecture}
                         disabled={!data}
-                        onChange={(e) => majRole.mutate({ role, module: m.id, niveau: e.target.value as Niveau | '' })}
-                      >
-                        <option value="">Aucun</option>
-                        {!m.sansLecture && <option value="lecture">Lecture</option>}
-                        <option value="ecriture">Écriture</option>
-                      </select>
+                        changer={(niveau) => majRole.mutate({ role, module: m.id, niveau })}
+                      />
                     </td>
                   ))
                 )}
