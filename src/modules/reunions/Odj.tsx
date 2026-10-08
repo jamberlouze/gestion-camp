@@ -40,17 +40,6 @@ export function Odj() {
 
         {ecriture && <AjoutPoint />}
 
-        {fixes.length > 0 && (
-          <section>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Points fixes</h3>
-            <ul className="divide-y divide-pierre-200/70 rounded-xl border border-pierre-200 bg-pierre-50/70">
-              {fixes.map((r) => (
-                <LigneRecurrent key={r.id} recurrent={r} />
-              ))}
-            </ul>
-          </section>
-        )}
-
         <section>
           <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">À l'ordre du jour ({ouverts.length})</h3>
           {ouverts.length === 0 ? (
@@ -65,6 +54,17 @@ export function Odj() {
             </ul>
           )}
         </section>
+
+        {fixes.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Points fixes</h3>
+            <ul className="divide-y divide-pierre-200/70 rounded-xl border border-pierre-200 bg-pierre-50/70">
+              {fixes.map((r) => (
+                <LigneRecurrent key={r.id} recurrent={r} />
+              ))}
+            </ul>
+          </section>
+        )}
 
         {plusTard.length > 0 && (
           <section>
