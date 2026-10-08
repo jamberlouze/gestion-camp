@@ -148,6 +148,13 @@ export const MODULES: DefinitionModule[] = [
     adminsSeulement: true,
   },
   {
+    id: 'crm',
+    nom: 'CRM',
+    description: 'Clients, démarchage et relances, liés aux réservations',
+    icone: '🤝',
+    chemin: '/crm',
+  },
+  {
     id: 'reunions',
     nom: 'Réunions',
     description: 'Ordre du jour de la direction et réunions spéciales',

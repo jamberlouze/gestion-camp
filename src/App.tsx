@@ -27,6 +27,7 @@ const Rooming = lazy(() => import('@/modules/rooming'))
 const Caisse = lazy(() => import('@/modules/caisse'))
 const Ameliorations = lazy(() => import('@/modules/ameliorations'))
 const Reunions = lazy(() => import('@/modules/reunions'))
+const Crm = lazy(() => import('@/modules/crm'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="petite-caisse/*" element={<GardeModule module="caisse"><Caisse /></GardeModule>} />
           <Route path="ameliorations/*" element={<GardeModule module="ameliorations"><Ameliorations /></GardeModule>} />
           <Route path="reunions/*" element={<GardeModule module="reunions"><Reunions /></GardeModule>} />
+          <Route path="crm/*" element={<GardeModule module="crm"><Crm /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="employes" replace />} />
             <Route path="groupes" element={<Groupes />} />

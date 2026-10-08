@@ -13,7 +13,7 @@
     "db:reset": "supabase db reset",
     "prod:db:push": "supabase db push --linked",
     "prod:db:config": "supabase config push",
-    "db:types": "supabase gen types typescript --local --schema core,embarcations,commande,horaire,mastertimeline,subventions,vigie,calendrier,temps,vehicules,travaux,achats,rooming,caisse,reunions,ameliorations > src/lib/database.types.ts",
+    "db:types": "supabase gen types typescript --local --schema core,embarcations,commande,horaire,mastertimeline,subventions,vigie,calendrier,temps,vehicules,travaux,achats,rooming,caisse,reunions,ameliorations,crm > src/lib/database.types.ts",
     "import:essai": "node scripts/migration/importer.mjs --essai",
     "import": "node scripts/migration/importer.mjs",
     "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder",

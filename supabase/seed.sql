@@ -290,3 +290,46 @@ update core.profils
 -- « Payé de ma poche ».
 -- ------------------------------------------------------------
 update caisse.poches set profil_id = '00000000-0000-0000-0000-000000000001' where nom = 'Maxime';
+
+-- ------------------------------------------------------------
+-- CRM : quelques clients et cibles d'essai, et leurs séjours dans la copie
+-- Airtable du Calendrier (client lié par le champ fldPuFu1m9Qv53HkM).
+-- ------------------------------------------------------------
+insert into calendrier.sejours (airtable_record_id, numero, nom_groupe, type_sejour, etat, date_arrivee, date_depart, nb_participants, raw)
+values
+  ('recEssaiCit1', '26-G-12', 'École Citoyenne', 'Classe nature', 'Confirmée', '2026-05-12', '2026-05-14', 58, '{"fldPuFu1m9Qv53HkM": ["recCliCitoyenne"]}'),
+  ('recEssaiCit2', '27-G-03', 'École Citoyenne', 'Classe nature', 'Confirmée', '2027-05-11', '2027-05-13', 60, '{"fldPuFu1m9Qv53HkM": ["recCliCitoyenne"]}'),
+  ('recEssaiDaw1', '25-G-40', 'Cégep Dawson', 'Accueil de groupe', 'Confirmée', '2025-10-01', '2025-10-03', 45, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
+  ('recEssaiDaw2', '26-G-02', 'Cégep Dawson', 'Accueil de groupe', 'Confirmée', '2026-01-20', '2026-01-22', 40, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
+  ('recEssaiDaw3', '26-G-61', 'Cégep Dawson', 'Accueil de groupe', 'Estimé envoyé', '2026-10-20', '2026-10-22', 45, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
+  ('recEssaiSou1', '26-G-20', 'École du Sous-Bois', 'Classe nature', 'Confirmée', '2026-06-02', '2026-06-04', 72, '{"fldPuFu1m9Qv53HkM": ["recCliSousBois"]}'),
+  ('recEssaiNou1', '26-G-70', 'Collège Nouveau', 'Classe nature', 'Demande de réservation', '2027-03-15', '2027-03-17', 30, '{"fldPuFu1m9Qv53HkM": ["recCliNouveau"]}')
+on conflict (airtable_record_id) do nothing;
+
+insert into crm.organisations (id, nom, genre, ville, conseiller_id, etape, prioritaire, cycle_ans, airtable_client_id, notes) values
+  ('c0000000-0000-0000-0000-000000000001', 'École Citoyenne', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conclusion', true, 1, 'recCliCitoyenne', 'Convertie après 6 contacts et 2 appels Zoom ; le PDF PFEQ a fait la différence.'),
+  ('c0000000-0000-0000-0000-000000000002', 'Cégep Dawson', 'cegep', 'Montréal', '00000000-0000-0000-0000-000000000002', null, false, 1, 'recCliDawson', 'Cycles différents à l''automne et à l''hiver.'),
+  ('c0000000-0000-0000-0000-000000000003', 'Collège Stanislas', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conversation', true, 1, null, null),
+  ('c0000000-0000-0000-0000-000000000004', 'École des Explorateurs', 'ecole_primaire', 'Laval', '00000000-0000-0000-0000-000000000003', null, false, 1, null, null),
+  ('c0000000-0000-0000-0000-000000000005', 'École du Sous-Bois', 'ecole_primaire', 'Saint-Jérôme', '00000000-0000-0000-0000-000000000003', null, false, 2, 'recCliSousBois', 'Vient une année sur deux.'),
+  ('c0000000-0000-0000-0000-000000000006', 'École Les Trois-Sources', 'ecole_primaire', 'Blainville', null, 'identification', false, 1, null, null),
+  ('c0000000-0000-0000-0000-000000000007', 'Collège Nouveau', 'ecole_secondaire', 'Terrebonne', '00000000-0000-0000-0000-000000000003', 'contacte', false, 1, 'recCliNouveau', null)
+on conflict (id) do nothing;
+
+insert into crm.contacts (organisation_id, nom, fonction, courriel, telephone, principal) values
+  ('c0000000-0000-0000-0000-000000000001', 'Vincent Lefebvre', 'Enseignant, 2e secondaire', 'vincent@citoyenne.test', '514 555-0101', true),
+  ('c0000000-0000-0000-0000-000000000002', 'Karen Smith', 'Outdoor education', 'ksmith@dawson.test', null, true),
+  ('c0000000-0000-0000-0000-000000000003', 'Marie Dubé', 'Direction adjointe', 'mdube@stanislas.test', '514 555-0130', true);
+
+insert into crm.regles (organisation_id, saison, mois_avant) values
+  ('c0000000-0000-0000-0000-000000000002', 'hiver', 3)
+on conflict do nothing;
+
+insert into crm.visites (organisation_id, date_arrivee, date_depart, nb_participants, note) values
+  ('c0000000-0000-0000-0000-000000000004', '2023-04-18', '2023-04-20', 50, 'Classe nature'),
+  ('c0000000-0000-0000-0000-000000000004', '2022-04-12', '2022-04-14', 48, 'Classe nature');
+
+insert into crm.echanges (organisation_id, genre, jour, texte, auteur_nom) values
+  ('c0000000-0000-0000-0000-000000000001', 'rencontre', '2026-02-10', 'Appel Zoom avec Vincent : programme aligné sur le PFEQ, envoi du PDF compétences transversales.', 'Julie Tremblay'),
+  ('c0000000-0000-0000-0000-000000000003', 'appel', '2026-09-22', 'Intéressés pour le printemps 2027 ; rappeler après leur conseil d''établissement.', 'Julie Tremblay'),
+  ('c0000000-0000-0000-0000-000000000007', 'courriel', '2026-09-30', 'Envoi de la brochure et du formulaire de demande.', 'Olivier Lavoie');
