@@ -384,10 +384,10 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
 
 Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
 
-1. **Fondation**
-   - tables, catalogue et prix (import), réservations, étapes et vues, CRM intégré ;
-   - **calcul de l'estimé vérifié contre tous les estimés 2026-27** ;
-   - import d'essai 2025-26 et 2026-27 en DEV.
+1. **Fondation** — **bâtie en DEV le 2026-10-08**, pas en PROD :
+   - tables, catalogue et prix 2026-27, réservations, étapes et vues, CRM intégré, estimés en versions ;
+   - calcul de l'estimé vérifié contre 163 onglets réels du chiffrier et les PDF 27-G-083, 27-G-014 et 27-G-002 (`npm run test:calcul`) ;
+   - import d'essai en DEV : 385 réservations (2026-27 et 2025-26), 1 324 notes devenues des échanges datés, 304 estimés. Contrôle : les contrats signés 2026-27 font 354 627,19 $, comme le Sheets.
 2. **Documents PDF** : estimé, contrat, pré-arrivée ; versions ; **démo de la signature électronique** à essayer par Maxime.
 3. **Formulaire public + page client** : acceptation, signature, factures QBO, fiches participants.
 4. **QuickBooks Online** (§6) :
@@ -414,6 +414,8 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
 - Pins haut : ne se vend pas seul.
 
 **Contrats :** voir §5 (VFH et VFB inversés, « Souper : <<Dîner>> », restes de copier-coller, coquilles, tableaux de lits périmés).
+
+**Contrat absent du fichier 2026-27** (trouvé par l'import d'essai) : **26-G-532**, signé, arrivée le 4 octobre 2026, 47 027 $ avant taxes. Il n'existe que dans le fichier 2025-26 ; les rapports 2026-27 ne le comptent donc pas.
 
 **Données à nettoyer à l'import :**
 - dates en texte et départs avant l'arrivée ;

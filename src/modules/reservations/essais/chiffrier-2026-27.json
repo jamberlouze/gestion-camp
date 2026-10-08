@@ -1,0 +1,2948 @@
+[
+ {
+  "onglet": "27-G-124",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 2
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 420
+  }
+ },
+ {
+  "onglet": "27-G-116",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-123",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 160,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    },
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 18624
+  }
+ },
+ {
+  "onglet": "onglet 11",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 160,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    },
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-122",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 6,
+   "repas": 19
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 2211.6
+  }
+ },
+ {
+  "onglet": "27-G-121",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 50,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 5820
+  }
+ },
+ {
+  "onglet": "27-G-120",
+  "abandon": true,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-27",
+   "date_depart": "2027-03-01",
+   "nb_participants": 23,
+   "nb_accompagnateurs": 1,
+   "ratio": "1:20",
+   "nb_dejeuners": 3,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 281.7,
+   "accompagnateur": 187.7
+  }
+ },
+ {
+  "onglet": "27-G-120",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 24,
+   "repas": 8
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 3724.8
+  }
+ },
+ {
+  "onglet": "27-G-119",
+  "abandon": true,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-06",
+   "date_depart": "2027-02-08",
+   "nb_participants": 23,
+   "nb_accompagnateurs": 1,
+   "ratio": "1:20",
+   "nb_dejeuners": 3,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 281.7,
+   "accompagnateur": 187.7
+  }
+ },
+ {
+  "onglet": "27-G-119",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 24,
+   "repas": 8
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 3724.8
+  }
+ },
+ {
+  "onglet": "27-G-118",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 60,
+   "repas": 4
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres (64 lits - 12 chambres)",
+     "prix": 1612.8
+    }
+   ],
+   "repas_total": 4656
+  }
+ },
+ {
+  "onglet": "27-G-118",
+  "abandon": true,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée complète (9h - 23h)",
+   "heures_sup": 1
+  },
+  "attendu": {
+   "forfait": 1815,
+   "heures_sup": 210
+  }
+ },
+ {
+  "onglet": "27-G-117",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 100,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pins (69 lits - 16 chambres)",
+     "prix": 1738.8
+    },
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-116",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 2
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 420
+  }
+ },
+ {
+  "onglet": "27-G-115",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-08-27",
+   "date_depart": "2027-08-28",
+   "nb_participants": 25,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-114",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 100,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres (64 lits - 12 chambres)",
+     "prix": 1612.8
+    },
+    {
+     "nom": "Pins bas (37 lits - 8 chambres)",
+     "prix": 932.4
+    }
+   ],
+   "repas_total": 11640
+  }
+ },
+ {
+  "onglet": "27-G-114",
+  "abandon": true,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-26",
+   "date_depart": "2027-02-28",
+   "nb_participants": 95,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "28-G-113",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2028-06-09",
+   "date_depart": "2028-06-11",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 6,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-112",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-107",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 28,
+   "repas": 2
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    }
+   ],
+   "repas_total": 1086.4
+  }
+ },
+ {
+  "onglet": "28-G-108",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 33,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-106",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-06",
+   "date_depart": "2027-05-07",
+   "nb_participants": 50,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-105",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 40,
+   "repas": 5
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 3880
+  }
+ },
+ {
+  "onglet": "onglet 31",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-01",
+   "date_depart": "2027-02-03",
+   "nb_participants": 120,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-485",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-12-09",
+   "date_depart": "2026-12-11",
+   "nb_participants": 29,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-104",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 40,
+   "repas": 7
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres (64 lits - 12 chambres)",
+     "prix": 1612.8
+    }
+   ],
+   "repas_total": 5432
+  }
+ },
+ {
+  "onglet": "27-G-104",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-22",
+   "date_depart": "2027-02-24",
+   "nb_participants": 38,
+   "nb_accompagnateurs": 2,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-104",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 38,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 4423.2
+  }
+ },
+ {
+  "onglet": "onglet 36",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 38,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-103",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 36,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-113",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 60,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres (64 lits - 12 chambres)",
+     "prix": 1612.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-102",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 65,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-101",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 24,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-100",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-07-05",
+   "date_depart": "2027-07-09",
+   "nb_participants": 20,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 4,
+   "nb_diners": 5,
+   "nb_soupers": 4,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 484.7,
+   "accompagnateur": 317.2
+  }
+ },
+ {
+  "onglet": "27-G-099",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 35,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-098",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 35,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-097",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-12",
+   "date_depart": "2027-02-13",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 1,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 136.7,
+   "accompagnateur": 76.95
+  }
+ },
+ {
+  "onglet": "27-G-095",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 15,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-096",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-02",
+   "date_depart": "2027-06-04",
+   "nb_participants": 56,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 2,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 242.9,
+   "accompagnateur": 148.9
+  }
+ },
+ {
+  "onglet": "27-G-094",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 60,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    },
+    {
+     "nom": "Cèdres Bas (28 lits - 5 chambres)",
+     "prix": 705.6
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-093",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 30,
+   "repas": 8
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Haut (36 lits - 9 chambres)",
+     "prix": 827
+    }
+   ],
+   "repas_total": 4656
+  }
+ },
+ {
+  "onglet": "27-G-092",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 3
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 630
+  }
+ },
+ {
+  "onglet": "28-G-091",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 2
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 420
+  }
+ },
+ {
+  "onglet": "27-G-090",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-089",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-15",
+   "date_depart": "2027-02-18",
+   "nb_participants": 63,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:20",
+   "nb_dejeuners": 0,
+   "nb_diners": 0,
+   "nb_soupers": 0,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 179.5,
+   "accompagnateur": 48.75
+  }
+ },
+ {
+  "onglet": "27-G-087",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 100,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pins (69 lits - 16 chambres)",
+     "prix": 1738.8
+    },
+    {
+     "nom": "Cèdres haut (36 lits - 7 chambres)",
+     "prix": 907.2
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-086",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 40,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-082",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 52,
+   "repas": 4
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 4035.2
+  }
+ },
+ {
+  "onglet": "onglet 56",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 52,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-082",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 45,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 5238
+  }
+ },
+ {
+  "onglet": "27-G-082",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 52,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-085",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-21",
+   "date_depart": "2027-06-22",
+   "nb_participants": 90,
+   "nb_accompagnateurs": 6,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-059",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-084",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 80,
+   "repas": 4
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 6208
+  }
+ },
+ {
+  "onglet": "27-G-083",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-21",
+   "date_depart": "2027-06-22",
+   "nb_participants": 22,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-082",
+  "abandon": true,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-01-06",
+   "date_depart": "2027-01-08",
+   "nb_participants": 48,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 0,
+   "nb_diners": 0,
+   "nb_soupers": 0,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 126.5,
+   "accompagnateur": 32.5
+  }
+ },
+ {
+  "onglet": "27-G-082",
+  "abandon": true,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-01-06",
+   "date_depart": "2027-01-08",
+   "nb_participants": 48,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 0,
+   "nb_diners": 0,
+   "nb_soupers": 0,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 126.5,
+   "accompagnateur": 32.5
+  }
+ },
+ {
+  "onglet": "27-G-081",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 6,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-510",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-18",
+   "date_depart": "2027-02-19",
+   "nb_participants": 13,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-080",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-19",
+   "date_depart": "2027-05-27",
+   "nb_participants": 88,
+   "nb_accompagnateurs": 7,
+   "ratio": "1:20",
+   "nb_dejeuners": 0,
+   "nb_diners": 0,
+   "nb_soupers": 0,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 444.5,
+   "accompagnateur": 130
+  }
+ },
+ {
+  "onglet": "27-G-079",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-17",
+   "date_depart": "2027-05-19",
+   "nb_participants": 51,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 1,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 223.5,
+   "accompagnateur": 129.5
+  }
+ },
+ {
+  "onglet": "27-G-078",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-12-02",
+   "date_depart": "2026-12-04",
+   "nb_participants": 29,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 1,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 223.5,
+   "accompagnateur": 129.5
+  }
+ },
+ {
+  "onglet": "27-G-077",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-19",
+   "date_depart": "2026-10-21",
+   "nb_participants": 133,
+   "nb_accompagnateurs": 15,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-076",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-26",
+   "date_depart": "2027-05-28",
+   "nb_participants": 32,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-075",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 45,
+   "repas": 1
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 873
+  }
+ },
+ {
+  "onglet": "27-G-073",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 55,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-069",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 200,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Site complet (190 lits - 43 chambres)",
+     "prix": 4788
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-072",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 140,
+   "repas": 5
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    },
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 13580
+  }
+ },
+ {
+  "onglet": "27-G-070",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-17",
+   "date_depart": "2027-06-18",
+   "nb_participants": 45,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 0,
+   "nb_diners": 0,
+   "nb_soupers": 0,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 78.5,
+   "accompagnateur": 18.75
+  }
+ },
+ {
+  "onglet": "27-G-068",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 20,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-067",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-01-28",
+   "date_depart": "2027-01-29",
+   "nb_participants": 37,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-062",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 185,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Site complet (190 lits - 43 chambres)",
+     "prix": 4788
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-066",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 25,
+   "repas": 11
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 5335
+  }
+ },
+ {
+  "onglet": "27-G-047",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 45,
+   "repas": 7
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 6111
+  }
+ },
+ {
+  "onglet": "27-G-065",
+  "abandon": false,
+  "forfait": "journee_plein_air",
+  "entree": {
+   "nb_participants": 200,
+   "nb_accompagnateurs": 15,
+   "ratio": "1:15",
+   "repas": 0
+  },
+  "attendu": {
+   "forfait": 42,
+   "accompagnateur": 0
+  }
+ },
+ {
+  "onglet": "27-G-064",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-17",
+   "date_depart": "2027-02-19",
+   "nb_participants": 35,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-063",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-14",
+   "date_depart": "2027-06-15",
+   "nb_participants": 80,
+   "nb_accompagnateurs": 7,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-606",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-11-23",
+   "date_depart": "2026-11-26",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 2,
+   "ratio": "1:15",
+   "nb_dejeuners": 3,
+   "nb_diners": 4,
+   "nb_soupers": 3,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 385.5,
+   "accompagnateur": 242.75
+  }
+ },
+ {
+  "onglet": "27-G-061",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-21",
+   "date_depart": "2027-06-23",
+   "nb_participants": 115,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-055",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-21",
+   "date_depart": "2026-10-22",
+   "nb_participants": 120,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-055",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-20",
+   "date_depart": "2026-10-21",
+   "nb_participants": 80,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-054",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-13",
+   "date_depart": "2027-05-14",
+   "nb_participants": 70,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 1,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 136.7,
+   "accompagnateur": 76.95
+  }
+ },
+ {
+  "onglet": "27-G-048",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 100,
+   "repas": 1
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 1940
+  }
+ },
+ {
+  "onglet": "27-G-045",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 20,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Bas (23 lits - 6 chambres)",
+     "prix": 579.6
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-053",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-049",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 50,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France (59 lits - 15 chambres)",
+     "prix": 1486.8
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "26-G-046",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 20,
+   "repas": 0
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Vieille-France Bas (23 lits - 6 chambres)",
+     "prix": 579.6
+    }
+   ],
+   "repas_total": 0
+  }
+ },
+ {
+  "onglet": "27-G-040",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-16",
+   "date_depart": "2027-06-18",
+   "nb_participants": 88,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-041",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-23",
+   "date_depart": "2027-02-25",
+   "nb_participants": 30,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 3,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 290.7,
+   "accompagnateur": 187.7
+  }
+ },
+ {
+  "onglet": "27-G-037",
+  "abandon": false,
+  "forfait": "journee_plein_air",
+  "entree": {
+   "nb_participants": 140,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:15",
+   "repas": 0
+  },
+  "attendu": {
+   "forfait": 42,
+   "accompagnateur": 0
+  }
+ },
+ {
+  "onglet": "27-G-039",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-16",
+   "date_depart": "2027-02-17",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-042",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 133,
+   "repas": 13
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 33542.6
+  }
+ },
+ {
+  "onglet": "27-G-035",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-06-16",
+   "date_depart": "2026-06-18",
+   "nb_participants": 47,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-032",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-12",
+   "date_depart": "2027-05-14",
+   "nb_participants": 98,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 2,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 242.9,
+   "accompagnateur": 148.9
+  }
+ },
+ {
+  "onglet": "27-G-032",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-12",
+   "date_depart": "2027-05-14",
+   "nb_participants": 98,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-577",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 120,
+   "repas": 3
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 6984
+  }
+ },
+ {
+  "onglet": "27-G-027",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 50,
+   "repas": 3
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 2910
+  }
+ },
+ {
+  "onglet": "27-G-026",
+  "abandon": false,
+  "forfait": "accueil_groupe",
+  "entree": {
+   "nb_personnes": 130,
+   "repas": 6
+  },
+  "attendu": {
+   "sections": [
+    {
+     "nom": "Pavillon Principal (133 lits - 28 chambres)",
+     "prix": 3351.6
+    }
+   ],
+   "repas_total": 15132
+  }
+ },
+ {
+  "onglet": "27-G-031",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-16",
+   "date_depart": "2026-10-18",
+   "nb_participants": 132,
+   "nb_accompagnateurs": 6,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-030",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-21",
+   "date_depart": "2027-06-22",
+   "nb_participants": 80,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-029",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-17",
+   "date_depart": "2027-06-18",
+   "nb_participants": 92,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-028",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-14",
+   "date_depart": "2027-06-16",
+   "nb_participants": 83,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-024",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-06-17",
+   "date_depart": "2026-06-19",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 6,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-023",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-25",
+   "date_depart": "2027-02-26",
+   "nb_participants": 115,
+   "nb_accompagnateurs": 7,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-022",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-06-08",
+   "date_depart": "2027-06-09",
+   "nb_participants": 150,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-013",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-06",
+   "date_depart": "2027-05-07",
+   "nb_participants": 190,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 1,
+   "nb_soupers": 2,
+   "heures_extra": 6.5
+  },
+  "attendu": {
+   "forfait": 181.19375,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-014",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-05-13",
+   "date_depart": "2027-05-14",
+   "nb_participants": 125,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 6
+  },
+  "attendu": {
+   "forfait": 179.725,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-016",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-010",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-07",
+   "date_depart": "2027-02-10",
+   "nb_participants": 50,
+   "nb_accompagnateurs": 5,
+   "ratio": "aucun",
+   "nb_dejeuners": 3,
+   "nb_diners": 0,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 194.5,
+   "accompagnateur": 145.75
+  }
+ },
+ {
+  "onglet": "27-G-005",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-02-11",
+   "date_depart": "2027-02-12",
+   "nb_participants": 170,
+   "nb_accompagnateurs": 9,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "27-G-009",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée complète (9h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1815,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "27-G-007",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-02",
+   "date_depart": "2026-10-04",
+   "nb_participants": 24,
+   "nb_accompagnateurs": 2,
+   "ratio": "aucun",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 200.8,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-006",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2027-01-11",
+   "date_depart": "2027-01-13",
+   "nb_participants": 25,
+   "nb_accompagnateurs": 1,
+   "ratio": "aucun",
+   "nb_dejeuners": 2,
+   "nb_diners": 2,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 181.4,
+   "accompagnateur": 148.9
+  }
+ },
+ {
+  "onglet": "27-G-507",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-07",
+   "date_depart": "2026-10-09",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "27-G-502",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-10-15",
+   "date_depart": "2026-10-16",
+   "nb_participants": 60,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "onglet 153",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-06-09",
+   "date_depart": "2026-06-10",
+   "nb_participants": 50,
+   "nb_accompagnateurs": 2,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "onglet 154",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-460",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-05-11",
+   "date_depart": "2026-05-13",
+   "nb_participants": 54,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-458",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-05",
+   "date_depart": "2026-02-06",
+   "nb_participants": 150,
+   "nb_accompagnateurs": 12,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-458",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-05",
+   "date_depart": "2026-02-06",
+   "nb_participants": 80,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-447",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-446",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 1
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 210
+  }
+ },
+ {
+  "onglet": "26-G-445",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 1
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 210
+  }
+ },
+ {
+  "onglet": "onglet 175",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-436",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-17",
+   "date_depart": "2026-02-18",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-435",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-29",
+   "date_depart": "2026-01-30",
+   "nb_participants": 96,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "onglet 180",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-28",
+   "date_depart": "2026-01-30",
+   "nb_participants": 96,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-435",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-28",
+   "date_depart": "2026-01-30",
+   "nb_participants": 50,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "onglet 182",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-28",
+   "date_depart": "2026-01-30",
+   "nb_participants": 30,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "onglet 183",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-29",
+   "date_depart": "2026-01-30",
+   "nb_participants": 50,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "onglet 184",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-29",
+   "date_depart": "2026-01-30",
+   "nb_participants": 30,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-415",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 3
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 630
+  }
+ },
+ {
+  "onglet": "26-G-410",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 4
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 840
+  }
+ },
+ {
+  "onglet": "26-G-409",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-406",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-404",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-402",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-401",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-395",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-21",
+   "date_depart": "2026-01-23",
+   "nb_participants": 91,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-390",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-12",
+   "date_depart": "2026-02-13",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-389",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-05",
+   "date_depart": "2026-02-06",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-387",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-05-11",
+   "date_depart": "2026-05-12",
+   "nb_participants": 65,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-385",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-14",
+   "date_depart": "2026-01-16",
+   "nb_participants": 25,
+   "nb_accompagnateurs": 1,
+   "ratio": "aucun",
+   "nb_dejeuners": 2,
+   "nb_diners": 0,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 142.6,
+   "accompagnateur": 110.1
+  }
+ },
+ {
+  "onglet": "26-G-382",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-01-07",
+   "date_depart": "2026-01-09",
+   "nb_participants": 18,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:10",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 280.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-381",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-05-04",
+   "date_depart": "2026-05-06",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-381",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-02-02",
+   "date_depart": "2026-02-04",
+   "nb_participants": 100,
+   "nb_accompagnateurs": 5,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-372",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-06-22",
+   "date_depart": "2026-06-23",
+   "nb_participants": 35,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-308",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-369",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-05-04",
+   "date_depart": "2026-05-06",
+   "nb_participants": 110,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 271.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "26-G-369",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-05-04",
+   "date_depart": "2026-05-05",
+   "nb_participants": 110,
+   "nb_accompagnateurs": 8,
+   "ratio": "1:15",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 162.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-366",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2026-06-01",
+   "date_depart": "2026-06-02",
+   "nb_participants": 40,
+   "nb_accompagnateurs": 6,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 156.1,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "26-G-358",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-351",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "26-G-310",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "25-G-279",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "25-G-261",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2025-06-09",
+   "date_depart": "2025-06-11",
+   "nb_participants": 58,
+   "nb_accompagnateurs": 4,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "25-G-259",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "25-G-251",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2025-02-04",
+   "date_depart": "2025-02-06",
+   "nb_participants": 150,
+   "nb_accompagnateurs": 10,
+   "ratio": "1:20",
+   "nb_dejeuners": 2,
+   "nb_diners": 3,
+   "nb_soupers": 2,
+   "heures_extra": 0
+  },
+  "attendu": {
+   "forfait": 262.3,
+   "accompagnateur": 168.3
+  }
+ },
+ {
+  "onglet": "25-G-248",
+  "abandon": false,
+  "forfait": "classe_nature",
+  "entree": {
+   "date_arrivee": "2025-05-20",
+   "date_depart": "2025-05-21",
+   "nb_participants": 55,
+   "nb_accompagnateurs": 3,
+   "ratio": "1:20",
+   "nb_dejeuners": 1,
+   "nb_diners": 2,
+   "nb_soupers": 1,
+   "heures_extra": 3
+  },
+  "attendu": {
+   "forfait": 163.7875,
+   "accompagnateur": 96.35
+  }
+ },
+ {
+  "onglet": "25-G-243",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Journée régulier (9h - 17h)",
+   "heures_sup": 2
+  },
+  "attendu": {
+   "forfait": 840,
+   "heures_sup": 420
+  }
+ },
+ {
+  "onglet": "25-G-239",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "25-G-234",
+  "abandon": false,
+  "forfait": "location_salle",
+  "entree": {
+   "forfait_salle": "Forfait | Soirée régulier (16h - 23h)",
+   "heures_sup": 0
+  },
+  "attendu": {
+   "forfait": 1092,
+   "heures_sup": 0
+  }
+ },
+ {
+  "onglet": "25-G-203",
+  "abandon": false,
+  "forfait": "journee_plein_air",
+  "entree": {
+   "nb_participants": 59,
+   "nb_accompagnateurs": 7,
+   "ratio": "1:20",
+   "repas": 0
+  },
+  "attendu": {
+   "forfait": 38,
+   "accompagnateur": 0
+  }
+ }
+]

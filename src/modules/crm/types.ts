@@ -1,7 +1,18 @@
-export type Genre = 'ecole_primaire' | 'ecole_secondaire' | 'cegep' | 'universite' | 'entreprise' | 'organisme' | 'autre'
+export type Genre =
+  | 'ecole_primaire'
+  | 'ecole_secondaire'
+  | 'cegep'
+  | 'universite'
+  | 'entreprise'
+  | 'organisme'
+  | 'particulier'
+  | 'club_sportif'
+  | 'municipalite'
+  | 'association_etudiante'
+  | 'autre'
 export type Etape = 'identification' | 'contacte' | 'conversation' | 'conclusion'
 export type Saison = 'hiver' | 'printemps' | 'ete' | 'automne'
-export type GenreEchange = 'appel' | 'courriel' | 'rencontre' | 'note'
+export type GenreEchange = 'appel' | 'message_vocal' | 'texto' | 'courriel' | 'visite' | 'rencontre' | 'note'
 export type StatutRelance = 'a_faire' | 'faite' | 'annulee'
 /** Calculé par l'app d'après les vraies données (jamais stocké). */
 export type Statut = 'cible' | 'prospect' | 'client' | 'inactif'
@@ -12,6 +23,8 @@ export interface Organisation {
   genre: Genre
   ville: string | null
   adresse: string | null
+  province: string | null
+  code_postal: string | null
   telephone: string | null
   site_web: string | null
   notes: string | null
@@ -47,6 +60,8 @@ export interface Echange {
   texte: string
   auteur: string | null
   auteur_nom: string | null
+  /** Réservation concernée (journal de la réservation). */
+  reservation_id: string | null
   created_at: string
 }
 
@@ -68,6 +83,8 @@ export interface Relance {
   statut: StatutRelance
   note: string | null
   source_cle: string | null
+  /** Réservation concernée (prochaine action d'une demande). */
+  reservation_id: string | null
   faite_le: string | null
   faite_par_nom: string | null
   auteur_nom: string | null
@@ -106,7 +123,11 @@ export const GENRES: { id: Genre; nom: string }[] = [
   { id: 'cegep', nom: 'Cégep' },
   { id: 'universite', nom: 'Université' },
   { id: 'entreprise', nom: 'Entreprise' },
-  { id: 'organisme', nom: 'Organisme' },
+  { id: 'organisme', nom: 'Organisme (OSBL/OBNL)' },
+  { id: 'particulier', nom: 'Particulier' },
+  { id: 'club_sportif', nom: 'Club sportif' },
+  { id: 'municipalite', nom: 'Ville ou municipalité' },
+  { id: 'association_etudiante', nom: 'Association étudiante' },
   { id: 'autre', nom: 'Autre' },
 ]
 
@@ -134,7 +155,10 @@ export const STATUTS: { id: Statut; nom: string; style: string }[] = [
 
 export const GENRES_ECHANGE: { id: GenreEchange; nom: string; icone: string }[] = [
   { id: 'appel', nom: 'Appel', icone: '📞' },
+  { id: 'message_vocal', nom: 'Message vocal', icone: '📟' },
+  { id: 'texto', nom: 'Texto', icone: '💬' },
   { id: 'courriel', nom: 'Courriel', icone: '✉️' },
+  { id: 'visite', nom: 'Visite du site', icone: '🏕️' },
   { id: 'rencontre', nom: 'Rencontre', icone: '🤝' },
   { id: 'note', nom: 'Note', icone: '📝' },
 ]
