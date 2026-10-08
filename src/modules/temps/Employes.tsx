@@ -11,6 +11,7 @@ import {
   nomEmploye,
   useEmployesFeuille,
   useFeuillesEmployes,
+  useFeuillesPropres,
   useHeuresEmployes,
   useNoterEmploye,
   useNotesEmployes,
@@ -51,8 +52,8 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * colonne par jour de la période, comme l'ancien Google Sheets. Un seul
  * nombre d'heures par jour (pas de vacances ni de maladie). Filtres par
  * secteur et par compagnie (réglés dans le référentiel).
- * Un employé qui remplit sa feuille (« Remplit sa feuille » dans le
- * référentiel) : sa ligne reprend ses heures régulières, avec l'état de sa
+ * Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
+ * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
  */
 export function FeuilleEmployes() {
@@ -78,6 +79,7 @@ export function FeuilleEmployes() {
   const heures = useHeuresEmployes(debut)
   const notes = useNotesEmployes(debut)
   const feuilles = useFeuillesEmployes(debut)
+  const propres = useFeuillesPropres()
   const saisir = useSaisirEmploye(debut)
   const noter = useNoterEmploye(debut)
   const [erreurNote, setErreurNote] = useState<string | null>(null)
@@ -98,7 +100,7 @@ export function FeuilleEmployes() {
   // assignée (s'il est actif) ou qui a des heures ou une note ; un employé actif sans compagnie a une
   // ligne vide pour le signaler.
   const toutes = useMemo(() => {
-    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data) return null
+    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data || !propres.data) return null
     const statutDe = new Map(feuilles.data.map((f) => [`${f.employe_id}|${f.entreprise_id}`, f.statut]))
     const parCompagnie = new Map(entreprises.data.map((x) => [x.id, x]))
     const parLigne = new Map<string, Map<string, number>>()
@@ -131,7 +133,7 @@ export function FeuilleEmployes() {
           if (jour < milieu) sem1 += h
           else sem2 += h
         }
-        const statut = statutDe.get(cle) ?? (e.feuille_propre ? 'ouverte' : null)
+        const statut = statutDe.get(cle) ?? (propres.data.has(e.id) ? 'ouverte' : null)
         resultat.push({ cle, employe: e, entreprise: x, parJour, sem1, sem2, total: sem1 + sem2, note: noteDe.get(cle) ?? '', statut })
       }
     }
@@ -144,9 +146,9 @@ export function FeuilleEmployes() {
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise?.nom ?? '').localeCompare(b.entreprise?.nom ?? '', 'fr'),
     )
-  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, milieu])
+  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, milieu])
 
-  const erreur = employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error
+  const erreur = employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error ?? propres.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!toutes) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
@@ -293,7 +295,7 @@ export function FeuilleEmployes() {
                     const e = l.employe
                     const details = [e.nom_complet ? e.surnom : null, e.poste].filter(Boolean).join(' · ')
                     // Remplie par l'employé : on corrige dans sa feuille. Approuvée : gelée.
-                    const parSaFeuille = e.feuille_propre || (l.statut != null && l.statut !== 'ouverte')
+                    const parSaFeuille = !!propres.data?.has(e.id) || (l.statut != null && l.statut !== 'ouverte')
                     const saFeuille = l.entreprise ? `/temps/employe/${e.id}/${l.entreprise.id}?periode=${debut}` : null
                     return (
                       <tr key={l.cle} className="break-inside-avoid">

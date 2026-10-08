@@ -11,6 +11,10 @@ export interface Profil {
   nom: string | null
   role: Role
   actif: boolean
+  /** Fiche d'employé dont ce compte remplit lui-même la feuille de temps (jamais pour la direction). */
+  employe_id: string | null
+  /** Heures de woofing (non payées) sur sa feuille de temps. */
+  woofing: boolean
 }
 
 export interface AccesModule {
@@ -48,10 +52,6 @@ export interface Employe {
   secteur: string | null
   /** Compagnies (mastertimeline.entreprises) : une ligne par compagnie dans la feuille des employés. */
   entreprise_ids: string[]
-  /** Remplit lui-même sa feuille de temps (connexion avec `courriel`, obligatoire). */
-  feuille_propre: boolean
-  /** Heures de woofing (non payées) sur sa feuille de temps. */
-  woofing: boolean
   actif: boolean
   airtable_id: string | null
 }

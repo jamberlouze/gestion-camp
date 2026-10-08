@@ -7,7 +7,7 @@ import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { usePeriode } from './outils'
 import { nomDe, useAApprouver, useMembres } from './donnees'
-import { nomEmploye, useEmployesFeuille, useEntreprises } from './donneesEmployes'
+import { nomEmploye, useEmployesFeuille, useEntreprises, useFeuillesPropres } from './donneesEmployes'
 import { FeuilleEmployes } from './Employes'
 import { Feuille } from './Feuille'
 import { FeuilleEmploye } from './FeuilleEmploye'
@@ -127,11 +127,12 @@ function EspaceEmploye({ employeId }: { employeId: string }) {
   const [params, setParams] = useSearchParams()
   const employes = useEmployesFeuille()
   const entreprises = useEntreprises()
+  const propres = useFeuillesPropres()
 
-  const erreur = employes.error ?? entreprises.error
+  const erreur = employes.error ?? entreprises.error ?? propres.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   const employe = employes.data?.find((e) => e.id === employeId)
-  if (!employes.data || !entreprises.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  if (!employes.data || !entreprises.data || !propres.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
   if (!employe) return <Navigate to="/" replace />
 
   const siennes = entreprises.data.filter((x) => employe.entreprise_ids.includes(x.id) && x.actif)
@@ -176,7 +177,13 @@ function EspaceEmploye({ employeId }: { employeId: string }) {
           </button>
         </div>
         {choisie ? (
-          <FeuilleEmploye key={`${choisie.id}-${debut}`} employe={employe} entreprise={choisie} debut={debut} />
+          <FeuilleEmploye
+            key={`${choisie.id}-${debut}`}
+            employe={employe}
+            entreprise={choisie}
+            debut={debut}
+            woofing={!!propres.data.get(employe.id)}
+          />
         ) : (
           <p className={`${ui.carte} px-4 py-8 text-center text-sm text-pierre-500`}>
             Aucune compagnie n'est associée à votre fiche. Demandez à la direction de l'ajouter.
@@ -193,9 +200,10 @@ function FeuilleDUnEmploye() {
   const [debut, setDebut] = usePeriode()
   const employes = useEmployesFeuille()
   const entreprises = useEntreprises()
+  const propres = useFeuillesPropres()
   const employe = employes.data?.find((e) => e.id === employeId)
   const entreprise = entreprises.data?.find((x) => x.id === entrepriseId)
-  const erreur = employes.error ?? entreprises.error
+  const erreur = employes.error ?? entreprises.error ?? propres.error
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
@@ -213,12 +221,18 @@ function FeuilleDUnEmploye() {
       </div>
       {erreur ? (
         <p className={ui.erreur}>{messageErreur(erreur)}</p>
-      ) : !employes.data || !entreprises.data ? (
+      ) : !employes.data || !entreprises.data || !propres.data ? (
         <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
       ) : !employe || !entreprise ? (
         <p className={ui.erreur}>Employé ou compagnie introuvable.</p>
       ) : (
-        <FeuilleEmploye key={`${employeId}-${entrepriseId}-${debut}`} employe={employe} entreprise={entreprise} debut={debut} />
+        <FeuilleEmploye
+          key={`${employeId}-${entrepriseId}-${debut}`}
+          employe={employe}
+          entreprise={entreprise}
+          debut={debut}
+          woofing={!!propres.data.get(employeId)}
+        />
       )}
     </div>
   )

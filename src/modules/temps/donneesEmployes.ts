@@ -10,7 +10,8 @@ import { finPeriode } from './periodes'
 // seulement, pas de temps réel ni de cache sur l'appareil (clés ['temps', …]).
 // Plusieurs personnes peuvent remplir la feuille en même temps : elle se
 // relit toutes les 30 secondes (une case en cours de saisie n'est pas touchée).
-// Un employé qui remplit sa feuille (`feuille_propre`) écrit dans les mêmes
+// Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
+// Utilisateurs : core.profils.employe_id) écrit dans les mêmes
 // lignes, par sa feuille à lui (une par compagnie) : la grille ne fait que
 // les afficher, avec l'état de sa feuille. Le woofing (non payé) n'y paraît pas.
 
@@ -25,8 +26,6 @@ export interface EmployeFeuille {
   poste: string | null
   secteur: string | null
   entreprise_ids: string[]
-  feuille_propre: boolean
-  woofing: boolean
   actif: boolean
 }
 
@@ -81,10 +80,25 @@ export function useEmployesFeuille() {
       const { data, error } = await supabase
         .schema('core')
         .from('employes')
-        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, feuille_propre, woofing, actif')
+        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif')
         .order('surnom')
       if (error) throw error
       return data as EmployeFeuille[]
+    },
+  })
+}
+
+/**
+ * Employés qui remplissent leur feuille (compte relié, page Utilisateurs) →
+ * option woofing. Tous pour la direction, soi-même pour un employé.
+ */
+export function useFeuillesPropres() {
+  return useQuery({
+    queryKey: [S, 'feuilles-propres'],
+    queryFn: async () => {
+      const { data, error } = await db().rpc('feuilles_propres')
+      if (error) throw error
+      return new Map((data as { employe_id: string; woofing: boolean }[]).map((f) => [f.employe_id, f.woofing]))
     },
   })
 }

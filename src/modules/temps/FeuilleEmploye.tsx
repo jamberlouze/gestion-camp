@@ -29,7 +29,18 @@ const WOOFING = { id: 'woofing', libelle: 'Woofing' }
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
  * base) ; le woofing (non payé) reste ici.
  */
-export function FeuilleEmploye({ employe, entreprise, debut }: { employe: EmployeFeuille; entreprise: Entreprise; debut: string }) {
+export function FeuilleEmploye({
+  employe,
+  entreprise,
+  debut,
+  woofing,
+}: {
+  employe: EmployeFeuille
+  entreprise: Entreprise
+  debut: string
+  /** Option woofing de son compte (page Utilisateurs). */
+  woofing: boolean
+}) {
   const { estDirection, estAdmin, employeTemps } = useAuth()
   const donnees = useFeuilleEmploye(employe.id, entreprise.id, debut)
   const saisir = useSaisirFeuilleEmploye(employe.id, entreprise.id, debut)
@@ -48,7 +59,7 @@ export function FeuilleEmploye({ employe, entreprise, debut }: { employe: Employ
   const soi = employeTemps === employe.id
   // Mêmes règles que temps.peut_modifier_employe.
   const modifiable = statut === 'ouverte' ? estDirection || soi : statut === 'soumise' && estDirection
-  const types = employe.woofing || heures.some((h) => h.type === 'woofing') ? [REGULIERES, WOOFING] : [REGULIERES]
+  const types = woofing || heures.some((h) => h.type === 'woofing') ? [REGULIERES, WOOFING] : [REGULIERES]
   const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
   const jours = joursPeriode(debut)

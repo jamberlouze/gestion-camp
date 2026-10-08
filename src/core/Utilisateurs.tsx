@@ -21,6 +21,17 @@ const LIBELLE_ROLE = Object.fromEntries(ROLES.map((r) => [r.id, r.libelle])) as 
 /** Colonnes de la grille d'accès par rôle (l'admin a tout). */
 const ROLES_GRILLE: AccesRole['role'][] = ['direction', 'coordo', 'terrain']
 
+/** Fiche du référentiel qu'un compte peut remplir dans les Feuilles de temps. */
+interface FicheEmploye {
+  id: string
+  surnom: string
+  nom_complet: string | null
+  courriel: string | null
+  actif: boolean
+}
+
+const nomFiche = (e: FicheEmploye) => (e.nom_complet ? `${e.nom_complet} (${e.surnom})` : e.surnom)
+
 const LIBELLE_NIVEAU: Record<Niveau, string> = { lecture: 'Lecture', ecriture: 'Écriture' }
 
 /** Icône et couleur de chaque niveau : aucun (interdit), lecture (œil), écriture (crayon). */
@@ -83,15 +94,22 @@ export function Utilisateurs() {
   const { data } = useQuery({
     queryKey: ['utilisateurs'],
     queryFn: async () => {
-      const [profils, acces, roles] = await Promise.all([
+      const [profils, acces, roles, employes] = await Promise.all([
         supabase.schema('core').from('profils').select('*').order('courriel'),
         supabase.schema('core').from('acces_modules').select('*'),
         supabase.schema('core').from('acces_roles').select('*'),
+        supabase.schema('core').from('employes').select('id, surnom, nom_complet, courriel, actif'),
       ])
       if (profils.error) throw profils.error
       if (acces.error) throw acces.error
       if (roles.error) throw roles.error
-      return { profils: profils.data as Profil[], acces: acces.data as AccesModule[], roles: roles.data as AccesRole[] }
+      if (employes.error) throw employes.error
+      return {
+        profils: profils.data as Profil[],
+        acces: acces.data as AccesModule[],
+        roles: roles.data as AccesRole[],
+        employes: (employes.data as FicheEmploye[]).sort((a, b) => nomFiche(a).localeCompare(nomFiche(b), 'fr')),
+      }
     },
   })
 
@@ -99,6 +117,7 @@ export function Utilisateurs() {
     setErreur(null)
     client.invalidateQueries({ queryKey: ['utilisateurs'] })
     client.invalidateQueries({ queryKey: ['droits'] })
+    client.invalidateQueries({ queryKey: ['temps'] })
   }
   const surErreur = (e: unknown) => setErreur(messageErreur(e))
 
@@ -149,6 +168,10 @@ export function Utilisateurs() {
         personne apparaît ici dès l'invitation, avec le rôle <strong>Terrain</strong> (elle ne voit que
         Travaux) : pour un membre de la direction ou un coordonnateur, change son rôle ci-dessous. Elle se
         connecte ensuite sur le site avec son adresse (code par courriel), même si le lien d'invitation a expiré.
+        <br />
+        <strong>Feuille de temps :</strong> pour qu'un employé remplisse lui-même sa feuille, choisissez sa fiche
+        du référentiel sur sa ligne (ses heures arrivent sur sa ligne de l'onglet Employés) ; cochez Woofing s'il
+        fait aussi des heures de woofing, non payées. La direction a déjà sa propre feuille.
       </div>
       {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
 
@@ -160,6 +183,9 @@ export function Utilisateurs() {
               <th className="px-3 py-2 font-medium">Nom</th>
               <th className="px-3 py-2 font-medium">Rôle</th>
               <th className="px-3 py-2 font-medium">Accès</th>
+              <th className="px-3 py-2 font-medium" title="Employé qui remplit lui-même sa feuille de temps">
+                Feuille de temps
+              </th>
               <th className="px-3 py-2 font-medium">Actif</th>
             </tr>
           </thead>
@@ -219,6 +245,18 @@ export function Utilisateurs() {
                       )}
                     </td>
                     <td className="px-3 py-2">
+                      {p.role === 'admin' || p.role === 'direction' ? (
+                        <span className="whitespace-nowrap text-pierre-500">Sa feuille de direction</span>
+                      ) : (
+                        <ChoixFiche
+                          profil={p}
+                          employes={data.employes}
+                          prises={new Set(data.profils.filter((x) => x.id !== p.id && x.employe_id).map((x) => x.employe_id!))}
+                          changer={(valeurs) => majProfil.mutate({ id: p.id, ...valeurs })}
+                        />
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-foret-700"
@@ -230,7 +268,7 @@ export function Utilisateurs() {
                   </tr>
                   {ouvert === p.id && p.role !== 'admin' && (
                     <tr className="bg-pierre-50">
-                      <td colSpan={5} className="px-3 py-3">
+                      <td colSpan={6} className="px-3 py-3">
                         <p className="text-xs text-pierre-500">
                           Modules en plus de ceux du rôle {LIBELLE_ROLE[p.role]}. Le niveau le plus élevé l'emporte.
                         </p>
@@ -311,6 +349,59 @@ export function Utilisateurs() {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Feuille de temps d'un compte hors direction : la fiche du référentiel
+ * qu'il remplit lui-même (une seule fiche par compte, un seul compte par
+ * fiche), et l'option woofing. La fiche au même courriel est proposée en tête.
+ */
+function ChoixFiche({
+  profil,
+  employes,
+  prises,
+  changer,
+}: {
+  profil: Profil
+  employes: FicheEmploye[]
+  prises: Set<string>
+  changer: (valeurs: Partial<Profil>) => void
+}) {
+  const courriel = profil.courriel.toLowerCase()
+  const memeCourriel = (e: FicheEmploye) => e.courriel?.toLowerCase() === courriel
+  const offertes = employes
+    .filter((e) => e.id === profil.employe_id || (e.actif && !prises.has(e.id)))
+    .sort((a, b) => Number(memeCourriel(b)) - Number(memeCourriel(a)))
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <select
+        aria-label={`Feuille de temps de ${profil.courriel}`}
+        className={`${ui.champ} min-w-52`}
+        value={profil.employe_id ?? ''}
+        onChange={(e) => changer({ employe_id: e.target.value || null, ...(e.target.value ? {} : { woofing: false }) })}
+      >
+        <option value="">Ne remplit pas sa feuille</option>
+        {offertes.map((e) => (
+          <option key={e.id} value={e.id}>
+            {nomFiche(e)}
+            {memeCourriel(e) ? ' · même courriel' : ''}
+            {!e.actif ? ' (inactif)' : ''}
+          </option>
+        ))}
+      </select>
+      {profil.employe_id && (
+        <label className="flex items-center gap-1.5 whitespace-nowrap text-sm text-pierre-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-foret-700"
+            checked={profil.woofing}
+            onChange={(e) => changer({ woofing: e.target.checked })}
+          />
+          Woofing
+        </label>
+      )}
     </div>
   )
 }
