@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
@@ -11,9 +12,13 @@ import type { Recurrent } from './types'
 export function Odj() {
   const { points, recurrents, reunions, jours, ecriture } = useDonnees()
   const auj = aujourdhui()
+  const [plusTardOuvert, setPlusTardOuvert] = useState(false)
 
   const quotidien = points.filter((p) => !p.reunion_id)
-  const ouverts = quotidien.filter((p) => p.statut === 'ouvert').sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const enAttente = quotidien.filter((p) => p.statut === 'ouvert')
+  const ouverts = enAttente.filter((p) => !p.pour_le || p.pour_le <= auj).sort((a, b) => a.created_at.localeCompare(b.created_at))
+  // Ajoutés depuis la vue Semaine pour un autre jour.
+  const plusTard = enAttente.filter((p) => p.pour_le && p.pour_le > auj).sort((a, b) => a.pour_le!.localeCompare(b.pour_le!) || a.created_at.localeCompare(b.created_at))
   const fixes = recurrentsDuJour(recurrents, points, auj)
   const traites = quotidien.filter((p) => p.statut === 'traite' && p.traite_jour === auj).sort((a, b) => (a.traite_le ?? '').localeCompare(b.traite_le ?? ''))
   const prochaines = reunionsAVenir(reunions).slice(0, 4)
@@ -56,6 +61,26 @@ export function Odj() {
             </ul>
           )}
         </section>
+
+        {plusTard.length > 0 && (
+          <section>
+            <button
+              type="button"
+              className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500 hover:text-pierre-800"
+              onClick={() => setPlusTardOuvert(!plusTardOuvert)}
+              aria-expanded={plusTardOuvert}
+            >
+              {plusTardOuvert ? '▾' : '▸'} Prévus pour un autre jour ({plusTard.length})
+            </button>
+            {plusTardOuvert && (
+              <ul className="space-y-1.5">
+                {plusTard.map((p) => (
+                  <CartePoint key={p.id} point={p} />
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {traites.length > 0 && (
           <section>

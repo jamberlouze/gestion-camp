@@ -3,13 +3,13 @@ import { Link, useSearchParams } from 'react-router'
 import { IconeChevron } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
-import { CartePoint } from './commun'
+import { AjoutPoint, CartePoint } from './commun'
 import { nomReunion, useDonnees } from './contexte'
 import { ajouterJours, jourDe, jourLisible, lundi, normaliser } from './outils'
 
 /** Ce qui a été traité chaque jour d'une semaine (comme une diapo de l'ancienne présentation), et la recherche. */
 export function Semaine() {
-  const { points, reunions } = useDonnees()
+  const { points, reunions, ecriture } = useDonnees()
   const [params, setParams] = useSearchParams()
   const [recherche, setRecherche] = useState('')
   const auj = aujourdhui()
@@ -44,9 +44,14 @@ export function Semaine() {
       .filter((p) => !p.reunion_id && p.statut === 'traite' && p.traite_jour === jour)
       .sort((a, b) => (a.traite_le ?? '').localeCompare(b.traite_le ?? ''))
   const speciales = (jour: string) => reunions.filter((r) => r.jour === jour)
-  // Fin de semaine : seulement s'il s'est passé quelque chose.
-  const affiches = jours.filter((j, i) => i < 5 || traitesLe(j).length || speciales(j).length)
-  const encoreOuverts = points.filter((p) => !p.reunion_id && p.statut === 'ouvert' && jourDe(p.created_at) >= debut && jourDe(p.created_at) <= fin)
+  // Points ajoutés pour un jour à venir (ils arriveront à l'ordre du jour ce matin-là).
+  const prevusLe = (jour: string) =>
+    jour > auj ? points.filter((p) => !p.reunion_id && p.statut === 'ouvert' && p.pour_le === jour).sort((a, b) => a.created_at.localeCompare(b.created_at)) : []
+  // Fin de semaine : seulement s'il s'est passé (ou s'il est prévu) quelque chose.
+  const affiches = jours.filter((j, i) => i < 5 || traitesLe(j).length || speciales(j).length || prevusLe(j).length)
+  const encoreOuverts = points.filter(
+    (p) => !p.reunion_id && p.statut === 'ouvert' && !(p.pour_le && p.pour_le > auj) && jourDe(p.created_at) >= debut && jourDe(p.created_at) <= fin,
+  )
 
   return (
     <div className="space-y-4">
@@ -75,6 +80,7 @@ export function Semaine() {
         {affiches.map((jour) => {
           const liste = traitesLe(jour)
           const sp = speciales(jour)
+          const prevus = prevusLe(jour)
           const passe = jour < auj
           return (
             <section key={jour}>
@@ -96,7 +102,20 @@ export function Semaine() {
                   ))}
                 </ul>
               ) : (
-                !sp.length && <p className="text-sm text-pierre-400">{passe ? '❌ Pas de réunion' : jour === auj ? 'Rien de traité encore.' : '—'}</p>
+                passe && !sp.length && <p className="text-sm text-pierre-400">❌ Pas de réunion</p>
+              )}
+              {prevus.length > 0 && (
+                <ul className="mt-1.5 space-y-1.5">
+                  {prevus.map((p) => (
+                    <CartePoint key={p.id} point={p} masquerPourLe />
+                  ))}
+                </ul>
+              )}
+              {/* Aujourd'hui et les jours à venir : on peut y ajouter un point. */}
+              {!passe && ecriture && (
+                <div className="mt-1.5">
+                  <AjoutPoint compact pourLe={jour === auj ? null : jour} placeholder={jour === auj ? 'Ajouter un point pour aujourd’hui…' : `Ajouter un point pour ${jourLisible(jour, auj)}…`} />
+                </div>
               )}
             </section>
           )

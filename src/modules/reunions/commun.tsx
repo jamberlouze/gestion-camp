@@ -77,6 +77,7 @@ export function CartePoint({
   avantActions,
   lecture,
   afficherJour,
+  masquerPourLe,
 }: {
   point: Point
   reports?: number
@@ -86,6 +87,8 @@ export function CartePoint({
   lecture?: boolean
   /** Montre le jour où le point a été traité (recherche). */
   afficherJour?: boolean
+  /** Le jour prévu est déjà donné par la vue (Semaine). */
+  masquerPourLe?: boolean
 }) {
   const { ecriture, moi, reunions } = useDonnees()
   const modifier = useModifierPoint()
@@ -96,7 +99,7 @@ export function CartePoint({
   const auj = aujourdhui()
 
   const changerStatut = (statut: StatutPoint) => modifier.mutate({ id: point.id, champs: { statut }, affiche: affichageStatut(statut, moi) })
-  const envoyerVers = (reunion: string | null) => modifier.mutate({ id: point.id, champs: { reunion_id: reunion, ordre: ordreEnFin() } })
+  const envoyerVers = (reunion: string | null) => modifier.mutate({ id: point.id, champs: { reunion_id: reunion, pour_le: null, ordre: ordreEnFin() } })
   const autres = reunionsAVenir(reunions).filter((r) => r.id !== point.reunion_id)
 
   return (
@@ -122,6 +125,9 @@ export function CartePoint({
               <span className="rounded-full bg-pierre-100 px-1.5 py-0.5 text-xs text-pierre-600" title="Réunions où il était à l’ordre du jour sans être traité">
                 reporté {reports}×
               </span>
+            )}
+            {ouvert && point.pour_le && point.pour_le > auj && !masquerPourLe && (
+              <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">pour le {jourLisible(point.pour_le, auj)}</span>
             )}
             {afficherJour && point.traite_jour && <span className="text-xs text-pierre-500">{jourLisible(point.traite_jour, auj)}</span>}
           </div>
@@ -225,14 +231,27 @@ function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
 }
 
 /** Ajout d'un point : une ligne, Entrée. */
-export function AjoutPoint({ reunionId = null, ordre = 0, placeholder }: { reunionId?: string | null; ordre?: number; placeholder?: string }) {
+export function AjoutPoint({
+  reunionId = null,
+  ordre = 0,
+  pourLe = null,
+  placeholder,
+  compact,
+}: {
+  reunionId?: string | null
+  ordre?: number
+  /** Quotidien : jour où le point apparaîtra à l'ordre du jour (null = tout de suite). */
+  pourLe?: string | null
+  placeholder?: string
+  compact?: boolean
+}) {
   const { moi } = useDonnees()
   const ajouter = useAjouterPoint()
   const [texte, setTexte] = useState('')
 
   const envoyer = () => {
     if (!texte.trim()) return
-    const p = nouveauPoint({ texte: texte.trim(), reunion_id: reunionId, ordre }, moi)
+    const p = nouveauPoint({ texte: texte.trim(), reunion_id: reunionId, ordre, pour_le: pourLe }, moi)
     ajouter.mutate({ ligne: aEnvoyer(p), affiche: p })
     setTexte('')
   }
@@ -245,15 +264,15 @@ export function AjoutPoint({ reunionId = null, ordre = 0, placeholder }: { reuni
         envoyer()
       }}
     >
-      <Auteur nom={moi.nom ?? moi.courriel} />
+      {!compact && <Auteur nom={moi.nom ?? moi.courriel} />}
       <input
-        className="min-w-0 flex-1 rounded-lg border border-pierre-300 bg-white px-3 py-2 text-[15px] focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20"
+        className={`min-w-0 flex-1 rounded-lg border border-pierre-300 bg-white px-3 focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20 ${compact ? 'py-1.5 text-sm' : 'py-2 text-[15px]'}`}
         placeholder={placeholder ?? 'Ajouter un point à l’ordre du jour…'}
         value={texte}
         onChange={(e) => setTexte(e.target.value)}
         aria-label="Nouveau point"
       />
-      <button className={ui.bouton} disabled={!texte.trim()}>
+      <button className={compact ? ui.boutonSecondaire + ' !py-1.5' : ui.bouton} disabled={!texte.trim()}>
         Ajouter
       </button>
     </form>

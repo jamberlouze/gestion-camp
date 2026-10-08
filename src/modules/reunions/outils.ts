@@ -92,6 +92,7 @@ export function reports(p: Point, jours: Map<string, string>, aujourdhui: string
   let n = 0
   for (const [jour, fin] of jours) {
     if (jour >= aujourdhui || p.created_at >= fin) continue
+    if (p.pour_le && p.pour_le > jour) continue
     if (p.traite_jour && p.traite_jour <= jour) continue
     n++
   }

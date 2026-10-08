@@ -46,6 +46,8 @@ export interface Point {
   details: string | null
   reunion_id: string | null
   ordre: number
+  /** Quotidien : à l'ordre du jour à partir de ce jour (null = tout de suite). */
+  pour_le: string | null
   recurrent_id: string | null
   statut: StatutPoint
   decision: string | null
