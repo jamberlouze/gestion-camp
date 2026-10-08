@@ -138,7 +138,7 @@ Accompagnateur payant = le repas seulement. Gratuités comme en Classe nature.
 - Un catalogue où chaque produit a un **code**, une **unité** (par personne, par jour, par nuit, par heure, par voyage, forfait…), un prix par exercice et une note de minimum (« Min 30 personnes », « min. 20 billets »). La note est affichée comme avertissement, sans blocage.
 - **Produits de fournisseurs** : coût du fournisseur × majoration → prix.
   - Billets et activités : × 1,15. Mont-Blanc : arrondi au dollar supérieur.
-  - Transport : × 1,15 × 1,15.
+  - Transport : × 1,15 (Maxime, 2026-10-08 : le 2e × 1,15 du chiffrier n'était qu'une protection en attendant les hausses du fournisseur).
   - Vélo : × 1,15 + 1 $.
   - La majoration est réglable par produit.
 - Les surveillances de soirée (150 $) et de nuit (300 $) entrent au catalogue. Aujourd'hui, elles sont tapées à la main.
@@ -172,6 +172,8 @@ Légende :
 - ✔ = écrit clairement dans un contrat ou le chiffrier, ou confirmé par Maxime ;
 - ⚠ = choisi par Claude, parce que les contrats sont flous ou se contredisent.
 
+**Validé par Maxime le 2026-10-08** : il a commenté P12, F1, F3, F6, F7, F8, F10, F17, F18 et F21 (reportés ci-dessous). Les règles qu'il n'a pas commentées sont tenues pour acceptées.
+
 Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accueil de groupe, **LS** = Location de salle.
 
 ### A. Calcul de l'estimé
@@ -189,7 +191,7 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 | P9 | Section = **lits de la section × prix du lit (25,20 $)**, par nuit, peu importe le nombre de personnes. | AG | ✔ (Maxime : au prorata des lits) |
 | P10 | Repas = nombre de repas × prix × personnes. | AG | ✔ |
 | P11 | Salle :<br>• forfait jour 840 $, soir 1 092 $, journée complète 1 815 $ ;<br>• heures supplémentaires 210 $/h ;<br>• **les repas sont facturés** (le modèle actuel les oublie). | LS | ✔ |
-| P12 | Fournisseurs = coût × majoration :<br>• × 1,15 ;<br>• transport × 1,15 × 1,15 ;<br>• Mont-Blanc arrondi au dollar supérieur. | tous | ✔ chiffrier |
+| P12 | Fournisseurs = coût × majoration :<br>• × 1,15, **transport compris** ;<br>• Mont-Blanc arrondi au dollar supérieur. | tous | ✔ Maxime : transport × 1,15 seulement (migration 20261008210842) |
 | P13 | Rabais = ligne négative (en montant ou en %), avant taxes. | tous | ✔ |
 | P14 | Minimums (30 personnes, 6 h, 20 billets…) : simple avertissement, pas de blocage. | tous | ⚠ |
 | P15 | TPS 5 % et TVQ 9,975 % sur le sous-total, **arrondies au cent**. | tous | ✔ taux / ⚠ arrondi |
@@ -200,28 +202,28 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 
 | # | Règle | Forfaits | Statut |
 |---|---|---|---|
-| F1 | Chaque acompte = **% du montant avant taxes + les taxes**. Dans QBO, c'est une facture progressive du devis. | tous | ✔ (Maxime, SOP) |
+| F1 | Chaque acompte = **% du montant avant taxes + les taxes**. Dans QBO, c'est une facture progressive du devis. | tous | ✔ (Maxime, SOP) ; façon de faire dans QBO : voir §6 (Q12) |
 | F2 | Échéancier :<br>• **25 / 50 / 25** en CN et JPA ;<br>• **25 / 75** en AG et LS ;<br>• toute autre répartition convenue peut être réglée par réservation. | tous | ✔ contrats, SOP |
-| F3 | **Acompte 1 (25 %)** : facturé à la signature du contrat, **payable en 14 jours**. | tous | ⚠ (contrat : 14 jours ; facture actuelle : « 30 jours ») |
+| F3 | **Acompte 1 (25 %)** : facturé à la signature du contrat, **payable sur réception**. C'est la réception de ce paiement qui confirme la réservation. | tous | ✔ Maxime. Le contrat dit encore « 14 jours après la signature » : clause à harmoniser dans le modèle (phase 2) |
 | F4 | **Acompte 2** (50 % en CN et JPA, **75 %** en AG et LS) : dû 21 jours avant l'arrivée, facturé 14 jours avant son échéance. | tous | ✔ contrat / ⚠ AG et LS à 75 % (le gabarit actuel facture 50 %) |
 | F5 | **Facture finale** = valeur finale du contrat − tout ce qui a déjà été facturé. C'est la dernière facture progressive. Le devis QBO est ajusté d'abord. | tous | ✔ SOP |
-| F6 | En AG et LS, il n'y a de facture finale que s'il y a eu un changement : ajouts, bris, repas sous le minimum. | AG, LS | ⚠ (le contrat ne dit rien) |
-| F7 | Facture finale **payable 14 jours après son envoi**. | tous | ⚠ (CN : le tableau du contrat dit « 14 jours après le départ », le texte dit « après réception de la facture ») |
-| F8 | **Réservation tardive** (signature moins de 35 jours avant l'arrivée) : acomptes 1 et 2 réunis en une facture, payable en 14 jours mais au plus tard la veille de l'arrivée. | tous | ⚠ |
+| F6 | **Bris et frais hors forfait** (dommages, ménage exceptionnel, matelas…) : **facture séparée**, jamais sur la facture finale, pour ne pas gonfler le montant du séjour dans les rapports. En AG et LS, il n'y a de facture finale que si le séjour lui-même a changé (ajouts, repas sous le minimum). | tous | ✔ Maxime |
+| F7 | Facture finale **payable sur réception** (factures séparées aussi). | tous | ✔ Maxime. Le contrat CN et JPA dit « 14 jours » : à harmoniser dans le modèle (phase 2) |
+| F8 | **Réservation tardive** (signature moins de 35 jours avant l'arrivée) : acomptes 1 et 2 réunis en une facture, payable sur réception (F3). | tous | ✔ Maxime |
 | F9 | Changement de nombre : avis par courriel **au moins 21 jours avant l'arrivée**. Après, c'est le nombre de l'estimé qui est facturé. | tous | ✔ contrat |
-| F10 | **Minimum 90 %** : si le nombre réel est sous 90 % des participants de l'estimé, on facture au moins 90 % du total de l'estimé. Les accompagnateurs ne comptent pas. | CN, JPA | ✔ / ⚠ accompagnateurs |
+| F10 | **Minimum 90 %** : si le nombre réel est sous 90 % des participants de l'estimé, on facture au moins 90 % du total de l'estimé. Les accompagnateurs ne comptent pas. | CN, JPA | ✔ Maxime |
 | F11 | **Minimum 90 %** : repas facturés ≥ 90 % du coût des repas de l'estimé. | AG, LS | ✔ |
 | F12 | Ne baisse jamais : l'hébergement (AG), la salle (LS), le forfait individuel (CN, JPA). | — | ✔ |
 | F13 | Ajout ou changement **avant l'arrivée** : nouvelle version de l'estimé envoyée au client. Le devis QBO est ajusté, et les factures progressives qui restent suivent le nouveau total. | tous | ✔ contrat, SOP |
-| F14 | Ajout **pendant le séjour**, bris : sur la facture finale. | tous | ✔ |
+| F14 | Ajout **au séjour pendant le séjour** (repas, nuitée, activité) : devis ajusté, puis facture finale. Bris : facture séparée (F6). | tous | ✔ |
 | F15 | Ajout **après la facture finale** : nouvelle facture. Réduction après la facture finale : **note de crédit**, jamais de facture modifiée. | tous | ✔ SOP |
 | F16 | **Annulation** : on retient 25 % (60 jours ou plus avant l'arrivée), 60 % (30 à 59 jours) ou 80 % (moins de 30 jours) du total taxes comprises. | tous | ✔ / ⚠ base taxes comprises |
-| F17 | Montant d'annulation à payer = palier − déjà facturé. S'il a été facturé plus que le palier : note de crédit et remboursement. | tous | ⚠ |
-| F18 | Annulation avant le paiement de l'acompte : les 25 % sont dus quand même. | tous | ⚠ |
+| F17 | Montant d'annulation à payer = palier − déjà facturé. S'il a été facturé plus que le palier : note de crédit et remboursement. | tous | ✔ Maxime |
+| F18 | ~~Annulation avant le paiement de l'acompte : les 25 % sont dus.~~ **Retirée** : en pratique, on ne l'exige jamais. Une demande annulée avant le paiement de l'acompte se ferme sans frais. | tous | ✔ Maxime |
 | F19 | **Dépôt de sécurité** préautorisé par carte à l'arrivée, hors de l'app : 2 000 $ en AG, 1 000 $ en LS. | AG, LS | ✔ |
 | F20 | **Défaut de paiement** : annulation possible, sans remboursement. Pas d'intérêts. | tous | ✔ |
-| F21 | **Contrat à signer dans les 7 jours**, sinon les dates peuvent être libérées. Rappel au 5e jour. | tous | ✔ / ⚠ rappel |
-| F22 | Numéro de réservation `AA-G-nnn` (exercice de l'arrivée, figé). Numéros de facture : voir Q10. | tous | ✔ |
+| F21 | **Contrat à signer dans les 7 jours**, sinon les dates peuvent être libérées. Rappel au 5e jour. | tous | ✔ Maxime |
+| F22 | Numéro de réservation `AA-G-nnn` (exercice de l'arrivée, figé). **Numéros de facture donnés par QBO** ; l'app les relie à la réservation. | tous | ✔ Maxime (Q10) |
 | F23 | Compagnie :<br>• **GBPA+** : TPS 704647619 RT0001, TVQ 1230915446 TQ0001, réponse Interac BPAMT ;<br>• **Opikawa** : TPS 764169736 RT0001, TVQ 1226925003 TQ0001, réponse Interac OPIMT. | tous | ✔ |
 | F24 | Paiement :<br>• comptant sur rendez-vous ;<br>• Interac à inscriptions@ (question = n° de réservation) ;<br>• chèque ;<br>• dépôt direct (spécimen en dernière page du contrat et joint au devis QBO). | tous | ✔ |
 | F25 | Les paiements sont **entrés dans QBO** par l'adjointe (SOP), qui reste la source. L'app ne fait que les relire. | tous | ✔ SOP |
@@ -248,23 +250,37 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 
 ## 6. QuickBooks Online : l'app fait les étapes du SOP
 
-Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le devis est accepté. L'app remplace Excel et fait elle-même les étapes QBO, par l'API de QuickBooks.
+Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le devis est accepté. L'app remplace Excel et fait elle-même les étapes QBO que l'API permet.
 
-| Étape du SOP | Ce que fait l'app |
-|---|---|
-| Vérifier ou créer le client | Cherche le client dans QBO (nom de l'organisation, courriel), le relie une fois pour toutes à l'organisation du CRM, met à jour l'adresse et le contact, ou le crée. |
-| Recréer le devis accepté dans QBO | À la **signature du contrat** :<br>• crée le devis QBO avec une ligne par catégorie de produit QBO ;<br>• joint le contrat signé et le spécimen de chèque. |
-| **Contrôle obligatoire** : total QBO = total accepté | Vérifié automatiquement. S'il y a un écart, la facturation s'arrête et une alerte part. |
-| Facture progressive (25 %, 50 % ou 75 %) | Créée par l'app à la bonne date (§5), liée au devis, avec l'échéance du contrat. L'API n'a pas de champ « pourcentage » : l'app calcule le % de chaque ligne. **À valider dans une compagnie d'essai QBO.** |
-| Envoyer la facture | L'app récupère le PDF officiel de QBO et l'envoie depuis inscriptions@, avec le lien de la page client. |
-| Ajuster le devis avant la facture finale | Nombre réel, ajouts, bris, minimum de 90 % : le devis QBO est modifié. Les factures déjà émises ne sont jamais touchées. |
-| Facture finale | Dernière facture progressive : le solde du devis. |
-| Ajout ou réduction après la facture finale | Nouvelle facture, ou note de crédit. |
-| Recevoir un paiement | **Reste dans QBO** (l'adjointe, compte 1000 - Compte Chèque ; un dépôt peut couvrir plusieurs écoles). |
-| État de compte | L'app relit les soldes des factures dans QBO toutes les 15 minutes. Elle affiche payé, en attente ou en retard, les vues « Soldes à régler » et « Paiements en retard », et envoie les rappels de paiement. |
+**Limite de l'API, vérifiée le 2026-10-08** dans la référence officielle de l'objet Invoice d'Intuit : « Only one link can be made to an Estimate. Progress Invoicing is not supported via the API. »
+- Dans l'écran de QBO, un devis se découpe bien en factures progressives par pourcentage : la comptable a raison.
+- Par l'API, une seule facture peut être liée à un devis. L'app ne peut donc pas créer elle-même les 2 ou 3 factures progressives d'un même devis.
 
-- **Deux compagnies** : si Opikawa a son propre dossier QBO, l'app se connecte aux deux (Q8).
-- **En attendant que cette phase soit en ligne**, l'app crée des tâches « À facturer dans QBO ». Chacune donne les montants par catégorie à recopier, et l'adjointe suit le SOP à la main. Les phases 1 à 5 peuvent donc servir avant la phase QBO.
+| Étape du SOP | Par l'app (API) | Remarque |
+|---|---|---|
+| Vérifier ou créer le client | ✅ l'app cherche le client (nom, courriel), le relie une fois pour toutes à l'organisation du CRM, met à jour l'adresse et le contact, ou le crée. Conditions de paiement du client : **payable sur réception**. | Deux dossiers QBO : GBPA+ et Opikawa (Q8) |
+| Recréer le devis accepté | ✅ à la signature du contrat ; joint le contrat signé et le spécimen de chèque | Lignes par produit et service QBO (Q9) |
+| Contrôle : total QBO = total accepté | ✅ automatique ; s'il y a un écart, la facturation s'arrête et une alerte part | |
+| **Factures progressives** (25 %, 50 % ou 75 %, solde) | ❌ **pas par l'API** : voir Q12 | |
+| Ajuster le devis avant la facture finale | ✅ nombre réel, ajouts, minimum de 90 % | Les factures émises ne sont jamais touchées |
+| **Facture séparée** (bris, hors forfait) | ✅ facture indépendante du devis | F6 |
+| Note de crédit (réduction après la facture finale) | ✅ | F15, F17 |
+| Recevoir un paiement | Reste dans QBO (l'adjointe, compte 1000 - Compte Chèque) | SOP |
+| État de compte | ✅ l'app relit les factures et leurs soldes toutes les 15 minutes ; elle note **les numéros de facture de QBO** sur la réservation (Q10) | |
+
+**Q12 — Comment faire les factures progressives ?** Deux façons possibles :
+- **A. Un clic dans QBO, le reste par l'app** (recommandé) :
+  - l'app crée le devis ;
+  - au bon moment, elle crée une tâche « Facturer 25 % du devis 27-G-054 dans QBO » ;
+  - l'adjointe fait « Créer une facture → 25 % » dans QBO (une minute) ;
+  - l'app retrouve la facture toute seule (elle est liée au devis), note son numéro, envoie le PDF officiel au client depuis inscriptions@ et suit le paiement.
+  - Le SOP est respecté à la lettre, et le rapport « Estimations et facturation progressive » de QBO reste juste.
+- **B. Tout par l'app** :
+  - l'app crée elle-même chaque facture (25 %, 50 %, solde), avec les lignes du devis au prorata ;
+  - seule la première est liée au devis.
+  - QBO ne sait donc plus ce qui reste à facturer sur le devis : c'est l'app qui le suit. Le SOP serait à ajuster.
+
+**En attendant que cette phase soit en ligne**, l'app crée les mêmes tâches « À facturer dans QBO », avec les montants à recopier ; l'adjointe suit le SOP à la main.
 
 ## 7. CRM intégré à la réservation
 
@@ -341,7 +357,9 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
 - Remplacent les « formulaires santé et allergies » exigés à J−21 par les contrats. Champs : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments, matricule ; aussi pour les professeurs et les accompagnateurs.
 - Lien public par réservation, envoyé avec la pré-arrivée ; suivi du nombre de fiches reçues sur le nombre attendu.
 - Accès limité à un rôle précis. Cuisine ne voit que des totaux (repas sans gluten…).
-- **Effacement automatique 3 mois après le départ** (Loi 25 ; durée réglable).
+- **Effacement automatique 3 mois après le départ** (Loi 25 ; durée réglable) **des données de santé seulement** : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments.
+- **On garde** (réponse de Maxime du 2026-10-08) : les adresses courriel et les informations génériques (groupe, date de la visite, forfait, etc.).
+  - Garder un courriel pour écrire plus tard à la personne demande son consentement (Loi 25, loi anti-pourriel) : la fiche aura une case « J'accepte de recevoir des nouvelles de la BPA », non cochée par défaut.
 
 ## 12. Rapports
 
@@ -401,6 +419,8 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
 
 ## 16. Anomalies trouvées dans les fichiers actuels
 
+À traiter plus tard (Maxime, 2026-10-08).
+
 **Argent non facturé ou mal facturé :**
 - Location de salle : les repas saisis ne sont reportés dans aucune ligne de l'estimé (27-G-124, 27-G-116, 27-G-112).
 - Accueil de groupe : les extras des lignes 31 et 32 ne sont jamais reportés (27-G-072 collation, 27-G-009 arrivée hâtive, 27-G-104 animation, 27-G-102 cuisine).
@@ -437,8 +457,12 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
 - **Q7** : toute la saison 2026-27 dans l'app, bascule à un moment précis avec l'équipe.
 - iCal Airbnb fournis (2 annonces : VF complète, VF bas).
 
+**Réponses du 2026-10-08 (2e série) :**
+- **Q8** : oui, Opikawa a son propre dossier QBO → deux connexions.
+- **Q9** : produits et services QBO pas encore connus.
+- **Q10** : QBO numérote les factures ; l'app relie ces numéros à la réservation.
+- **Q11** : la comptable fait des essais ; le but est d'entrer ces factures dans QBO.
+
 **Questions ouvertes :**
-- **Q8** : Opikawa a-t-elle son propre dossier QBO ?
-- **Q9** : liste des produits et services de QBO à utiliser par catégorie (hébergement, repas, animation, salle, activités, transport…). À demander à la comptable, ou lue par l'API une fois QBO connecté.
-- **Q10** : numéros de facture. Garder `27-G-054-1`, `-2`, « Facture finale » (numéros personnalisés dans QBO) ou laisser QBO numéroter ?
-- **Q11** : les factures 1 et 2 de 2026-27 déjà produites par autoCrat sont-elles entrées dans QBO ?
+- **Q9** : liste des produits et services QBO (à venir de la comptable).
+- **Q12** : factures progressives, façon A (un clic dans QBO) ou B (tout par l'app) ? Voir §6.
