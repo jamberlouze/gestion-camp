@@ -292,7 +292,7 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
           {emoji ?? '…'}
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-medium">L'émoji du jour</p>
+          <p className="text-sm font-medium">Poke du jour</p>
           <p className="text-xs text-pierre-500">Un poke par jour · revient à minuit</p>
         </div>
       </div>
