@@ -9,7 +9,7 @@ import { aujourdhui } from '@/shell/pokes'
 import { AjoutPoint, CartePoint } from './commun'
 import { nomReunion, useDonnees } from './contexte'
 import { useAjouterPoints, useAjouterReunion, useModifierPoint, useModifierReunion, useSupprimerReunion } from './donnees'
-import { dureeLisible, jourLisible } from './outils'
+import { jourLisible } from './outils'
 import { GABARITS, GENRES, type GenreReunion, type Point, type Reunion } from './types'
 
 /** « 9 h », « 13 h 30 ». */
@@ -29,7 +29,6 @@ export function Speciales() {
   const Ligne = ({ r }: { r: Reunion }) => {
     const siens = points.filter((p) => p.reunion_id === r.id)
     const ouverts = siens.filter((p) => p.statut === 'ouvert').length
-    const duree = siens.reduce((t, p) => t + (p.duree_min ?? 0), 0)
     const compagnie = entreprises.find((e) => e.id === r.entreprise_id)
     return (
       <li>
@@ -44,7 +43,6 @@ export function Speciales() {
           <span className="ml-auto text-xs text-pierre-500">
             {siens.length} point{siens.length > 1 ? 's' : ''}
             {ouverts > 0 && r.jour && r.jour < auj && ` · ${ouverts} non traité${ouverts > 1 ? 's' : ''}`}
-            {duree > 0 && ` · ${dureeLisible(duree)}`}
           </span>
         </Link>
       </li>
@@ -54,7 +52,7 @@ export function Speciales() {
   return (
     <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-pierre-600">MT Lab, post-mortem, planification : chaque réunion a son ordre du jour minuté et son compte rendu.</p>
+        <p className="text-sm text-pierre-600">MT Lab, post-mortem, planification : chaque réunion a son ordre du jour et son compte rendu.</p>
         {ecriture && (
           <button className={ui.bouton} onClick={() => setNouvelle(true)}>
             + Nouvelle réunion
@@ -80,7 +78,7 @@ export function Speciales() {
   )
 }
 
-/** Fiche d'une réunion spéciale : infos, ordre du jour minuté, compte rendu. */
+/** Fiche d'une réunion spéciale : infos, ordre du jour, compte rendu. */
 export function Speciale() {
   const { id } = useParams()
   const { reunions, points, entreprises, ecriture } = useDonnees()
@@ -100,21 +98,9 @@ export function Speciale() {
     )
 
   const siens = points.filter((p) => p.reunion_id === r.id).sort((a, b) => a.ordre - b.ordre || a.created_at.localeCompare(b.created_at))
-  const duree = siens.reduce((t, p) => t + (p.duree_min ?? 0), 0)
   const ouverts = siens.filter((p) => p.statut === 'ouvert')
   const compagnie = entreprises.find((e) => e.id === r.entreprise_id)
   const passee = !!r.jour && r.jour < auj
-
-  // Heure de début de chaque point (si la réunion a une heure).
-  const debuts = new Map<string, string>()
-  if (r.heure) {
-    const [h, m] = r.heure.split(':').map(Number)
-    let minutes = h * 60 + m
-    for (const p of siens) {
-      debuts.set(p.id, heureLisible(`${Math.floor(minutes / 60) % 24}:${String(minutes % 60).padStart(2, '0')}`))
-      minutes += p.duree_min ?? 0
-    }
-  }
 
   const deplacer = (p: Point, sens: -1 | 1) => {
     const i = siens.indexOf(p)
@@ -168,7 +154,7 @@ export function Speciale() {
       <section className="space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-xs font-medium uppercase tracking-wide text-pierre-500">
-            Ordre du jour ({siens.length}){duree > 0 && ` · ${dureeLisible(duree)}`}
+            Ordre du jour ({siens.length})
           </h3>
           {passee && ouverts.length > 0 && ecriture && (
             <button type="button" className="text-sm text-foret-800 hover:underline" onClick={toutRenvoyer}>
@@ -184,7 +170,6 @@ export function Speciale() {
                 point={p}
                 avantActions={
                   <>
-                    {debuts.get(p.id) && <span className="mr-1 text-xs tabular-nums text-pierre-400">{debuts.get(p.id)}</span>}
                     <button type="button" className="rounded px-1 text-pierre-400 hover:bg-pierre-100 hover:text-pierre-800 disabled:invisible" disabled={i === 0} onClick={() => deplacer(p, -1)} aria-label="Monter">
                       ↑
                     </button>
@@ -284,7 +269,7 @@ function FenetreReunion({ reunion, fermer }: { reunion?: Reunion; fermer: () => 
       const id = crypto.randomUUID()
       await ajouter.mutateAsync({ ligne: { id, ...champs }, affiche: { id, ...champs, compte_rendu: null, creee_par_nom: moi.nom, created_at: new Date().toISOString() } })
       if (gabarit && GABARITS[genre].length)
-        ajouterPoints.mutate(GABARITS[genre].map(([texte, duree_min], i) => ({ texte, duree_min, reunion_id: id, ordre: i + 1, type: 'discussion' as const })))
+        ajouterPoints.mutate(GABARITS[genre].map((texte, i) => ({ texte, reunion_id: id, ordre: i + 1 })))
       fermer()
       naviguer(`/reunions/speciales/${id}`)
     } catch (e) {
@@ -358,7 +343,7 @@ function FenetreReunion({ reunion, fermer }: { reunion?: Reunion; fermer: () => 
             <input type="checkbox" className="mt-0.5 size-4 accent-foret-700" checked={gabarit} onChange={(e) => setGabarit(e.target.checked)} />
             <span>
               Ordre du jour de départ :
-              <span className="block text-xs text-pierre-500">{GABARITS[genre].map(([t, m]) => `${t} (${m} min)`).join(' · ')}</span>
+              <span className="block text-xs text-pierre-500">{GABARITS[genre].join(' · ')}</span>
             </span>
           </label>
         )}

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Entreprise, Profil } from '@/lib/types'
 import { aujourdhui } from '@/shell/pokes'
-import { GENRES, type Personne, type Point, type Recurrent, type Reunion, type StatutPoint, type Suivi } from './types'
+import { GENRES, type Point, type Recurrent, type Reunion, type StatutPoint } from './types'
 
 // ------------------------------------------------------------
 // Données communes du module (chargées une fois par index.tsx)
@@ -9,10 +9,8 @@ import { GENRES, type Personne, type Point, type Recurrent, type Reunion, type S
 
 export interface Donnees {
   points: Point[]
-  suivis: Suivi[]
   reunions: Reunion[]
   recurrents: Recurrent[]
-  personnes: Personne[]
   entreprises: Entreprise[]
   /** Jours de réunion du quotidien → heure du dernier point traité. */
   jours: Map<string, string>
@@ -48,12 +46,8 @@ export function nouveauPoint(champs: Partial<Point> & { texte: string }, moi: Pr
   return {
     id: crypto.randomUUID(),
     details: null,
-    type: 'discussion',
-    urgent: false,
-    duree_min: null,
     reunion_id: null,
     ordre: 0,
-    pour_le: null,
     recurrent_id: null,
     decision: null,
     traite_par_nom: statut === 'ouvert' ? null : moi.nom,
@@ -69,8 +63,8 @@ export function nouveauPoint(champs: Partial<Point> & { texte: string }, moi: Pr
 
 /** Champs qu'on envoie à la base (sans ceux qu'elle pose elle-même). */
 export function aEnvoyer(p: Point): Partial<Point> & { id: string } {
-  const { id, texte, details, type, urgent, duree_min, reunion_id, ordre, pour_le, recurrent_id, statut, decision } = p
-  return { id, texte, details, type, urgent, duree_min, reunion_id, ordre, pour_le, recurrent_id, statut, decision }
+  const { id, texte, details, reunion_id, ordre, recurrent_id, statut, decision } = p
+  return { id, texte, details, reunion_id, ordre, recurrent_id, statut, decision }
 }
 
 /** Champs d'affichage optimiste quand un point change de statut. */

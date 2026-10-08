@@ -1,4 +1,4 @@
-import type { Point, Recurrent, Suivi } from './types'
+import type { Point, Recurrent } from './types'
 
 // Fonctions pures du module (dates en AAAA-MM-JJ, jour de Montréal).
 
@@ -35,13 +35,6 @@ export function jourLisible(jour: string, aujourdhui?: string, sansJour?: boolea
 /** Jour de Montréal d'un horodatage. */
 export const jourDe = (horodatage: string) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(horodatage))
-
-export function dureeLisible(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`
-}
 
 export const normaliser = (t: string) =>
   t
@@ -90,8 +83,8 @@ export function joursDeReunion(points: Point[]): Map<string, string> {
 
 /**
  * Nombre de réunions passées où un point du quotidien était à l'ordre du
- * jour sans être traité : ajouté avant la fin de la réunion, prévu pour ce
- * jour-là ou avant, et encore ouvert après. La réunion d'aujourd'hui ne
+ * jour sans être traité : ajouté avant la fin de la réunion et encore
+ * ouvert après. La réunion d'aujourd'hui ne
  * compte pas (elle n'est peut-être pas finie).
  */
 export function reports(p: Point, jours: Map<string, string>, aujourdhui: string): number {
@@ -99,7 +92,6 @@ export function reports(p: Point, jours: Map<string, string>, aujourdhui: string
   let n = 0
   for (const [jour, fin] of jours) {
     if (jour >= aujourdhui || p.created_at >= fin) continue
-    if (p.pour_le && p.pour_le > jour) continue
     if (p.traite_jour && p.traite_jour <= jour) continue
     n++
   }
@@ -129,11 +121,3 @@ export function descriptionJours(jours: number[]): string {
   if (tries.join() === '1,2,3,4,5') return 'Chaque jour de semaine'
   return 'Le ' + tries.map((j) => NOMS_JOURS[j - 1]).join(', ')
 }
-
-/** Ordre du quotidien : urgents d'abord, puis les plus anciens. */
-export const ordreQuotidien = (a: Point, b: Point) =>
-  Number(b.urgent) - Number(a.urgent) || a.created_at.localeCompare(b.created_at)
-
-/** Suivis ouverts : échéances dépassées d'abord, puis les plus proches, puis sans échéance. */
-export const ordreSuivis = (a: Suivi, b: Suivi) =>
-  (a.echeance ?? '9999').localeCompare(b.echeance ?? '9999') || a.created_at.localeCompare(b.created_at)

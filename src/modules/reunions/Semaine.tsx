@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { IconeChevron } from '@/lib/icones'
+import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
 import { CartePoint } from './commun'
 import { nomReunion, useDonnees } from './contexte'
@@ -7,7 +9,7 @@ import { ajouterJours, jourDe, jourLisible, lundi, normaliser } from './outils'
 
 /** Ce qui a été traité chaque jour d'une semaine (comme une diapo de l'ancienne présentation), et la recherche. */
 export function Semaine() {
-  const { points, reunions, suivis } = useDonnees()
+  const { points, reunions } = useDonnees()
   const [params, setParams] = useSearchParams()
   const [recherche, setRecherche] = useState('')
   const auj = aujourdhui()
@@ -18,10 +20,7 @@ export function Semaine() {
   const mot = normaliser(recherche.trim())
   if (mot) {
     const resultats = points
-      .filter((p) => {
-        const texteSuivis = suivis.filter((s) => s.point_id === p.id).map((s) => s.texte).join(' ')
-        return normaliser(`${p.texte} ${p.details ?? ''} ${p.decision ?? ''} ${p.auteur_nom ?? ''} ${texteSuivis}`).includes(mot)
-      })
+      .filter((p) => normaliser(`${p.texte} ${p.details ?? ''} ${p.decision ?? ''} ${p.auteur_nom ?? ''}`).includes(mot))
       .sort((a, b) => (b.traite_le ?? b.created_at).localeCompare(a.traite_le ?? a.created_at))
     return (
       <div className="space-y-4">
@@ -42,8 +41,8 @@ export function Semaine() {
   const jours = Array.from({ length: 7 }, (_, i) => ajouterJours(debut, i))
   const traitesLe = (jour: string) =>
     points
-      .filter((p) => !p.reunion_id && p.statut !== 'ouvert' && p.traite_jour === jour)
-      .sort((a, b) => Number(a.statut === 'retire') - Number(b.statut === 'retire') || (a.traite_le ?? '').localeCompare(b.traite_le ?? ''))
+      .filter((p) => !p.reunion_id && p.statut === 'traite' && p.traite_jour === jour)
+      .sort((a, b) => (a.traite_le ?? '').localeCompare(b.traite_le ?? ''))
   const speciales = (jour: string) => reunions.filter((r) => r.jour === jour)
   // Fin de semaine : seulement s'il s'est passé quelque chose.
   const affiches = jours.filter((j, i) => i < 5 || traitesLe(j).length || speciales(j).length)
@@ -51,22 +50,25 @@ export function Semaine() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Même navigation que le Calendrier : flèches, titre, retour à aujourd'hui. */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <button type="button" className="rounded-lg px-2 py-1 text-pierre-600 hover:bg-pierre-100" onClick={() => aller(ajouterJours(debut, -7))} aria-label="Semaine précédente">
-            ‹
+          <button className={`${ui.boutonSecondaire} px-2.5`} aria-label="Semaine précédente" onClick={() => aller(ajouterJours(debut, -7))}>
+            <IconeChevron className="size-4 rotate-180" />
           </button>
-          <h2 className="min-w-56 text-center text-lg font-semibold">Semaine du {jourLisible(debut, auj, true)}</h2>
-          <button type="button" className="rounded-lg px-2 py-1 text-pierre-600 hover:bg-pierre-100" onClick={() => aller(ajouterJours(debut, 7))} aria-label="Semaine suivante">
-            ›
+          <button className={`${ui.boutonSecondaire} px-2.5`} aria-label="Semaine suivante" onClick={() => aller(ajouterJours(debut, 7))}>
+            <IconeChevron className="size-4" />
           </button>
+        </div>
+        <h2 className="order-first w-full min-w-0 text-lg font-semibold sm:order-none sm:w-auto sm:flex-1">Semaine du {jourLisible(debut, auj, true)}</h2>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {debut !== lundi(auj) && (
-            <button type="button" className="ml-2 text-sm text-foret-800 hover:underline" onClick={() => aller(auj)}>
+            <button className={ui.boutonSecondaire} onClick={() => aller(auj)}>
               Cette semaine
             </button>
           )}
+          <Recherche valeur={recherche} changer={setRecherche} />
         </div>
-        <Recherche valeur={recherche} changer={setRecherche} />
       </div>
 
       <div className="max-w-4xl space-y-5">

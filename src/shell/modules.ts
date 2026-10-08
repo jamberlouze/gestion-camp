@@ -29,13 +29,6 @@ export const estEntree = (m: DefinitionModule) => !m.parent
  */
 export const MODULES: DefinitionModule[] = [
   {
-    id: 'reunions',
-    nom: 'Réunions',
-    description: 'Ordre du jour de la direction, réunions spéciales et suivis',
-    icone: '🗣️',
-    chemin: '/reunions',
-  },
-  {
     id: 'calendrier',
     nom: 'Calendrier',
     description: 'Séjours, événements et qui travaille chaque jour',
@@ -153,5 +146,12 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/ameliorations',
     accesFixe: 'Admins seulement.',
     adminsSeulement: true,
+  },
+  {
+    id: 'reunions',
+    nom: 'Réunions',
+    description: 'Ordre du jour de la direction et réunions spéciales',
+    icone: '☕',
+    chemin: '/reunions',
   },
 ]

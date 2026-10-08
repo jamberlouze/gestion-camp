@@ -9,7 +9,7 @@
 -- traités par `traite_jour`.
 --
 -- Réunions spéciales (MT Lab, post-mortem, planification…) =
--- `reunions.reunions`, avec leur propre ordre du jour minuté (points dont
+-- `reunions.reunions`, avec leur propre ordre du jour (points dont
 -- `reunion_id` = la réunion). Un point passe d'un ordre du jour à l'autre
 -- en changeant `reunion_id`.
 --
@@ -19,6 +19,9 @@
 --
 -- Auteur de chaque point posé par la base (demande de Maxime : chaque
 -- point est identifié à la personne qui l'a ajouté), jamais changé ensuite.
+--
+-- Volontairement simple (demande de Maxime du 2026-10-07) : pas de suivis,
+-- pas de type de point, pas d'« urgent », pas de durée ni de date de report.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -83,7 +86,6 @@ for each row execute function core.maj_updated_at();
 create table reunions.recurrents (
   id uuid primary key default gen_random_uuid(),
   texte text not null check (btrim(texte) <> ''),
-  type text not null default 'info' check (type in ('info','decision','discussion')),
   -- Jours ISO (1 = lundi … 7 = dimanche). Vide = une fois par semaine :
   -- le point reste affiché jusqu'à ce qu'on le traite dans la semaine.
   jours smallint[] not null default '{}' check (jours <@ '{1,2,3,4,5,6,7}'::smallint[]),
@@ -101,19 +103,15 @@ create table reunions.points (
   id uuid primary key default gen_random_uuid(),
   texte text not null check (btrim(texte) <> ''),
   details text,
-  type text not null default 'discussion' check (type in ('info','decision','discussion')),
-  urgent boolean not null default false,
-  duree_min smallint check (duree_min between 1 and 480),
   -- null = ordre du jour continu du quotidien.
   reunion_id uuid references reunions.reunions(id) on delete cascade,
-  -- Ordre dans une réunion spéciale (le quotidien trie lui-même).
+  -- Ordre dans une réunion spéciale (le quotidien trie par date d'ajout).
   ordre double precision not null default 0,
-  -- Quotidien : pas avant ce jour (ex. « jeudi, quand Marco est là »).
-  pour_le date,
   recurrent_id uuid references reunions.recurrents(id) on delete set null,
-  statut text not null default 'ouvert' check (statut in ('ouvert','traite','retire')),
+  statut text not null default 'ouvert' check (statut in ('ouvert','traite')),
+  -- Ce qu'on retient (facultatif).
   decision text,
-  -- Posés par la base quand le point quitte « ouvert ».
+  -- Posés par la base quand le point est traité.
   traite_le timestamptz,
   traite_jour date,
   traite_par uuid references core.profils(id) on delete set null,
@@ -136,7 +134,7 @@ create trigger trg_reunions_points_updated_at before update on reunions.points
 for each row execute function core.maj_updated_at();
 
 -- Auteur (posé à l'ajout, jamais changé) ; date et auteur du traitement
--- (posés quand le point quitte « ouvert », effacés s'il est rouvert).
+-- (posés quand le point est traité, effacés s'il est rouvert).
 create function reunions.verifier_point()
 returns trigger
 language plpgsql
@@ -162,7 +160,7 @@ begin
     new.traite_jour := null;
     new.traite_par := null;
     new.traite_par_nom := null;
-  elsif tg_op = 'INSERT' or old.statut = 'ouvert' or new.traite_le is null then
+  elsif tg_op = 'INSERT' or old.statut = 'ouvert' then
     new.traite_le := now();
     new.traite_jour := (now() at time zone 'America/Toronto')::date;
     new.traite_par := auth.uid();
@@ -179,75 +177,6 @@ $$;
 
 create trigger trg_reunions_verifier_point before insert or update on reunions.points
 for each row execute function reunions.verifier_point();
-
--- ------------------------------------------------------------
--- Suivis (actions décidées : qui fait quoi pour quand)
--- ------------------------------------------------------------
-create table reunions.suivis (
-  id uuid primary key default gen_random_uuid(),
-  texte text not null check (btrim(texte) <> ''),
-  -- Point d'où vient le suivi (facultatif).
-  point_id uuid references reunions.points(id) on delete cascade,
-  responsable_id uuid references core.profils(id) on delete set null,
-  -- Copie du nom (posée par la base) : lisible après le retrait d'un compte.
-  responsable_nom text,
-  echeance date,
-  fait_le timestamptz,
-  fait_par_nom text,
-  auteur uuid references core.profils(id) on delete set null,
-  auteur_nom text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-comment on table reunions.suivis is 'Actions décidées en réunion ; elles reviennent à l''ordre du jour tant qu''elles ne sont pas faites';
-
-create index idx_reunions_suivis_point on reunions.suivis(point_id);
-
-create trigger trg_reunions_suivis_updated_at before update on reunions.suivis
-for each row execute function core.maj_updated_at();
-
-create function reunions.verifier_suivi()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if tg_op = 'INSERT' then
-    if auth.uid() is not null then
-      new.auteur := auth.uid();
-      new.auteur_nom := reunions.nom_de(auth.uid());
-    end if;
-  else
-    new.auteur := old.auteur;
-    new.auteur_nom := old.auteur_nom;
-    new.created_at := old.created_at;
-  end if;
-
-  if new.responsable_id is null then
-    new.responsable_nom := null;
-  elsif tg_op = 'INSERT' or new.responsable_id is distinct from old.responsable_id then
-    new.responsable_nom := reunions.nom_de(new.responsable_id);
-  else
-    new.responsable_nom := old.responsable_nom;
-  end if;
-
-  if new.fait_le is null then
-    new.fait_par_nom := null;
-  elsif tg_op = 'INSERT' or old.fait_le is null then
-    new.fait_le := now();
-    new.fait_par_nom := reunions.nom_de(auth.uid());
-  else
-    new.fait_le := old.fait_le;
-    new.fait_par_nom := old.fait_par_nom;
-  end if;
-  return new;
-end;
-$$;
-
-create trigger trg_reunions_verifier_suivi before insert or update on reunions.suivis
-for each row execute function reunions.verifier_suivi();
 
 -- Créateur d'une réunion spéciale.
 create function reunions.verifier_reunion()
@@ -291,33 +220,16 @@ begin
 end;
 $$;
 
--- Personnes à qui confier un suivi : comptes actifs qui ont accès au module.
-create function reunions.personnes()
-returns table (id uuid, nom text)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select p.id, reunions.nom_de(p.id)
-  from core.profils p
-  where core.peut_lire('reunions')
-    and p.actif
-    and core.niveau_module_de(p.id, 'reunions') is not null
-  order by 2
-$$;
-
 -- ------------------------------------------------------------
 -- Droits et RLS
 -- ------------------------------------------------------------
 grant usage on schema reunions to authenticated, service_role;
 grant select, insert, update, delete on all tables in schema reunions to authenticated, service_role;
-grant execute on function reunions.supprimer_reunion(uuid), reunions.personnes() to authenticated;
+grant execute on function reunions.supprimer_reunion(uuid) to authenticated;
 
 alter table reunions.reunions enable row level security;
 alter table reunions.recurrents enable row level security;
 alter table reunions.points enable row level security;
-alter table reunions.suivis enable row level security;
 
 create policy "Lire" on reunions.reunions for select to authenticated using (core.peut_lire('reunions'));
 create policy "Écrire" on reunions.reunions for all to authenticated
@@ -331,20 +243,16 @@ create policy "Lire" on reunions.points for select to authenticated using (core.
 create policy "Écrire" on reunions.points for all to authenticated
   using (core.peut_ecrire('reunions')) with check (core.peut_ecrire('reunions'));
 
-create policy "Lire" on reunions.suivis for select to authenticated using (core.peut_lire('reunions'));
-create policy "Écrire" on reunions.suivis for all to authenticated
-  using (core.peut_ecrire('reunions')) with check (core.peut_ecrire('reunions'));
-
-alter publication supabase_realtime add table reunions.reunions, reunions.recurrents, reunions.points, reunions.suivis;
+alter publication supabase_realtime add table reunions.reunions, reunions.recurrents, reunions.points;
 
 -- ------------------------------------------------------------
 -- Points fixes de départ : ceux qui revenaient chaque semaine dans la
 -- présentation. Une fois par semaine ; les jours se règlent dans Réglages.
 -- ------------------------------------------------------------
-insert into reunions.recurrents (texte, type, ordre) values
-  ('Topo RH', 'info', 1),
-  ('Estimés en attente', 'info', 2),
-  ('Contrats non signés', 'info', 3),
-  ('Paiements en retard', 'info', 4),
-  ('Topo terrain', 'info', 5),
-  ('Validation horaire', 'decision', 6);
+insert into reunions.recurrents (texte, ordre) values
+  ('Topo RH', 1),
+  ('Estimés en attente', 2),
+  ('Contrats non signés', 3),
+  ('Paiements en retard', 4),
+  ('Topo terrain', 5),
+  ('Validation horaire', 6);

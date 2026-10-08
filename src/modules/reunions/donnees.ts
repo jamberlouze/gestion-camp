@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { Entreprise } from '@/lib/types'
-import type { Personne, Point, Recurrent, Reunion, Suivi } from './types'
+import type { Point, Recurrent, Reunion } from './types'
 
 // Module en ligne seulement (networkMode « always »). Les modifications
 // sont optimistes (la réunion avance sans attendre la base) ; une
@@ -42,20 +42,7 @@ export function usePoints() {
 
 export const useReunions = () => useListe<Reunion>('reunions', 'reunions', 'jour')
 export const useRecurrents = () => useListe<Recurrent>('reunions', 'recurrents', 'ordre')
-export const useSuivis = () => useListe<Suivi>('reunions', 'suivis', 'created_at')
 export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
-
-/** Comptes à qui confier un suivi (actifs, avec accès au module). */
-export function usePersonnes() {
-  return useQuery({
-    queryKey: ['reunions', 'personnes'],
-    queryFn: async () => {
-      const { data, error } = await db().rpc('personnes')
-      if (error) throw error
-      return data as Personne[]
-    },
-  })
-}
 
 type Ligne = { id: string }
 
@@ -124,10 +111,6 @@ function useRetirer<T extends Ligne>(table: string, cle: QueryKey) {
 export const useAjouterPoint = () => useAjouter<Point>('points', clePoints)
 export const useModifierPoint = () => useModifier<Point>('points', clePoints)
 export const useSupprimerPoint = () => useRetirer<Point>('points', clePoints)
-
-export const useAjouterSuivi = () => useAjouter<Suivi>('suivis', ['reunions', 'suivis'])
-export const useModifierSuivi = () => useModifier<Suivi>('suivis', ['reunions', 'suivis'])
-export const useSupprimerSuivi = () => useRetirer<Suivi>('suivis', ['reunions', 'suivis'])
 
 export const useAjouterReunion = () => useAjouter<Reunion>('reunions', ['reunions', 'reunions'])
 export const useModifierReunion = () => useModifier<Reunion>('reunions', ['reunions', 'reunions'])

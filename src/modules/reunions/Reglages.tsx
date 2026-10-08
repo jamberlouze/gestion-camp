@@ -3,11 +3,10 @@ import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
-import { ChoixType, PuceType } from './commun'
 import { useDonnees } from './contexte'
 import { useAjouterRecurrent, useModifierRecurrent, useSupprimerRecurrent } from './donnees'
 import { INITIALES_JOURS, NOMS_JOURS, descriptionJours } from './outils'
-import type { Recurrent, TypePoint } from './types'
+import type { Recurrent } from './types'
 
 /** Points fixes du quotidien (Topo RH, Topo terrain…). */
 export function Reglages() {
@@ -59,7 +58,6 @@ export function Reglages() {
               </span>
             )}
             <span className="font-medium">{r.texte}</span>
-            <PuceType type={r.type} />
             <span className="text-sm text-pierre-500">{r.actif ? descriptionJours(r.jours) : 'En pause'}</span>
             {ecriture && <BoutonModifier className="ml-auto" onClick={() => setFiche(r)} />}
           </li>
@@ -75,13 +73,12 @@ function FenetreRecurrent({ recurrent, ordre, fermer }: { recurrent?: Recurrent;
   const modifier = useModifierRecurrent()
   const supprimer = useSupprimerRecurrent()
   const [texte, setTexte] = useState(recurrent?.texte ?? '')
-  const [type, setType] = useState<TypePoint>(recurrent?.type ?? 'info')
   const [jours, setJours] = useState<number[]>(recurrent?.jours ?? [])
   const [actif, setActif] = useState(recurrent?.actif ?? true)
 
   const enregistrer = () => {
     if (!texte.trim()) return
-    const champs = { texte: texte.trim(), type, jours: [...jours].sort(), actif }
+    const champs = { texte: texte.trim(), jours: [...jours].sort(), actif }
     if (recurrent) modifier.mutate({ id: recurrent.id, champs })
     else {
       const ligne = { id: crypto.randomUUID(), ordre, ...champs }
@@ -103,7 +100,6 @@ function FenetreRecurrent({ recurrent, ordre, fermer }: { recurrent?: Recurrent;
           <span className={ui.etiquette}>Point</span>
           <input className={ui.champ} value={texte} onChange={(e) => setTexte(e.target.value)} required autoFocus />
         </label>
-        <ChoixType valeur={type} changer={setType} />
         <div>
           <span className={ui.etiquette}>Quand</span>
           <div className="flex flex-wrap gap-1">
