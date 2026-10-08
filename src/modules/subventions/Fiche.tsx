@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -125,9 +126,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
               ))}
             </select>
           )}
-          <button
-            className={ui.boutonDanger}
-            aria-label="Supprimer la subvention"
+          <BoutonSupprimer
             onClick={async () => {
               if (
                 await confirmer({
@@ -139,18 +138,20 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
                 supprimer.mutate(g.id, { onSuccess: () => navigate('/subventions', { replace: true }) })
               }
             }}
-          >
-            <IconeCorbeille />
-          </button>
+          />
         </div>
       </div>
 
       <Section
         titre="Programme"
         action={
-          <button className={ui.boutonSecondaire} onClick={() => setModifier((m) => !m)}>
-            {modifier ? 'Terminé' : 'Modifier'}
-          </button>
+          modifier ? (
+            <button className={ui.boutonSecondaire} onClick={() => setModifier(false)}>
+              Terminé
+            </button>
+          ) : (
+            <BoutonModifier onClick={() => setModifier(true)} />
+          )
         }
       >
         {modifier ? <InfosProgramme g={g} entreprises={entreprises} maj={maj} /> : <ApercuProgramme g={g} entreprises={entreprises} />}
