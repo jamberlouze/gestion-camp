@@ -60,7 +60,7 @@ export function useSupprimer(table: Table) {
   })
 }
 
-/** Valider (on y va, avec l'entreprise qui dépose) ou rejeter (catégorie obligatoire). */
+/** Retenir (en cours, avec l'entreprise qui dépose) ou rejeter (catégorie obligatoire). */
 export function useDecider() {
   const client = useQueryClient()
   return useMutation({

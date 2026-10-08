@@ -6,7 +6,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { ChampDate, ChampMontant, FilNotes, LienOfficiel, Pastille, PastilleStatut, Section, ZoneTexte } from './commun'
+import { ChampDate, ChampMontant, FilNotes, LienOfficiel, PastilleStatut, Section, ZoneTexte } from './commun'
 import {
   copierEtapes,
   useEnregistrer,
@@ -27,6 +27,7 @@ import {
   heures as formatHeures,
   libelleAnneeFiscale,
   anneeFiscale,
+  montantsPotentiels,
   dateRattachement,
   moment,
   nomPersonne,
@@ -65,6 +66,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
   const supprimer = useSupprimer('grants')
   const maj = (champs: Partial<Subvention>) => enregistrer.mutate({ id: g.id, ...champs })
   const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
+  const [modifier, setModifier] = useState(false)
   const aDecider = g.status === 'nouveau' || g.status === 'a_valider'
 
   const changerStatut = (status: Statut) => {
@@ -103,7 +105,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
           {aDecider ? (
             <>
               <button className={ui.bouton} onClick={() => setDialogue('valider')}>
-                On y va
+                Retenir…
               </button>
               <button className={ui.boutonSecondaire} onClick={() => setDialogue('rejeter')}>
                 Rejeter…
@@ -143,19 +145,24 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section titre="Programme">
-          <InfosProgramme g={g} entreprises={entreprises} maj={maj} />
-        </Section>
+      <Section
+        titre="Programme"
+        action={
+          <button className={ui.boutonSecondaire} onClick={() => setModifier((m) => !m)}>
+            {modifier ? 'Terminé' : 'Modifier'}
+          </button>
+        }
+      >
+        {modifier ? <InfosProgramme g={g} entreprises={entreprises} maj={maj} /> : <ApercuProgramme g={g} entreprises={entreprises} />}
+      </Section>
 
-        <div className="space-y-4">
-          <Section titre="Suivi financier">
-            <SuiviFinancier g={g} maj={maj} />
-          </Section>
-          <Section titre="Heures investies">
-            <HeuresInvesties g={g} />
-          </Section>
-        </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section titre="Suivi financier">
+          <SuiviFinancier g={g} maj={maj} />
+        </Section>
+        <Section titre="Heures investies">
+          <HeuresInvesties g={g} />
+        </Section>
       </div>
 
       <Section titre="Reddition de compte">
@@ -201,16 +208,51 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
 
 function Champ({ etiquette, children, large }: { etiquette: string; children: React.ReactNode; large?: boolean }) {
   return (
-    <label className={`block ${large ? 'sm:col-span-2' : ''}`}>
+    <label className={`block ${large ? 'sm:col-span-2 lg:col-span-4' : ''}`}>
       <span className={ui.etiquette}>{etiquette}</span>
       {children}
     </label>
   )
 }
 
+/** Aperçu en lecture seule ; « Modifier » ouvre les champs (InfosProgramme). */
+function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entreprise[] }) {
+  const nom = (id: string | null) => entreprises.find((e) => e.id === id)?.name
+  const infos: [string, string | null | undefined][] = [
+    ['Organisme', g.organisme],
+    ['Type', TYPES[g.grant_type]],
+    ['Trouvée pour', nom(g.target_company_id)],
+    ['Entreprise qui dépose', nom(g.applicant_company_id) ?? 'Pas encore décidé'],
+    ['Montant potentiel', montantsPotentiels(g)],
+    ['Ouverture de la demande', g.open_date && dateCourte(g.open_date)],
+    ['Date limite', g.deadline_date && dateCourte(g.deadline_date)],
+  ]
+  return (
+    <div className="space-y-3">
+      <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        {infos.map(([etiquette, valeur]) => (
+          <div key={etiquette}>
+            <dt className="text-xs uppercase tracking-wide text-pierre-500">{etiquette}</dt>
+            <dd>{valeur || <span className="text-pierre-400">—</span>}</dd>
+          </div>
+        ))}
+      </dl>
+      {g.description && <p className="whitespace-pre-line text-sm">{g.description}</p>}
+      {g.relevance_justification && (
+        <div className="rounded-lg bg-pierre-50 px-3 py-2 text-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-pierre-500">
+            {g.origin === 'claude' ? 'Pourquoi Claude la propose' : 'Pertinence'}
+          </p>
+          <p className="mt-0.5 whitespace-pre-line">{g.relevance_justification}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: Entreprise[]; maj: (c: Partial<Subvention>) => void }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Champ etiquette="Organisme">
         <ChampTexte className={ui.champ} valeur={g.organisme ?? ''} enregistrer={(v) => maj({ organisme: v || null })} />
       </Champ>
@@ -562,7 +604,6 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
                       <IconeCorbeille />
                     </button>
                   </div>
-                  {e.template_source_step_id && <Pastille>reprise</Pastille>}
                 </li>
               )
             })}

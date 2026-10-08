@@ -165,7 +165,7 @@ function CarteValidation({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button className={ui.bouton} onClick={() => setDialogue('valider')}>
-          On y va
+          Retenir…
         </button>
         {g.status === 'nouveau' ? (
           <button
@@ -222,7 +222,7 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
   }
 
   return (
-    <Dialogue titre="On y va" fermer={fermer}>
+    <Dialogue titre="Retenir cette subvention" fermer={fermer}>
       <p className="mb-4 text-sm text-pierre-600">
         « {g.program_name} » passe <b>en cours</b> : la demande est à préparer. Cette décision aide aussi Claude à mieux cibler
         les prochaines recherches.
@@ -254,7 +254,7 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
           Annuler
         </button>
         <button className={ui.bouton} disabled={decider.isPending} onClick={valider}>
-          Valider
+          Retenir
         </button>
       </div>
     </Dialogue>
