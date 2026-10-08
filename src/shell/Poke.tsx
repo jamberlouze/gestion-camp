@@ -2,11 +2,10 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { ui } from '@/lib/ui'
 import { useAuth } from './auth'
 import {
-  CATEGORIES_EMOJIS,
-  EMOJI_POKE_DEFAUT,
   aujourdhui,
   messagePoke,
   useCollegues,
+  useEmojiDuJour,
   useMarquerPokesVus,
   usePoker,
   usePokes,
@@ -237,8 +236,7 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
   const { data: collegues } = useCollegues()
   const poker = usePoker()
   const [choisi, setChoisi] = useState<string | null>(null)
-  const [emoji, setEmoji] = useState<string>(EMOJI_POKE_DEFAUT)
-  const [categorie, setCategorie] = useState(0)
+  const { data: emoji } = useEmojiDuJour()
   const [filtre, setFiltre] = useState('')
   const [erreur, setErreur] = useState('')
   const bouton = useRef<HTMLButtonElement>(null)
@@ -269,11 +267,6 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
     .sort((x, y) => (echanges.get(y.id) ?? 0) - (echanges.get(x.id) ?? 0))
     .filter((c) => norme(c.nom).includes(norme(filtre.trim())))
 
-  // Récents : les émojis qu'on a envoyés, du plus récent au plus ancien.
-  const recents = [...new Set(pokes.filter((p) => p.de === profil.id).map((p) => p.emoji))].slice(0, 9)
-  const categories = recents.length > 0 ? [{ nom: 'Récents', icone: '🕘', emojis: recents }, ...CATEGORIES_EMOJIS] : CATEGORIES_EMOJIS
-  const emojis = categories[Math.min(categorie, categories.length - 1)].emojis
-
   const envoyer = () => {
     if (!choisi) {
       setErreur("Choisis quelqu'un d'abord.")
@@ -282,10 +275,10 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
     // Position prise au clic : le bouton disparaît une fois le poke envoyé.
     const r = bouton.current?.getBoundingClientRect()
     poker.mutate(
-      { a: choisi, emoji },
+      { a: choisi },
       {
-        onSuccess: () => {
-          if (r) exploser([emoji], r.left + r.width / 2, r.top + r.height / 2, 16, 160)
+        onSuccess: (envoi) => {
+          if (r) exploser([envoi.emoji], r.left + r.width / 2, r.top + r.height / 2, 16, 160)
         },
         onError: (e) => setErreur(messagePoke(e)),
       },
@@ -294,7 +287,15 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
 
   return (
     <div>
-      <p className="px-1 text-xs text-pierre-500">Un poke par jour · revient à minuit</p>
+      <div className="flex items-center gap-2.5 px-1">
+        <span className="text-3xl leading-none" title="L'émoji du jour, le même pour tout le monde">
+          {emoji ?? '…'}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">L'émoji du jour</p>
+          <p className="text-xs text-pierre-500">Un poke par jour · revient à minuit</p>
+        </div>
+      </div>
       {collegues.length > 6 && (
         <input
           value={filtre}
@@ -323,41 +324,9 @@ function FenetrePoke({ envoye }: { envoye: Poke | undefined }) {
         ))}
         {liste.length === 0 && <li className="px-2 py-1.5 text-sm text-pierre-500">Personne</li>}
       </ul>
-      <div className="mt-2 border-t border-pierre-200 pt-2">
-        <div className="flex gap-0.5" role="tablist" aria-label="Catégories d'émojis">
-          {categories.map((c, i) => (
-            <button
-              key={c.nom}
-              onClick={() => setCategorie(i)}
-              role="tab"
-              aria-selected={emojis === c.emojis}
-              title={c.nom}
-              className={`flex h-7 flex-1 items-center justify-center rounded-md text-sm leading-none ${
-                emojis === c.emojis ? 'bg-pierre-100' : 'opacity-50 grayscale hover:opacity-100 hover:grayscale-0'
-              }`}
-            >
-              {c.icone}
-            </button>
-          ))}
-        </div>
-        <div className="mt-1 grid grid-cols-9 gap-0.5">
-          {emojis.map((e) => (
-            <button
-              key={e}
-              onClick={() => setEmoji(e)}
-              aria-pressed={emoji === e}
-              className={`flex h-8 items-center justify-center rounded-md text-lg leading-none ${
-                emoji === e ? 'bg-foret-100 ring-1 ring-foret-600' : 'hover:bg-pierre-100'
-              }`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="mt-3 flex items-center gap-2">
         <button ref={bouton} className={`${ui.bouton} py-1.5`} onClick={envoyer} disabled={poker.isPending}>
-          {poker.isPending ? 'Envoi…' : `${emoji} ${choisi ? `Poker ${nomDe(choisi).split(/\s+/)[0]}` : 'Poker'}`}
+          {poker.isPending ? 'Envoi…' : `${emoji ?? ''} ${choisi ? `Poker ${nomDe(choisi).split(/\s+/)[0]}` : 'Poker'}`.trim()}
         </button>
         {erreur && <span className="text-xs text-red-700">{erreur}</span>}
       </div>

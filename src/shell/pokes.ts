@@ -6,42 +6,8 @@ import { useAuth } from './auth'
 
 // Pokes : un envoi par personne et par jour (journée de Montréal), avec un
 // émoji. La base décide (core.poker, contrainte unique (de, jour)) ; l'app
-// ne fait qu'afficher. Émojis : choix de l'app, par catégories ; la base
-// vérifie seulement que c'est un court émoji (on peut allonger la liste sans migration).
-export const EMOJI_POKE_DEFAUT = '👉'
-
-export const CATEGORIES_EMOJIS: { nom: string; icone: string; emojis: string[] }[] = [
-  {
-    nom: 'Salut',
-    icone: '👋',
-    emojis: ['👉', '👋', '🙌', '👏', '🤝', '🫶', '👍', '💪', '🤙', '✌️', '🤞', '🫡', '🙏', '🤘', '👊', '✋', '🫵', '👀'],
-  },
-  {
-    nom: 'Visages',
-    icone: '😂',
-    emojis: ['😂', '🤣', '😄', '😊', '😍', '🥰', '😎', '🤩', '🥳', '😜', '🤪', '😇', '🤗', '🤭', '😴', '🤯', '😱', '🥹'],
-  },
-  {
-    nom: 'Camp',
-    icone: '🌲',
-    emojis: ['🌲', '🏕️', '⛺', '🛶', '🔥', '🌊', '☀️', '🌈', '⭐', '🌙', '🦆', '🦫', '🐻', '🦌', '🐿️', '🦉', '🐸', '🍁'],
-  },
-  {
-    nom: 'Bouffe',
-    icone: '☕',
-    emojis: ['☕', '🍕', '🌭', '🍔', '🍟', '🌮', '🥞', '🧇', '🍩', '🍪', '🧁', '🍦', '🍫', '🍿', '🍓', '🍉', '🥤', '🍺'],
-  },
-  {
-    nom: 'Fête',
-    icone: '🎉',
-    emojis: ['🎉', '🎊', '🎈', '🏆', '🥇', '🎯', '🚀', '💯', '✨', '💥', '🎶', '🎸', '⚽', '🏀', '🎣', '🧗', '🚴', '🏊'],
-  },
-  {
-    nom: 'Cœurs',
-    icone: '💚',
-    emojis: ['💚', '❤️', '🧡', '💛', '💙', '💜', '🖤', '🤍', '💖', '💘', '💝', '💐', '🌻', '🌷', '🌸', '🍀', '🌼', '🦋'],
-  },
-]
+// ne fait qu'afficher. Émoji : celui du jour, le même pour tout le monde,
+// tiré et posé par la base (core.emoji_du_jour, core.poker).
 
 export interface Poke {
   id: string
@@ -125,14 +91,31 @@ export function useCollegues() {
   })
 }
 
+/** L'émoji du jour (le même pour tout le monde, change à minuit à Montréal). */
+export function useEmojiDuJour() {
+  const { profil } = useAuth()
+  const jour = aujourdhui()
+  return useQuery({
+    queryKey: ['pokes', profil?.id, 'emoji', jour],
+    enabled: !!profil,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const { data, error } = await supabase.schema('core').rpc('emoji_du_jour', { p_jour: jour })
+      if (error) throw error
+      return data as string
+    },
+  })
+}
+
 export function usePoker() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['poke-local'],
     networkMode: 'always',
-    mutationFn: async ({ a, emoji }: { a: string; emoji: string }) => {
-      const { error } = await supabase.schema('core').rpc('poker', { p_a: a, p_emoji: emoji })
+    mutationFn: async ({ a }: { a: string }) => {
+      const { data, error } = await supabase.schema('core').rpc('poker', { p_a: a })
       if (error) throw error
+      return data as Poke
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['pokes'] }),
   })
