@@ -1,11 +1,13 @@
-import { useMemo } from 'react'
-import { cleAujourdhui, exerciceDeCle, libelleMois } from '@/modules/mastertimeline/calendrier'
+import { useMemo, useState } from 'react'
+import { cleAujourdhui, cleCoche, exerciceDeCle, libelleMois } from '@/modules/mastertimeline/calendrier'
+import { CaseCoche } from '@/modules/mastertimeline/commun'
 import { useCoches, useResponsables, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
-import { FILTRES_VIDES, passagesDuMois, retards, trierPassages } from '@/modules/mastertimeline/outils'
+import { FILTRES_VIDES, passagesDuMois, retards, trierPassages, useBasculer, type Passage } from '@/modules/mastertimeline/outils'
 import { useAApprouver, useFeuille } from '@/modules/temps/donnees'
 import { dateCourte as dateCourteTemps, finPeriode, periodePrecedente, PREMIERE_PERIODE } from '@/modules/temps/periodes'
 import { periodeCourante } from '@/modules/temps/outils'
 import { comparer, dateCourte, enRetard, estOuverte, jourAujourdhui } from '@/modules/travaux/outils'
+import { CaseTache } from '@/modules/travaux/commun'
 import { useTaches } from '@/modules/travaux/donnees'
 import { PRIORITES } from '@/modules/travaux/types'
 import { useAuth } from '../auth'
@@ -59,11 +61,21 @@ function MaFeuille({ userId, debut }: { userId: string; debut: string }) {
 
 function MesTravaux({ moi }: { moi: string }) {
   const { data } = useTaches()
-  const miennes = useMemo(() => (data ?? []).filter((t) => t.assigne_a === moi && estOuverte(t)).sort(comparer), [data, moi])
+  // Cochées pendant cette visite : restent affichées (barrées), pour pouvoir décocher.
+  const [cochees, setCochees] = useState<string[]>([])
+  const garder = (id: string) => setCochees((c) => (c.includes(id) ? c : [...c, id]))
+  const { ouvertes, faites } = useMemo(() => {
+    const miennes = (data ?? []).filter((t) => t.assigne_a === moi).sort(comparer)
+    return {
+      ouvertes: miennes.filter(estOuverte),
+      faites: miennes.filter((t) => !estOuverte(t) && cochees.includes(t.id)),
+    }
+  }, [data, moi, cochees])
   const jour = jourAujourdhui()
   return (
     <>
-      {miennes.slice(0, MAX_PAR_SOURCE).map((t) => {
+      {[...ouvertes.slice(0, MAX_PAR_SOURCE), ...faites].map((t) => {
+        const faite = !estOuverte(t)
         const retard = enRetard(t, jour)
         const morceaux = [
           t.priorite < 3 ? PRIORITES[t.priorite] : null,
@@ -73,14 +85,20 @@ function MesTravaux({ moi }: { moi: string }) {
           <Ligne
             key={t.id}
             to="/travaux"
+            caseACocher={
+              <span onClickCapture={() => garder(t.id)}>
+                <CaseTache tache={t} />
+              </span>
+            }
+            faite={faite}
             titre={t.titre}
             module="🛠️ Travaux"
-            detail={morceaux.join(' · ') || 'Assignée à toi'}
-            alerte={retard || t.priorite === 1}
+            detail={faite ? 'Terminée' : morceaux.join(' · ') || 'Assignée à toi'}
+            alerte={!faite && (retard || t.priorite === 1)}
           />
         )
       })}
-      <Autres n={miennes.length - MAX_PAR_SOURCE} to="/travaux" />
+      <Autres n={ouvertes.length - MAX_PAR_SOURCE} to="/travaux" />
     </>
   )
 }
@@ -91,10 +109,11 @@ function MesTravaux({ moi }: { moi: string }) {
  * relie au compte par le courriel.
  */
 function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string | null }) {
+  const { peutEcrire } = useAuth()
   const responsables = useResponsables()
   const taches = useTachesMt()
   const cle = cleAujourdhui()
-  const coches = useCoches(exerciceDeCle(cle))
+  const index = useCoches(exerciceDeCle(cle))
   const moi = useMemo(() => {
     const actifs = (responsables.data ?? []).filter((r) => r.actif)
     const parCourriel = actifs.find((r) => r.courriel?.toLowerCase() === courriel.toLowerCase())
@@ -105,29 +124,59 @@ function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string |
     return parNom.length === 1 ? parNom[0] : undefined
   }, [responsables.data, courriel, nom])
 
-  const liste = useMemo(() => {
-    if (!moi || !taches.data || !coches.pret) return []
+  const ecriture = peutEcrire('mastertimeline')
+  const basculer = useBasculer()
+  // Passages cochés pendant cette visite : restent affichés (barrés), pour pouvoir décocher.
+  const [cochees, setCochees] = useState<Passage[]>([])
+
+  const { aFaire, faits } = useMemo(() => {
+    if (!moi || !taches.data || !index.pret) return { aFaire: [], faits: [] }
     const filtres = { ...FILTRES_VIDES, responsable: moi.id }
-    const enRetard = trierPassages(retards(taches.data, coches.index, filtres))
-    const duMois = trierPassages(passagesDuMois(taches.data, cle, coches.index, filtres)).filter(
+    const enRetard = trierPassages(retards(taches.data, index.index, filtres))
+    const duMois = trierPassages(passagesDuMois(taches.data, cle, index.index, filtres)).filter(
       (p) => p.etat !== 'faite' && p.etat !== 'sautee',
     )
-    return [...enRetard, ...duMois]
-  }, [moi, taches.data, coches.pret, coches.index, cle])
+    const aFaire = [...enRetard, ...duMois]
+    const cles = new Set(aFaire.map((p) => cleCoche(p.tache.id, p.periode)))
+    const faits = cochees
+      .filter((p) => !cles.has(cleCoche(p.tache.id, p.periode)))
+      .map((p) => {
+        const coche = index.index.get(cleCoche(p.tache.id, p.periode))
+        return { ...p, coche, etat: coche?.statut ?? p.etat }
+      })
+    return { aFaire, faits }
+  }, [moi, taches.data, index.pret, index.index, cle, cochees])
+
+  const cocher = (p: Passage) => {
+    setCochees((c) => (c.some((x) => x.tache.id === p.tache.id && x.periode === p.periode) ? c : [...c, p]))
+    basculer(p.tache, p.periode, p.coche, 'faite')
+  }
+  const liste = [...aFaire.slice(0, MAX_PAR_SOURCE), ...faits]
 
   return (
     <>
-      {liste.slice(0, MAX_PAR_SOURCE).map((p) => (
-        <Ligne
-          key={`${p.tache.id}|${p.periode}`}
-          to="/mastertimeline"
-          titre={p.tache.titre}
-          module="✅ Mastertimeline"
-          detail={p.etat === 'retard' ? `En retard (${p.periode === 'unique' ? 'échéance passée' : libelleMois(p.periode)})` : 'Ce mois-ci'}
-          alerte={p.etat === 'retard'}
-        />
-      ))}
-      <Autres n={liste.length - MAX_PAR_SOURCE} to="/mastertimeline" />
+      {liste.map((p) => {
+        const faite = p.etat === 'faite'
+        return (
+          <Ligne
+            key={cleCoche(p.tache.id, p.periode)}
+            to="/mastertimeline"
+            caseACocher={<CaseCoche etat={p.etat} basculer={() => cocher(p)} desactivee={!ecriture} />}
+            faite={faite}
+            titre={p.tache.titre}
+            module="✅ Mastertimeline"
+            detail={
+              faite
+                ? 'Faite'
+                : p.etat === 'retard'
+                  ? `En retard (${p.periode === 'unique' ? 'échéance passée' : libelleMois(p.periode)})`
+                  : 'Ce mois-ci'
+            }
+            alerte={p.etat === 'retard'}
+          />
+        )
+      })}
+      <Autres n={aFaire.length - MAX_PAR_SOURCE} to="/mastertimeline" />
     </>
   )
 }

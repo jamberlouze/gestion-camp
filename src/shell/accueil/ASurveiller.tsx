@@ -1,5 +1,5 @@
 import { useAchats } from '@/modules/achats/donnees'
-import { useEmbarcations, useNotes } from '@/modules/embarcations/donnees'
+import { useNotes } from '@/modules/embarcations/donnees'
 import { useSubventions } from '@/modules/subventions/donnees'
 import { joursAvant } from '@/modules/subventions/outils'
 import { useTaches } from '@/modules/travaux/donnees'
@@ -66,20 +66,10 @@ function Vehicules() {
 }
 
 function Embarcations() {
-  const embarcations = useEmbarcations()
   const notes = useNotes()
-  const defaillantes = (embarcations.data ?? []).filter((e) => !e.fonctionnel).length
   const aTraiter = (notes.data ?? []).filter((n) => n.statut === 'a_traiter').length
-  return (
-    <>
-      {defaillantes > 0 && (
-        <Ligne to="/embarcations" pastille="douce" titre={`${pluriel(defaillantes, 'embarcation')} hors d'usage`} module="🛶 Embarcations" />
-      )}
-      {aTraiter > 0 && (
-        <Ligne to="/embarcations" pastille="douce" titre={`${pluriel(aTraiter, 'note')} à traiter`} module="🛶 Embarcations" />
-      )}
-    </>
-  )
+  if (!aTraiter) return null
+  return <Ligne to="/embarcations" pastille="douce" titre={`${pluriel(aTraiter, 'note')} à traiter`} module="🛶 Embarcations" />
 }
 
 /** Dates limites des subventions en attente ou en cours, d'ici 30 jours. */
