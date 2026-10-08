@@ -124,12 +124,15 @@ export const MODULES: DefinitionModule[] = [
   },
   {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
-    // base : temps.role_autorise et les politiques du schéma temps).
+    // base : temps.role_autorise, temps.mon_employe et les politiques du
+    // schéma temps). Un employé coché « Remplit sa feuille » dans le
+    // référentiel y entre aussi, pour sa feuille seulement.
     id: 'temps',
     nom: 'Feuilles de temps',
-    description: "Saisie des heures de l'équipe de direction",
+    description: 'Saisie et approbation des heures',
     icone: '⏱️',
     chemin: '/temps',
-    accesFixe: 'Chacun sa feuille, les admins voient tout. Jamais les coordonnateurs.',
+    accesFixe:
+      'Chacun sa feuille, les admins voient tout. Jamais les coordonnateurs, sauf un employé coché « Remplit sa feuille » (sa feuille seulement).',
   },
 ]

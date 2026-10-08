@@ -3,7 +3,18 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
-import { nomDe, useEnregistrerNote, useFeuille, useHeures, useMembres, useSaisir, type Heure } from './donnees'
+import {
+  nomDe,
+  useChangerFeuille,
+  useEnregistrerNote,
+  useFeuille,
+  useHeures,
+  useJournal,
+  useMembres,
+  useSaisir,
+  type Heure,
+} from './donnees'
+import { BarreStatut, Journal } from './Statut'
 import {
   aujourdhui,
   depuisIso,
@@ -17,10 +28,11 @@ import {
 } from './periodes'
 
 /**
- * Feuille de temps d'une personne pour une période : deux semaines de
- * dimanche à samedi, une rangée par type d'heures. La personne saisit et
- * corrige en tout temps (pas d'approbation) ; un admin peut corriger toute
- * feuille.
+ * Feuille de temps d'une personne de la direction pour une période : deux
+ * semaines de dimanche à samedi, une rangée par type d'heures. La personne
+ * saisit puis soumet sa feuille aux admins (gelée pour elle, sauf les notes
+ * ajoutées) ; un admin corrige, approuve ou renvoie. La feuille d'un admin
+ * ne passe pas par l'approbation.
  */
 export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const { profil, estAdmin } = useAuth()
@@ -29,6 +41,8 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const membres = useMembres()
   const saisir = useSaisir(userId, debut)
   const enregistrerNote = useEnregistrerNote()
+  const changer = useChangerFeuille()
+  const journal = useJournal('feuille_id', feuille.data?.id)
   const [erreurAction, setErreurAction] = useState<string | null>(null)
 
   const personne = membres.data?.find((m) => m.id === userId)
@@ -39,7 +53,13 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!heures.data || feuille.data === undefined) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const modifiable = estAdmin || userId === profil?.id
+  const statut = feuille.data?.statut ?? 'ouverte'
+  const mienne = userId === profil?.id
+  // Mêmes règles que temps.peut_modifier.
+  const modifiable = statut === 'ouverte' ? mienne || estAdmin : statut === 'soumise' && estAdmin && !mienne
+  const avecApprobation = personne?.role === 'direction' || statut !== 'ouverte'
+  const agir = (action: Parameters<typeof changer.mutateAsync>[0]['action'], texte?: string) =>
+    changer.mutateAsync({ userId, debut, action, texte })
   const jours = joursPeriode(debut)
   const semaines = [jours.slice(0, 7), jours.slice(7)]
   const valeur = (jour: string, type: TypeHeures) => heures.data.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
@@ -53,6 +73,17 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
         <h2 className="text-lg font-semibold">{nomDe(personne)}</h2>
         <p className="text-sm">Période du {libellePeriode(debut)}</p>
       </div>
+      {avecApprobation && (
+        <BarreStatut
+          statut={statut}
+          journal={journal.data ?? []}
+          auteur={mienne}
+          approbateur={estAdmin && !mienne}
+          peutRouvrir={estAdmin && !mienne}
+          destinataire="un administrateur"
+          onAction={agir}
+        />
+      )}
       {erreurAction && <p className={ui.erreur}>{erreurAction}</p>}
 
       {semaines.map((s, i) => (
@@ -60,9 +91,12 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
           key={s[0]}
           titre={`Semaine ${i + 1}`}
           jours={s}
-          valeur={valeur}
+          types={TYPES}
+          valeur={(jour, type) => valeur(jour, type as TypeHeures)}
           modifiable={modifiable}
-          onSaisir={(jour, type, h) => saisir.mutate({ jour, type, heures: h })}
+          onSaisir={(jour, type, h) =>
+            saisir.mutate({ jour, type: type as TypeHeures, heures: h }, { onError: (e) => setErreurAction(messageErreur(e)) })
+          }
         />
       ))}
 
@@ -86,26 +120,33 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
           enregistrerNote.mutate({ userId, debut, note }, { onError: (e) => setErreurAction(messageErreur(e)) })
         }
       />
+
+      {avecApprobation && (
+        <Journal journal={journal.data ?? []} peutNoter={statut !== 'ouverte'} onNoter={(texte) => agir('noter', texte)} />
+      )}
     </div>
   )
 }
 
-function Semaine({
+/** Une semaine de la feuille : une rangée par type d'heures, une colonne par jour. */
+export function Semaine({
   titre,
   jours,
+  types,
   valeur,
   modifiable,
   onSaisir,
 }: {
   titre: string
   jours: string[]
-  valeur: (jour: string, type: TypeHeures) => number
+  types: { id: string; libelle: string }[]
+  valeur: (jour: string, type: string) => number
   modifiable: boolean
-  onSaisir: (jour: string, type: TypeHeures, heures: number | null) => void
+  onSaisir: (jour: string, type: string, heures: number | null) => void
 }) {
   const auj = aujourdhui()
-  const totalJour = (jour: string) => TYPES.reduce((s, t) => s + valeur(jour, t.id), 0)
-  const totalType = (type: TypeHeures) => jours.reduce((s, j) => s + valeur(j, type), 0)
+  const totalJour = (jour: string) => types.reduce((s, t) => s + valeur(jour, t.id), 0)
+  const totalType = (type: string) => jours.reduce((s, j) => s + valeur(j, type), 0)
   const totalSemaine = jours.reduce((s, j) => s + totalJour(j), 0)
   const fond = (jour: string) => (jour === auj ? 'bg-foret-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : '')
 
@@ -124,7 +165,7 @@ function Semaine({
           </tr>
         </thead>
         <tbody className="divide-y divide-pierre-100">
-          {TYPES.map((t) => (
+          {types.map((t) => (
             <tr key={t.id}>
               <th className="px-3 py-1.5 text-left font-medium text-pierre-700">{t.libelle}</th>
               {jours.map((j) => (
@@ -253,7 +294,7 @@ export function Case({
   )
 }
 
-function Note({ valeur, modifiable, onEnregistrer }: { valeur: string; modifiable: boolean; onEnregistrer: (note: string) => void }) {
+export function Note({ valeur, modifiable, onEnregistrer }: { valeur: string; modifiable: boolean; onEnregistrer: (note: string) => void }) {
   const [texte, setTexte] = useState(valeur)
   if (!modifiable && !valeur) return null
   return (

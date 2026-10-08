@@ -5,7 +5,8 @@ import { IconeTableur } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { ChoixPeriode } from './commun'
 import { menu, usePeriode } from './outils'
-import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre } from './donnees'
+import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre, type Statut } from './donnees'
+import { PastilleStatut } from './Statut'
 import { ajouterJours, dateCourte, finPeriode, formatHeures, libellePeriode, periodesEntre, PREMIERE_PERIODE, TYPES, type TypeHeures } from './periodes'
 
 interface Ligne {
@@ -15,6 +16,7 @@ interface Ligne {
   types: Record<TypeHeures, number>
   total: number
   note: string | null
+  statut: Statut
 }
 
 const vide = (): Record<TypeHeures, number> => ({ regulieres: 0, vacances: 0, maladie: 0 })
@@ -54,6 +56,7 @@ export function TableauDeBord() {
         types,
         total: types.regulieres + types.vacances + types.maladie,
         note: feuilles.data.find((f) => f.user_id === m.id)?.note ?? null,
+        statut: feuilles.data.find((f) => f.user_id === m.id)?.statut ?? 'ouverte',
       }
     }
     return {
@@ -100,6 +103,7 @@ export function TableauDeBord() {
               <thead className="text-xs uppercase tracking-wide text-pierre-500">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Personne</th>
+                  <th className="px-3 py-2 text-left font-medium">État</th>
                   <th className="px-3 py-2 text-right font-medium" title="Heures régulières, semaine 1">Rég. sem. 1</th>
                   <th className="px-3 py-2 text-right font-medium" title="Heures régulières, semaine 2">Rég. sem. 2</th>
                   {TYPES.map((t) => (
@@ -118,6 +122,8 @@ export function TableauDeBord() {
                       {nomDe(l.membre)}
                       {!l.membre.actif && <span className="ml-1 text-xs font-normal text-pierre-500">(inactif)</span>}
                     </td>
+                    {/* Les admins ne soumettent pas leur feuille. */}
+                    <td className="px-3 py-2">{l.membre.role === 'admin' && l.statut === 'ouverte' ? null : <PastilleStatut statut={l.statut} />}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(l.sem1)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(l.sem2)}</td>
                     {TYPES.map((t) => (
@@ -133,7 +139,7 @@ export function TableauDeBord() {
                 ))}
                 {nb === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-pierre-500">
+                    <td colSpan={9} className="px-3 py-6 text-center text-pierre-500">
                       Aucun membre de la direction.
                     </td>
                   </tr>
@@ -143,6 +149,7 @@ export function TableauDeBord() {
                 <tfoot className="border-t border-pierre-200 bg-pierre-50 font-semibold">
                   <tr>
                     <td className="px-3 py-2">Total</td>
+                    <td />
                     <td className="px-3 py-2 text-right tabular-nums">{h(somme(donnees.periode, (l) => l.sem1))}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(somme(donnees.periode, (l) => l.sem2))}</td>
                     {TYPES.map((t) => (

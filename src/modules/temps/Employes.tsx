@@ -6,9 +6,11 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { ChoixPeriode } from './commun'
+import type { Statut } from './donnees'
 import {
   nomEmploye,
   useEmployesFeuille,
+  useFeuillesEmployes,
   useHeuresEmployes,
   useNoterEmploye,
   useNotesEmployes,
@@ -18,6 +20,7 @@ import {
   type Entreprise,
 } from './donneesEmployes'
 import { Case } from './Feuille'
+import { PastilleStatut } from './Statut'
 import { menu, usePeriode } from './outils'
 import { aujourdhui, depuisIso, finPeriode, formatHeures, jourCourt, joursPeriode, JOURS_COURTS, libellePeriode } from './periodes'
 
@@ -35,7 +38,11 @@ interface Ligne {
   sem2: number
   total: number
   note: string
+  /** État de sa feuille s'il remplit la sienne (ou si elle a un état) ; null sinon. */
+  statut: Statut | null
 }
+
+const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'Soumise', approuvee: 'Approuvée' }
 
 /**
  * Feuille partagée des employés (hors direction) : toute la direction voit
@@ -44,6 +51,9 @@ interface Ligne {
  * colonne par jour de la période, comme l'ancien Google Sheets. Un seul
  * nombre d'heures par jour (pas de vacances ni de maladie). Filtres par
  * secteur et par compagnie (réglés dans le référentiel).
+ * Un employé qui remplit sa feuille (« Remplit sa feuille » dans le
+ * référentiel) : sa ligne reprend ses heures régulières, avec l'état de sa
+ * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
  */
 export function FeuilleEmployes() {
   const [debut, setDebut] = usePeriode()
@@ -67,6 +77,7 @@ export function FeuilleEmployes() {
   const entreprises = useEntreprises()
   const heures = useHeuresEmployes(debut)
   const notes = useNotesEmployes(debut)
+  const feuilles = useFeuillesEmployes(debut)
   const saisir = useSaisirEmploye(debut)
   const noter = useNoterEmploye(debut)
   const [erreurNote, setErreurNote] = useState<string | null>(null)
@@ -87,7 +98,8 @@ export function FeuilleEmployes() {
   // assignée (s'il est actif) ou qui a des heures ou une note ; un employé actif sans compagnie a une
   // ligne vide pour le signaler.
   const toutes = useMemo(() => {
-    if (!employes.data || !entreprises.data || !heures.data || !notes.data) return null
+    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data) return null
+    const statutDe = new Map(feuilles.data.map((f) => [`${f.employe_id}|${f.entreprise_id}`, f.statut]))
     const parCompagnie = new Map(entreprises.data.map((x) => [x.id, x]))
     const parLigne = new Map<string, Map<string, number>>()
     for (const h of heures.data) {
@@ -106,7 +118,8 @@ export function FeuilleEmployes() {
       const ids = new Set([...(e.actif ? e.entreprise_ids.filter((id) => parCompagnie.get(id)?.actif) : []), ...avecDonnees(e.id)])
       const compagnies = [...ids].map((id) => parCompagnie.get(id)).filter((x): x is Entreprise => !!x)
       if (!compagnies.length) {
-        if (e.actif) resultat.push({ cle: `${e.id}|`, employe: e, entreprise: null, parJour: new Map(), sem1: 0, sem2: 0, total: 0, note: '' })
+        if (e.actif)
+          resultat.push({ cle: `${e.id}|`, employe: e, entreprise: null, parJour: new Map(), sem1: 0, sem2: 0, total: 0, note: '', statut: null })
         continue
       }
       for (const x of compagnies) {
@@ -118,7 +131,8 @@ export function FeuilleEmployes() {
           if (jour < milieu) sem1 += h
           else sem2 += h
         }
-        resultat.push({ cle, employe: e, entreprise: x, parJour, sem1, sem2, total: sem1 + sem2, note: noteDe.get(cle) ?? '' })
+        const statut = statutDe.get(cle) ?? (e.feuille_propre ? 'ouverte' : null)
+        resultat.push({ cle, employe: e, entreprise: x, parJour, sem1, sem2, total: sem1 + sem2, note: noteDe.get(cle) ?? '', statut })
       }
     }
     return resultat.sort(
@@ -130,9 +144,9 @@ export function FeuilleEmployes() {
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise?.nom ?? '').localeCompare(b.entreprise?.nom ?? '', 'fr'),
     )
-  }, [employes.data, entreprises.data, heures.data, notes.data, milieu])
+  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, milieu])
 
-  const erreur = employes.error ?? entreprises.error ?? heures.error ?? notes.error
+  const erreur = employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!toutes) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
@@ -278,12 +292,22 @@ export function FeuilleEmployes() {
                     const n = numero++
                     const e = l.employe
                     const details = [e.nom_complet ? e.surnom : null, e.poste].filter(Boolean).join(' · ')
+                    // Remplie par l'employé : on corrige dans sa feuille. Approuvée : gelée.
+                    const parSaFeuille = e.feuille_propre || (l.statut != null && l.statut !== 'ouverte')
+                    const saFeuille = l.entreprise ? `/temps/employe/${e.id}/${l.entreprise.id}?periode=${debut}` : null
                     return (
                       <tr key={l.cle} className="break-inside-avoid">
                         <th className="sticky left-0 z-10 min-w-40 bg-white px-3 py-1 text-left font-normal whitespace-nowrap">
-                          <span className="block font-medium text-pierre-900">
-                            {nomEmploye(e)}
-                            {!e.actif && <span className="ml-1.5 text-xs font-normal text-pierre-400">(inactif)</span>}
+                          <span className="flex items-center gap-1.5 font-medium text-pierre-900">
+                            {parSaFeuille && saFeuille ? (
+                              <Link to={saFeuille} className="underline decoration-pierre-300 hover:text-foret-700" title="Ouvrir sa feuille">
+                                {nomEmploye(e)}
+                              </Link>
+                            ) : (
+                              nomEmploye(e)
+                            )}
+                            {!e.actif && <span className="text-xs font-normal text-pierre-400">(inactif)</span>}
+                            {parSaFeuille && l.statut && <PastilleStatut statut={l.statut} className="px-1.5! py-px!" />}
                           </span>
                           <span className="flex items-center gap-1.5 text-xs text-pierre-500">
                             {l.entreprise ? (
@@ -300,7 +324,7 @@ export function FeuilleEmployes() {
                           <td key={j} className={`px-0.5 py-1 text-center ${fond(j)} ${coupure(i)}`}>
                             <Case
                               etroite
-                              modifiable={!!l.entreprise}
+                              modifiable={!!l.entreprise && !parSaFeuille}
                               ligne={n}
                               colonne={i}
                               valeur={l.parJour.get(j) ?? 0}
@@ -364,6 +388,8 @@ export function FeuilleEmployes() {
       <p className="text-xs text-pierre-500 print:hidden">
         Feuille partagée : toute la direction voit et modifie ces heures. Saisie au quart d’heure (7,5 ou 7h30) ; Entrée
         passe à la ligne suivante, Tab au jour suivant. Un employé qui travaille pour deux compagnies a une ligne pour chacune.
+        Un employé avec un état (En cours, Soumise, Approuvée) remplit sa propre feuille : ses heures régulières
+        s’affichent ici, et on les corrige dans sa feuille (clic sur son nom).
       </p>
     </div>
   )
@@ -407,7 +433,7 @@ function CaseNote({ valeur, libelle, onEnregistrer }: { valeur: string; libelle:
 function exporter(debut: string, jours: string[], lignes: Ligne[]) {
   const nombre = (n: number) => (n ? String(Math.round(n * 100) / 100).replace('.', ',') : '')
   const champ = (t: string | null) => (t && /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : (t ?? ''))
-  const entete = ['Employé', 'Nom de camp', 'Compagnie', 'Secteur', 'Poste', ...jours, 'Semaine 1', 'Semaine 2', 'Total', 'Note']
+  const entete = ['Employé', 'Nom de camp', 'Compagnie', 'Secteur', 'Poste', ...jours, 'Semaine 1', 'Semaine 2', 'Total', 'Note', 'État']
   const rangees = lignes.map((l) => [
     champ(l.employe.nom_complet ?? l.employe.surnom),
     champ(l.employe.surnom),
@@ -419,6 +445,7 @@ function exporter(debut: string, jours: string[], lignes: Ligne[]) {
     nombre(l.sem2) || '0',
     nombre(l.total) || '0',
     champ(l.note),
+    l.statut ? LIBELLES_ETAT[l.statut] : '',
   ])
   const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')

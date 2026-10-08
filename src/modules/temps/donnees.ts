@@ -21,11 +21,27 @@ export interface Heure {
   updated_by: string | null
 }
 
+/** État d'une feuille ; sans ligne = ouverte. */
+export type Statut = 'ouverte' | 'soumise' | 'approuvee'
+
 export interface Feuille {
   id: string
   user_id: string
   debut: string
   note: string | null
+  statut: Statut
+}
+
+/** Action sur une feuille (temps.changer_feuille / changer_feuille_employe). */
+export type Action = 'soumettre' | 'approuver' | 'renvoyer' | 'rouvrir' | 'noter'
+
+/** Une ligne du journal d'une feuille : soumission, approbation, renvoi, réouverture ou note ajoutée. */
+export interface EntreeJournal {
+  id: string
+  genre: 'soumission' | 'approbation' | 'renvoi' | 'reouverture' | 'note'
+  texte: string | null
+  auteur_nom: string
+  created_at: string
 }
 
 export interface Membre {
@@ -193,5 +209,68 @@ export function useEnregistrerNote() {
       if (error) throw error
     },
     onSettled: () => invaliderFeuilles(client),
+  })
+}
+
+/** Soumettre, approuver, renvoyer, rouvrir ou ajouter une note à la feuille d'une personne de la direction. */
+export function useChangerFeuille() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'statut'],
+    networkMode: 'always',
+    mutationFn: async (p: { userId: string; debut: string; action: Action; texte?: string }) => {
+      const { error } = await db().rpc('changer_feuille', {
+        p_user: p.userId,
+        p_debut: p.debut,
+        p_action: p.action,
+        p_texte: p.texte ?? null,
+      })
+      if (error) throw error
+    },
+    onSettled: () => {
+      invaliderFeuilles(client)
+      client.invalidateQueries({ queryKey: [S, 'journal'] })
+      client.invalidateQueries({ queryKey: [S, 'a-approuver'] })
+      client.invalidateQueries({ queryKey: [S, 'heures'] })
+    },
+  })
+}
+
+/** Journal d'une feuille (direction : `feuille_id` ; employé : `feuille_employe_id`), du plus ancien au plus récent. */
+export function useJournal(colonne: 'feuille_id' | 'feuille_employe_id', id: string | null | undefined) {
+  return useQuery({
+    queryKey: [S, 'journal', colonne, id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await db()
+        .from('journal')
+        .select('id, genre, texte, auteur_nom, created_at')
+        .eq(colonne, id!)
+        .order('created_at')
+      if (error) throw error
+      return data as EntreeJournal[]
+    },
+  })
+}
+
+/** Feuilles soumises qui attendent une approbation (la base ne renvoie que celles qu'on peut voir). */
+export function useAApprouver(avecDirection: boolean) {
+  return useQuery({
+    queryKey: [S, 'a-approuver', avecDirection],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const [employes, direction] = await Promise.all([
+        db().from('feuilles_employes').select('id, employe_id, entreprise_id, debut, statut').eq('statut', 'soumise').order('debut'),
+        avecDirection
+          ? db().from('feuilles').select('*').eq('statut', 'soumise').order('debut')
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      if (employes.error) throw employes.error
+      if (direction.error) throw direction.error
+      return {
+        employes: employes.data as { id: string; employe_id: string; entreprise_id: string; debut: string; statut: Statut }[],
+        direction: direction.data as Feuille[],
+      }
+    },
   })
 }

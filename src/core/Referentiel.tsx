@@ -63,12 +63,17 @@ export function Employes() {
         La source officielle des employés est Airtable (base « Inscriptions Camp de vacances »). Une
         synchronisation automatique viendra plus tard ; en attendant, la liste se gère ici.
       </p>
+      <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+        <strong>Remplit sa feuille</strong> : l'employé entre lui-même ses heures dans Feuilles de temps et les
+        soumet à la direction. Il se connecte avec le courriel de sa fiche (son compte doit avoir été invité, voir
+        Utilisateurs). <strong>Woofing</strong> : ajoute les heures de woofing, non payées, à sa feuille.
+      </p>
       <TableauReferentiel<Employe>
         schema="core"
         table="employes"
         tri="surnom"
         nomLigne={(e) => e.surnom}
-        valeursDefaut={{ entreprise_ids: [], actif: true }}
+        valeursDefaut={{ entreprise_ids: [], feuille_propre: false, woofing: false, actif: true }}
         colonnes={[
           { champ: 'surnom', libelle: 'Nom de camp', type: 'texte', requis: true },
           { champ: 'prenom', libelle: 'Prénom', type: 'texte' },
@@ -77,6 +82,9 @@ export function Employes() {
           { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
           { champ: 'poste', libelle: 'Poste', type: 'texte' },
           { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
+          // Feuilles de temps : l'employé coché remplit sa feuille lui-même (connexion avec ce courriel).
+          { champ: 'feuille_propre', libelle: 'Remplit sa feuille', type: 'booleen' },
+          { champ: 'woofing', libelle: 'Woofing', type: 'booleen' },
           { champ: 'actif', libelle: 'Actif', type: 'booleen' },
         ]}
       />

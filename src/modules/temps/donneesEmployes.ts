@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import { toutLire } from './donnees'
+import { toutLire, type Action, type Statut } from './donnees'
 import { finPeriode } from './periodes'
 
 // Heures des employés (hors direction), saisies par la direction dans une
@@ -10,6 +10,9 @@ import { finPeriode } from './periodes'
 // seulement, pas de temps réel ni de cache sur l'appareil (clés ['temps', …]).
 // Plusieurs personnes peuvent remplir la feuille en même temps : elle se
 // relit toutes les 30 secondes (une case en cours de saisie n'est pas touchée).
+// Un employé qui remplit sa feuille (`feuille_propre`) écrit dans les mêmes
+// lignes, par sa feuille à lui (une par compagnie) : la grille ne fait que
+// les afficher, avec l'état de sa feuille. Le woofing (non payé) n'y paraît pas.
 
 const S = 'temps'
 const db = () => supabase.schema(S)
@@ -22,6 +25,8 @@ export interface EmployeFeuille {
   poste: string | null
   secteur: string | null
   entreprise_ids: string[]
+  feuille_propre: boolean
+  woofing: boolean
   actif: boolean
 }
 
@@ -35,12 +40,26 @@ export interface Entreprise {
   actif: boolean
 }
 
+/** Régulières : payées, dans la grille ; woofing : non payées, seulement sur la feuille de l'employé. */
+export type TypeHeuresEmploye = 'regulieres' | 'woofing'
+
 export interface HeureEmploye {
   id: string
   employe_id: string
   entreprise_id: string
   jour: string
+  type: TypeHeuresEmploye
   heures: number
+}
+
+/** Feuille d'un employé qui remplit la sienne (une par compagnie et période) ; sans ligne = ouverte. */
+export interface FeuilleEmploye {
+  id: string
+  employe_id: string
+  entreprise_id: string
+  debut: string
+  statut: Statut
+  note: string | null
 }
 
 export interface NoteEmploye {
@@ -62,7 +81,7 @@ export function useEmployesFeuille() {
       const { data, error } = await supabase
         .schema('core')
         .from('employes')
-        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif')
+        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, feuille_propre, woofing, actif')
         .order('surnom')
       if (error) throw error
       return data as EmployeFeuille[]
@@ -74,6 +93,7 @@ export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 
 
 const cleHeures = (debut: string) => [S, 'employes-heures', debut]
 const cleNotes = (debut: string) => [S, 'employes-notes', debut]
+const cleFeuilles = (debut: string) => [S, 'employes-feuilles', debut]
 
 export function useHeuresEmployes(debut: string) {
   return useQuery({
@@ -84,7 +104,8 @@ export function useHeuresEmployes(debut: string) {
         await toutLire<HeureEmploye>((a, b) =>
           db()
             .from('heures_employes')
-            .select('id, employe_id, entreprise_id, jour, heures')
+            .select('id, employe_id, entreprise_id, jour, type, heures')
+            .eq('type', 'regulieres')
             .gte('jour', debut)
             .lte('jour', finPeriode(debut))
             .order('jour')
@@ -103,6 +124,19 @@ export function useNotesEmployes(debut: string) {
       const { data, error } = await db().from('notes_employes').select('id, employe_id, entreprise_id, debut, note').eq('debut', debut)
       if (error) throw error
       return data as NoteEmploye[]
+    },
+  })
+}
+
+/** États des feuilles des employés qui remplissent la leur, pour la période. */
+export function useFeuillesEmployes(debut: string) {
+  return useQuery({
+    queryKey: cleFeuilles(debut),
+    refetchInterval: RELECTURE,
+    queryFn: async () => {
+      const { data, error } = await db().from('feuilles_employes').select('*').eq('debut', debut)
+      if (error) throw error
+      return data as FeuilleEmploye[]
     },
   })
 }
@@ -126,11 +160,12 @@ export function useSaisirEmploye(debut: string) {
               .eq('employe_id', c.employeId)
               .eq('entreprise_id', c.entrepriseId)
               .eq('jour', c.jour)
+              .eq('type', 'regulieres')
           : await db()
               .from('heures_employes')
               .upsert(
-                { employe_id: c.employeId, entreprise_id: c.entrepriseId, jour: c.jour, heures: c.heures },
-                { onConflict: 'employe_id,entreprise_id,jour' },
+                { employe_id: c.employeId, entreprise_id: c.entrepriseId, jour: c.jour, type: 'regulieres', heures: c.heures },
+                { onConflict: 'employe_id,entreprise_id,jour,type' },
               )
       if (error) throw error
     },
@@ -143,7 +178,14 @@ export function useSaisirEmploye(debut: string) {
         if (c.heures == null) return reste
         return [
           ...reste,
-          { id: existante?.id ?? crypto.randomUUID(), employe_id: c.employeId, entreprise_id: c.entrepriseId, jour: c.jour, heures: c.heures },
+          {
+            id: existante?.id ?? crypto.randomUUID(),
+            employe_id: c.employeId,
+            entreprise_id: c.entrepriseId,
+            jour: c.jour,
+            type: 'regulieres',
+            heures: c.heures,
+          },
         ]
       })
       return { avant }
@@ -193,5 +235,146 @@ export function useNoterEmploye(debut: string) {
       if (ctx) client.setQueryData(cle, ctx.avant)
     },
     onSettled: () => client.invalidateQueries({ queryKey: cle }),
+  })
+}
+
+// ------------------------------------------------------------------
+// Feuille d'un employé qui remplit la sienne (une compagnie, une période)
+// ------------------------------------------------------------------
+
+const cleSaFeuille = (employeId: string, entrepriseId: string, debut: string) => [S, 'feuille-employe', employeId, entrepriseId, debut]
+
+/** Ses heures (régulières et woofing) et sa feuille (null = ouverte, sans note). */
+export function useFeuilleEmploye(employeId: string, entrepriseId: string, debut: string) {
+  return useQuery({
+    queryKey: cleSaFeuille(employeId, entrepriseId, debut),
+    refetchInterval: RELECTURE,
+    queryFn: async () => {
+      const [heures, feuille] = await Promise.all([
+        db()
+          .from('heures_employes')
+          .select('id, employe_id, entreprise_id, jour, type, heures')
+          .eq('employe_id', employeId)
+          .eq('entreprise_id', entrepriseId)
+          .gte('jour', debut)
+          .lte('jour', finPeriode(debut)),
+        db().from('feuilles_employes').select('*').eq('employe_id', employeId).eq('entreprise_id', entrepriseId).eq('debut', debut).maybeSingle(),
+      ])
+      if (heures.error) throw heures.error
+      if (feuille.error) throw feuille.error
+      return {
+        heures: (heures.data as HeureEmploye[]).map((h) => ({ ...h, heures: Number(h.heures) })),
+        feuille: feuille.data as FeuilleEmploye | null,
+      }
+    },
+  })
+}
+
+type DonneesFeuille = { heures: HeureEmploye[]; feuille: FeuilleEmploye | null }
+
+/** Inscrit les heures d'une case de sa feuille (null = efface), affichage mis à jour d'avance. */
+export function useSaisirFeuilleEmploye(employeId: string, entrepriseId: string, debut: string) {
+  const client = useQueryClient()
+  const cle = cleSaFeuille(employeId, entrepriseId, debut)
+  return useMutation({
+    mutationKey: [S, 'feuille-employe-heures'],
+    networkMode: 'always',
+    mutationFn: async (c: { jour: string; type: TypeHeuresEmploye; heures: number | null }) => {
+      const { error } =
+        c.heures == null
+          ? await db()
+              .from('heures_employes')
+              .delete()
+              .eq('employe_id', employeId)
+              .eq('entreprise_id', entrepriseId)
+              .eq('jour', c.jour)
+              .eq('type', c.type)
+          : await db()
+              .from('heures_employes')
+              .upsert(
+                { employe_id: employeId, entreprise_id: entrepriseId, jour: c.jour, type: c.type, heures: c.heures },
+                { onConflict: 'employe_id,entreprise_id,jour,type' },
+              )
+      if (error) throw error
+    },
+    onMutate: async (c) => {
+      await client.cancelQueries({ queryKey: cle })
+      const avant = client.getQueryData<DonneesFeuille>(cle)
+      if (avant) {
+        const existante = avant.heures.find((h) => h.jour === c.jour && h.type === c.type)
+        const reste = avant.heures.filter((h) => h !== existante)
+        client.setQueryData<DonneesFeuille>(cle, {
+          ...avant,
+          heures:
+            c.heures == null
+              ? reste
+              : [
+                  ...reste,
+                  {
+                    id: existante?.id ?? crypto.randomUUID(),
+                    employe_id: employeId,
+                    entreprise_id: entrepriseId,
+                    jour: c.jour,
+                    type: c.type,
+                    heures: c.heures,
+                  },
+                ],
+        })
+      }
+      return { avant }
+    },
+    onError: (_e, _c, ctx) => {
+      if (ctx?.avant) client.setQueryData(cle, ctx.avant)
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: cle })
+      client.invalidateQueries({ queryKey: cleHeures(debut) })
+    },
+  })
+}
+
+const invaliderSaFeuille = (client: ReturnType<typeof useQueryClient>) => {
+  client.invalidateQueries({ queryKey: [S, 'feuille-employe'] })
+  client.invalidateQueries({ queryKey: [S, 'employes-feuilles'] })
+  client.invalidateQueries({ queryKey: [S, 'journal'] })
+  client.invalidateQueries({ queryKey: [S, 'a-approuver'] })
+}
+
+/** Note de la période sur sa feuille. */
+export function useNoteFeuilleEmploye() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'note-employe'],
+    networkMode: 'always',
+    mutationFn: async (p: { employeId: string; entrepriseId: string; debut: string; note: string }) => {
+      const { error } = await db().rpc('enregistrer_note_employe', {
+        p_employe: p.employeId,
+        p_entreprise: p.entrepriseId,
+        p_debut: p.debut,
+        p_note: p.note,
+      })
+      if (error) throw error
+    },
+    onSettled: () => invaliderSaFeuille(client),
+  })
+}
+
+/** Soumettre, approuver, renvoyer, rouvrir ou ajouter une note à la feuille d'un employé. */
+export function useChangerFeuilleEmploye() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'statut-employe'],
+    networkMode: 'always',
+    mutationFn: async (p: { employeId: string; entrepriseId: string; debut: string; action: Action; texte?: string }) => {
+      const { error } = await db().rpc('changer_feuille_employe', {
+        p_employe: p.employeId,
+        p_entreprise: p.entrepriseId,
+        p_debut: p.debut,
+        p_action: p.action,
+        p_texte: p.texte ?? null,
+      })
+      if (error) throw error
+    },
+    onSettled: () => invaliderSaFeuille(client),
   })
 }

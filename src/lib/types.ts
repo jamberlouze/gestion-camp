@@ -48,6 +48,10 @@ export interface Employe {
   secteur: string | null
   /** Compagnies (mastertimeline.entreprises) : une ligne par compagnie dans la feuille des employés. */
   entreprise_ids: string[]
+  /** Remplit lui-même sa feuille de temps (connexion avec `courriel`, obligatoire). */
+  feuille_propre: boolean
+  /** Heures de woofing (non payées) sur sa feuille de temps. */
+  woofing: boolean
   actif: boolean
   airtable_id: string | null
 }

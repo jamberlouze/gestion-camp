@@ -274,6 +274,14 @@ select v.surnom, v.prenom, v.nom_famille, v.poste, v.secteur,
   ) as v(surnom, prenom, nom_famille, poste, secteur, entreprises)
 on conflict (surnom) do update set secteur = excluded.secteur, entreprise_ids = excluded.entreprise_ids;
 
+-- Léa (compte terrain lea@camp.test) remplit sa propre feuille, avec woofing,
+-- pour deux compagnies (une feuille par compagnie).
+insert into core.employes (surnom, prenom, nom_famille, poste, secteur, courriel, feuille_propre, woofing, entreprise_ids)
+select 'Pinson', 'Léa', 'Morin', 'Aide de camp', 'Terrain', 'lea@camp.test', true, true,
+       array(select e.id from core.entreprises e where e.nom in ('GBPA+', 'Aquabounga'))
+on conflict (surnom) do update set courriel = excluded.courriel, feuille_propre = true, woofing = true,
+  entreprise_ids = excluded.entreprise_ids;
+
 -- ------------------------------------------------------------
 -- Petite caisse : l'historique vient de la migration (import du Sheets) ;
 -- la poche de Maxime est liée au compte admin de test pour essayer

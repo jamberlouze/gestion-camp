@@ -7,18 +7,20 @@ const definition = (m: ModuleId) => MODULES.find((d) => d.id === m)
  * Niveau d'une personne dans un module, mêmes règles que core.niveau_module_de
  * (la base décide ; ceci ne sert qu'à l'affichage) : l'admin a tout ; sinon le
  * plus élevé entre la grille de son rôle et ses ajouts personnels. Un module à
- * accès fixe (Feuilles de temps) : admin et direction.
+ * accès fixe (Feuilles de temps) : admin et direction, plus l'employé qui
+ * remplit sa propre feuille (`employeTemps`, quel que soit son rôle).
  */
 export function niveauModule(
   role: Role | undefined,
   roles: AccesRole[],
   perso: AccesModule[],
   m: ModuleId,
+  employeTemps = false,
 ): Niveau | null {
   if (!role) return null
   if (role === 'admin') return 'ecriture'
   const def = definition(m)
-  if (def?.accesFixe) return role === 'direction' ? 'ecriture' : null
+  if (def?.accesFixe) return role === 'direction' || (m === 'temps' && employeTemps) ? 'ecriture' : null
   const niveaux = [
     ...roles.filter((r) => r.role === role && r.module === m),
     ...perso.filter((a) => a.module === m),

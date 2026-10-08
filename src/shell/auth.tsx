@@ -16,6 +16,12 @@ interface EtatAuth {
   erreurProfil: boolean
   estAdmin: boolean
   estDirection: boolean
+  /**
+   * Employé du référentiel qui remplit sa propre feuille de temps (courriel
+   * de sa fiche = celui du compte) ; null sinon. Sa seule porte d'entrée
+   * dans les Feuilles de temps (temps.mon_employe en base).
+   */
+  employeTemps: string | null
   peutLire: (module: ModuleId) => boolean
   peutEcrire: (module: ModuleId) => boolean
   deconnexion: () => Promise<void>
@@ -50,18 +56,21 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     queryKey: ['droits', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const [profil, acces, roles] = await Promise.all([
+      const [profil, acces, roles, employe] = await Promise.all([
         supabase.schema('core').from('profils').select('*').eq('id', userId!).maybeSingle(),
         supabase.schema('core').from('acces_modules').select('*').eq('user_id', userId!),
         supabase.schema('core').from('acces_roles').select('*'),
+        supabase.schema('temps').rpc('mon_employe'),
       ])
       if (profil.error) throw profil.error
       if (acces.error) throw acces.error
       if (roles.error) throw roles.error
+      if (employe.error) throw employe.error
       return {
         profil: profil.data as Profil | null,
         acces: (acces.data ?? []) as AccesModule[],
         roles: (roles.data ?? []) as AccesRole[],
+        employeTemps: (employe.data as string | null) ?? null,
       }
     },
   })
@@ -69,7 +78,9 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
   const profil = droits?.profil?.actif ? droits.profil : null
   const estAdmin = profil?.role === 'admin'
   const estDirection = estAdmin || profil?.role === 'direction'
-  const niveau = (m: ModuleId) => niveauModule(profil?.role, droits?.roles ?? GRILLE_AVANT, droits?.acces ?? [], m)
+  const employeTemps = (profil && droits?.employeTemps) || null
+  const niveau = (m: ModuleId) =>
+    niveauModule(profil?.role, droits?.roles ?? GRILLE_AVANT, droits?.acces ?? [], m, !!employeTemps)
 
   const valeur: EtatAuth = {
     session,
@@ -78,6 +89,7 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
+    employeTemps,
     peutLire: (m) => niveau(m) !== null,
     peutEcrire: (m) => niveau(m) === 'ecriture',
     deconnexion: async () => {
