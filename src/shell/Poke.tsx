@@ -148,7 +148,7 @@ function PokeOuvert({ pokes, onFermer }: { pokes: Poke[]; onFermer: () => void }
         <p className="mt-4 font-semibold">
           {recus.length === 1
             ? `${nomDe(recus[0].de)} t'a poké !`
-            : `${recus.map((p) => nomDe(p.de).split(/\s+/)[0]).join(', ')} t'ont poké !`}
+            : `${new Intl.ListFormat('fr', { type: 'conjunction' }).format(recus.map((p) => nomDe(p.de).split(/\s+/)[0]))} t'ont poké !`}
         </p>
         <button className={`${ui.boutonSecondaire} mt-5`} onClick={onFermer}>
           Fermer
