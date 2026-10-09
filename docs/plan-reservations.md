@@ -239,9 +239,10 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
   - champs remplis par l'app, estimé accepté en annexe, spécimen de chèque de la compagnie en dernière page ;
   - pré-signé par la direction (« Signé par Marco Patriarco le … à Mont-Tremblant ») ; le signataire se règle dans Réglages ;
   - signature électronique du client (§8).
-  - Corrections apportées aux modèles, que Maxime doit approuver :
+  - Corrections apportées aux modèles, **approuvées par Maxime le 2026-10-09** :
+    - acompte et facture finale payables sur réception ; bris et frais hors forfait sur une facture séparée ;
     - VFH et VFB inversés ;
-    - « Souper : <<Dîner>> » en LS ;
+    - « Souper : <<Dîner>> » en LS ; « chèque » → « paiement » dans la clause d'annulation de LS ;
     - restes d'un copier-coller en JPA ;
     - coquilles ;
     - tableaux de lits tirés de Rooming.
@@ -268,7 +269,7 @@ Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le d
 | Recevoir un paiement | Reste dans QBO (l'adjointe, compte 1000 - Compte Chèque) | SOP |
 | État de compte | ✅ l'app relit les factures et leurs soldes toutes les 15 minutes ; elle note **les numéros de facture de QBO** sur la réservation (Q10) | |
 
-**Q12 — Comment faire les factures progressives ?** Deux façons possibles :
+**Q12 — Comment faire les factures progressives ?** **Réponse de Maxime (2026-10-09) : façon A.** Les deux façons étudiées :
 - **A. Un clic dans QBO, le reste par l'app** (recommandé) :
   - l'app crée le devis ;
   - au bon moment, elle crée une tâche « Facturer 25 % du devis 27-G-054 dans QBO » ;
@@ -279,6 +280,12 @@ Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le d
   - l'app crée elle-même chaque facture (25 %, 50 %, solde), avec les lignes du devis au prorata ;
   - seule la première est liée au devis.
   - QBO ne sait donc plus ce qui reste à facturer sur le devis : c'est l'app qui le suit. Le SOP serait à ajuster.
+
+**Estimé de l'app et devis QBO : pas de double saisie.** Le SOP prévoit un estimé, puis un devis QBO. Avec la façon A, le devis QBO reste nécessaire, parce que « Créer une facture → % » ne part que d'un devis QBO. Mais personne ne le saisit :
+- l'estimé de l'app est le document commercial : calcul, versions, envoi au client, acceptation ;
+- à la signature, l'app crée le devis QBO toute seule, par l'API, avec les lignes de l'estimé accepté. Il ne part jamais au client ; il sert seulement de base aux factures dans QBO ;
+- si l'estimé change avant la facture finale (F13, F14), l'app met le devis QBO à jour.
+- À vérifier dans la compagnie d'essai QBO : qu'un devis créé par l'API se facture bien par pourcentage dans l'écran de QBO.
 
 **En attendant que cette phase soit en ligne**, l'app crée les mêmes tâches « À facturer dans QBO », avec les montants à recopier ; l'adjointe suit le SOP à la main.
 
@@ -468,6 +475,9 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
 - **Q10** : QBO numérote les factures ; l'app relie ces numéros à la réservation.
 - **Q11** : la comptable fait des essais ; le but est d'entrer ces factures dans QBO.
 
+**Réponses du 2026-10-09 :**
+- **Q12** : façon A (un clic dans QBO pour chaque facture progressive, l'app fait le reste). Le devis QBO est créé par l'app, sans double saisie (§6).
+- Corrections des modèles de contrat approuvées ; signature électronique approuvée.
+
 **Questions ouvertes :**
-- **Q9** : liste des produits et services QBO (à venir de la comptable).
-- **Q12** : factures progressives, façon A (un clic dans QBO) ou B (tout par l'app) ? Voir §6.
+- **Q9** : liste des produits et services QBO (à déterminer plus tard, avec la comptable).
