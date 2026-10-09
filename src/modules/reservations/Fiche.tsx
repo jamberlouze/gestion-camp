@@ -9,10 +9,13 @@ import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, u
 import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
 import { ChoixOrganisation } from './ChoixOrganisation'
+import { DemandeRecue } from './DemandeRecue'
+import { EspaceClient } from './EspaceClient'
 import { PuceEtape, Section } from './commun'
-import { heuresNormales, useDonnees } from './contexte'
+import { useDonnees } from './contexte'
+import { heuresNormales } from './parametres'
 import { champPetit, dateCourte, dateLongue, heure, nomEtape } from './format'
-import { useJournal, useModifierReservation, useSupprimerReservation } from './donnees'
+import { useDemandes, useJournal, useModifierReservation, useSupprimerReservation } from './donnees'
 import { Documents } from './Documents'
 import { Estime } from './Estime'
 import {
@@ -55,6 +58,8 @@ function Contenu({ r }: { r: Reservation }) {
   const modifier = useModifierReservation()
   const supprimer = useSupprimerReservation()
   const naviguer = useNavigate()
+  const demandes = useDemandes()
+  const demande = demandes.data?.find((d) => d.reservation_id === r.id)
   const changer: Changer = (champs) => modifier.mutate({ id: r.id, champs })
 
   return (
@@ -90,16 +95,19 @@ function Contenu({ r }: { r: Reservation }) {
         </div>
       </div>
 
+      {demande && <DemandeRecue demande={demande} />}
+
       <Parcours r={r} changer={changer} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
           <Estime r={r} />
           <Documents r={r} />
+          <EspaceClient r={r} />
           <Suivi r={r} />
         </div>
         <div className="space-y-5">
-          <Client r={r} changer={changer} />
+          <Client r={r} changer={changer} demandeAValider={!!demande && !demande.validee_le} />
           <Sejour r={r} changer={changer} />
           <Notes r={r} changer={changer} />
         </div>
@@ -206,7 +214,7 @@ function ClosedLost({ fermer, enregistrer }: { fermer: () => void; enregistrer: 
 // ------------------------------------------------------------
 // Client
 // ------------------------------------------------------------
-function Client({ r, changer }: { r: Reservation; changer: Changer }) {
+function Client({ r, changer, demandeAValider }: { r: Reservation; changer: Changer; demandeAValider: boolean }) {
   const { contacts, compagnies, responsables, ecriture, nomResponsable } = useDonnees()
   const sesContacts = r.organisation_id ? contacts.filter((c) => c.organisation_id === r.organisation_id) : []
 
@@ -215,8 +223,14 @@ function Client({ r, changer }: { r: Reservation; changer: Changer }) {
       <div className="space-y-3">
         <div>
           <span className={ui.etiquette}>Organisation</span>
-          <ChoixOrganisation valeur={r.organisation_id} disabled={!ecriture} changer={(id) => changer({ organisation_id: id, contact_reservation_id: null, contact_facturation_id: null })} />
-          {!r.organisation_id && <p className="mt-1 text-xs text-amber-700">À valider : reliez la demande à une organisation du CRM, ou créez-la.</p>}
+          {demandeAValider && !r.organisation_id ? (
+            <p className="text-xs text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
+          ) : (
+            <>
+              <ChoixOrganisation valeur={r.organisation_id} disabled={!ecriture} changer={(id) => changer({ organisation_id: id, contact_reservation_id: null, contact_facturation_id: null })} />
+              {!r.organisation_id && <p className="mt-1 text-xs text-amber-700">À valider : reliez la demande à une organisation du CRM, ou créez-la.</p>}
+            </>
+          )}
         </div>
         {r.organisation_id && (
           <>

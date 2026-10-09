@@ -310,7 +310,8 @@ Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le d
   - accompagnateurs et âges pour les écoles ;
   - responsable de la facturation seulement s'il est différent.
 - Page publique, protégée contre les robots (Cloudflare Turnstile, gratuit), intégrable au site camptremblant.com.
-- Crée une « Nouvelle demande » à valider (§1) et envoie un accusé de réception.
+- Crée une « Nouvelle demande » à valider (§1) et envoie un accusé de réception (courriel : phase 5 ; en attendant, l'écran de remerciement donne le numéro de la demande).
+- **Fait (phase 3, DEV)** : coquilles du Jotform corrigées ; les heures normales et le prix du repas (19,40 $ en 2026-27, le Jotform disait encore 17,50 $) viennent des réglages et du catalogue.
 
 **Page client sans compte** : un lien secret par réservation. Le client peut :
 - voir l'estimé et **l'accepter** ;
@@ -364,6 +365,7 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
 - Remplacent les « formulaires santé et allergies » exigés à J−21 par les contrats. Champs : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments, matricule ; aussi pour les professeurs et les accompagnateurs.
 - Lien public par réservation, envoyé avec la pré-arrivée ; suivi du nombre de fiches reçues sur le nombre attendu.
 - Accès limité à un rôle précis. Cuisine ne voit que des totaux (repas sans gluten…).
+- **Fait (phase 3, DEV)** : questions du formulaire du prototype Airtable (matricule, allergies ou santé, Epipen, diète, médicaments en vente libre), pour les élèves et les adultes ; accès « Réservations › Fiches participants » dans la grille (admins au départ) ; effacé : nom, classe, matricule, santé, diète, médicaments ; gardé : le groupe, les dates, le type de fiche et le courriel seulement avec le consentement. Le lien vers la Cuisine (totaux par repas) viendra plus tard.
 - **Effacement automatique 3 mois après le départ** (Loi 25 ; durée réglable) **des données de santé seulement** : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments.
 - **On garde** (réponse de Maxime du 2026-10-08) : les adresses courriel et les informations génériques (groupe, date de la visite, forfait, etc.).
   - Garder un courriel pour écrire plus tard à la personne demande son consentement (Loi 25, loi anti-pourriel) : la fiche aura une case « J'accepte de recevoir des nouvelles de la BPA », non cochée par défaut.
@@ -419,7 +421,11 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - fiches des deux compagnies qui facturent (GBPA+, Opikawa) : logo, taxes, consignes de paiement, spécimens de chèque en annexe ;
    - **signature électronique** : lien secret envoyé au client, page publique sans compte (contrat, case « J'accepte », nom, signature au doigt ou à la souris), réservation confirmée, contrat signé avec certificat (date, IP, navigateur, empreinte SHA-256 du contrat envoyé). Essai complet réussi en DEV.
    - Reste pour plus tard : l'envoi du lien par courriel (phase 5) et la production automatique du contrat signé (pour l'instant, un bouton dans la fiche).
-3. **Formulaire public + page client** : acceptation, signature, factures QBO, fiches participants.
+3. **Formulaire public + page client** — **bâtie en DEV le 2026-10-09**, pas en PROD :
+   - formulaire `/demande` : les questions et les conditions du Jotform, en français et en anglais ; Turnstile ; la réservation arrive à l'étape Nouvelle, « À valider » ; l'équipe la relie au CRM en un clic (suggestions) ;
+   - page client `/client/<lien>` : le séjour, l'estimé à accepter en ligne, la signature du contrat, les documents, le lien des fiches, un message à l'équipe ;
+   - fiches participants `/fiches/<lien>` : santé, Epipen, diète, médicaments ; accès propre « Fiches participants » ; totaux pour les autres ; effacées 3 mois après le départ (Loi 25) ;
+   - reste pour la mise en ligne : sous-domaine, clés Turnstile (README, section 11) ; les factures QBO s'ajouteront à la page client à la phase 4 ; l'accusé de réception par courriel, à la phase 5.
 4. **QuickBooks Online** (§6) :
    - compagnie d'essai QBO d'abord ;
    - client, devis, factures progressives, ajustement, notes de crédit, lecture des soldes ;

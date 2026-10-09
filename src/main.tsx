@@ -6,11 +6,13 @@ import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './index.css'
 import { Confirmations } from './lib/Confirmation'
+import { estPagePublique } from './lib/pagesPubliques'
 import { clientRequetes, persistance } from './lib/requetes'
 import { FournisseurAuth } from './shell/auth'
 
 // Service worker : garde l'app disponible sans réseau et se met à jour seul.
-registerSW({ immediate: true })
+// Pas sur les pages publiques : un client n'a pas à télécharger toute l'app.
+if (!estPagePublique()) registerSW({ immediate: true })
 
 // Après une mise en ligne, un onglet resté ouvert peut réclamer les fichiers
 // d'un module qui n'existent plus (nouveaux noms) : au lieu d'une page

@@ -1,7 +1,9 @@
 // Worker de la gestion du camp : sert l'application (fichiers statiques de
 // dist/, voir wrangler.jsonc), garde Supabase éveillé, fait la recherche
-// hebdomadaire de la Vigie de subventions (voir subventions/pipeline.js) et
-// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js).
+// hebdomadaire de la Vigie de subventions (voir subventions/pipeline.js),
+// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js)
+// et les routes publiques des Réservations : formulaire de demande et
+// documents de la page client (voir reservations/api.js).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -15,6 +17,7 @@
 
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
+import { routeReservations } from "./reservations/api.js";
 import { routeSubventions } from "./subventions/api.js";
 import { tourHebdomadaire } from "./subventions/pipeline.js";
 
@@ -58,6 +61,8 @@ export default {
     if (api) return routeSubventions(request, env, ctx, api[1]);
     const cal = url.pathname.match(/^\/api\/calendrier\/([a-z]+)$/);
     if (cal) return routeCalendrier(request, env, cal[1]);
+    const res = url.pathname.match(/^\/api\/reservations\/([a-z]+)$/);
+    if (res) return routeReservations(request, env, res[1]);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping
     if (url.pathname === "/_ping") {
       try {

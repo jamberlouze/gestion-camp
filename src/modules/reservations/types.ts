@@ -1,5 +1,7 @@
 // Types du module Réservations (tables du schéma `reservations`).
 
+import type { Reponses } from './demande'
+
 export type Forfait = 'classe_nature' | 'journee_plein_air' | 'accueil_groupe' | 'location_salle'
 export type Variante = 'verte' | 'blanche' | 'rouge' | 'jour' | 'soir' | 'complete' | 'sur_mesure'
 export type Ratio = '1:10' | '1:15' | '1:20' | '1:30' | '1:X' | 'aucun'
@@ -76,6 +78,10 @@ export interface Reservation {
   signe_le: string | null
   origine: 'app' | 'formulaire' | 'import' | 'airbnb'
   ref_externe: string | null
+  /** Lien secret de la page client (/client/<jeton>). */
+  jeton_client: string
+  /** Lien secret des fiches participants (/fiches/<jeton>), transmis aux parents. */
+  jeton_fiches: string
   created_at: string
   updated_at: string
 }
@@ -97,6 +103,9 @@ export interface Estime {
   importe: boolean
   envoye_le: string | null
   accepte_le: string | null
+  /** Accepté par le client sur sa page : son nom et son adresse IP. */
+  accepte_par: string | null
+  accepte_ip: string | null
   created_at: string
   updated_at: string
 }
@@ -399,4 +408,70 @@ export interface Signature {
   adresse_ip: string | null
   navigateur: string | null
   document_signe_id: string | null
+}
+
+// ------------------------------------------------------------------
+// Phase 3 : formulaire public, page client, fiches participants
+// ------------------------------------------------------------------
+
+/** Demande reçue par le formulaire public (réponses dans demande.ts). */
+export interface DemandeRecue {
+  id: string
+  reservation_id: string
+  cle: string
+  recue_le: string
+  langue: 'fr' | 'en'
+  reponses: Reponses
+  adresse_ip: string | null
+  navigateur: string | null
+  validee_le: string | null
+  validee_par: string | null
+  validee_par_nom: string | null
+}
+
+export type Diete = 'reguliere' | 'vegetarienne' | 'sans_porc' | 'halal' | 'sans_lactose' | 'sans_gluten' | 'autre'
+
+export const DIETES: Record<Diete, string> = {
+  reguliere: 'Régulière',
+  vegetarienne: 'Végétarienne',
+  sans_porc: 'Sans porc',
+  halal: 'Halal',
+  sans_lactose: 'Sans lactose',
+  sans_gluten: 'Sans gluten',
+  autre: 'Autre',
+}
+
+/** Fiche participant (données de santé : accès reservations_sante). */
+export interface FicheParticipant {
+  id: string
+  reservation_id: string
+  genre: 'participant' | 'adulte'
+  prenom: string | null
+  nom: string | null
+  groupe: string | null
+  matricule: string | null
+  sante: boolean | null
+  allergies: string | null
+  problemes_sante: string | null
+  epipen: boolean | null
+  diete: Diete | null
+  diete_autre: string | null
+  medicaments: boolean | null
+  courriel: string | null
+  nouvelles: boolean
+  langue: 'fr' | 'en'
+  recue_le: string
+  effacee_le: string | null
+}
+
+/** Totaux des fiches, sans nom (reservations.totaux_fiches). */
+export interface TotauxFiches {
+  recues: number
+  participants: number
+  adultes: number
+  sante: number
+  epipen: number
+  sans_medicaments: number
+  effacees: number
+  dietes: Partial<Record<Diete, number>>
 }

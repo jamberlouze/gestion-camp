@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { messageErreur } from '@/lib/donnees'
-import { supabase } from '@/lib/supabase'
 import { ui } from '@/lib/ui'
+import { db, messageDe } from './client'
 
 // Page publique de signature du contrat (adresse /signer/<jeton>), ouverte
 // par le client sans compte. Elle ne lit que ce que renvoie
@@ -21,7 +20,6 @@ interface Infos {
   nom_signataire: string | null
 }
 
-const db = () => supabase.schema('reservations')
 const quand = (iso: string) => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Toronto', dateStyle: 'long', timeStyle: 'short' }).format(new Date(iso))
 
 export default function SignaturePublique() {
@@ -33,7 +31,7 @@ export default function SignaturePublique() {
     db()
       .rpc('signature_publique', { p_jeton: jeton })
       .then(({ data, error }) => {
-        if (error) setErreur(messageErreur(error))
+        if (error) setErreur(messageDe(error, 'Erreur'))
         setInfos((data as Infos | null) ?? null)
       })
   }, [jeton])
@@ -168,7 +166,7 @@ function Formulaire({ infos, jeton, relire }: { infos: Infos; jeton: string; rel
     const image = canevas.current!.toDataURL('image/png')
     const { error } = await db().rpc('signer_contrat', { p_jeton: jeton, p_nom: nom, p_fonction: fonction, p_image: image, p_accepte: accepte })
     if (error) {
-      setErreur(messageErreur(error))
+      setErreur(messageDe(error, 'Erreur'))
       setEnvoi(false)
       return
     }

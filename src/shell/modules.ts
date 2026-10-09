@@ -155,6 +155,17 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/reservations',
   },
   {
+    // Fiches participants (allergies, diètes, médicaments) : données de
+    // santé, accès propre ; admins au départ (aucune ligne dans la grille).
+    // Les autres voient seulement des totaux.
+    id: 'reservations_sante',
+    nom: 'Réservations › Fiches participants',
+    description: 'Allergies, diètes et médicaments des participants (Loi 25)',
+    icone: '🩺',
+    chemin: '/reservations',
+    parent: 'reservations',
+  },
+  {
     id: 'crm',
     nom: 'CRM',
     description: 'Clients, démarchage et relances, liés aux réservations',

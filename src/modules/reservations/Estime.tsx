@@ -192,6 +192,7 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
           Prix {libelleExercice(estime.statut === 'brouillon' ? calcul.exercice : estime.exercice_prix)}
           {estime.envoye_le && ` · envoyé le ${dateLongue(estime.envoye_le)}`}
           {estime.accepte_le && ` · accepté le ${dateLongue(estime.accepte_le)}`}
+          {estime.accepte_par && ` en ligne par ${estime.accepte_par}`}
         </span>
       </div>
 

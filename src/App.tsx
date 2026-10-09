@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router'
 import { Compagnies, Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
 import { Utilisateurs } from '@/core/Utilisateurs'
+import { estPagePublique } from '@/lib/pagesPubliques'
 import { configManquante } from '@/lib/supabase'
 import { Accueil } from '@/shell/Accueil'
 import { useAuth } from '@/shell/auth'
@@ -29,8 +30,9 @@ const Ameliorations = lazy(() => import('@/modules/ameliorations'))
 const Reunions = lazy(() => import('@/modules/reunions'))
 const Crm = lazy(() => import('@/modules/crm'))
 const Reservations = lazy(() => import('@/modules/reservations'))
-// Page publique (client sans compte) : signature d'un contrat.
-const SignaturePublique = lazy(() => import('@/modules/reservations/public/SignaturePublique'))
+// Pages publiques des Réservations (clients sans compte) : formulaire de
+// demande, page client, signature, fiches participants.
+const PagesPubliques = lazy(() => import('@/modules/reservations/public'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -44,10 +46,10 @@ export default function App() {
     )
   }
   // Pages publiques : ni connexion ni menu (le client n'a pas de compte).
-  if (window.location.pathname.startsWith('/signer/'))
+  if (estPagePublique())
     return (
       <Suspense fallback={<Chargement />}>
-        <SignaturePublique />
+        <PagesPubliques />
       </Suspense>
     )
   if (chargement) return <Chargement />

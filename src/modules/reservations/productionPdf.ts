@@ -1,6 +1,7 @@
 // Documents dans l'app : produire les PDF (pdf/), les garder dans le seau
 // privé avec leur empreinte, préparer la signature du contrat.
 
+import { urlPublique } from '@/lib/pagesPubliques'
 import { supabase } from '@/lib/supabase'
 import type { Contact, Organisation } from '@/modules/crm/types'
 import type { Contexte } from './pdf/champs'
@@ -152,7 +153,7 @@ export async function preparerContrat(s: Sources, estime: Estime, modele: Modele
 }
 
 /** Lien de la page de signature, à envoyer au client. */
-export const lienSignature = (sig: Pick<Signature, 'jeton'>) => `${window.location.origin}/signer/${sig.jeton}`
+export const lienSignature = (sig: Pick<Signature, 'jeton'>) => urlPublique(`/signer/${sig.jeton}`)
 
 /** Contrat signé : la signature est posée sur le contrat envoyé, avec le certificat. */
 export async function produireContratSigne(s: Sources, sig: Signature, contratEnvoye: DocumentPdf): Promise<DocumentPdf> {

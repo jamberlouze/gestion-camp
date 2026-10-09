@@ -5,12 +5,13 @@ import { ui } from '@/lib/ui'
 import { exerciceDe, libelleExercice, repasProposes, varianteProposee } from './calcul'
 import { ChoixOrganisation } from './ChoixOrganisation'
 import { PuceEtape, Puces } from './commun'
-import { heuresNormales, useDonnees } from './contexte'
+import { useDonnees } from './contexte'
+import { heuresNormales } from './parametres'
 import { argent, champPetit, nomForfait, normaliser, periode } from './format'
 import { useAjouterReservation } from './donnees'
 import { ETAPES, FORFAITS, type Forfait, type Reservation } from './types'
 
-type Vue = 'actives' | 'nouvelles' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
+type Vue = 'actives' | 'nouvelles' | 'a_valider' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
 
 const rang = (r: Reservation) => ETAPES.findIndex((e) => e.valeur === r.etape)
 const RANG_CONFIRMEE = ETAPES.findIndex((e) => e.valeur === 'confirmee')
@@ -20,6 +21,8 @@ const RANG_TERMINEE = ETAPES.findIndex((e) => e.valeur === 'terminee')
 const VUES: { id: Vue; nom: string; garde: (r: Reservation) => boolean }[] = [
   { id: 'actives', nom: 'Actives', garde: (r) => !r.fermeture && rang(r) < RANG_TERMINEE },
   { id: 'nouvelles', nom: 'Nouvelles demandes', garde: (r) => !r.fermeture && r.etape === 'nouvelle' },
+  // Demandes du formulaire pas encore reliées au CRM (et toute réservation sans organisation).
+  { id: 'a_valider', nom: 'À valider', garde: (r) => !r.fermeture && !r.organisation_id },
   { id: 'non_confirmees', nom: 'Non confirmées', garde: (r) => !r.fermeture && rang(r) < RANG_CONFIRMEE },
   { id: 'confirmees', nom: 'Confirmées', garde: (r) => !r.fermeture && rang(r) >= RANG_CONFIRMEE },
   { id: 'a_facturer', nom: 'Factures finales à faire', garde: (r) => !r.fermeture && r.etape === 'terminee' },
@@ -155,7 +158,7 @@ export function Liste() {
   )
 }
 
-/** Saisie d'une réservation par l'équipe (une demande du formulaire arrivera toute seule plus tard). */
+/** Saisie d'une réservation par l'équipe (les demandes du formulaire public arrivent toutes seules, « À valider »). */
 function NouvelleReservation({ fermer }: { fermer: () => void }) {
   const { reglages, compagnieDefaut, moi } = useDonnees()
   const ajouter = useAjouterReservation()

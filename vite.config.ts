@@ -53,4 +53,8 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // En DEV, les routes /api/* vont au Worker local (npm run worker:dev).
+  server: {
+    proxy: { '/api': 'http://127.0.0.1:8787' },
+  },
 })

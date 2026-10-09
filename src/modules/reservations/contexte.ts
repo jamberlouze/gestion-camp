@@ -1,19 +1,11 @@
 import { createContext, useContext } from 'react'
 import type { Profil } from '@/lib/types'
 import type { Contact, Organisation } from '@/modules/crm/types'
-import type { Catalogue, HeuresRepas } from './calcul'
+import type { Catalogue } from './calcul'
 import type { Entreprise } from './donnees'
 import type { Sources } from './productionPdf'
-import type { Compagnie, EtageRooming, Forfait, Modele, Prix, Produit, Ratio, Reglage, Reservation, Responsable } from './types'
-
-export interface Reglages {
-  heuresNormales: Record<string, [string, string]>
-  heuresRepas: HeuresRepas
-  gratuitePar: number
-  ratioDefaut: Ratio
-  diviseurHeuresExtra: number
-  variantesClasse: Record<string, string>
-}
+import type { Reglages } from './parametres'
+import type { Compagnie, EtageRooming, Modele, Prix, Produit, Reservation, Responsable } from './types'
 
 // Données communes du module (chargées une fois par index.tsx).
 export interface Donnees {
@@ -51,31 +43,6 @@ export function useDonnees() {
   const d = useContext(ContexteReservations)
   if (!d) throw new Error('useDonnees hors du module Réservations')
   return d
-}
-
-const valeur = <T,>(reglages: Reglage[], cle: string, defaut: T): T =>
-  (reglages.find((r) => r.cle === cle)?.valeur as T | undefined) ?? defaut
-
-export function lireReglages(r: Reglage[]): Reglages {
-  return {
-    heuresNormales: valeur(r, 'heures_normales', {}),
-    heuresRepas: valeur(r, 'heures_repas', { dejeuner: '08:00', diner: '12:00', souper: '17:30' }),
-    gratuitePar: Number(valeur(r, 'gratuite_par', 20)),
-    ratioDefaut: valeur<Ratio>(r, 'ratio_defaut', '1:15'),
-    diviseurHeuresExtra: Number(valeur(r, 'diviseur_heures_extra', 8)),
-    variantesClasse: valeur(r, 'variantes_classe', {}),
-  }
-}
-
-/** Heures normales d'arrivée et de départ d'un forfait (Location : selon la variante). */
-export function heuresNormales(reglages: Reglages, forfait: Forfait, variante: string | null): [string, string] | null {
-  if (forfait === 'location_salle') {
-    if (variante === 'jour') return reglages.heuresNormales.location_salle_jour ?? null
-    if (variante === 'soir') return reglages.heuresNormales.location_salle_soir ?? null
-    if (variante === 'complete') return ['09:00', '23:00']
-    return null
-  }
-  return reglages.heuresNormales[forfait] ?? null
 }
 
 /** Fonction de prix avec repli sur l'exercice le plus récent qui a un prix (P2). */

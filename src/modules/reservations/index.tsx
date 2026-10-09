@@ -7,7 +7,8 @@ import { useContacts, useOrganisations } from '@/modules/crm/donnees'
 import { useAuth } from '@/shell/auth'
 import { aujourdhui } from '@/shell/pokes'
 import { Catalogue } from './Catalogue'
-import { ContexteReservations, fabriquerPrixDe, lireReglages, type Donnees } from './contexte'
+import { ContexteReservations, fabriquerPrixDe, type Donnees } from './contexte'
+import { lireReglages } from './parametres'
 import {
   useCompagnies,
   useCompagniesFacture,

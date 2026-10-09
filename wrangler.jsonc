@@ -1,6 +1,7 @@
 // Cloudflare Worker unique : sert l'application (fichiers de dist/), garde
-// Supabase éveillé (cron) et fait la recherche du lundi de la Vigie de
-// subventions (cron + routes /api/subventions/*). Déployé automatiquement
+// Supabase éveillé (cron), fait la recherche du lundi de la Vigie de
+// subventions (cron + routes /api/subventions/*) et reçoit le formulaire
+// public des Réservations (/api/reservations/*). Déployé automatiquement
 // par Cloudflare (Workers Builds) à chaque push sur main : build
 // `npm run build`, puis `npx wrangler deploy`.
 {
@@ -25,7 +26,7 @@
   },
   // Valeurs publiques (les mêmes que dans .env.production). Les secrets
   // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*, AIRTABLE_TOKEN,
-  // CALENDRIER_JETON_SYNCHRO) se mettent dans
+  // CALENDRIER_JETON_SYNCHRO, TURNSTILE_SECRET) se mettent dans
   // Cloudflare (Worker → Settings → Variables and Secrets), jamais ici.
   "vars": {
     "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",

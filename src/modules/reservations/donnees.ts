@@ -1,7 +1,24 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Compagnie, DocumentPdf, EntreeJournal, Estime, EtageRooming, Ligne, Modele, Prix, Produit, Reglage, Reservation, Responsable, Signature } from './types'
+import type {
+  Compagnie,
+  DemandeRecue,
+  DocumentPdf,
+  EntreeJournal,
+  Estime,
+  EtageRooming,
+  FicheParticipant,
+  Ligne,
+  Modele,
+  Prix,
+  Produit,
+  Reglage,
+  Reservation,
+  Responsable,
+  Signature,
+  TotauxFiches,
+} from './types'
 
 // Module en ligne seulement (networkMode « always »). Modifications
 // optimistes ; une modification refusée remet la ligne d'avant et va dans
@@ -49,6 +66,8 @@ export const useReservations = () => useTable<Reservation>('reservations', 'date
 export const useProduits = () => useTable<Produit>('produits', 'ordre')
 export const usePrix = () => useTable<Prix>('prix', 'exercice')
 export const useReglages = () => useTable<Reglage>('reglages', 'cle')
+/** Demandes reçues par le formulaire public (une par réservation). */
+export const useDemandes = () => useTable<DemandeRecue>('demandes', 'recue_le')
 
 /** Estimés d'une réservation et leurs lignes. */
 export function useEstimes(reservationId: string) {
@@ -346,3 +365,89 @@ export function useModifierCompagnie() {
 }
 
 export const useModifierModele = () => useModifier<Modele>('modeles', ['reservations', 'modeles'])
+
+// ------------------------------------------------------------------
+// Phase 3 : demandes du formulaire, liens, fiches participants
+// ------------------------------------------------------------------
+
+/** Relier une demande du formulaire au CRM (organisation choisie ou créée, contacts). */
+export function useValiderDemande() {
+  const client = useQueryClient()
+  return useMutation({
+    // Erreur affichée sur place (DemandeRecue), pas dans le bandeau.
+    mutationKey: ['reservations-local', 'demandes', 'valider'],
+    networkMode: 'always',
+    mutationFn: async (v: { demande: string; organisation: string | null; genre: string | null }) => {
+      const { error } = await db().rpc('valider_demande', { p_demande: v.demande, p_organisation: v.organisation, p_genre: v.genre })
+      if (error) throw error
+    },
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['reservations', 'demandes'] }),
+        client.invalidateQueries({ queryKey: ['reservations', 'reservations'] }),
+        client.invalidateQueries({ queryKey: ['crm'] }),
+      ]),
+  })
+}
+
+/** Nouveau lien secret (page client ou fiches) : l'ancien ne fonctionne plus. */
+export function useNouveauLien() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations', 'reservations', 'nouveau-lien'],
+    networkMode: 'always',
+    mutationFn: async (v: { reservation: string; genre: 'client' | 'fiches' }) => {
+      const { error } = await db().rpc('nouveau_lien', { p_reservation: v.reservation, p_genre: v.genre })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'reservations'] }),
+  })
+}
+
+/** Totaux des fiches (sans nom), pour toute personne qui voit le module. */
+export function useTotauxFiches(reservationId: string) {
+  return useQuery({
+    queryKey: ['reservations', 'totaux-fiches', reservationId],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await db().rpc('totaux_fiches', { p_reservation: reservationId })
+      if (error) throw error
+      return data as TotauxFiches | null
+    },
+  })
+}
+
+/**
+ * Fiches d'une réservation (données de santé) : seulement avec l'accès
+ * reservations_sante. Racine « reservations-sante » : jamais gardée sur
+ * l'appareil (voir src/lib/requetes.ts).
+ */
+export function useFiches(reservationId: string, actif: boolean) {
+  return useQuery({
+    queryKey: ['reservations-sante', reservationId],
+    enabled: actif,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await db().from('fiches').select('*').eq('reservation_id', reservationId).order('nom').order('prenom')
+      if (error) throw error
+      return data as FicheParticipant[]
+    },
+  })
+}
+
+export function useSupprimerFiche() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-sante', 'supprimer'],
+    networkMode: 'always',
+    mutationFn: async (id: string) => {
+      const { error } = await db().from('fiches').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['reservations-sante'] }),
+        client.invalidateQueries({ queryKey: ['reservations', 'totaux-fiches'] }),
+      ]),
+  })
+}

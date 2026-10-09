@@ -18,6 +18,7 @@
     "import": "node scripts/migration/importer.mjs",
     "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder",
     "deploy": "npm run build && wrangler deploy",
+    "worker:dev": "wrangler dev --port 8787",
     "test:worker": "node --test \"worker/**/*.test.js\"",
     "test:calcul": "node --test src/modules/reservations/calcul.test.mjs"
   },

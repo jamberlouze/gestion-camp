@@ -104,7 +104,8 @@ contre la PROD. Les commandes qui touchent la PROD commencent par `prod:`.
 | `npm run import:essai` | Lit les anciennes bases et affiche les décomptes (n'écrit rien) |
 | `npm run import` | Importe les anciennes données dans la nouvelle base |
 | `npm run deploy` | Déploiement manuel (normalement automatique à chaque push) |
-| `npm run test:worker` | Tests du Worker (Vigie de subventions), réseau simulé |
+| `npm run test:worker` | Tests du Worker (Subventions, Calendrier, formulaire des Réservations), réseau simulé |
+| `npm run worker:dev` | DEV : le Worker en local sur le port 8787 (routes `/api/*`, base locale via `.dev.vars`) ; `npm run dev` lui envoie les `/api/*` |
 
 ---
 
@@ -296,6 +297,31 @@ Secrets **Cloudflare** (même endroit qu'en 8) :
 
 **Vérifier** : app → Calendrier → Réglages → « Synchroniser maintenant » ; la
 liste « Dernières synchros » affiche le bilan (ou l'erreur).
+
+### 11. Réservations : formulaire public et page client
+
+Pages publiques sans compte : `/demande` (formulaire, remplace Jotform),
+`/client/<jeton>` (page client), `/signer/<jeton>`, `/fiches/<jeton>`. Elles
+seront servies sur un sous-domaine de camptremblant.com (le site principal est
+chez Squarespace) :
+
+1. **Sous-domaine** (ex. `groupes.camptremblant.com`) : Cloudflare → Workers →
+   `gestion-camp` → Settings → Domains & Routes → **Add custom domain**. Si le
+   DNS de camptremblant.com n'est pas chez Cloudflare, ajouter dans le DNS du
+   domaine (Squarespace) l'enregistrement CNAME indiqué par Cloudflare.
+2. **Turnstile** (anti-robot, gratuit) : Cloudflare → Turnstile → **Add
+   widget**, domaine = le sous-domaine (et celui du Worker), mode « Managed ».
+   - clé du site → `VITE_TURNSTILE_SITE_KEY` dans `.env.production` (publique) ;
+   - clé secrète → secret Cloudflare `TURNSTILE_SECRET` (même endroit qu'en 8).
+3. `.env.production` : `VITE_HOTE_PUBLIC=groupes.camptremblant.com` (sur cet
+   hôte, seules les pages publiques s'affichent ; les liens envoyés aux
+   clients y mènent).
+4. Site camptremblant.com : remplacer le lien du Jotform par
+   `https://groupes.camptremblant.com/demande` (`?lang=en` pour l'anglais).
+
+`SUPABASE_SECRET_KEY` (le même qu'en 8) sert aussi au formulaire et aux
+téléchargements de la page client. En DEV, `.dev.vars` contient la clé
+locale et les clés d'essai de Turnstile (toujours acceptées).
 
 ## Ajouter un module
 
