@@ -111,6 +111,10 @@ export function Utilisateurs() {
         employes: (employes.data as FicheEmploye[]).sort((a, b) => nomFiche(a).localeCompare(nomFiche(b), 'fr')),
       }
     },
+    // Une copie gardée sur l'appareil d'avant les fiches d'employés
+    // (2026-10-07) n'a pas `employes` : sans ça, la page plante avant
+    // même de pouvoir relire la liste.
+    select: (d) => (d.employes ? d : { ...d, employes: [] }),
   })
 
   const rafraichir = () => {
