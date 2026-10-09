@@ -9,6 +9,7 @@ import { Confirmations } from './lib/Confirmation'
 import { estPagePublique } from './lib/pagesPubliques'
 import { clientRequetes, persistance } from './lib/requetes'
 import { FournisseurAuth } from './shell/auth'
+import { FrontiereErreur } from './shell/FrontiereErreur'
 
 // Service worker : garde l'app disponible sans réseau et se met à jour seul.
 // Pas sur les pages publiques : un client n'a pas à télécharger toute l'app.
@@ -38,18 +39,22 @@ window.addEventListener('vite:preloadError', (evenement) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PersistQueryClientProvider
-      client={clientRequetes}
-      persistOptions={persistance}
-      // Relance les modifications faites hors ligne avant la fermeture de l'app.
-      onSuccess={() => clientRequetes.resumePausedMutations()}
-    >
-      <FournisseurAuth>
-        <BrowserRouter>
-          <App />
-          <Confirmations />
-        </BrowserRouter>
-      </FournisseurAuth>
-    </PersistQueryClientProvider>
+    {/* Dernier recours (chaque page a aussi la sienne, dans le cadre) : un
+        écran d'erreur plutôt qu'une page blanche. */}
+    <FrontiereErreur>
+      <PersistQueryClientProvider
+        client={clientRequetes}
+        persistOptions={persistance}
+        // Relance les modifications faites hors ligne avant la fermeture de l'app.
+        onSuccess={() => clientRequetes.resumePausedMutations()}
+      >
+        <FournisseurAuth>
+          <BrowserRouter>
+            <App />
+            <Confirmations />
+          </BrowserRouter>
+        </FournisseurAuth>
+      </PersistQueryClientProvider>
+    </FrontiereErreur>
   </StrictMode>,
 )

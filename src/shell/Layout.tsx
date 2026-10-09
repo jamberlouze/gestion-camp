@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { IconeAttention, IconeDeconnexion, IconeFermer, IconeReduireMenu, IconeTroisTraits } from '@/lib/icones'
 import { useAuth } from './auth'
+import { FrontiereErreur } from './FrontiereErreur'
 import { estEntree, MODULES } from './modules'
 import { CoinPoke, FournisseurPoke } from './Poke'
 import { voitNouvelAccueil } from './accueil/outils'
@@ -210,7 +211,10 @@ export function Layout() {
         )}
 
         <main className="px-4 py-6 lg:px-6 print:p-0">
-          <Outlet />
+          {/* Une page qui plante n'emporte pas le menu. */}
+          <FrontiereErreur chemin={pathname}>
+            <Outlet />
+          </FrontiereErreur>
         </main>
       </div>
     </FournisseurPoke>
