@@ -1,8 +1,48 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { connect } from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const PORT_WORKER = 8787
+
+/** Vrai si quelque chose écoute déjà sur ce port (ex. un Worker lancé ailleurs). */
+const portOccupe = (port: number) =>
+  new Promise<boolean>((resolve) => {
+    const s = connect(port, '127.0.0.1')
+    s.once('connect', () => {
+      s.destroy()
+      resolve(true)
+    })
+    s.once('error', () => resolve(false))
+  })
+
+/**
+ * En DEV, le Worker local (routes /api/* : formulaire public, documents de la
+ * page client) démarre avec `npm run dev`, sauf s'il roule déjà (npm run
+ * worker:dev, autre serveur de dev). Il survit aux redémarrages de Vite
+ * (changement de configuration) et s'arrête avec lui (Ctrl-C).
+ */
+function workerLocal(): Plugin {
+  return {
+    name: 'worker-local',
+    apply: 'serve',
+    async configureServer() {
+      const g = globalThis as { workerLocal?: ChildProcess }
+      if (g.workerLocal && g.workerLocal.exitCode === null) return
+      if (await portOccupe(PORT_WORKER)) return
+      // Sans le menu clavier de Wrangler : le clavier du terminal reste à Vite.
+      const enfant = spawn('npx', ['wrangler', 'dev', '--port', String(PORT_WORKER), '--log-level', 'error', '--show-interactive-dev-session=false'], {
+        cwd: fileURLToPath(new URL('.', import.meta.url)),
+        stdio: ['ignore', 'inherit', 'inherit'],
+      })
+      g.workerLocal = enfant
+      process.once('exit', () => enfant.kill())
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -16,6 +56,7 @@ export default defineConfig({
           .replace('content="#0f5132"', 'content="#e8590c"')
           .replace('<title>Gestion du camp</title>', '<title>DEV · Gestion du camp</title>'),
     },
+    workerLocal(),
     react(),
     tailwindcss(),
     // App installable + disponible hors ligne (service worker généré au build).
@@ -53,8 +94,8 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  // En DEV, les routes /api/* vont au Worker local (npm run worker:dev).
+  // En DEV, les routes /api/* vont au Worker local (voir workerLocal).
   server: {
-    proxy: { '/api': 'http://127.0.0.1:8787' },
+    proxy: { '/api': `http://127.0.0.1:${PORT_WORKER}` },
   },
 })

@@ -4,7 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
-import { garderDocument, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
+import { garderDocument, garderEstime, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
 import { useDocuments, useEstimes, useSignatures } from './donnees'
 import { dateCourte, dateLongue } from './format'
 import type { Reservation } from './types'
@@ -30,6 +30,10 @@ export function Documents({ r }: { r: Reservation }) {
   const sig = signatures.data?.find((s) => s.statut !== 'annule')
   const docs = documents.data ?? []
   const contratDe = (id: string) => docs.find((d) => d.id === id)
+  // Estimé envoyé dont le PDF n'a pas été gardé (ex. coupure pendant l'envoi) :
+  // le client ne pourrait pas le télécharger. Pas pour les estimés importés.
+  const envoye = [...liste].reverse().find((e) => (e.statut === 'envoye' || e.statut === 'accepte') && !e.importe)
+  const pdfManquant = !!envoye && !!documents.data && !docs.some((d) => d.genre === 'estime' && d.estime_id === envoye.id)
 
   const agir = async (nom: string, f: () => Promise<unknown>) => {
     setOccupe(nom)
@@ -63,14 +67,26 @@ export function Documents({ r }: { r: Reservation }) {
         {/* Estimé */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-medium">Estimé</span>
-          <button
-            className={ui.boutonSecondaire}
-            disabled={!courant || occupe !== null}
-            onClick={() => courant && agir('estime', async () => ouvrirPdf(await pdfDeLEstime(sources(r), courant)))}
-          >
-            {occupe === 'estime' ? 'Préparation…' : `Aperçu PDF${courant ? ` (v${courant.version})` : ''}`}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {ecriture && pdfManquant && envoye && (
+              <button className={ui.bouton} disabled={occupe !== null} onClick={() => agir('garder-estime', () => garderEstime(sources(r), envoye))}>
+                {occupe === 'garder-estime' ? 'Préparation…' : `Garder le PDF (v${envoye.version})`}
+              </button>
+            )}
+            <button
+              className={ui.boutonSecondaire}
+              disabled={!courant || occupe !== null}
+              onClick={() => courant && agir('estime', async () => ouvrirPdf(await pdfDeLEstime(sources(r), courant)))}
+            >
+              {occupe === 'estime' ? 'Préparation…' : `Aperçu PDF${courant ? ` (v${courant.version})` : ''}`}
+            </button>
+          </div>
         </div>
+        {pdfManquant && envoye && (
+          <p className="-mt-1 text-xs text-amber-700">
+            Le PDF de l'estimé envoyé (v{envoye.version}) n'a pas été gardé : le client ne peut pas le télécharger de sa page.
+          </p>
+        )}
 
         {/* Contrat */}
         <div className="rounded-lg border border-pierre-200 p-3">

@@ -96,7 +96,7 @@ contre la PROD. Les commandes qui touchent la PROD commencent par `prod:`.
 | `npm run db:start` | DEV : démarre la base locale (Docker Desktop doit rouler). Courriels dans Mailpit : http://localhost:54324 |
 | `npm run db:reset` | DEV : recrée la base locale (toutes les migrations + `supabase/seed.sql`) |
 | `npm run db:stop` | DEV : arrête la base locale |
-| `npm run dev` | Lance l'app en local sur http://localhost:5173 (base locale, via `.env.local`) |
+| `npm run dev` | Lance l'app en local sur http://localhost:5173 (base locale, via `.env.local`), avec le Worker local (routes `/api/*`) |
 | `npm run build` | Vérifie les types et construit `dist/` (base PROD, via `.env.production`) |
 | `npm run prod:db:push` | **PROD** : applique les nouvelles migrations au projet Supabase hébergé |
 | `npm run prod:db:config` | **PROD** : envoie `supabase/config.toml` (connexion, courriels) au projet hébergé |
@@ -105,7 +105,7 @@ contre la PROD. Les commandes qui touchent la PROD commencent par `prod:`.
 | `npm run import` | Importe les anciennes données dans la nouvelle base |
 | `npm run deploy` | Déploiement manuel (normalement automatique à chaque push) |
 | `npm run test:worker` | Tests du Worker (Subventions, Calendrier, formulaire des Réservations), réseau simulé |
-| `npm run worker:dev` | DEV : le Worker en local sur le port 8787 (routes `/api/*`, base locale via `.dev.vars`) ; `npm run dev` lui envoie les `/api/*` |
+| `npm run worker:dev` | DEV : le Worker seul, sur le port 8787 (base locale via `.dev.vars`) ; `npm run dev` le lance déjà |
 
 ---
 

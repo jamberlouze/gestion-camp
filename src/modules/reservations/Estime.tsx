@@ -163,7 +163,10 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
           onSuccess: (id) => {
             if (a === 'nouvelle_version') choisir(id)
             // L'estimé envoyé est gardé en PDF (preuve de ce que le client a reçu).
-            if (a === 'envoyer') garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' }).catch((e) => setPdf(messageErreur(e)))
+            if (a === 'envoyer')
+              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' }).catch((e) =>
+                setPdf(`Estimé marqué envoyé, mais son PDF n'a pas été gardé (${messageErreur(e)}) : refaites-le avec « Garder le PDF » dans Documents.`),
+              )
           },
         },
       )
