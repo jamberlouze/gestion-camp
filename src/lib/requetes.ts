@@ -7,6 +7,9 @@ import { oublierToutesLesPhotos } from '@/modules/travaux/photosLocales'
 /** Durée de conservation du cache sur l'appareil (lecture hors ligne). */
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000
 
+/** Clé du cache gardé dans le navigateur (localStorage). */
+const CLE_CACHE = 'gestion-camp-cache'
+
 export const clientRequetes = new QueryClient({
   defaultOptions: {
     // gcTime infini : les données restent en mémoire pour être conservées sur
@@ -30,7 +33,7 @@ enregistrerMutationsTravaux(clientRequetes)
 export const persistance = {
   persister: createSyncStoragePersister({
     storage: typeof window === 'undefined' ? undefined : window.localStorage,
-    key: 'gestion-camp-cache',
+    key: CLE_CACHE,
     throttleTime: 500,
   }),
   maxAge: TRENTE_JOURS,
@@ -48,4 +51,40 @@ export async function viderCache() {
   clientRequetes.clear()
   await persistance.persister.removeClient()
   await oublierToutesLesPhotos()
+}
+
+type FiltreCle = (cle: readonly unknown[]) => boolean
+type CopieGardee = { clientState?: { queries?: { queryKey: readonly unknown[] }[] } } | null
+
+function lireCopieGardee(): CopieGardee {
+  try {
+    return JSON.parse(localStorage.getItem(CLE_CACHE) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+/** Nombre de requêtes de la copie gardée sur l'appareil qui répondent au filtre. */
+export function compterRequetesGardees(filtre: FiltreCle) {
+  return (lireCopieGardee()?.clientState?.queries ?? []).filter((q) => filtre(q.queryKey)).length
+}
+
+/**
+ * Oublie des requêtes (en mémoire et dans la copie gardée sur l'appareil) pour
+ * qu'elles soient relues du serveur, ex. une copie d'avant une migration qui
+ * fait planter une page. Le reste du cache, les modifications pas encore
+ * envoyées et le `buster` ne sont pas touchés.
+ */
+export function oublierRequetes(filtre: FiltreCle) {
+  // En mémoire d'abord : la sauvegarde différée (throttleTime) écrira l'état filtré.
+  clientRequetes.removeQueries({ predicate: (q) => filtre(q.queryKey) })
+  // Puis la copie de l'appareil tout de suite, sans attendre cette sauvegarde.
+  const copie = lireCopieGardee()
+  if (!copie?.clientState?.queries) return
+  copie.clientState.queries = copie.clientState.queries.filter((q) => !filtre(q.queryKey))
+  try {
+    localStorage.setItem(CLE_CACHE, JSON.stringify(copie))
+  } catch {
+    // Stockage indisponible : rien de plus à faire.
+  }
 }
