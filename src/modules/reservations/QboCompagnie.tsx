@@ -31,18 +31,23 @@ export function QboCompagnie({ c }: { c: Compagnie }) {
   const [listes, setListes] = useState<Listes | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [occupe, setOccupe] = useState(false)
+  const [version, setVersion] = useState(0)
   const realm = connexion?.realm_id
 
   useEffect(() => {
     if (!realm) return
     let actif = true
     appelerQbo<Listes>('listes', { compagnie: c.entreprise_id })
-      .then((l) => actif && setListes(l))
+      .then((l) => {
+        if (!actif) return
+        setListes(l)
+        setErreur(null)
+      })
       .catch((e: Error) => actif && setErreur(e.message))
     return () => {
       actif = false
     }
-  }, [realm, c.entreprise_id])
+  }, [realm, c.entreprise_id, version])
 
   const connecter = async () => {
     setErreur(null)
@@ -75,12 +80,22 @@ export function QboCompagnie({ c }: { c: Compagnie }) {
     }
   }
 
+  // Réglages tenus sur place : deux choix rapides s'additionnent au lieu de
+  // repartir chacun de la valeur d'avant (la base n'a pas encore répondu).
+  const [qbo, setQbo] = useState<QboReglages>(c.qbo)
+  const [base, setBase] = useState(JSON.stringify(c.qbo))
+  if (JSON.stringify(c.qbo) !== base) {
+    setBase(JSON.stringify(c.qbo))
+    setQbo(c.qbo)
+  }
+
   const choisir = (cle: keyof QboReglages, options: ReferenceQbo[], id: string) => {
     const o = options.find((x) => x.id === id)
-    const qbo = { ...c.qbo }
-    if (o) qbo[cle] = { id: o.id, nom: o.nom }
-    else delete qbo[cle]
-    modifier.mutate({ id: c.entreprise_id, champs: { qbo } })
+    const suivant = { ...qbo }
+    if (o) suivant[cle] = { id: o.id, nom: o.nom }
+    else delete suivant[cle]
+    setQbo(suivant)
+    modifier.mutate({ id: c.entreprise_id, champs: { qbo: suivant } })
   }
 
   const liste = (cle: keyof QboReglages, libelle: string, aide: string, options: ReferenceQbo[] | undefined) => (
@@ -88,18 +103,18 @@ export function QboCompagnie({ c }: { c: Compagnie }) {
       <span className={ui.etiquette}>{libelle}</span>
       <select
         className={ui.champ}
-        value={c.qbo[cle]?.id ?? ''}
+        value={qbo[cle]?.id ?? ''}
         disabled={!ecriture || !options}
         onChange={(e) => choisir(cle, options ?? [], e.target.value)}
       >
-        <option value="">{options ? '— À choisir' : (c.qbo[cle]?.nom ?? '—')}</option>
+        <option value="">{options ? '— À choisir' : (qbo[cle]?.nom ?? '—')}</option>
         {options?.map((o) => (
           <option key={o.id} value={o.id}>
             {o.nom}
           </option>
         ))}
         {/* Valeur choisie absente de la liste (retirée dans QBO) : gardée visible. */}
-        {options && c.qbo[cle] && !options.some((o) => o.id === c.qbo[cle]!.id) && <option value={c.qbo[cle]!.id}>{c.qbo[cle]!.nom} (introuvable dans QBO)</option>}
+        {options && qbo[cle] && !options.some((o) => o.id === qbo[cle]!.id) && <option value={qbo[cle]!.id}>{qbo[cle]!.nom} (introuvable dans QBO)</option>}
       </select>
       <span className="mt-0.5 block text-xs text-pierre-400">{aide}</span>
     </label>
@@ -144,6 +159,11 @@ export function QboCompagnie({ c }: { c: Compagnie }) {
               <button className={ui.boutonSecondaire} disabled={occupe} onClick={connecter}>
                 Reconnecter
               </button>
+              {!listes && (
+                <button className={ui.boutonSecondaire} onClick={() => setVersion((v) => v + 1)}>
+                  Recharger les listes
+                </button>
+              )}
               <button className="text-xs text-red-700 underline" disabled={occupe} onClick={deconnecter}>
                 Déconnecter
               </button>

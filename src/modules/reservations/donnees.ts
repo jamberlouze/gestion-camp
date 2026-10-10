@@ -359,6 +359,8 @@ export function useModifierCompagnie() {
   return useMutation({
     mutationKey: ['reservations', 'compagnies', 'modifier'],
     networkMode: 'always',
+    // Une à la fois, dans l'ordre : la dernière modification gagne.
+    scope: { id: 'reservations-compagnies' },
     mutationFn: async ({ id, champs }: { id: string; champs: Partial<Compagnie> }) => {
       const { error } = await db().from('compagnies').update(champs).eq('entreprise_id', id)
       if (error) throw error

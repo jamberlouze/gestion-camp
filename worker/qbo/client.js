@@ -77,10 +77,15 @@ export async function clientQbo(env, compagnieId) {
     const url = `${racine}/${chemin}${chemin.includes('?') ? '&' : '?'}minorversion=75`
     const res = await fetch(url, {
       method: methode,
-      headers: { Authorization: `Bearer ${await jetonAcces(essai > 0)}`, Accept: accept, ...(corps ? { 'Content-Type': typeCorps } : {}) },
+      headers: { Authorization: `Bearer ${await jetonAcces(essai === 1)}`, Accept: accept, ...(corps ? { 'Content-Type': typeCorps } : {}) },
       body: corps,
     })
     if (res.status === 401 && essai === 0) return appel(methode, chemin, { corps, typeCorps, accept }, 1)
+    // Refus passagers de QBO (403 juste après une connexion, trop de requêtes, panne) : un nouvel essai.
+    if ((res.status === 403 || res.status === 429 || res.status >= 500) && essai === 0) {
+      await new Promise((r) => setTimeout(r, 1000))
+      return appel(methode, chemin, { corps, typeCorps, accept }, 2)
+    }
     if (!res.ok) {
       const brut = await res.text()
       let json = null
