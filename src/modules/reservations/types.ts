@@ -176,6 +176,8 @@ export interface Produit {
   extra: boolean
   actif: boolean
   ordre: number
+  /** Article QBO par compagnie (id de la compagnie → article) ; vide = l'article par défaut. */
+  qbo_articles: Record<string, ReferenceQbo>
 }
 
 export interface Prix {
@@ -354,6 +356,8 @@ export interface Compagnie {
   logo: string
   consignes_paiement: string
   annexes: Annexe[]
+  /** Réglages QuickBooks Online : article par défaut, code de taxes, conditions de paiement. */
+  qbo: QboReglages
 }
 
 export type GenreModele = 'contrat' | 'pre_arrivee'
@@ -474,4 +478,69 @@ export interface TotauxFiches {
   sans_medicaments: number
   effacees: number
   dietes: Partial<Record<Diete, number>>
+}
+
+// ------------------------------------------------------------------
+// Phase 4 : QuickBooks Online
+// ------------------------------------------------------------------
+
+export interface ReferenceQbo {
+  id: string
+  nom: string
+}
+
+export interface QboReglages {
+  article?: ReferenceQbo
+  taxes?: ReferenceQbo
+  terme?: ReferenceQbo
+}
+
+/** Connexion d'une compagnie à son dossier QBO (sans les jetons : reservations.qbo_etat). */
+export interface QboConnexion {
+  compagnie_id: string
+  realm_id: string
+  environnement: 'sandbox' | 'production'
+  connecte_le: string
+  connecte_par_nom: string | null
+  derniere_synchro: string | null
+  erreur: string | null
+}
+
+export interface QboDevis {
+  reservation_id: string
+  compagnie_id: string
+  qbo_id: string
+  numero: string | null
+  estime_id: string | null
+  estime_version: number | null
+  total: number
+  total_app: number
+  statut: string | null
+  cree_le: string
+  cree_par_nom: string | null
+  maj_le: string
+}
+
+export type GenreFacture = 'progressive' | 'separee' | 'note_credit'
+
+export interface Facture {
+  id: string
+  reservation_id: string
+  compagnie_id: string
+  qbo_type: 'Invoice' | 'CreditMemo'
+  qbo_id: string
+  genre: GenreFacture
+  numero: string | null
+  date_facture: string | null
+  echeance: string | null
+  total: number
+  solde: number
+  supprimee: boolean
+  maj_le: string
+}
+
+export const GENRES_FACTURE: Record<GenreFacture, string> = {
+  progressive: 'Facture',
+  separee: 'Facture séparée',
+  note_credit: 'Note de crédit',
 }

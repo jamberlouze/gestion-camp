@@ -426,10 +426,14 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - page client `/client/<lien>` : le séjour, l'estimé à accepter en ligne, la signature du contrat, les documents, le lien des fiches, un message à l'équipe ;
    - fiches participants `/fiches/<lien>` : santé, Epipen, diète, médicaments ; accès propre « Fiches participants » ; totaux pour les autres ; effacées 3 mois après le départ (Loi 25) ;
    - reste pour la mise en ligne : sous-domaine, clés Turnstile (README, section 11) ; les factures QBO s'ajouteront à la page client à la phase 4 ; l'accusé de réception par courriel, à la phase 5.
-4. **QuickBooks Online** (§6) :
-   - compagnie d'essai QBO d'abord ;
-   - client, devis, factures progressives, ajustement, notes de crédit, lecture des soldes ;
-   - en attendant, des tâches « À facturer dans QBO ».
+4. **QuickBooks Online** (§6, façon A) — **bâtie en DEV le 2026-10-10**, pas en PROD, pas encore essayée avec une vraie compagnie QBO (il faut l'application Intuit : README, section 12) :
+   - connexion OAuth de chaque compagnie à son dossier QBO (Modèles et compagnies), jetons chiffrés dans le Worker ; article, code de taxes et conditions de paiement choisis dans l'app ;
+   - fiche › Facturation : client QBO relié (ou créé) une fois pour toutes, devis QBO créé d'un clic à partir de l'estimé accepté (numéro de la réservation, contrat signé et spécimen joints, contrôle du total), mis à jour si l'estimé change ;
+   - échéancier (F2 à F8) et relances « facturer l'acompte… dans QBO » à l'adjointe ; elles se ferment toutes seules quand la facture progressive apparaît dans QBO ;
+   - factures et soldes relus de QBO aux 15 minutes (et bouton « Mettre à jour ») ; factures séparées (F6) et notes de crédit (F15) créées par l'app ; PDF officiels de QBO dans la fiche et sur la page client ;
+   - relance « créer le devis QBO » à la signature du contrat ;
+   - sans QBO relié, l'échéancier donne les montants à facturer à la main ;
+   - **reste** : Q9 (un article QBO par produit), le minimum de 90 % calculé pour la facture finale (F10, F11), un échéancier convenu autrement (F2), l'annulation (F16, F17).
 5. **Courriels automatiques.**
 6. **Google Agenda + Airbnb.**
 7. **Rapports.**

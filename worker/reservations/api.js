@@ -7,12 +7,16 @@
 //   GET  /api/reservations/document?jeton=…&id=… : PDF d'un document de la
 //        page client ; renvoie vers une adresse signée de 5 minutes du seau
 //        privé (le client n'a jamais la clé ni un lien permanent).
+//   GET  /api/reservations/facture?jeton=…&id=… : PDF officiel d'une facture
+//        QBO de la page client.
 //
 // Secrets : SUPABASE_SECRET_KEY et TURNSTILE_SECRET (Cloudflare en PROD,
 // .dev.vars en DEV).
 
 import { aujourdhui, erreurs, nettoyer, REPONSES_VIDES, versReservation } from '../../src/modules/reservations/demande.ts'
 import { lireReglages } from '../../src/modules/reservations/parametres.ts'
+import { pdf } from '../qbo/api.js'
+import { qboConfigure } from '../qbo/oauth.js'
 import { base } from '../subventions/base.js'
 
 const json = (corps, status = 200) =>
@@ -100,10 +104,26 @@ async function documentClient(url, env) {
   return Response.redirect(`${env.SUPABASE_URL}/storage/v1${signedURL}`, 302)
 }
 
+/** Facture QBO de la page client : le PDF officiel, tiré de QuickBooks. */
+async function factureClient(url, env) {
+  const jeton = url.searchParams.get('jeton') ?? ''
+  const id = url.searchParams.get('id') ?? ''
+  if (!qboConfigure(env) || !/^[0-9a-f]{48}$/.test(jeton) || !/^[0-9a-f-]{36}$/.test(id)) return introuvable()
+  const f = await base(env, 'reservations').rpc('facture_client', { p_jeton: jeton, p_facture: id })
+  if (!f) return introuvable()
+  try {
+    return await pdf(env, f)
+  } catch (e) {
+    console.error('PDF de facture impossible :', e)
+    return new Response('Facture indisponible pour le moment.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } })
+  }
+}
+
 export async function routeReservations(request, env, chemin) {
   if (!env.SUPABASE_SECRET_KEY) return json({ erreur: 'serveur' }, 503)
   const url = new URL(request.url)
   if (chemin === 'demande' && request.method === 'POST') return recevoirDemande(request, env)
   if (chemin === 'document' && request.method === 'GET') return documentClient(url, env)
+  if (chemin === 'facture' && request.method === 'GET') return factureClient(url, env)
   return json({ erreur: 'introuvable' }, 404)
 }

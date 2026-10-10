@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -10,6 +11,7 @@ import { useModifierCompagnie, useModifierModele } from './donnees'
 import { champPetit } from './format'
 import { CHAMPS_MODELES } from './pdf/champs'
 import { apercuContrat, estimeCourant, ouvrirPdf, pdfDeLaPreArrivee, SEAU } from './productionPdf'
+import { QboCompagnie } from './QboCompagnie'
 import { FORFAITS, type Compagnie, type Modele } from './types'
 
 /** Modèles des contrats et de la pré-arrivée, coordonnées des compagnies qui facturent. */
@@ -21,8 +23,23 @@ export function Modeles() {
   )
   const [choisi, setChoisi] = useState(tries[0]?.id)
   const modele = tries.find((m) => m.id === choisi)
+  // Retour de la connexion QuickBooks (le Worker revient ici).
+  const [params, setParams] = useSearchParams()
+  const retourQbo = params.get('qbo')
   return (
     <div className="space-y-5">
+      {retourQbo && (
+        <div
+          className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+            retourQbo === 'ok' ? 'border-foret-200 bg-foret-50 text-foret-800' : 'border-red-200 bg-red-50 text-red-800'
+          }`}
+        >
+          <span>{retourQbo === 'ok' ? 'QuickBooks est relié. Choisissez maintenant l’article, le code de taxes et les conditions de paiement.' : `Connexion à QuickBooks : ${params.get('message') ?? 'échec.'}`}</span>
+          <button className="underline" onClick={() => setParams({}, { replace: true })}>
+            Fermer
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-1">
         {tries.map((m) => (
           <button
@@ -245,6 +262,7 @@ function FicheCompagnie({ c }: { c: Compagnie }) {
           <p className="mt-1 text-xs text-pierre-400">Gardées dans un espace privé : jamais publiques, seulement imprimées dans les contrats.</p>
         </div>
         {erreur && <p className={ui.erreur}>{erreur}</p>}
+        <QboCompagnie c={c} />
       </div>
     </Section>
   )

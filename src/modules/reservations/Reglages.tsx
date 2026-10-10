@@ -17,7 +17,7 @@ const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 
 
 /** Réglages du calcul et des propositions (pas de code à toucher). */
 export function Reglages() {
-  const { reglages, ecriture } = useDonnees()
+  const { reglages, ecriture, responsables, nomResponsable } = useDonnees()
   const enregistrer = useEnregistrerReglage()
   const d = !ecriture
 
@@ -121,6 +121,28 @@ export function Reglages() {
             </label>
           ))}
         </div>
+      </Section>
+      <Section titre="Facturation (QuickBooks)">
+        <label className="flex items-center gap-2 text-sm">
+          <span className="flex-1">Les relances « facturer l'acompte… dans QBO » vont à</span>
+          <select
+            className={champPetit}
+            disabled={d}
+            value={reglages.responsableFacturation ?? ''}
+            onChange={(e) => enregistrer.mutate({ cle: 'responsable_facturation', valeur: e.target.value || null })}
+          >
+            <option value="">la personne responsable de la réservation</option>
+            {reglages.responsableFacturation && !responsables.some((x) => x.id === reglages.responsableFacturation) && (
+              <option value={reglages.responsableFacturation}>{nomResponsable(reglages.responsableFacturation)}</option>
+            )}
+            {responsables.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nom}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-pierre-500">Habituellement l'adjointe, qui fait les factures progressives dans QBO (SOP).</p>
       </Section>
       {!ecriture && <p className={`${ui.erreur} lg:col-span-2`}>Lecture seule.</p>}
     </div>

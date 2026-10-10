@@ -8,11 +8,14 @@ import type {
   EntreeJournal,
   Estime,
   EtageRooming,
+  Facture,
   FicheParticipant,
   Ligne,
   Modele,
   Prix,
   Produit,
+  QboConnexion,
+  QboDevis,
   Reglage,
   Reservation,
   Responsable,
@@ -449,5 +452,100 @@ export function useSupprimerFiche() {
         client.invalidateQueries({ queryKey: ['reservations-sante'] }),
         client.invalidateQueries({ queryKey: ['reservations', 'totaux-fiches'] }),
       ]),
+  })
+}
+
+// ------------------------------------------------------------------
+// Phase 4 : QuickBooks Online (tout passe par le Worker, /api/qbo/*)
+// ------------------------------------------------------------------
+
+/** Appel au Worker QBO avec la session ; lève une erreur lisible. */
+export async function appelerQbo<T = unknown>(chemin: string, corps?: unknown): Promise<T> {
+  const { data } = await supabase.auth.getSession()
+  const jeton = data.session?.access_token
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.')
+  let res: Response
+  try {
+    res = await fetch(`/api/qbo/${chemin}`, {
+      method: corps === undefined ? 'GET' : 'POST',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: corps === undefined ? undefined : JSON.stringify(corps),
+    })
+  } catch {
+    throw new Error('Le serveur de l’app ne répond pas (Worker).')
+  }
+  if (!res.ok) {
+    let message = `Erreur ${res.status}.`
+    try {
+      const j = await res.json()
+      if (j?.erreur) message = String(j.erreur)
+    } catch {
+      if (res.status === 404) message = 'Le Worker ne répond pas à cette adresse (l’app est-elle à jour ?).'
+    }
+    throw new Error(message)
+  }
+  return (res.headers.get('content-type')?.includes('application/pdf') ? res.blob() : res.json()) as Promise<T>
+}
+
+/** QBO configuré dans le Worker (secrets de l'app Intuit) ? */
+export function useQboConfiguration() {
+  return useQuery({
+    queryKey: ['reservations', 'qbo-configuration'],
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => appelerQbo<{ configure: boolean; environnement: 'sandbox' | 'production' }>('etat'),
+  })
+}
+
+/** Connexions des compagnies à leur dossier QBO (sans les jetons). */
+export function useQboConnexions() {
+  return useQuery({
+    queryKey: ['reservations', 'qbo-connexions'],
+    queryFn: async () => {
+      const { data, error } = await db().rpc('qbo_etat')
+      if (error) throw error
+      return data as QboConnexion[]
+    },
+  })
+}
+
+export function useQboDevis(reservationId: string) {
+  const cle = ['reservations', 'qbo_devis', reservationId]
+  useTempsReel('qbo_devis', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('qbo_devis').select('*').eq('reservation_id', reservationId).maybeSingle()
+      if (error) throw error
+      return data as QboDevis | null
+    },
+  })
+}
+
+export function useFactures(reservationId: string) {
+  const cle = ['reservations', 'factures', reservationId]
+  useTempsReel('factures', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('factures').select('*').eq('reservation_id', reservationId).order('date_facture').order('numero')
+      if (error) throw error
+      return data as Facture[]
+    },
+  })
+}
+
+/** Action QBO (devis, facture séparée, note de crédit, synchro) : relit ce qui change. */
+export function useActionQbo<V, R = unknown>(chemin: string) {
+  const client = useQueryClient()
+  return useMutation({
+    // Erreurs affichées sur place, pas dans le bandeau.
+    mutationKey: ['reservations-local', 'qbo', chemin],
+    networkMode: 'always',
+    mutationFn: (v: V) => appelerQbo<R>(chemin, v),
+    onSettled: () =>
+      Promise.all(
+        [['reservations', 'qbo_devis'], ['reservations', 'factures'], ['reservations', 'qbo-connexions'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey })),
+      ),
   })
 }

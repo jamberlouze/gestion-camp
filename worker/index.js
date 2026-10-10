@@ -1,9 +1,10 @@
 // Worker de la gestion du camp : sert l'application (fichiers statiques de
 // dist/, voir wrangler.jsonc), garde Supabase éveillé, fait la recherche
 // hebdomadaire de la Vigie de subventions (voir subventions/pipeline.js),
-// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js)
-// et les routes publiques des Réservations : formulaire de demande et
-// documents de la page client (voir reservations/api.js).
+// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js),
+// les routes publiques des Réservations (formulaire de demande, documents et
+// factures de la page client : reservations/api.js) et QuickBooks Online
+// (connexion, devis, factures, synchro aux 15 minutes : qbo/).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -18,6 +19,9 @@
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
+import { routeQbo } from "./qbo/api.js";
+import { qboConfigure } from "./qbo/oauth.js";
+import { synchroniserTout as synchroQbo } from "./qbo/operations.js";
 import { routeSubventions } from "./subventions/api.js";
 import { tourHebdomadaire } from "./subventions/pipeline.js";
 
@@ -53,6 +57,8 @@ export default {
     if (estTourSubventions(new Date(event.scheduledTime))) ctx.waitUntil(tourHebdomadaire(env));
     // Séjours Airtable → calendrier.sejours (rien tant que les secrets manquent).
     if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
+    // Factures et soldes de QuickBooks Online (rien tant que l'app Intuit n'est pas configurée).
+    if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
   },
 
   async fetch(request, env, ctx) {
@@ -63,6 +69,8 @@ export default {
     if (cal) return routeCalendrier(request, env, cal[1]);
     const res = url.pathname.match(/^\/api\/reservations\/([a-z]+)$/);
     if (res) return routeReservations(request, env, res[1]);
+    const qbo = url.pathname.match(/^\/api\/qbo\/([a-z]+)$/);
+    if (qbo) return routeQbo(request, env, qbo[1]);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping
     if (url.pathname === "/_ping") {
       try {

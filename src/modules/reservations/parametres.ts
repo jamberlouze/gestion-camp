@@ -10,6 +10,8 @@ export interface Reglages {
   ratioDefaut: Ratio
   diviseurHeuresExtra: number
   variantesClasse: Record<string, string>
+  /** Compte qui fait les factures dans QBO (relances de facturation) ; null = responsable de la réservation. */
+  responsableFacturation: string | null
 }
 
 const valeur = <T,>(reglages: Reglage[], cle: string, defaut: T): T =>
@@ -23,6 +25,7 @@ export function lireReglages(r: Reglage[]): Reglages {
     ratioDefaut: valeur<Ratio>(r, 'ratio_defaut', '1:15'),
     diviseurHeuresExtra: Number(valeur(r, 'diviseur_heures_extra', 8)),
     variantesClasse: valeur(r, 'variantes_classe', {}),
+    responsableFacturation: valeur<string | null>(r, 'responsable_facturation', null),
   }
 }
 

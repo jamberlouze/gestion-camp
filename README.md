@@ -323,6 +323,43 @@ chez Squarespace) :
 téléchargements de la page client. En DEV, `.dev.vars` contient la clé
 locale et les clés d'essai de Turnstile (toujours acceptées).
 
+### 12. Réservations : QuickBooks Online
+
+L'app crée les clients, les devis, les factures séparées et les notes de
+crédit dans QBO, et relit les factures et leurs soldes aux 15 minutes (plan
+des réservations, §6). Un dossier QBO par compagnie (GBPA+, Opikawa), chacun
+relié à part. Tout passe par le Worker (`worker/qbo/`) : les jetons d'Intuit
+sont chiffrés (`QBO_CLE`) et jamais lisibles par l'app.
+
+1. **Application Intuit** : [developer.intuit.com](https://developer.intuit.com) →
+   connexion avec le compte Intuit → **Create an app** → QuickBooks Online →
+   nom « Gestion du camp », portée **Accounting** seulement.
+2. **Compagnie d'essai** : menu **Sandbox** → **Add a sandbox company**, pays
+   **Canada** (pour la TPS et la TVQ). Dans cette compagnie d'essai : activer
+   les taxes (Taxes → configurer, Québec) et la **facturation progressive**
+   (Paramètres → Ventes → Facturation progressive).
+3. **Clés de développement** (Keys & credentials → Development) :
+   - Redirect URI : `http://localhost:5173/api/qbo/retour` ;
+   - Client ID et Client Secret → `.dev.vars` (`QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`).
+   - Essai en DEV : Modèles et compagnies → GBPA+ → **Connecter QuickBooks**,
+     choisir la compagnie d'essai ; puis l'article, le code de taxes
+     (« TPS/TVQ QC ») et les conditions (« Payable dès réception »).
+   - À vérifier dans la compagnie d'essai : un devis créé par l'app se
+     facture par pourcentage dans l'écran de QBO (« Créer une facture »).
+4. **Clés de production** (Keys & credentials → Production, après le
+   questionnaire d'Intuit) :
+   - Redirect URI : `https://<adresse de l'app en PROD>/api/qbo/retour` ;
+   - secrets Cloudflare (même endroit qu'en 8) : `QBO_CLIENT_ID`,
+     `QBO_CLIENT_SECRET` et `QBO_CLE` (`openssl rand -base64 32`, une clé
+     différente de celle du DEV) ;
+   - `wrangler.jsonc` : `QBO_ENVIRONNEMENT` passe de `sandbox` à `production`.
+5. Dans l'app (PROD) : connecter GBPA+ puis Opikawa (chacun son dossier),
+   choisir l'article, le code de taxes et les conditions de chacun ;
+   Réservations › Réglages : à qui vont les relances de facturation (l'adjointe).
+
+Changer `QBO_CLE` rend les jetons gardés illisibles : il faut alors
+reconnecter les compagnies.
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,

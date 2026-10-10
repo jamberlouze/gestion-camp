@@ -161,6 +161,7 @@ export default function PageClient() {
         </section>
       )}
 
+      <Factures jeton={jeton} langue={langue} version={version} />
       {infos.fiches && <LienFiches fiches={infos.fiches} langue={langue} />}
       {!infos.fermeture && <Message jeton={jeton} langue={langue} />}
       <Pied compagnie={infos.compagnie} />
@@ -300,6 +301,67 @@ function Contrat({ infos, langue }: { infos: Infos; langue: 'fr' | 'en' }) {
         <p className="text-sm font-medium text-foret-800">
           {remplacer(t.contrat_signe, { n: s.nom_signataire ?? '', d: dateLisible((s.signe_le ?? '').slice(0, 10), langue) })}
         </p>
+      )}
+    </section>
+  )
+}
+
+interface FactureClient {
+  id: string
+  genre: 'progressive' | 'separee' | 'note_credit'
+  numero: string | null
+  date_facture: string | null
+  echeance: string | null
+  total: number
+  solde: number
+}
+
+/** Factures de QuickBooks : PDF officiel par le Worker, soldes à jour. */
+function Factures({ jeton, langue, version }: { jeton: string; langue: 'fr' | 'en'; version: number }) {
+  const t = TEXTES_PUBLICS[langue]
+  const [liste, setListe] = useState<FactureClient[]>([])
+  useEffect(() => {
+    let actif = true
+    db()
+      .rpc('factures_client', { p_jeton: jeton })
+      .then(({ data }) => actif && setListe((data as FactureClient[] | null) ?? []))
+    return () => {
+      actif = false
+    }
+  }, [jeton, version])
+  if (!liste.length) return null
+  const solde = liste.filter((f) => f.genre !== 'note_credit').reduce((s, f) => s + Number(f.solde), 0)
+  return (
+    <section className={`${ui.carte} p-5`}>
+      <h2 className="mb-2 text-lg font-semibold">{t.factures}</h2>
+      <ul className="divide-y divide-pierre-100 text-sm">
+        {liste.map((f) => (
+          <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span>
+              {remplacer(f.genre === 'note_credit' ? t.note_credit_n : t.facture_n, { n: f.numero ?? '' })}
+              {f.date_facture && <span className="ml-2 text-xs text-pierre-400">{dateLisible(f.date_facture, langue)}</span>}
+            </span>
+            <span className="flex items-center gap-3">
+              <span className="tabular-nums">{dollars(f.genre === 'note_credit' ? -Number(f.total) : f.total, langue)}</span>
+              {f.genre !== 'note_credit' && (
+                <span className={Number(f.solde) > 0 ? 'text-pierre-700' : 'text-foret-700'}>
+                  {Number(f.solde) > 0
+                    ? `${remplacer(t.solde_du, { m: dollars(f.solde, langue) })} · ${f.echeance ? remplacer(t.echeance_le, { d: dateLisible(f.echeance, langue) }) : t.sur_reception}`
+                    : t.payee}
+                </span>
+              )}
+              <a className="text-foret-700 underline" href={`/api/reservations/facture?jeton=${jeton}&id=${f.id}`} target="_blank" rel="noreferrer">
+                PDF
+              </a>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {solde > 0 && (
+        <div className="mt-3 space-y-1 border-t border-pierre-100 pt-3 text-sm">
+          <p className="font-medium">{remplacer(t.solde_total, { m: dollars(solde, langue) })}</p>
+          <p className="text-xs text-pierre-500">{t.paiement_aide}</p>
+        </div>
       )}
     </section>
   )

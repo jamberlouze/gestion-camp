@@ -26,14 +26,18 @@
   },
   // Valeurs publiques (les mêmes que dans .env.production). Les secrets
   // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*, AIRTABLE_TOKEN,
-  // CALENDRIER_JETON_SYNCHRO, TURNSTILE_SECRET) se mettent dans
+  // CALENDRIER_JETON_SYNCHRO, TURNSTILE_SECRET, QBO_CLIENT_ID,
+  // QBO_CLIENT_SECRET, QBO_CLE) se mettent dans
   // Cloudflare (Worker → Settings → Variables and Secrets), jamais ici.
   "vars": {
     "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x8nstxT1q6UT9ZAm2N6zTA_woykXT1y",
     "APP_URL": "https://gestion-camp.maxime-0f5.workers.dev",
     // Modèle Claude de la Vigie de subventions.
-    "SUBVENTIONS_MODELE": "claude-opus-5-5"
+    "SUBVENTIONS_MODELE": "claude-opus-5-5",
+    // QuickBooks Online : « sandbox » (compagnie d'essai) tant que l'app
+    // Intuit n'a pas ses clés de production, puis « production ».
+    "QBO_ENVIRONNEMENT": "sandbox"
   },
   "observability": { "enabled": true }
 }

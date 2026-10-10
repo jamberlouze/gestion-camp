@@ -19,6 +19,7 @@ import { champPetit, dateCourte, dateLongue, heure, nomEtape } from './format'
 import { useDemandes, useJournal, useModifierReservation, useSupprimerReservation } from './donnees'
 import { Documents } from './Documents'
 import { Estime } from './Estime'
+import { Facturation } from './FacturationQbo'
 import {
   ETAGES,
   ETAPES,
@@ -106,6 +107,7 @@ function Contenu({ r }: { r: Reservation }) {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
           <Estime r={r} />
+          <Facturation r={r} />
           <Documents r={r} />
           <EspaceClient r={r} />
           <Suivi r={r} />
