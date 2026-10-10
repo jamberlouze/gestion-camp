@@ -9,6 +9,7 @@ import { useDonnees } from './contexte'
 import { garderEstime, ouvrirPdf, pdfDeLEstime } from './productionPdf'
 import { argent, champPetit, dateLongue } from './format'
 import { useChangerEstime, useEnregistrerEstime, useEstimes, useLignes, type LigneAEcrire } from './donnees'
+import { CODE_MINIMUM, estimeDeReference, minimum90 } from './facturation'
 import { CATEGORIES, UNITES, type Estime as TEstime, type Reservation, type StatutEstime } from './types'
 
 const STATUTS: Record<StatutEstime, [string, string]> = {
@@ -53,7 +54,7 @@ export function Estime({ r }: { r: Reservation }) {
         )
       }
     >
-      <Editeur key={courant.id} r={r} estime={courant} choisir={setChoisi} />
+      <Editeur key={courant.id} r={r} estime={courant} choisir={setChoisi} reference={estimeDeReference(liste.filter((e) => e.version < courant.version), r.date_arrivee)} />
     </Section>
   )
 }
@@ -81,8 +82,8 @@ function PremierEstime({ r }: { r: Reservation }) {
   )
 }
 
-function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choisir: (id: string) => void }) {
-  const { catalogue, produits, parCode, prixDe, ecriture, sources } = useDonnees()
+function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TEstime; choisir: (id: string) => void; reference: TEstime | null }) {
+  const { catalogue, produits, parCode, prixDe, ecriture, sources, auj } = useDonnees()
   const [pdf, setPdf] = useState<string | null>(null)
   const lignesDb = useLignes(estime.id)
   const enregistrer = useEnregistrerEstime()
@@ -108,6 +109,13 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
   const calcul = useMemo(() => lignesAuto(r, catalogue), [r, catalogue])
   const avecMontants = useMemo(() => (lignes ? appliquerPourcentages(lignes) : []), [lignes])
   const t = totaux(avecMontants)
+
+  // Minimum de 90 % (F10, F11) : à moins de 21 jours de l'arrivée, l'estimé
+  // final ne descend pas sous 90 % de l'estimé en vigueur à ce moment (F9).
+  const delaiPasse = auj >= new Date(Date.parse(`${r.date_arrivee}T12:00:00Z`) - 21 * 86_400_000).toISOString().slice(0, 10)
+  const lignesRef = useLignes(modifiable && delaiPasse && reference ? reference.id : null)
+  const minimum = modifiable && reference && lignesRef.data ? minimum90(r.forfait, lignesRef.data, avecMontants) : null
+  const ligneMinimum = avecMontants.find((l) => l.code === CODE_MINIMUM)
 
   // Les lignes calculées ne correspondent plus à la réservation (dates, nombre, ratio…).
   const auto = avecMontants.filter((l) => l.auto)
@@ -205,6 +213,54 @@ function Editeur({ r, estime, choisir }: { r: Reservation; estime: TEstime; choi
           <button className={ui.boutonSecondaire} onClick={recalculer}>
             Recalculer
           </button>
+        </div>
+      )}
+      {minimum && reference && (minimum.ajustement > 0 || ligneMinimum) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            Minimum de 90 % ({minimum.regle}, estimé v{reference.version}) : {minimum.explication}.
+            {ligneMinimum && Math.abs(ligneMinimum.montant - minimum.ajustement) < 0.01 && ' ✓ Ajustement à jour.'}
+          </span>
+          {!ligneMinimum ? (
+            <button
+              className={ui.boutonSecondaire}
+              onClick={() =>
+                maj([
+                  ...lignes,
+                  {
+                    id: crypto.randomUUID(),
+                    ordre: 0,
+                    produit_id: null,
+                    code: CODE_MINIMUM,
+                    description: minimum.description,
+                    note: null,
+                    quantite: 1,
+                    prix_unitaire: minimum.ajustement,
+                    pourcentage: null,
+                    montant: minimum.ajustement,
+                    auto: false,
+                  },
+                ])
+              }
+            >
+              Ajouter l'ajustement de {argent(minimum.ajustement)}
+            </button>
+          ) : (
+            Math.abs(ligneMinimum.montant - minimum.ajustement) >= 0.01 && (
+              <button
+                className={ui.boutonSecondaire}
+                onClick={() =>
+                  maj(
+                    minimum.ajustement > 0
+                      ? lignes.map((l) => (l.code === CODE_MINIMUM ? { ...l, quantite: 1, prix_unitaire: minimum.ajustement, montant: minimum.ajustement } : l))
+                      : lignes.filter((l) => l.code !== CODE_MINIMUM),
+                  )
+                }
+              >
+                {minimum.ajustement > 0 ? `Mettre l'ajustement à ${argent(minimum.ajustement)}` : "Retirer l'ajustement"}
+              </button>
+            )
+          )}
         </div>
       )}
       {modifiable && calcul.manquants.length > 0 && (

@@ -336,16 +336,27 @@ sont chiffrés (`QBO_CLE`) et jamais lisibles par l'app.
    nom « Gestion du camp », portée **Accounting** seulement.
 2. **Compagnie d'essai** : menu **Sandbox** → **Add a sandbox company**, pays
    **Canada** (pour la TPS et la TVQ). Dans cette compagnie d'essai : activer
-   les taxes (Taxes → configurer, Québec) et la **facturation progressive**
-   (Paramètres → Ventes → Facturation progressive).
+   la **facturation progressive** et les **numéros de transaction
+   personnalisés** (Paramètres → Ventes ; le devis porte le numéro de la
+   réservation, les factures sont alors numérotées par l'app avec
+   `AutoDocNumber`).
+   - La compagnie d'essai d'Intuit est ontarienne (HST ON seulement) et sa
+     province ne se change pas. Le code « GST/QST QC » de l'essai (TPS 5 % +
+     TVQ 9,975 %, agence Revenu Québec) a été créé par l'API (TaxService) le
+     2026-10-10 ; le vrai dossier de GBPA+ a déjà le code standard.
+   - **Ne rien envoyer par courriel depuis la compagnie d'essai** : en DEV,
+     les devis et factures portent les vrais courriels des clients importés.
 3. **Clés de développement** (Keys & credentials → Development) :
    - Redirect URI : `http://localhost:5173/api/qbo/retour` ;
    - Client ID et Client Secret → `.dev.vars` (`QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`).
    - Essai en DEV : Modèles et compagnies → GBPA+ → **Connecter QuickBooks**,
      choisir la compagnie d'essai ; puis l'article, le code de taxes
-     (« TPS/TVQ QC ») et les conditions (« Payable dès réception »).
+     (« GST/QST QC ») et les conditions (« Due on receipt »).
    - À vérifier dans la compagnie d'essai : un devis créé par l'app se
      facture par pourcentage dans l'écran de QBO (« Créer une facture »).
+   - QBO arrondit les taxes ligne par ligne, l'estimé sur le sous-total : un
+     écart de quelques cents est affiché comme un écart d'arrondi (toléré
+     jusqu'à 10 ¢, `JEU_ARRONDI` dans `facturation.ts`).
 4. **Clés de production** (Keys & credentials → Production, après le
    questionnaire d'Intuit) :
    - Redirect URI : `https://<adresse de l'app en PROD>/api/qbo/retour` ;

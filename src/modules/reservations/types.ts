@@ -76,6 +76,11 @@ export interface Reservation {
   montant_estime: number | null
   demande_le: string
   signe_le: string | null
+  /** Échéancier convenu autrement (F2) : parts des acomptes 1 et 2, null = standard. */
+  acompte1_part: number | null
+  acompte2_part: number | null
+  /** Jour de l'avis d'annulation (F16), posé par la base quand la réservation est annulée. */
+  annule_le: string | null
   origine: 'app' | 'formulaire' | 'import' | 'airbnb'
   ref_externe: string | null
   /** Lien secret de la page client (/client/<jeton>). */
@@ -516,6 +521,8 @@ export interface QboDevis {
   total: number
   total_app: number
   statut: string | null
+  /** Annulation : le devis ne porte plus que les frais d'annulation (F17). */
+  annulation: boolean
   cree_le: string
   cree_par_nom: string | null
   maj_le: string

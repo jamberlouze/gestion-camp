@@ -194,7 +194,7 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 | P12 | Fournisseurs = coût × majoration :<br>• × 1,15, **transport compris** ;<br>• Mont-Blanc arrondi au dollar supérieur. | tous | ✔ Maxime : transport × 1,15 seulement (migration 20261008210842) |
 | P13 | Rabais = ligne négative (en montant ou en %), avant taxes. | tous | ✔ |
 | P14 | Minimums (30 personnes, 6 h, 20 billets…) : simple avertissement, pas de blocage. | tous | ⚠ |
-| P15 | TPS 5 % et TVQ 9,975 % sur le sous-total, **arrondies au cent**. | tous | ✔ taux / ⚠ arrondi |
+| P15 | TPS 5 % et TVQ 9,975 % sur le sous-total, **arrondies au cent**. | tous | ✔ taux / ⚠ arrondi : **QBO arrondit ligne par ligne** (vu en compagnie d'essai le 2026-10-10 : 1 ¢ d'écart sur 27-G-594). L'app tolère 10 ¢ d'écart d'arrondi ; à trancher avec la comptable : garder le sous-total (chiffrier, contrats) ou arrondir comme QBO. |
 | P16 | Repas proposés d'après les heures (déjeuner 8 h, dîner 12 h, souper 17 h 30), modifiables. | tous | ⚠ |
 | P17 | Estimé automatique dès la demande :<br>• ratio par défaut **1:15** (le plus choisi) en CN ;<br>• en AG, sections libres proposées par l'app, envoi approuvé d'un clic. | CN, AG | ✔ (Maxime : « on peut commencer comme ça ») / ⚠ 1:15 |
 
@@ -203,7 +203,7 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 | # | Règle | Forfaits | Statut |
 |---|---|---|---|
 | F1 | Chaque acompte = **% du montant avant taxes + les taxes**. Dans QBO, c'est une facture progressive du devis. | tous | ✔ (Maxime, SOP) ; façon de faire dans QBO : voir §6 (Q12) |
-| F2 | Échéancier :<br>• **25 / 50 / 25** en CN et JPA ;<br>• **25 / 75** en AG et LS ;<br>• toute autre répartition convenue peut être réglée par réservation. | tous | ✔ contrats, SOP |
+| F2 | Échéancier :<br>• **25 / 50 / 25** en CN et JPA ;<br>• **25 / 75** en AG et LS ;<br>• toute autre répartition convenue peut être réglée par réservation. | tous | ✔ contrats, SOP. Bâti le 2026-10-10 : fiche › Facturation › « Modifier l'échéancier » (parts des acomptes 1 et 2 ; en AG et LS, l'acompte 2 est le reste) ; contrats : champs {{acompte1}}, {{acompte2}}, {{solde}} et leurs {{…_pct}} |
 | F3 | **Acompte 1 (25 %)** : facturé à la signature du contrat, **payable sur réception**. C'est la réception de ce paiement qui confirme la réservation. | tous | ✔ Maxime. Le contrat dit encore « 14 jours après la signature » : clause à harmoniser dans le modèle (phase 2) |
 | F4 | **Acompte 2** (50 % en CN et JPA, **75 %** en AG et LS) : dû 21 jours avant l'arrivée, facturé 14 jours avant son échéance. | tous | ✔ contrat / ⚠ AG et LS à 75 % (le gabarit actuel facture 50 %) |
 | F5 | **Facture finale** = valeur finale du contrat − tout ce qui a déjà été facturé. C'est la dernière facture progressive. Le devis QBO est ajusté d'abord. | tous | ✔ SOP |
@@ -211,14 +211,14 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 | F7 | Facture finale **payable sur réception** (factures séparées aussi). | tous | ✔ Maxime. Le contrat CN et JPA dit « 14 jours » : à harmoniser dans le modèle (phase 2) |
 | F8 | **Réservation tardive** (signature moins de 35 jours avant l'arrivée) : acomptes 1 et 2 réunis en une facture, payable sur réception (F3). | tous | ✔ Maxime |
 | F9 | Changement de nombre : avis par courriel **au moins 21 jours avant l'arrivée**. Après, c'est le nombre de l'estimé qui est facturé. | tous | ✔ contrat |
-| F10 | **Minimum 90 %** : si le nombre réel est sous 90 % des participants de l'estimé, on facture au moins 90 % du total de l'estimé. Les accompagnateurs ne comptent pas. | CN, JPA | ✔ Maxime |
-| F11 | **Minimum 90 %** : repas facturés ≥ 90 % du coût des repas de l'estimé. | AG, LS | ✔ |
+| F10 | **Minimum 90 %** : si le nombre réel est sous 90 % des participants de l'estimé, on facture au moins 90 % du total de l'estimé. Les accompagnateurs ne comptent pas. | CN, JPA | ✔ Maxime. Bâti le 2026-10-10 : à moins de 21 jours de l'arrivée, l'estimé brouillon propose la ligne « Ajustement : minimum de 90 % » (référence = dernière version acceptée au plus tard 21 jours avant l'arrivée, sinon la première ; F9) |
+| F11 | **Minimum 90 %** : repas facturés ≥ 90 % du coût des repas de l'estimé. | AG, LS | ✔ Bâti le 2026-10-10, même ligne d'ajustement (lignes `REPAS`) |
 | F12 | Ne baisse jamais : l'hébergement (AG), la salle (LS), le forfait individuel (CN, JPA). | — | ✔ |
 | F13 | Ajout ou changement **avant l'arrivée** : nouvelle version de l'estimé envoyée au client. Le devis QBO est ajusté, et les factures progressives qui restent suivent le nouveau total. | tous | ✔ contrat, SOP |
 | F14 | Ajout **au séjour pendant le séjour** (repas, nuitée, activité) : devis ajusté, puis facture finale. Bris : facture séparée (F6). | tous | ✔ |
 | F15 | Ajout **après la facture finale** : nouvelle facture. Réduction après la facture finale : **note de crédit**, jamais de facture modifiée. | tous | ✔ SOP |
-| F16 | **Annulation** : on retient 25 % (60 jours ou plus avant l'arrivée), 60 % (30 à 59 jours) ou 80 % (moins de 30 jours) du total taxes comprises. | tous | ✔ / ⚠ base taxes comprises |
-| F17 | Montant d'annulation à payer = palier − déjà facturé. S'il a été facturé plus que le palier : note de crédit et remboursement. | tous | ✔ Maxime |
+| F16 | **Annulation** : on retient 25 % (60 jours ou plus avant l'arrivée), 60 % (30 à 59 jours) ou 80 % (moins de 30 jours) du total taxes comprises. | tous | ✔ / ⚠ base taxes comprises. Bâti le 2026-10-10 : jour de l'avis posé à l'annulation (modifiable), palier calculé dans la fiche ; sans aucun paiement d'acompte, sans frais (F18 retirée) |
+| F17 | Montant d'annulation à payer = palier − déjà facturé. S'il a été facturé plus que le palier : note de crédit et remboursement. | tous | ✔ Maxime. Bâti le 2026-10-10 : frais à facturer → le devis QBO ne porte plus que les frais, l'adjointe en facture le solde ; trop facturé → note de crédit de l'excédent, devis fermé, relance pour l'appliquer et rembourser |
 | F18 | ~~Annulation avant le paiement de l'acompte : les 25 % sont dus.~~ **Retirée** : en pratique, on ne l'exige jamais. Une demande annulée avant le paiement de l'acompte se ferme sans frais. | tous | ✔ Maxime |
 | F19 | **Dépôt de sécurité** préautorisé par carte à l'arrivée, hors de l'app : 2 000 $ en AG, 1 000 $ en LS. | AG, LS | ✔ |
 | F20 | **Défaut de paiement** : annulation possible, sans remboursement. Pas d'intérêts. | tous | ✔ |
@@ -426,14 +426,16 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - page client `/client/<lien>` : le séjour, l'estimé à accepter en ligne, la signature du contrat, les documents, le lien des fiches, un message à l'équipe ;
    - fiches participants `/fiches/<lien>` : santé, Epipen, diète, médicaments ; accès propre « Fiches participants » ; totaux pour les autres ; effacées 3 mois après le départ (Loi 25) ;
    - reste pour la mise en ligne : sous-domaine, clés Turnstile (README, section 11) ; les factures QBO s'ajouteront à la page client à la phase 4 ; l'accusé de réception par courriel, à la phase 5.
-4. **QuickBooks Online** (§6, façon A) — **bâtie en DEV le 2026-10-10**, pas en PROD, pas encore essayée avec une vraie compagnie QBO (il faut l'application Intuit : README, section 12) :
+4. **QuickBooks Online** (§6, façon A) — **bâtie en DEV le 2026-10-10**, pas en PROD ; essai avec la compagnie d'essai d'Intuit commencé le 2026-10-10 (README, section 12) :
    - connexion OAuth de chaque compagnie à son dossier QBO (Modèles et compagnies), jetons chiffrés dans le Worker ; article, code de taxes et conditions de paiement choisis dans l'app ;
    - fiche › Facturation : client QBO relié (ou créé) une fois pour toutes, devis QBO créé d'un clic à partir de l'estimé accepté (numéro de la réservation, contrat signé et spécimen joints, contrôle du total), mis à jour si l'estimé change ;
    - échéancier (F2 à F8) et relances « facturer l'acompte… dans QBO » à l'adjointe ; elles se ferment toutes seules quand la facture progressive apparaît dans QBO ;
    - factures et soldes relus de QBO aux 15 minutes (et bouton « Mettre à jour ») ; factures séparées (F6) et notes de crédit (F15) créées par l'app ; PDF officiels de QBO dans la fiche et sur la page client ;
    - relance « créer le devis QBO » à la signature du contrat ;
    - sans QBO relié, l'échéancier donne les montants à facturer à la main ;
-   - **reste** : Q9 (un article QBO par produit), le minimum de 90 % calculé pour la facture finale (F10, F11), un échéancier convenu autrement (F2), l'annulation (F16, F17).
+   - échéancier convenu autrement (F2), minimum de 90 % à l'estimé final (F10, F11) et annulation (F16, F17) : bâtis le 2026-10-10 ;
+   - essai réel, 2026-10-10 : devis 27-G-055 (numéro, lignes, TPS/TVQ au cent près, contrat signé et spécimen joints), facture séparée, note de crédit, PDF de QBO dans la fiche et sur la page client, devis des frais d'annulation (27-G-594, remis comme avant ensuite). Corrigés : pièces jointes jamais envoyées, factures sans numéro (numéros personnalisés activés : `AutoDocNumber`), taxes non recalculées à la mise à jour d'un devis (`TxnTaxDetail` vide), solde dû sans les crédits, relance « acomptes 1 et 2 » d'une réservation tardive fermée dès 25 % ;
+   - **reste** : dans QBO, « Créer une facture → 75 % » sur le devis 27-G-055 et un paiement (à faire par Maxime), puis « Mettre à jour depuis QBO » ; arrondi des taxes (P15) à trancher ; Q9 (un article QBO par produit) ; Opikawa (2e compagnie d'essai).
 5. **Courriels automatiques.**
 6. **Google Agenda + Airbnb.**
 7. **Rapports.**

@@ -6,7 +6,9 @@
 //   POST deconnexion : {compagnie} ;
 //   POST listes      : {compagnie} → articles, codes de taxes, conditions ;
 //   POST clients     : {reservation} → client QBO relié ou candidats ;
-//   POST devis       : {reservation, client?} → crée ou met à jour le devis ;
+//   POST devis       : {reservation, client?} → crée ou met à jour le devis
+//                      (réservation annulée : frais d'annulation, F17) ;
+//   POST echeancier  : {reservation} → relances refaites (échéancier convenu, F2) ;
 //   POST document    : {reservation, genre: separee | note_credit, lignes, note} ;
 //   POST synchro     : {compagnie?} → synchro immédiate ;
 //   POST pdf         : {facture} → PDF de QBO.
@@ -15,7 +17,7 @@ import { base } from '../subventions/base.js'
 import { chiffrer, dechiffrer, verifier } from './chiffre.js'
 import { clientQbo, ErreurQbo } from './client.js'
 import { echangerCode, environnement, qboConfigure, revoquer, urlConnexion, versJetons } from './oauth.js'
-import { candidatsClients, devis, document, listes, synchroniserCompagnie, synchroniserTout } from './operations.js'
+import { candidatsClients, devis, document, listes, majEcheancier, synchroniserCompagnie, synchroniserTout } from './operations.js'
 
 const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
@@ -23,7 +25,7 @@ const json = (corps, status = 200) =>
 const erreur = (e) => {
   const message = e instanceof Error ? e.message : String(e)
   const code = e instanceof ErreurQbo ? e.code : 'erreur'
-  const statut = ['non_connecte', 'reglages', 'estime', 'organisation', 'client', 'doublon', 'lignes', 'introuvable', 'compagnie'].includes(code) ? 409 : 502
+  const statut = ['non_connecte', 'reglages', 'estime', 'organisation', 'client', 'doublon', 'lignes', 'introuvable', 'compagnie', 'annulation'].includes(code) ? 409 : 502
   return json({ erreur: message, code }, statut)
 }
 
@@ -139,6 +141,8 @@ export async function routeQbo(request, env, chemin) {
         return json(await candidatsClients(env, corps.reservation))
       case 'devis':
         return json(await devis(env, corps.reservation, corps.client, s.nom))
+      case 'echeancier':
+        return json(await majEcheancier(env, corps.reservation))
       case 'document':
         if (!['separee', 'note_credit'].includes(corps.genre)) return json({ erreur: 'Genre inconnu.' }, 400)
         return json(await document(env, corps.reservation, corps.genre, corps.lignes, corps.note))

@@ -3,7 +3,17 @@
 // contrat signé et le spécimen de chèque joints), relances de facturation,
 // factures séparées, notes de crédit, synchro des factures et des soldes.
 
-import { clientQbo as payloadClient, ecart, echeancier, lignesQbo, tachesFacturation } from '../../src/modules/reservations/facturation.ts'
+import {
+  annulation,
+  avantTaxesPour,
+  clientQbo as payloadClient,
+  ecart,
+  echeancier,
+  lignesQbo,
+  pourcent,
+  seuilsEcheancier,
+  tachesFacturation,
+} from '../../src/modules/reservations/facturation.ts'
 import { base } from '../subventions/base.js'
 import { clientQbo, ErreurQbo } from './client.js'
 
@@ -131,18 +141,16 @@ const articleDe = (produits, compagnie) => (code) => {
   return p?.qbo_articles?.[compagnie.entreprise_id] ?? compagnie.qbo.article
 }
 
+const estimeAccepte = async (db, r) =>
+  un(await db.lire(`estimes?reservation_id=eq.${r.id}&statut=eq.accepte&select=*&order=version.desc&limit=1`))
+
 /**
- * Crée (ou met à jour) le devis QBO de la réservation à partir de son
- * estimé accepté : client relié ou créé, lignes identiques, contrôle du
- * total, pièces jointes et relances de l'échéancier à la création.
+ * Crée ou met à jour le devis QBO (client relié ou créé, lignes, contrôle du
+ * total) ; pièces jointes à la création seulement.
  */
-export async function devis(env, reservationId, choixClient, auteur) {
-  const ctx = await contexteReservation(env, reservationId)
+async function envoyerDevis(env, ctx, { lignes, estime, totalApp, annulation, choixClient, auteur }) {
   const { db, r, compagnie } = ctx
   const reglages = reglagesQbo(compagnie)
-  const estime = un(await db.lire(`estimes?reservation_id=eq.${r.id}&statut=eq.accepte&select=*&order=version.desc&limit=1`))
-  if (!estime) throw new ErreurQbo('estime', "Il faut un estimé accepté par le client pour faire le devis QBO.")
-  const lignes = await db.lire(`lignes?estime_id=eq.${estime.id}&select=*&order=ordre,created_at`)
   const produits = await db.lire('produits?select=code,qbo_articles')
   const qbo = await clientQbo(env, r.compagnie_id)
   const clientId = await relierClient(env, qbo, ctx, choixClient)
@@ -154,9 +162,11 @@ export async function devis(env, reservationId, choixClient, auteur) {
     ...(estime.accepte_par ? { AcceptedBy: estime.accepte_par.slice(0, 100) } : {}),
     ...(estime.accepte_le ? { AcceptedDate: estime.accepte_le.slice(0, 10) } : {}),
     GlobalTaxCalculation: 'TaxExcluded',
-    Line: lignesQbo(lignes.filter((l) => Number(l.montant) !== 0 || l.auto), articleDe(produits, compagnie), reglages.taxes),
+    Line: lignesQbo(lignes, articleDe(produits, compagnie), reglages.taxes),
     CustomerMemo: { value: `Réservation ${r.numero} — ${r.nom}`.slice(0, 1000) },
-    PrivateNote: `Créé par l'app de gestion à partir de l'estimé v${estime.version} accepté (${r.numero}).`,
+    PrivateNote: annulation
+      ? `Frais d'annulation calculés par l'app de gestion (${r.numero}).`
+      : `Créé par l'app de gestion à partir de l'estimé v${estime.version} accepté (${r.numero}).`,
     ...(ctx.contact?.courriel ? { BillEmail: { Address: ctx.contact.courriel } } : {}),
     ...(reglages.terme?.id ? { SalesTermRef: { value: reglages.terme.id } } : {}),
   }
@@ -167,7 +177,8 @@ export async function devis(env, reservationId, choixClient, auteur) {
     resultat = await qbo.creer('Estimate', { ...contenu, TxnDate: aujourdhui() })
   } else {
     const actuel = await qbo.lire('Estimate', ctx.devis.qbo_id)
-    resultat = await qbo.modifier('Estimate', { ...contenu, Id: actuel.Id, SyncToken: actuel.SyncToken })
+    // Sans TxnTaxDetail vide, une mise à jour partielle garde les taxes des anciennes lignes (vérifié en compagnie d'essai).
+    resultat = await qbo.modifier('Estimate', { ...contenu, TxnTaxDetail: {}, Id: actuel.Id, SyncToken: actuel.SyncToken })
   }
 
   const ligneDevis = {
@@ -178,8 +189,9 @@ export async function devis(env, reservationId, choixClient, auteur) {
     estime_id: estime.id,
     estime_version: estime.version,
     total: Number(resultat.TotalAmt ?? 0),
-    total_app: Number(estime.total),
+    total_app: Number(totalApp),
     statut: resultat.TxnStatus ?? null,
+    annulation,
     maj_le: new Date().toISOString(),
     ...(creation ? { cree_par_nom: auteur ?? null } : {}),
   }
@@ -202,14 +214,111 @@ export async function devis(env, reservationId, choixClient, auteur) {
       }
     }
   }
+  return { qbo, ligneDevis, avertissements }
+}
 
-  // Relances de l'échéancier (montants à jour si le devis change).
-  if (r.signe_le) {
-    const etapes = echeancier({ forfait: r.forfait, total: ligneDevis.total, signe_le: r.signe_le, date_arrivee: r.date_arrivee, date_depart: r.date_depart })
-    await db.rpc('qbo_taches', { p_reservation: r.id, p_taches: tachesFacturation(r.numero, etapes) })
+/** Relances de l'échéancier et seuils gardés avec le devis (montants d'après son total). */
+async function poserEcheancier(db, r, total) {
+  if (!r.signe_le) return
+  const etapes = echeancier({ ...r, total, signe_le: r.signe_le })
+  await db.modifier('qbo_devis', `reservation_id=eq.${r.id}`, { echeancier: seuilsEcheancier(etapes, r.date_depart) })
+  await db.rpc('qbo_taches', { p_reservation: r.id, p_taches: tachesFacturation(r.numero, etapes) })
+  await db.rpc('qbo_fermer_taches', { p_reservation: r.id })
+}
+
+/**
+ * Crée (ou met à jour) le devis QBO de la réservation à partir de son
+ * estimé accepté : client relié ou créé, lignes identiques, contrôle du
+ * total, pièces jointes et relances de l'échéancier à la création.
+ * Réservation annulée : c'est le devis des frais d'annulation (F17).
+ */
+export async function devis(env, reservationId, choixClient, auteur) {
+  const ctx = await contexteReservation(env, reservationId)
+  if (ctx.r.fermeture === 'annulee') return traiterAnnulation(env, ctx, choixClient, auteur)
+  const { db, r } = ctx
+  const estime = await estimeAccepte(db, r)
+  if (!estime) throw new ErreurQbo('estime', "Il faut un estimé accepté par le client pour faire le devis QBO.")
+  const lignes = await db.lire(`lignes?estime_id=eq.${estime.id}&select=*&order=ordre,created_at`)
+  const { ligneDevis, avertissements } = await envoyerDevis(env, ctx, {
+    lignes: lignes.filter((l) => Number(l.montant) !== 0 || l.auto),
+    estime,
+    totalApp: estime.total,
+    annulation: false,
+    choixClient,
+    auteur,
+  })
+  await poserEcheancier(db, r, ligneDevis.total)
+  return { devis: ligneDevis, ecart: ecart(ligneDevis.total, ligneDevis.total_app), avertissements }
+}
+
+/** Échéancier changé dans la fiche (F2) : relances et seuils refaits d'après le devis. */
+export async function majEcheancier(env, reservationId) {
+  const { db, r, devis: d } = await contexteReservation(env, reservationId)
+  if (!d || d.annulation || r.fermeture === 'annulee') return { ok: true }
+  await poserEcheancier(db, r, Number(d.total))
+  return { ok: true }
+}
+
+const jourCourt = (jour) => new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${jour}T00:00:00Z`))
+const argent = (n) => new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(n)
+
+/**
+ * Annulation après signature (F16, F17 ; F18 retirée) :
+ * - frais à facturer : le devis ne porte plus que les frais d'annulation,
+ *   l'adjointe en facture le solde dans QBO (relance) ;
+ * - trop facturé : note de crédit de l'excédent, devis fermé, relance pour
+ *   l'appliquer et rembourser ce qui a été payé en trop ;
+ * - rien à facturer : devis fermé, relance faite.
+ */
+async function traiterAnnulation(env, ctx, choixClient, auteur) {
+  const { db, r } = ctx
+  if (!r.annule_le) throw new ErreurQbo('annulation', "Indiquez le jour de l'avis d'annulation.")
+  const estime = await estimeAccepte(db, r)
+  if (!estime) throw new ErreurQbo('estime', "Il faut l'estimé accepté (contrat) pour calculer les frais d'annulation.")
+  const factures = await db.lire(`factures?reservation_id=eq.${r.id}&supprimee=eq.false&select=qbo_type,genre,total,solde,numero`)
+  const a = annulation({ annule_le: r.annule_le, date_arrivee: r.date_arrivee, sous_total: Number(estime.sous_total), factures })
+  const cle = 'annulation'
+  const avis = `avis du ${jourCourt(r.annule_le)}, ${a.jours} jours avant l'arrivée`
+  const tache = (titre) => db.rpc('qbo_taches', { p_reservation: r.id, p_taches: [{ cle, titre, echeance: aujourdhui() }] })
+
+  if (a.ecart > 0) {
+    const montant = a.retenu_avant_taxes
+    const { ligneDevis, avertissements } = await envoyerDevis(env, ctx, {
+      lignes: [{ code: null, description: `Frais d'annulation : ${pourcent(a.part)} du séjour (${avis})`, note: null, quantite: 1, prix_unitaire: montant, montant }],
+      estime,
+      totalApp: a.retenu,
+      annulation: true,
+      choixClient,
+      auteur,
+    })
+    await db.modifier('qbo_devis', `reservation_id=eq.${r.id}`, { echeancier: [{ cle, cumul: 1, apres: null }] })
+    await tache(`${r.numero} : annulée — facturer le solde du devis ${r.numero} dans QBO (frais d'annulation), ${argent(a.ecart)} (payable sur réception)`)
+    await db.rpc('qbo_fermer_taches', { p_reservation: r.id })
+    return { annulation: a, devis: ligneDevis, ecart: ecart(ligneDevis.total, ligneDevis.total_app), avertissements, message: `Devis QBO ajusté aux frais d'annulation (${argent(a.retenu)}) : il reste ${argent(a.ecart)} à facturer dans QBO.` }
   }
 
-  return { devis: ligneDevis, ecart: ecart(ligneDevis.total, ligneDevis.total_app), avertissements }
+  let note = null
+  if (a.ecart < 0) {
+    note = await document(env, r.id, 'note_credit', [{ description: `Annulation (${avis}) : facturé au-delà des frais retenus (${pourcent(a.part)})`, quantite: 1, prix_unitaire: avantTaxesPour(-a.ecart) }], null)
+  }
+  // Plus rien à facturer sur ce devis.
+  if (ctx.devis) {
+    const qbo = await clientQbo(env, r.compagnie_id)
+    const actuel = await qbo.lire('Estimate', ctx.devis.qbo_id)
+    if (actuel.TxnStatus !== 'Closed') await qbo.modifier('Estimate', { Id: actuel.Id, SyncToken: actuel.SyncToken, TxnStatus: 'Closed' })
+    await db.modifier('qbo_devis', `reservation_id=eq.${r.id}`, { statut: 'Closed', annulation: true, echeancier: [], maj_le: new Date().toISOString() })
+  }
+  if (note) {
+    const paye = factures.filter((f) => f.genre === 'progressive').reduce((t, f) => t + Number(f.total) - Number(f.solde), 0)
+    const rembourser = Math.round((paye - a.retenu) * 100) / 100
+    await tache(
+      `${r.numero} : annulée — appliquer la note de crédit n° ${note.numero ?? '?'} (${argent(note.total)}) dans QBO` +
+        (rembourser > 0 ? ` et rembourser ${argent(rembourser)} au client (payé au-delà des frais retenus de ${argent(a.retenu)})` : ' aux factures impayées'),
+    )
+    return { annulation: a, facture: note, ecart: 0, avertissements: [], message: `Note de crédit n° ${note.numero ?? '?'} créée : ${argent(note.total)} taxes comprises.` }
+  }
+  await base(env, 'crm').modifier('relances', `source_cle=eq.qbo:${r.id}:${cle}&statut=eq.a_faire`, { statut: 'faite' })
+  return { annulation: a, ecart: 0, avertissements: [], message: a.part === 0 ? "Acompte jamais payé : annulation sans frais (rien à facturer)." : 'Déjà facturé : rien de plus à facturer.' }
 }
 
 // ------------------------------------------------------------------

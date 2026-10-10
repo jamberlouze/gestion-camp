@@ -2,6 +2,7 @@
 // Fonctions pures (aucun accès réseau), partagées par l'app et le Worker.
 
 import { arrondi2, nuitsEntre } from '../calcul'
+import { partsAcomptes, pourcent } from '../facturation'
 import { argent, dateLongue, heure } from '../format'
 import type { Compagnie, Estime, EtageRooming, Reservation } from '../types'
 
@@ -62,6 +63,10 @@ export function champs(c: Contexte): Record<string, string> {
   const total = Number(c.estime?.total ?? 0)
   const nuits = nuitsEntre(r.date_arrivee, r.date_depart)
   const n = (v: number | null | undefined) => (vide(v) ? '' : String(v))
+  // Versements du contrat : échéancier de la réservation (F2), standard ou convenu.
+  const parts = partsAcomptes(r)
+  const partSolde = Math.max(0, 1 - parts.acompte1 - parts.acompte2)
+  const versement = (part: number) => argent(c.estime ? arrondi2(total * part) : null)
   return {
     groupe: r.nom,
     numero: r.numero,
@@ -92,6 +97,12 @@ export function champs(c: Contexte): Record<string, string> {
     tps: argent(c.estime?.tps ?? null),
     tvq: argent(c.estime?.tvq ?? null),
     total: argent(c.estime ? total : null),
+    acompte1: versement(parts.acompte1),
+    acompte1_pct: pourcent(parts.acompte1),
+    acompte2: versement(parts.acompte2),
+    acompte2_pct: pourcent(parts.acompte2),
+    solde: versement(partSolde),
+    solde_pct: pourcent(partSolde),
     // Trois semaines avant l'arrivée : changement de nombre, 2e versement, formulaires.
     date_limite: dateLongue(ajouterJours(r.date_arrivee, -21)),
     aujourdhui: dateLongue(jourMontreal(c.maintenant)),
@@ -146,6 +157,12 @@ export const CHAMPS_MODELES: [string, string][] = [
   ['tps', 'TPS'],
   ['tvq', 'TVQ'],
   ['total', 'Total taxes comprises'],
+  ['acompte1', "1er versement (25 % du total, ou la part convenue pour la réservation)"],
+  ['acompte1_pct', 'Part du 1er versement (« 25 % »)'],
+  ['acompte2', '2e versement (50 % en CN et JPA, 75 % en AG et LS, ou la part convenue)'],
+  ['acompte2_pct', 'Part du 2e versement'],
+  ['solde', 'Solde à la facture finale (le reste du total)'],
+  ['solde_pct', 'Part du solde'],
   ['montant_25', '25 % du total (tout pourcentage : montant_50, montant_90…)'],
   ['date_limite', "Trois semaines avant l'arrivée"],
   ['aujourdhui', 'Date du document'],
