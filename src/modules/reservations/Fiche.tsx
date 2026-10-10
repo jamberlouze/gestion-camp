@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { BoutonSupprimer } from '@/lib/BoutonsAction'
+import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, useModifierRelance, useRelances } from '@/modules/crm/donnees'
 import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
@@ -99,6 +100,9 @@ function Contenu({ r }: { r: Reservation }) {
 
       <Parcours r={r} changer={changer} />
 
+      {/* Le séjour d'abord, sur toute la largeur : c'est lui qui fait l'estimé. */}
+      <Sejour r={r} changer={changer} />
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
           <Estime r={r} />
@@ -108,7 +112,6 @@ function Contenu({ r }: { r: Reservation }) {
         </div>
         <div className="space-y-5">
           <Client r={r} changer={changer} demandeAValider={!!demande && !demande.validee_le} />
-          <Sejour r={r} changer={changer} />
           <Notes r={r} changer={changer} />
         </div>
       </div>
@@ -215,70 +218,195 @@ function ClosedLost({ fermer, enregistrer }: { fermer: () => void; enregistrer: 
 // Client
 // ------------------------------------------------------------
 function Client({ r, changer, demandeAValider }: { r: Reservation; changer: Changer; demandeAValider: boolean }) {
+  const { ecriture } = useDonnees()
+  const [edition, setEdition] = useState(false)
+  return (
+    <Section
+      titre="Client"
+      action={
+        ecriture &&
+        (edition ? (
+          <button className={ui.bouton} onClick={() => setEdition(false)}>
+            Terminé
+          </button>
+        ) : (
+          <BoutonModifier onClick={() => setEdition(true)} />
+        ))
+      }
+    >
+      {edition ? (
+        <ClientEdition r={r} changer={changer} demandeAValider={demandeAValider} />
+      ) : (
+        <ClientLecture r={r} demandeAValider={demandeAValider} relier={() => setEdition(true)} />
+      )}
+    </Section>
+  )
+}
+
+/** Client en lecture : l'essentiel, courriels et téléphones cliquables. */
+function ClientLecture({ r, demandeAValider, relier }: { r: Reservation; demandeAValider: boolean; relier: () => void }) {
+  const { orgParId, contactParId, compagnies, nomResponsable, ecriture } = useDonnees()
+  const org = r.organisation_id ? orgParId.get(r.organisation_id) : undefined
+  const resp = r.contact_reservation_id ? contactParId.get(r.contact_reservation_id) : undefined
+  const fact = r.contact_facturation_id ? contactParId.get(r.contact_facturation_id) : undefined
+  const compagnie = compagnies.find((c) => c.id === r.compagnie_id)
+  const adresse = org ? [org.adresse, org.ville, [org.province, org.code_postal].filter(Boolean).join(' ')].filter(Boolean).join(', ') : ''
+
+  return (
+    <div className="space-y-4 text-sm">
+      {org ? (
+        <div>
+          <Link to={`/crm/o/${org.id}`} className="font-medium text-foret-800 hover:underline">
+            {org.nom}
+          </Link>
+          {adresse && <p className="text-pierre-500">{adresse}</p>}
+        </div>
+      ) : demandeAValider ? (
+        <p className="text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
+      ) : (
+        <p className="text-amber-700">
+          Aucune organisation du CRM.{' '}
+          {ecriture && (
+            <button className="underline hover:text-amber-900" onClick={relier}>
+              Relier au CRM
+            </button>
+          )}
+        </p>
+      )}
+
+      {org && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Personne libelle="Responsable de la réservation" contact={resp} />
+          <Personne libelle="Responsable de la facturation" contact={fact} vide={resp ? 'Le même' : '—'} />
+        </div>
+      )}
+
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5">
+        {r.courriel_direction && (
+          <>
+            <dt className="text-pierre-500">Direction</dt>
+            <dd className="truncate">
+              <a className="text-foret-700 hover:underline" href={`mailto:${r.courriel_direction}`}>
+                {r.courriel_direction}
+              </a>
+            </dd>
+          </>
+        )}
+        <dt className="text-pierre-500">Facturé par</dt>
+        <dd>{compagnie ? <PuceCompagnie compagnie={compagnie} /> : '—'}</dd>
+        <dt className="text-pierre-500">Responsable interne</dt>
+        <dd>{nomResponsable(r.responsable_id) ?? '—'}</dd>
+        {r.provenance && (
+          <>
+            <dt className="text-pierre-500">Provenance</dt>
+            <dd>{r.provenance}</dd>
+          </>
+        )}
+      </dl>
+    </div>
+  )
+}
+
+function Personne({
+  libelle,
+  contact,
+  vide = '—',
+}: {
+  libelle: string
+  contact: { nom: string; fonction: string | null; courriel: string | null; telephone: string | null } | undefined
+  vide?: string
+}) {
+  return (
+    <div className="min-w-0">
+      <p className={ui.etiquette}>{libelle}</p>
+      {contact ? (
+        <div className="space-y-0.5">
+          <p className="font-medium text-pierre-900">
+            {contact.nom}
+            {contact.fonction && <span className="font-normal text-pierre-500"> · {contact.fonction}</span>}
+          </p>
+          {contact.courriel && (
+            <a className="block truncate text-foret-700 hover:underline" href={`mailto:${contact.courriel}`}>
+              {contact.courriel}
+            </a>
+          )}
+          {contact.telephone && (
+            <a className="block text-foret-700 hover:underline" href={`tel:${contact.telephone.replace(/[^\d+]/g, '')}`}>
+              {contact.telephone}
+            </a>
+          )}
+        </div>
+      ) : (
+        <p className="text-pierre-400">{vide}</p>
+      )}
+    </div>
+  )
+}
+
+/** Client en modification (ouvert par le crayon). */
+function ClientEdition({ r, changer, demandeAValider }: { r: Reservation; changer: Changer; demandeAValider: boolean }) {
   const { contacts, compagnies, responsables, ecriture, nomResponsable } = useDonnees()
   const sesContacts = r.organisation_id ? contacts.filter((c) => c.organisation_id === r.organisation_id) : []
 
   return (
-    <Section titre="Client">
-      <div className="space-y-3">
-        <div>
-          <span className={ui.etiquette}>Organisation</span>
-          {demandeAValider && !r.organisation_id ? (
-            <p className="text-xs text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
-          ) : (
-            <>
-              <ChoixOrganisation valeur={r.organisation_id} disabled={!ecriture} changer={(id) => changer({ organisation_id: id, contact_reservation_id: null, contact_facturation_id: null })} />
-              {!r.organisation_id && <p className="mt-1 text-xs text-amber-700">À valider : reliez la demande à une organisation du CRM, ou créez-la.</p>}
-            </>
-          )}
-        </div>
-        {r.organisation_id && (
+    <div className="space-y-3">
+      <div>
+        <span className={ui.etiquette}>Organisation</span>
+        {demandeAValider && !r.organisation_id ? (
+          <p className="text-xs text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
+        ) : (
           <>
-            <ChoixContact libelle="Responsable de la réservation" r={r} valeur={r.contact_reservation_id} contacts={sesContacts} changer={(id) => changer({ contact_reservation_id: id })} />
-            <ChoixContact
-              libelle="Responsable de la facturation"
-              vide="— Le même"
-              r={r}
-              valeur={r.contact_facturation_id}
-              contacts={sesContacts}
-              changer={(id) => changer({ contact_facturation_id: id })}
-            />
+            <ChoixOrganisation valeur={r.organisation_id} disabled={!ecriture} changer={(id) => changer({ organisation_id: id, contact_reservation_id: null, contact_facturation_id: null })} />
+            {!r.organisation_id && <p className="mt-1 text-xs text-amber-700">À valider : reliez la demande à une organisation du CRM, ou créez-la.</p>}
           </>
         )}
+      </div>
+      {r.organisation_id && (
+        <>
+          <ChoixContact libelle="Responsable de la réservation" r={r} valeur={r.contact_reservation_id} contacts={sesContacts} changer={(id) => changer({ contact_reservation_id: id })} />
+          <ChoixContact
+            libelle="Responsable de la facturation"
+            vide="— Le même"
+            r={r}
+            valeur={r.contact_facturation_id}
+            contacts={sesContacts}
+            changer={(id) => changer({ contact_facturation_id: id })}
+          />
+        </>
+      )}
+      <label className="block">
+        <span className={ui.etiquette}>Courriel de la direction ou du secrétariat</span>
+        <ChampTexte className={ui.champ} type="email" valeur={r.courriel_direction ?? ''} disabled={!ecriture} enregistrer={(v) => changer({ courriel_direction: v || null })} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className={ui.etiquette}>Courriel de la direction ou du secrétariat</span>
-          <ChampTexte className={ui.champ} type="email" valeur={r.courriel_direction ?? ''} disabled={!ecriture} enregistrer={(v) => changer({ courriel_direction: v || null })} />
+          <span className={ui.etiquette}>Facturé par</span>
+          <select className={ui.champ} value={r.compagnie_id} disabled={!ecriture} onChange={(e) => changer({ compagnie_id: e.target.value })}>
+            {compagnies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nom}
+              </option>
+            ))}
+          </select>
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className={ui.etiquette}>Facturé par</span>
-            <select className={ui.champ} value={r.compagnie_id} disabled={!ecriture} onChange={(e) => changer({ compagnie_id: e.target.value })}>
-              {compagnies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nom}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className={ui.etiquette}>Responsable interne</span>
-            <select className={ui.champ} value={r.responsable_id ?? ''} disabled={!ecriture} onChange={(e) => changer({ responsable_id: e.target.value || null })}>
-              <option value="">— Personne</option>
-              {r.responsable_id && !responsables.some((x) => x.id === r.responsable_id) && <option value={r.responsable_id}>{nomResponsable(r.responsable_id)}</option>}
-              {responsables.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.nom}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
         <label className="block">
-          <span className={ui.etiquette}>Provenance (source, référence)</span>
-          <ChampTexte className={ui.champ} valeur={r.provenance ?? ''} disabled={!ecriture} placeholder="Site web, amie de Vickie, client fidèle…" enregistrer={(v) => changer({ provenance: v || null })} />
+          <span className={ui.etiquette}>Responsable interne</span>
+          <select className={ui.champ} value={r.responsable_id ?? ''} disabled={!ecriture} onChange={(e) => changer({ responsable_id: e.target.value || null })}>
+            <option value="">— Personne</option>
+            {r.responsable_id && !responsables.some((x) => x.id === r.responsable_id) && <option value={r.responsable_id}>{nomResponsable(r.responsable_id)}</option>}
+            {responsables.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nom}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
-    </Section>
+      <label className="block">
+        <span className={ui.etiquette}>Provenance (source, référence)</span>
+        <ChampTexte className={ui.champ} valeur={r.provenance ?? ''} disabled={!ecriture} placeholder="Site web, amie de Vickie, client fidèle…" enregistrer={(v) => changer({ provenance: v || null })} />
+      </label>
+    </div>
   )
 }
 
@@ -391,12 +519,69 @@ function Nombre({ valeur, changer, disabled, pas = 1 }: { valeur: number | null;
   )
 }
 
+/**
+ * Un seul jour (Journée plein air, Location de salle) : la date, puis les
+ * heures de début et de fin. Plusieurs jours : arrivée et départ, chacun
+ * avec son heure.
+ */
+function DatesEtHeures({ r, changer }: { r: Reservation; changer: Changer }) {
+  const { ecriture } = useDonnees()
+  const d = !ecriture
+  const unJour = r.forfait === 'journee_plein_air' || r.forfait === 'location_salle'
+  const nuits = nuitsEntre(r.date_arrivee, r.date_depart)
+  const dateArrivee = (
+    <input
+      type="date"
+      className={ui.champ}
+      value={r.date_arrivee}
+      disabled={d}
+      onChange={(e) => e.target.value && changer({ date_arrivee: e.target.value, ...(unJour || e.target.value > r.date_depart ? { date_depart: e.target.value } : {}) })}
+    />
+  )
+  const heureArrivee = (
+    <input type="time" className={ui.champ} value={r.heure_arrivee?.slice(0, 5) ?? ''} disabled={d} onChange={(e) => changer({ heure_arrivee: e.target.value || null })} />
+  )
+  const heureDepart = (
+    <input type="time" className={ui.champ} value={r.heure_depart?.slice(0, 5) ?? ''} disabled={d} onChange={(e) => changer({ heure_depart: e.target.value || null })} />
+  )
+  if (unJour) {
+    return (
+      <>
+        <Champ libelle="Date">{dateArrivee}</Champ>
+        <div className="grid grid-cols-2 gap-3">
+          <Champ libelle="De">{heureArrivee}</Champ>
+          <Champ libelle="À">{heureDepart}</Champ>
+        </div>
+      </>
+    )
+  }
+  return (
+    <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
+      <Champ libelle="Arrivée">{dateArrivee}</Champ>
+      <Champ libelle="Heure">{heureArrivee}</Champ>
+      <Champ libelle={`Départ (${nuits} nuit${nuits > 1 ? 's' : ''})`}>
+        <input type="date" className={ui.champ} value={r.date_depart} min={r.date_arrivee} disabled={d} onChange={(e) => e.target.value && changer({ date_depart: e.target.value })} />
+      </Champ>
+      <Champ libelle="Heure">{heureDepart}</Champ>
+    </div>
+  )
+}
+
+/** Un bloc de la section Séjour (forfait et dates, groupe, repas, hébergement). */
+function Bloc({ titre, children }: { titre: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-3">
+      <h3 className="border-b border-pierre-100 pb-1 text-sm font-medium text-pierre-700">{titre}</h3>
+      {children}
+    </div>
+  )
+}
+
 function Sejour({ r, changer }: { r: Reservation; changer: Changer }) {
   const { reglages, etages, ecriture, catalogue } = useDonnees()
   const scolaire = r.forfait === 'classe_nature' || r.forfait === 'journee_plein_air'
-  const unJour = r.forfait === 'journee_plein_air' || r.forfait === 'location_salle'
+  const avecLieux = r.forfait !== 'journee_plein_air'
   const normales = heuresNormales(reglages, r.forfait, r.variante)
-  const nuits = nuitsEntre(r.date_arrivee, r.date_depart)
   const proposes = repasProposes(r, reglages.heuresRepas)
   const repasDiff = proposes.dejeuners !== r.nb_dejeuners || proposes.diners !== r.nb_diners || proposes.soupers !== r.nb_soupers
   const d = !ecriture
@@ -412,109 +597,107 @@ function Sejour({ r, changer }: { r: Reservation; changer: Changer }) {
 
   return (
     <Section titre="Séjour">
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Champ libelle="Forfait">
-            <select className={ui.champ} value={r.forfait} disabled={d} onChange={(e) => changerForfait(e.target.value as Forfait)}>
-              {Object.entries(FORFAITS).map(([v, n]) => (
-                <option key={v} value={v}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </Champ>
-          {VARIANTES[r.forfait].length > 0 && (
-            <Champ libelle={r.forfait === 'location_salle' ? 'Location' : 'Variante'}>
-              <select className={ui.champ} value={r.variante ?? ''} disabled={d} onChange={(e) => changer({ variante: (e.target.value || null) as Reservation['variante'] })}>
-                <option value="">—</option>
-                {VARIANTES[r.forfait].map((v) => (
-                  <option key={v.valeur} value={v.valeur}>
-                    {v.libelle}
-                  </option>
-                ))}
-              </select>
-            </Champ>
-          )}
-        </div>
-        {r.forfait_demande && r.forfait_demande !== r.forfait && (
-          <p className="text-xs text-pierre-500">Demandé au formulaire : {FORFAITS[r.forfait_demande]}</p>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <Champ libelle={unJour ? 'Date' : 'Arrivée'}>
-            <input
-              type="date"
-              className={ui.champ}
-              value={r.date_arrivee}
-              disabled={d}
-              onChange={(e) => e.target.value && changer({ date_arrivee: e.target.value, ...(unJour || e.target.value > r.date_depart ? { date_depart: e.target.value } : {}) })}
-            />
-          </Champ>
-          {!unJour && (
-            <Champ libelle={`Départ (${nuits} nuit${nuits > 1 ? 's' : ''})`}>
-              <input type="date" className={ui.champ} value={r.date_depart} min={r.date_arrivee} disabled={d} onChange={(e) => e.target.value && changer({ date_depart: e.target.value })} />
-            </Champ>
-          )}
-          <Champ libelle="Heure d'arrivée">
-            <input type="time" className={ui.champ} value={r.heure_arrivee?.slice(0, 5) ?? ''} disabled={d} onChange={(e) => changer({ heure_arrivee: e.target.value || null })} />
-          </Champ>
-          <Champ libelle="Heure de départ">
-            <input type="time" className={ui.champ} value={r.heure_depart?.slice(0, 5) ?? ''} disabled={d} onChange={(e) => changer({ heure_depart: e.target.value || null })} />
-          </Champ>
-        </div>
-        {normales && ecriture && (r.heure_arrivee?.slice(0, 5) !== normales[0] || r.heure_depart?.slice(0, 5) !== normales[1]) && (
-          <button className="text-xs text-foret-700 underline" onClick={() => changer({ heure_arrivee: normales[0], heure_depart: normales[1], heures_regulieres: true })}>
-            Heures normales : {heure(normales[0])} – {heure(normales[1])}
-          </button>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
-          <Champ libelle={scolaire ? 'Élèves' : 'Personnes'}>
-            <Nombre valeur={r.nb_participants} disabled={d} changer={(n) => changer({ nb_participants: n })} />
-          </Champ>
-          {scolaire && (
-            <Champ libelle="Accompagnateurs">
-              <Nombre valeur={r.nb_accompagnateurs} disabled={d} changer={(n) => changer({ nb_accompagnateurs: n })} />
-            </Champ>
-          )}
-          {scolaire && (
-            <Champ libelle="Ratio">
-              <select className={ui.champ} value={r.ratio ?? ''} disabled={d} onChange={(e) => changer({ ratio: (e.target.value || null) as Reservation['ratio'] })}>
-                <option value="">—</option>
-                {RATIOS.map((x) => (
-                  <option key={x.valeur} value={x.valeur}>
-                    {x.libelle}
-                  </option>
-                ))}
-              </select>
-            </Champ>
-          )}
-        </div>
-        {scolaire && (
-          <p className="text-xs text-pierre-500">
-            {animateursRequis(r.nb_participants, r.ratio)} animateur(s) requis ·{' '}
-            {gratuites(r.nb_participants, r.nb_accompagnateurs, catalogue.gratuitePar)} accompagnateur(s) gratuit(s) (1:{catalogue.gratuitePar})
-          </p>
-        )}
-        {scolaire && (
+      {/* Quatre blocs côte à côte sur grand écran (trois en Journée plein air), deux sur écran moyen. */}
+      <div
+        className={`grid gap-x-6 gap-y-5 lg:grid-cols-2 ${
+          avecLieux
+            ? 'xl:grid-cols-[minmax(0,4fr)_minmax(0,3fr)_minmax(0,3fr)_minmax(0,3fr)]'
+            : 'xl:grid-cols-[minmax(0,4fr)_minmax(0,3fr)_minmax(0,3fr)]'
+        }`}
+      >
+        <Bloc titre="Forfait et dates">
           <div className="grid grid-cols-2 gap-3">
-            <Champ libelle="Âges et niveaux">
-              <ChampTexte className={ui.champ} valeur={r.ages ?? ''} disabled={d} enregistrer={(v) => changer({ ages: v || null })} />
+            <Champ libelle="Forfait">
+              <select className={ui.champ} value={r.forfait} disabled={d} onChange={(e) => changerForfait(e.target.value as Forfait)}>
+                {Object.entries(FORFAITS).map(([v, n]) => (
+                  <option key={v} value={v}>
+                    {n}
+                  </option>
+                ))}
+              </select>
             </Champ>
+            {VARIANTES[r.forfait].length > 0 && (
+              <Champ libelle={r.forfait === 'location_salle' ? 'Location' : 'Variante'}>
+                <select className={ui.champ} value={r.variante ?? ''} disabled={d} onChange={(e) => changer({ variante: (e.target.value || null) as Reservation['variante'] })}>
+                  <option value="">—</option>
+                  {VARIANTES[r.forfait].map((v) => (
+                    <option key={v.valeur} value={v.valeur}>
+                      {v.libelle}
+                    </option>
+                  ))}
+                </select>
+              </Champ>
+            )}
+          </div>
+          {r.forfait_demande && r.forfait_demande !== r.forfait && (
+            <p className="text-xs text-pierre-500">Demandé au formulaire : {FORFAITS[r.forfait_demande]}</p>
+          )}
+          <DatesEtHeures r={r} changer={changer} />
+          {normales && ecriture && (r.heure_arrivee?.slice(0, 5) !== normales[0] || r.heure_depart?.slice(0, 5) !== normales[1]) && (
+            <button className="text-xs text-foret-700 underline" onClick={() => changer({ heure_arrivee: normales[0], heure_depart: normales[1], heures_regulieres: true })}>
+              Heures normales : {heure(normales[0])} – {heure(normales[1])}
+            </button>
+          )}
+          {r.forfait === 'classe_nature' && (
+            <Champ libelle="Heures en extra (hors 10 h – 14 h)">
+              <Nombre valeur={r.heures_extra} pas={0.5} disabled={d} changer={(n) => changer({ heures_extra: n ?? 0 })} />
+            </Champ>
+          )}
+          {r.forfait === 'location_salle' && (
+            <Champ libelle="Heures supplémentaires">
+              <Nombre valeur={r.heures_supplementaires} pas={0.5} disabled={d} changer={(n) => changer({ heures_supplementaires: n ?? 0 })} />
+            </Champ>
+          )}
+        </Bloc>
+
+        <Bloc titre="Groupe">
+          {/* Deuxième colonne plus large : « Accompagnateurs » tient sans être coupé. */}
+          <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
+            <Champ libelle={scolaire ? 'Élèves' : 'Personnes'}>
+              <Nombre valeur={r.nb_participants} disabled={d} changer={(n) => changer({ nb_participants: n })} />
+            </Champ>
+            {scolaire && (
+              <Champ libelle="Accompagnateurs">
+                <Nombre valeur={r.nb_accompagnateurs} disabled={d} changer={(n) => changer({ nb_accompagnateurs: n })} />
+              </Champ>
+            )}
+            {scolaire && (
+              <Champ libelle="Ratio">
+                <select className={ui.champ} value={r.ratio ?? ''} disabled={d} onChange={(e) => changer({ ratio: (e.target.value || null) as Reservation['ratio'] })}>
+                  <option value="">—</option>
+                  {RATIOS.map((x) => (
+                    <option key={x.valeur} value={x.valeur}>
+                      {x.libelle}
+                    </option>
+                  ))}
+                </select>
+              </Champ>
+            )}
             <Champ libelle="Langue">
               <ChampTexte className={ui.champ} valeur={r.langue ?? ''} disabled={d} enregistrer={(v) => changer({ langue: v || null })} />
             </Champ>
           </div>
-        )}
+          {scolaire && (
+            <>
+              <p className="text-xs text-pierre-500">
+                {animateursRequis(r.nb_participants, r.ratio)} animateur(s) requis · {gratuites(r.nb_participants, r.nb_accompagnateurs, catalogue.gratuitePar)} accompagnateur(s)
+                gratuit(s) (1:{catalogue.gratuitePar})
+              </p>
+              <Champ libelle="Âges et niveaux">
+                <ChampTexte className={ui.champ} valeur={r.ages ?? ''} disabled={d} enregistrer={(v) => changer({ ages: v || null })} />
+              </Champ>
+            </>
+          )}
+        </Bloc>
 
-        <div className="rounded-lg border border-pierre-200 p-3">
-          <label className="flex items-center gap-2 text-sm font-medium">
+        <Bloc titre="Repas">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={r.service_repas || r.forfait === 'classe_nature'} disabled={d || r.forfait === 'classe_nature'} onChange={(e) => changer({ service_repas: e.target.checked })} />
-            Service de repas{r.forfait === 'classe_nature' && ' (toujours inclus en Classe nature)'}
+            Service de repas{r.forfait === 'classe_nature' && ' (toujours inclus)'}
           </label>
           {(r.service_repas || r.forfait === 'classe_nature') && (
             <>
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3">
                 <Champ libelle="Déjeuners">
                   <Nombre valeur={r.nb_dejeuners} disabled={d} changer={(n) => changer({ nb_dejeuners: n ?? 0 })} />
                 </Champ>
@@ -530,7 +713,7 @@ function Sejour({ r, changer }: { r: Reservation; changer: Changer }) {
               </div>
               {repasDiff && ecriture && (
                 <button
-                  className="mt-1 text-xs text-foret-700 underline"
+                  className="text-left text-xs text-foret-700 underline"
                   onClick={() => changer({ nb_dejeuners: proposes.dejeuners, nb_diners: proposes.diners, nb_soupers: proposes.soupers })}
                 >
                   D'après les heures : {proposes.dejeuners} déjeuner(s), {proposes.diners} dîner(s), {proposes.soupers} souper(s)
@@ -538,58 +721,48 @@ function Sejour({ r, changer }: { r: Reservation; changer: Changer }) {
               )}
             </>
           )}
-        </div>
+        </Bloc>
 
-        {r.forfait === 'classe_nature' && (
-          <Champ libelle="Heures en extra (hors 10 h – 14 h)">
-            <Nombre valeur={r.heures_extra} pas={0.5} disabled={d} changer={(n) => changer({ heures_extra: n ?? 0 })} />
-          </Champ>
-        )}
-        {r.forfait === 'location_salle' && (
-          <Champ libelle="Heures supplémentaires">
-            <Nombre valeur={r.heures_supplementaires} pas={0.5} disabled={d} changer={(n) => changer({ heures_supplementaires: n ?? 0 })} />
-          </Champ>
-        )}
-
-        {r.forfait !== 'location_salle' && r.forfait !== 'journee_plein_air' && (
-          <div>
-            <span className={ui.etiquette}>{r.forfait === 'accueil_groupe' ? 'Sections réservées (facturées au prorata des lits)' : 'Étages occupés'}</span>
-            <div className="grid grid-cols-2 gap-1">
-              {ETAGES.map((code) => {
-                const e = etages.find((x) => x.code === code)
-                return (
-                  <label key={code} className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-pierre-50">
+        {avecLieux && (
+          <Bloc titre={r.forfait === 'location_salle' ? 'Salles' : r.forfait === 'accueil_groupe' ? 'Sections réservées' : 'Hébergement'}>
+            {r.forfait === 'location_salle' ? (
+              <div className="grid gap-0.5">
+                {SALLES.map((s) => (
+                  <label key={s.code} className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-pierre-50">
                     <input
                       type="checkbox"
                       disabled={d}
-                      checked={r.etages.includes(code)}
-                      onChange={(ev) => changer({ etages: ev.target.checked ? [...r.etages, code] : r.etages.filter((x) => x !== code) })}
+                      checked={r.salles.includes(s.code)}
+                      onChange={(ev) => changer({ salles: ev.target.checked ? [...r.salles, s.code] : r.salles.filter((x) => x !== s.code) })}
                     />
-                    {e?.nom ?? code} <span className="text-xs text-pierre-400">{e ? `${e.lits} lits` : ''}</span>
+                    {s.nom} <span className="text-xs text-pierre-400">{s.batiment === 'Vieille-France' ? 'VF' : 'PP'}</span>
                   </label>
-                )
-              })}
-            </div>
-            {r.etages.length > 0 && <p className="mt-1 text-xs text-pierre-500">{litsDe(r.etages, catalogue.etages).lits} lits au total</p>}
-          </div>
-        )}
-        {r.forfait === 'location_salle' && (
-          <div>
-            <span className={ui.etiquette}>Salles</span>
-            <div className="grid grid-cols-2 gap-1">
-              {SALLES.map((s) => (
-                <label key={s.code} className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-pierre-50">
-                  <input
-                    type="checkbox"
-                    disabled={d}
-                    checked={r.salles.includes(s.code)}
-                    onChange={(ev) => changer({ salles: ev.target.checked ? [...r.salles, s.code] : r.salles.filter((x) => x !== s.code) })}
-                  />
-                  {s.nom} <span className="text-xs text-pierre-400">{s.batiment === 'Vieille-France' ? 'VF' : 'PP'}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                {r.forfait === 'accueil_groupe' && <p className="text-xs text-pierre-500">Facturées au prorata des lits.</p>}
+                <div className="grid gap-0.5">
+                  {ETAGES.map((code) => {
+                    const e = etages.find((x) => x.code === code)
+                    return (
+                      <label key={code} className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-pierre-50">
+                        <input
+                          type="checkbox"
+                          disabled={d}
+                          checked={r.etages.includes(code)}
+                          onChange={(ev) => changer({ etages: ev.target.checked ? [...r.etages, code] : r.etages.filter((x) => x !== code) })}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{e?.nom ?? code}</span>
+                        <span className="text-xs text-pierre-400">{e ? `${e.lits} lits` : ''}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {r.etages.length > 0 && <p className="text-xs text-pierre-500">{litsDe(r.etages, catalogue.etages).lits} lits au total</p>}
+              </>
+            )}
+          </Bloc>
         )}
       </div>
     </Section>
