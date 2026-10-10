@@ -354,9 +354,10 @@ sont chiffrés (`QBO_CLE`) et jamais lisibles par l'app.
      (« GST/QST QC ») et les conditions (« Due on receipt »).
    - À vérifier dans la compagnie d'essai : un devis créé par l'app se
      facture par pourcentage dans l'écran de QBO (« Créer une facture »).
-   - QBO arrondit les taxes ligne par ligne, l'estimé sur le sous-total : un
-     écart de quelques cents est affiché comme un écart d'arrondi (toléré
-     jusqu'à 10 ¢, `JEU_ARRONDI` dans `facturation.ts`).
+   - QBO arrondit les taxes ligne par ligne ; l'estimé aussi depuis le
+     2026-10-10 (`totaux` dans `calcul.ts`). Un estimé figé avant peut garder
+     un cent d'écart, affiché comme écart d'arrondi (toléré jusqu'à 10 ¢,
+     `JEU_ARRONDI` dans `facturation.ts`).
 4. **Clés de production** (Keys & credentials → Production, après le
    questionnaire d'Intuit) :
    - Redirect URI : `https://<adresse de l'app en PROD>/api/qbo/retour` ;

@@ -194,7 +194,7 @@ Forfaits : **CN** = Classe nature, **JPA** = Journée plein air, **AG** = Accuei
 | P12 | Fournisseurs = coût × majoration :<br>• × 1,15, **transport compris** ;<br>• Mont-Blanc arrondi au dollar supérieur. | tous | ✔ Maxime : transport × 1,15 seulement (migration 20261008210842) |
 | P13 | Rabais = ligne négative (en montant ou en %), avant taxes. | tous | ✔ |
 | P14 | Minimums (30 personnes, 6 h, 20 billets…) : simple avertissement, pas de blocage. | tous | ⚠ |
-| P15 | TPS 5 % et TVQ 9,975 % sur le sous-total, **arrondies au cent**. | tous | ✔ taux / ⚠ arrondi : **QBO arrondit ligne par ligne** (vu en compagnie d'essai le 2026-10-10 : 1 ¢ d'écart sur 27-G-594). L'app tolère 10 ¢ d'écart d'arrondi ; à trancher avec la comptable : garder le sous-total (chiffrier, contrats) ou arrondir comme QBO. |
+| P15 | TPS 5 % et TVQ 9,975 % **ligne par ligne, arrondies au cent**, puis additionnées, comme QBO. | tous | ✔ taux. Arrondi : **on se colle à QBO** (Maxime, 2026-10-10). QBO arrondit ligne par ligne, codes standard compris (vérifié en compagnie d'essai) ; le chiffrier arrondissait sur le sous-total (1 ¢ d'écart possible). Un estimé figé avant garde ses totaux : écart d'arrondi toléré jusqu'à 10 ¢. |
 | P16 | Repas proposés d'après les heures (déjeuner 8 h, dîner 12 h, souper 17 h 30), modifiables. | tous | ⚠ |
 | P17 | Estimé automatique dès la demande :<br>• ratio par défaut **1:15** (le plus choisi) en CN ;<br>• en AG, sections libres proposées par l'app, envoi approuvé d'un clic. | CN, AG | ✔ (Maxime : « on peut commencer comme ça ») / ⚠ 1:15 |
 
@@ -435,7 +435,8 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - sans QBO relié, l'échéancier donne les montants à facturer à la main ;
    - échéancier convenu autrement (F2), minimum de 90 % à l'estimé final (F10, F11) et annulation (F16, F17) : bâtis le 2026-10-10 ;
    - essai réel, 2026-10-10 : devis 27-G-055 (numéro, lignes, TPS/TVQ au cent près, contrat signé et spécimen joints), facture séparée, note de crédit, PDF de QBO dans la fiche et sur la page client, devis des frais d'annulation (27-G-594, remis comme avant ensuite). Corrigés : pièces jointes jamais envoyées, factures sans numéro (numéros personnalisés activés : `AutoDocNumber`), taxes non recalculées à la mise à jour d'un devis (`TxnTaxDetail` vide), solde dû sans les crédits, relance « acomptes 1 et 2 » d'une réservation tardive fermée dès 25 % ;
-   - **reste** : dans QBO, « Créer une facture → 75 % » sur le devis 27-G-055 et un paiement (à faire par Maxime), puis « Mettre à jour depuis QBO » ; arrondi des taxes (P15) à trancher ; Q9 (un article QBO par produit) ; Opikawa (2e compagnie d'essai).
+   - essai suite, 2026-10-10 : « Créer une facture → 75 % » sur le devis 27-G-055 et paiement entrés dans QBO par Maxime, retrouvés par la synchro (facture progressive n° 1019 liée au devis, relance fermée, solde, PDF, page client) : la façon A marche sur un devis créé par l'API ; taxes de l'estimé arrondies ligne par ligne comme QBO (P15) ;
+   - **reste** : Q9 (un article QBO par produit) ; Opikawa (2e compagnie d'essai) ; avant la PROD, voir README §12.
 5. **Courriels automatiques.**
 6. **Google Agenda + Airbnb.**
 7. **Rapports.**

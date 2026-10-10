@@ -140,7 +140,7 @@ export function Facturation({ r }: { r: Reservation }) {
               </p>
               {ecartDevis !== 0 && !ecartReel(ecartDevis) && (
                 <p className="text-pierre-500">
-                  Écart d'arrondi de {argent(ecartDevis)} avec l'estimé ({argent(d.total_app)}) : QBO arrondit les taxes ligne par ligne. Sans conséquence.
+                  Écart d'arrondi de {argent(ecartDevis)} avec l'estimé ({argent(d.total_app)}) : estimé figé avant l'arrondi des taxes ligne par ligne. Sans conséquence.
                 </p>
               )}
               {ecartReel(ecartDevis) && (

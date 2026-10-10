@@ -372,11 +372,17 @@ export interface Totaux {
   total: number
 }
 
-/** TPS et TVQ sur le sous-total, chacune arrondie au cent. */
+/**
+ * TPS et TVQ ligne par ligne, chacune arrondie au cent, puis additionnées :
+ * comme QBO (vérifié en compagnie d'essai, codes standard compris), pour que
+ * le devis tombe juste. Décision de Maxime du 2026-10-10 ; le chiffrier, lui,
+ * arrondissait sur le sous-total (un cent d'écart possible avec ses PDF).
+ */
 export function totaux(lignes: Pick<LigneCalculee, 'montant'>[]): Totaux {
   const sous_total = arrondi2(lignes.reduce((t, l) => t + l.montant, 0))
-  const tps = arrondi2(sous_total * TPS)
-  const tvq = arrondi2(sous_total * TVQ)
+  const taxe = (taux: number) => arrondi2(lignes.reduce((t, l) => t + arrondi2(l.montant * taux), 0))
+  const tps = taxe(TPS)
+  const tvq = taxe(TVQ)
   return { sous_total, tps, tvq, total: arrondi2(sous_total + tps + tvq) }
 }
 

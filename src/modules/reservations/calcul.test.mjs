@@ -180,3 +180,11 @@ test('Petites règles', () => {
   ])
   assert.deepEqual(l.map((x) => x.montant), [1000, -100])
 })
+
+test('taxes ligne par ligne, comme QBO (vérifié en compagnie d’essai le 2026-10-10)', () => {
+  const l = (...montants) => montants.map((montant) => ({ montant }))
+  // Sur le sous-total, la TPS serait 347,54 $ ; QBO donne 347,55 $ (339,125 → 339,13 et 8,415 → 8,42).
+  assert.deepEqual(totaux(l(6782.5, 0, 168.3)), { sous_total: 6950.8, tps: 347.55, tvq: 693.34, total: 7991.69 })
+  // Ligne négative (rabais) : arrondie de façon symétrique, comme QBO.
+  assert.deepEqual(totaux(l(6782.5, 168.3, -168.3)), { sous_total: 6782.5, tps: 339.13, tvq: 676.55, total: 7798.18 })
+})

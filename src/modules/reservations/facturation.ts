@@ -192,10 +192,11 @@ export function lignesQbo(lignes: LigneApp[], article: (code: string | null) => 
 export const ecart = (totalQbo: number, totalApp: number) => arrondi2(Number(totalQbo) - Number(totalApp))
 
 /**
- * Écart d'arrondi toléré : QBO arrondit les taxes ligne par ligne, l'estimé
- * (comme le chiffrier) sur le sous-total (P15) ; vérifié en compagnie
- * d'essai, quelques cents au plus. Au-delà, c'est un vrai écart (code de
- * taxes, lignes changées dans QBO) : on ne facture pas avant de corriger.
+ * Écart d'arrondi toléré : l'estimé arrondit maintenant les taxes ligne par
+ * ligne comme QBO (P15, décision du 2026-10-10), mais un estimé figé avant
+ * (arrondi sur le sous-total) peut garder un cent d'écart. Au-delà, c'est un
+ * vrai écart (code de taxes, lignes changées dans QBO) : on ne facture pas
+ * avant de corriger.
  */
 export const JEU_ARRONDI = 0.1
 export const ecartReel = (e: number) => Math.abs(e) > JEU_ARRONDI
