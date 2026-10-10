@@ -10,6 +10,7 @@ import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, u
 import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
 import { ChoixOrganisation } from './ChoixOrganisation'
+import { CourrielsReservation } from './CourrielsClients'
 import { DemandeRecue } from './DemandeRecue'
 import { EspaceClient } from './EspaceClient'
 import { PuceEtape, Section } from './commun'
@@ -109,6 +110,7 @@ function Contenu({ r }: { r: Reservation }) {
           <Estime r={r} />
           <Facturation r={r} />
           <Documents r={r} />
+          <CourrielsReservation r={r} />
           <EspaceClient r={r} />
           <Suivi r={r} />
         </div>

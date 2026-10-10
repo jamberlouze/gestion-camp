@@ -127,7 +127,7 @@ async function relierClient(env, qbo, ctx, choix) {
 // Devis QBO
 // ------------------------------------------------------------------
 
-async function telecharger(env, chemin) {
+export async function telecharger(env, chemin) {
   const cle = env.SUPABASE_SECRET_KEY
   const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${SEAU}/${chemin.split('/').map(encodeURIComponent).join('/')}`, {
     headers: { apikey: cle, ...(cle?.startsWith('eyJ') ? { Authorization: `Bearer ${cle}` } : {}) },

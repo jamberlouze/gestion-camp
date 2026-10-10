@@ -5,7 +5,7 @@ import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { garderDocument, garderEstime, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
-import { useDocuments, useEstimes, useSignatures } from './donnees'
+import { preparerCourriels, useDocuments, useEstimes, useSignatures } from './donnees'
 import { dateCourte, dateLongue } from './format'
 import type { Reservation } from './types'
 
@@ -58,7 +58,11 @@ export function Documents({ r }: { r: Reservation }) {
       })
       if (!ok) return
     }
-    await agir('contrat', () => preparerContrat(sources(r), accepte, modeleContrat))
+    await agir('contrat', async () => {
+      await preparerContrat(sources(r), accepte, modeleContrat)
+      // Le courriel « contrat à signer », tout de suite.
+      await preparerCourriels(r.id).catch(() => {})
+    })
   }
 
   return (
@@ -126,7 +130,7 @@ export function Documents({ r }: { r: Reservation }) {
                 </a>
               </div>
               <p className="text-xs text-pierre-500">
-                Lien à envoyer au client (l'envoi automatique par courriel viendra plus tard). Il voit le contrat, coche « J'accepte », écrit son nom et signe.
+                Lien envoyé au client par le courriel « Contrat à signer » (Courriels, plus bas). Il voit le contrat, coche « J'accepte », écrit son nom et signe.
               </p>
             </div>
           )}

@@ -12,7 +12,7 @@ const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 
 export function dateLongue(jour: string | null | undefined) {
   if (!jour) return '—'
   const [a, m, j] = jour.slice(0, 10).split('-').map(Number)
-  return `${j} ${MOIS[m - 1]} ${a}`
+  return `${j === 1 ? '1er' : j} ${MOIS[m - 1]} ${a}`
 }
 
 /** « 13 mai » (avec l'année si elle diffère de `auj`). */

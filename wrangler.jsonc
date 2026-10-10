@@ -37,7 +37,12 @@
     "SUBVENTIONS_MODELE": "claude-opus-5-5",
     // QuickBooks Online : « sandbox » (compagnie d'essai) tant que l'app
     // Intuit n'a pas ses clés de production, puis « production ».
-    "QBO_ENVIRONNEMENT": "sandbox"
+    "QBO_ENVIRONNEMENT": "sandbox",
+    // Courriels aux clients des Réservations : expéditeur (boîte autorisée
+    // par GMAIL_INSCRIPTIONS_REFRESH_TOKEN). HOTE_PUBLIC (sous-domaine des
+    // pages publiques, ex. groupes.camptremblant.com) s'ajoutera ici ; sans
+    // lui, les liens des courriels pointent vers APP_URL.
+    "COURRIELS_EXPEDITEUR": "inscriptions@camptremblant.com"
   },
   "observability": { "enabled": true }
 }

@@ -29,8 +29,8 @@ const erreur = (e) => {
   return json({ erreur: message, code }, statut)
 }
 
-/** Session de l'équipe : { ok, nom } d'après reservations.peut_facturer. */
-async function session(request, env) {
+/** Session de l'équipe : { ok, nom } d'après reservations.peut_facturer (droit d'écrire dans Réservations). */
+export async function session(request, env) {
   const jeton = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!jeton) return null
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/peut_facturer`, {

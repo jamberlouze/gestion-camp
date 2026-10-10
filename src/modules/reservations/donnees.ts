@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type {
   Compagnie,
+  Courriel,
   DemandeRecue,
   DocumentPdf,
   EntreeJournal,
@@ -12,6 +13,7 @@ import type {
   FicheParticipant,
   Ligne,
   Modele,
+  ModeleCourriel,
   Prix,
   Produit,
   QboConnexion,
@@ -462,13 +464,16 @@ export function useSupprimerFiche() {
 // ------------------------------------------------------------------
 
 /** Appel au Worker QBO avec la session ; lève une erreur lisible. */
-export async function appelerQbo<T = unknown>(chemin: string, corps?: unknown): Promise<T> {
+export const appelerQbo = <T = unknown>(chemin: string, corps?: unknown) => appelerWorker<T>(`/api/qbo/${chemin}`, corps)
+
+/** Route de l'équipe du Worker (jeton de session) : QBO, courriels. */
+export async function appelerWorker<T = unknown>(adresse: string, corps?: unknown): Promise<T> {
   const { data } = await supabase.auth.getSession()
   const jeton = data.session?.access_token
   if (!jeton) throw new Error('Session expirée : reconnectez-vous.')
   let res: Response
   try {
-    res = await fetch(`/api/qbo/${chemin}`, {
+    res = await fetch(adresse, {
       method: corps === undefined ? 'GET' : 'POST',
       headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
       body: corps === undefined ? undefined : JSON.stringify(corps),
@@ -549,5 +554,88 @@ export function useActionQbo<V, R = unknown>(chemin: string) {
       Promise.all(
         [['reservations', 'qbo_devis'], ['reservations', 'factures'], ['reservations', 'qbo-connexions'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey })),
       ),
+  })
+}
+
+// ------------------------------------------------------------------
+// Courriels aux clients (phase 5)
+// ------------------------------------------------------------------
+
+export const useModelesCourriels = () => useTable<ModeleCourriel>('modeles_courriels', 'genre')
+
+export function useCourriels(reservationId: string) {
+  const cle = ['reservations', 'courriels', reservationId]
+  useTempsReel('courriels', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('courriels').select('*').eq('reservation_id', reservationId).order('prepare_le')
+      if (error) throw error
+      return data as Courriel[]
+    },
+  })
+}
+
+/** Courriels préparés de toutes les réservations (à approuver), puis les derniers envoyés. */
+export function useCourrielsOnglet() {
+  const cle = ['reservations', 'courriels', 'onglet']
+  useTempsReel('courriels', cle)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const choix = '*, reservation:reservations(numero, nom)'
+      const [prepares, envoyes] = await Promise.all([
+        db().from('courriels').select(choix).eq('statut', 'prepare').order('prepare_le'),
+        db().from('courriels').select(choix).eq('statut', 'envoye').order('envoye_le', { ascending: false }).limit(40),
+      ])
+      if (prepares.error) throw prepares.error
+      if (envoyes.error) throw envoyes.error
+      return { prepares: prepares.data as Courriel[], envoyes: envoyes.data as Courriel[] }
+    },
+  })
+}
+
+/** Destinataires, sujet, texte d'un courriel préparé, ou son annulation (erreurs affichées sur place). */
+export function useModifierCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'courriels', 'modifier'],
+    networkMode: 'always',
+    mutationFn: async ({ id, champs }: { id: string; champs: Partial<Pick<Courriel, 'a' | 'cc' | 'sujet' | 'corps' | 'statut' | 'raison'>> }) => {
+      const { error } = await db().from('courriels').update(champs).eq('id', id).eq('statut', 'prepare')
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'courriels'] }),
+  })
+}
+
+export function useModifierModeleCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'modeles_courriels', 'modifier'],
+    networkMode: 'always',
+    mutationFn: async ({ genre, champs }: { genre: string; champs: Partial<Omit<ModeleCourriel, 'genre'>> }) => {
+      const { error } = await db().from('modeles_courriels').update(champs).eq('genre', genre)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'modeles_courriels'] }),
+  })
+}
+
+export type ModeEnvoi = 'mailpit' | 'gmail' | 'bloque' | 'non_configure'
+
+/** Prépare tout de suite les courriels dus (une réservation, ou toutes). */
+export const preparerCourriels = (reservation?: string) =>
+  appelerWorker<{ prepares: number; annules: number; envoi: ModeEnvoi }>('/api/reservations/preparer', reservation ? { reservation } : {})
+
+/** Envoi d'un courriel préparé par le Worker (inscriptions@ ; Mailpit en DEV). */
+export function useEnvoyerCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'courriels', 'envoyer'],
+    networkMode: 'always',
+    mutationFn: (id: string) => appelerWorker<{ ok: boolean; mode: ModeEnvoi }>('/api/reservations/envoyer', { courriel: id }),
+    onSettled: () =>
+      Promise.all([['reservations', 'courriels'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey }))),
   })
 }

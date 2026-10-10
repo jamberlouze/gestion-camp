@@ -8,7 +8,7 @@ import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { garderEstime, ouvrirPdf, pdfDeLEstime } from './productionPdf'
 import { argent, champPetit, dateLongue } from './format'
-import { useChangerEstime, useEnregistrerEstime, useEstimes, useLignes, type LigneAEcrire } from './donnees'
+import { preparerCourriels, useChangerEstime, useEnregistrerEstime, useEstimes, useLignes, type LigneAEcrire } from './donnees'
 import { CODE_MINIMUM, estimeDeReference, minimum90 } from './facturation'
 import { CATEGORIES, UNITES, type Estime as TEstime, type Reservation, type StatutEstime } from './types'
 
@@ -158,7 +158,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
     if (a === 'envoyer') {
       const ok = await confirmer({
         titre: `Marquer l'estimé v${estime.version} comme envoyé ?`,
-        message: "Il sera figé et son PDF gardé dans les documents : pour le changer ensuite, on en fait une nouvelle version. (L'envoi par courriel au client viendra plus tard.)",
+        message: "Il sera figé et son PDF gardé dans les documents : pour le changer ensuite, on en fait une nouvelle version. Le courriel au client (PDF joint, lien pour l'accepter en ligne) se prépare dans Courriels, plus bas.",
         libelleOk: 'Marquer envoyé',
         danger: false,
       })
@@ -172,9 +172,12 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
             if (a === 'nouvelle_version') choisir(id)
             // L'estimé envoyé est gardé en PDF (preuve de ce que le client a reçu).
             if (a === 'envoyer')
-              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' }).catch((e) =>
-                setPdf(`Estimé marqué envoyé, mais son PDF n'a pas été gardé (${messageErreur(e)}) : refaites-le avec « Garder le PDF » dans Documents.`),
-              )
+              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' })
+                // Le courriel de l'estimé, tout de suite (sans attendre le passage aux 15 minutes).
+                .then(() => preparerCourriels(r.id).catch(() => {}))
+                .catch((e) =>
+                  setPdf(`Estimé marqué envoyé, mais son PDF n'a pas été gardé (${messageErreur(e)}) : refaites-le avec « Garder le PDF » dans Documents.`),
+                )
           },
         },
       )

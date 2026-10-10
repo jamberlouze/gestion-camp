@@ -372,6 +372,31 @@ sont chiffrés (`QBO_CLE`) et jamais lisibles par l'app.
 Changer `QBO_CLE` rend les jetons gardés illisibles : il faut alors
 reconnecter les compagnies.
 
+### 13. Réservations : courriels aux clients (inscriptions@)
+
+Les courriels aux groupes (accusé, estimé, contrat, factures, rappels,
+pré-arrivée, suivi : plan des réservations, §9) partent de
+**inscriptions@camptremblant.com** par l'API Gmail : ils apparaissent dans
+ses « Envoyés ». Le Worker les prépare aux 15 minutes ; par défaut, chacun
+attend un clic (Réservations › Courriels, ou la fiche).
+
+- **DEV** : `COURRIELS_MAILPIT=http://127.0.0.1:54324` dans `.dev.vars`. Tout
+  arrive dans Mailpit (http://localhost:54324), jamais chez un client (les
+  clients importés ont leurs vrais courriels). Sans cette ligne, une base
+  locale refuse tout envoi.
+- **PROD**, une seule fois :
+  1. le client OAuth « interne » de la section 8 sert aussi ici
+     (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`) ;
+  2. [OAuth Playground](https://developers.google.com/oauthplayground), comme à
+     l'étape 5 de la section 8, mais **connecté avec inscriptions@** →
+     **Refresh token** → secret Cloudflare `GMAIL_INSCRIPTIONS_REFRESH_TOKEN` ;
+  3. `wrangler.jsonc` : `COURRIELS_EXPEDITEUR` (déjà inscriptions@) ; ajouter
+     `HOTE_PUBLIC` (sous-domaine des pages publiques, section 11) pour que les
+     liens des courriels y mènent, sinon ils pointent vers `APP_URL`.
+- Mise en service : le réglage `courriels_depuis` (posé par la migration, au
+  jour où elle passe) ; aucun courriel pour un événement plus ancien, donc
+  pas d'envoi en masse aux réservations importées.
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,

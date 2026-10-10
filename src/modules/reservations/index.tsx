@@ -7,6 +7,7 @@ import { useContacts, useOrganisations } from '@/modules/crm/donnees'
 import { useAuth } from '@/shell/auth'
 import { aujourdhui } from '@/shell/pokes'
 import { Catalogue } from './Catalogue'
+import { OngletCourriels } from './CourrielsClients'
 import { ContexteReservations, fabriquerPrixDe, type Donnees } from './contexte'
 import { lireReglages } from './parametres'
 import {
@@ -143,6 +144,9 @@ export default function ModuleReservations() {
         <NavLink to="/reservations/catalogue" className={onglet}>
           Catalogue et prix
         </NavLink>
+        <NavLink to="/reservations/courriels" className={onglet}>
+          Courriels
+        </NavLink>
         <NavLink to="/reservations/modeles" className={onglet}>
           Modèles et compagnies
         </NavLink>
@@ -162,6 +166,7 @@ export default function ModuleReservations() {
             <Route index element={<Liste />} />
             <Route path="r/:id" element={<Fiche />} />
             <Route path="catalogue" element={<Catalogue />} />
+            <Route path="courriels" element={<OngletCourriels />} />
             <Route path="modeles" element={<Modeles />} />
             <Route path="reglages" element={<Reglages />} />
             <Route path="*" element={<Navigate to="/reservations" replace />} />

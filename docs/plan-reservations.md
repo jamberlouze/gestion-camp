@@ -328,7 +328,17 @@ Le SOP de la comptable dit : Excel pour calculer et négocier, QBO dès que le d
 
 ## 9. Courriels automatiques
 
-Tous les courriels partent de **inscriptions@camptremblant.com**, par l'API Gmail déjà en place : ils apparaissent dans ses « Envoyés ». Chaque envoi est noté dans le journal de la réservation et dans le CRM. Les modèles sont modifiables dans Réglages. Chaque courriel peut être mis en mode « automatique » ou « préparé, à approuver d'un clic ».
+Tous les courriels partent de **inscriptions@camptremblant.com**, par l'API Gmail déjà en place : ils apparaissent dans ses « Envoyés ». Chaque envoi est noté dans le journal de la réservation et dans le CRM. Les modèles sont modifiables (onglet Courriels). Chaque courriel peut être mis en mode « automatique » ou « préparé, à approuver d'un clic ».
+
+**Bâti en DEV le 2026-10-10 (phase 5).** Réponses de Maxime : inscriptions@ est une vraie boîte ; **tout à approuver d'un clic au départ** (chaque type passe en automatique dans l'onglet Courriels quand on a confiance) ; tout le tableau ; pas de sondage pour l'instant. Décisions prises seul :
+- l'estimé part quand il est **marqué envoyé** (pas dès la demande : la demande arrive « À valider ») ; le contrat, quand il est **préparé** (lien de signature) ;
+- la facture finale = la facture progressive qui atteint le total du devis ; les factures séparées partent comme les acomptes ;
+- rappels de paiement : 3 jours avant l'échéance et à l'échéance ; facture payable sur réception : 7 jours après ; l'acompte 2 est dû 21 jours avant l'arrivée (F4) même si QBO le dit payable sur réception ;
+- pré-arrivée et rappel des fiches : Classe nature et Journée plein air (les seuls qui ont une pré-arrivée) ; le rappel ne part qu'après la pré-arrivée ; réservation signée après J−30 : pré-arrivée à la signature ;
+- destinataires : le responsable de la réservation ; factures et rappels au responsable de la facturation, copie au responsable ; contrat et rappel de signature, copie au courriel de la direction ; accusé à qui a rempli la demande ;
+- un courriel par événement, jamais deux (même annulé) ; un courriel préparé qui ne sert plus (estimé accepté, contrat signé, facture payée) est annulé tout seul (« plus nécessaire ») ;
+- mise en service (`courriels_depuis`) : rien pour un événement plus ancien ;
+- la pré-arrivée ne peut pas encore partir seule : son PDF est produit dans le navigateur au moment du clic.
 
 | Courriel | Déclencheur | Mode par défaut |
 |---|---|---|
@@ -437,7 +447,11 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - essai réel, 2026-10-10 : devis 27-G-055 (numéro, lignes, TPS/TVQ au cent près, contrat signé et spécimen joints), facture séparée, note de crédit, PDF de QBO dans la fiche et sur la page client, devis des frais d'annulation (27-G-594, remis comme avant ensuite). Corrigés : pièces jointes jamais envoyées, factures sans numéro (numéros personnalisés activés : `AutoDocNumber`), taxes non recalculées à la mise à jour d'un devis (`TxnTaxDetail` vide), solde dû sans les crédits, relance « acomptes 1 et 2 » d'une réservation tardive fermée dès 25 % ;
    - essai suite, 2026-10-10 : « Créer une facture → 75 % » sur le devis 27-G-055 et paiement entrés dans QBO par Maxime, retrouvés par la synchro (facture progressive n° 1019 liée au devis, relance fermée, solde, PDF, page client) : la façon A marche sur un devis créé par l'API ; taxes de l'estimé arrondies ligne par ligne comme QBO (P15) ;
    - **reste** : Q9 (un article QBO par produit) ; Opikawa (2e compagnie d'essai) ; avant la PROD, voir README §12.
-5. **Courriels automatiques.**
+5. **Courriels automatiques** — **bâtie en DEV le 2026-10-10**, pas en PROD :
+   - les 10 courriels du §9, préparés par le Worker aux 15 minutes (et tout de suite depuis la fiche), à approuver d'un clic : onglet **Courriels** (à approuver, derniers envoyés, modèles français et anglais, mode de chaque type) et section Courriels de la fiche ;
+   - pièces jointes : PDF de l'estimé, de la pré-arrivée et des factures (QBO) ; chaque envoi au journal et dans les échanges du CRM ;
+   - essais dans Mailpit : facture 1019 (27-G-055), contrat (27-G-592), pré-arrivée (27-G-594), estimé (27-G-593) ;
+   - reste pour la PROD : jeton Gmail d'inscriptions@ et `HOTE_PUBLIC` (README, section 13).
 6. **Google Agenda + Airbnb.**
 7. **Rapports.**
 8. **Bascule avec l'équipe** : import 2026-27, Jotform, Sheets et chiffrier retirés, Airtable fermé.

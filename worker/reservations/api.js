@@ -9,15 +9,20 @@
 //        privé (le client n'a jamais la clé ni un lien permanent).
 //   GET  /api/reservations/facture?jeton=…&id=… : PDF officiel d'une facture
 //        QBO de la page client.
+// Routes de l'équipe (jeton de session + droit d'écrire dans Réservations) :
+//   POST /api/reservations/preparer {reservation} : courriels dus préparés
+//        tout de suite (sans attendre le cron) ; renvoie aussi le mode d'envoi ;
+//   POST /api/reservations/envoyer {courriel} : envoie un courriel préparé.
 //
 // Secrets : SUPABASE_SECRET_KEY et TURNSTILE_SECRET (Cloudflare en PROD,
 // .dev.vars en DEV).
 
 import { aujourdhui, erreurs, nettoyer, REPONSES_VIDES, versReservation } from '../../src/modules/reservations/demande.ts'
 import { lireReglages } from '../../src/modules/reservations/parametres.ts'
-import { pdf } from '../qbo/api.js'
+import { pdf, session } from '../qbo/api.js'
 import { qboConfigure } from '../qbo/oauth.js'
 import { base } from '../subventions/base.js'
+import { envoyerCourriel, ErreurCourriel, modeEnvoi, preparerCourriels } from './courriels.js'
 
 const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
@@ -72,6 +77,8 @@ async function recevoirDemande(request, env) {
       p_reservation: versReservation(reponses, reglages),
       p_demande: { cle, langue, reponses, adresse_ip: ip, navigateur: request.headers.get('User-Agent') ?? '' },
     })
+    // Accusé de réception préparé tout de suite (envoyé seul s'il est en mode automatique).
+    if (res.id && !res.deja) await preparerCourriels(env, res.id).catch((e) => console.error('Accusé non préparé :', e))
     return json({ ok: true, numero: res.numero })
   } catch (e) {
     console.error('Demande de réservation non enregistrée :', e)
@@ -125,5 +132,28 @@ export async function routeReservations(request, env, chemin) {
   if (chemin === 'demande' && request.method === 'POST') return recevoirDemande(request, env)
   if (chemin === 'document' && request.method === 'GET') return documentClient(url, env)
   if (chemin === 'facture' && request.method === 'GET') return factureClient(url, env)
+  if ((chemin === 'preparer' || chemin === 'envoyer') && request.method === 'POST') return routeCourriels(request, env, chemin)
   return json({ erreur: 'introuvable' }, 404)
+}
+
+async function routeCourriels(request, env, chemin) {
+  const s = await session(request, env)
+  if (!s) return json({ erreur: 'Accès refusé.' }, 403)
+  let corps = {}
+  try {
+    corps = await request.json()
+  } catch {
+    // Corps vide : erreur plus bas.
+  }
+  const uuid = (v) => /^[0-9a-f-]{36}$/i.test(String(v ?? ''))
+  try {
+    if (chemin === 'preparer') {
+      if (corps.reservation !== undefined && !uuid(corps.reservation)) return json({ erreur: 'Réservation inconnue.' }, 400)
+      return json({ ...(await preparerCourriels(env, corps.reservation ?? null)), envoi: modeEnvoi(env) })
+    }
+    if (!uuid(corps.courriel)) return json({ erreur: 'Courriel inconnu.' }, 400)
+    return json(await envoyerCourriel(env, corps.courriel, s.nom))
+  } catch (e) {
+    return json({ erreur: e.message, code: e.code ?? 'erreur' }, e instanceof ErreurCourriel ? 409 : 502)
+  }
 }

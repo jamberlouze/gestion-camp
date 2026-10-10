@@ -1,5 +1,6 @@
 // Types du module Réservations (tables du schéma `reservations`).
 
+import type { GenreCourriel, ModeleCourriel } from './courriels'
 import type { Reponses } from './demande'
 
 export type Forfait = 'classe_nature' | 'journee_plein_air' | 'accueil_groupe' | 'location_salle'
@@ -366,6 +367,7 @@ export interface Compagnie {
 }
 
 export type GenreModele = 'contrat' | 'pre_arrivee'
+export type { GenreCourriel, ModeleCourriel }
 
 export interface Modele {
   id: string
@@ -526,6 +528,30 @@ export interface QboDevis {
   cree_le: string
   cree_par_nom: string | null
   maj_le: string
+}
+
+/** Courriel aux clients (phase 5) : préparé, puis envoyé d'un clic ou annulé. */
+export interface Courriel {
+  id: string
+  reservation_id: string
+  genre: GenreCourriel
+  cle: string
+  ref: string | null
+  statut: 'prepare' | 'envoye' | 'annule'
+  langue: 'fr' | 'en'
+  a: string[]
+  cc: string[]
+  sujet: string
+  corps: string
+  prepare_le: string
+  envoye_le: string | null
+  envoye_par_nom: string | null
+  annule_le: string | null
+  annule_par_nom: string | null
+  raison: string | null
+  erreur: string | null
+  /** Avec la réservation (listes de l'onglet Courriels). */
+  reservation?: { numero: string; nom: string } | null
 }
 
 export type GenreFacture = 'progressive' | 'separee' | 'note_credit'

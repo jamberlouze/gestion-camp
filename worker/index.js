@@ -19,6 +19,7 @@
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
+import { preparerCourriels } from "./reservations/courriels.js";
 import { routeQbo } from "./qbo/api.js";
 import { qboConfigure } from "./qbo/oauth.js";
 import { synchroniserTout as synchroQbo } from "./qbo/operations.js";
@@ -59,6 +60,8 @@ export default {
     if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
     // Factures et soldes de QuickBooks Online (rien tant que l'app Intuit n'est pas configurée).
     if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
+    // Courriels aux clients des Réservations : préparés (et envoyés, pour les types en mode automatique).
+    ctx.waitUntil(preparerCourriels(env).catch((e) => console.error("Courriels non préparés :", e)));
   },
 
   async fetch(request, env, ctx) {

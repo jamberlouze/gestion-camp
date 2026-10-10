@@ -150,6 +150,9 @@ function simuler({ turnstile = true } = {}) {
     if (u.includes('turnstile')) return Response.json({ success: turnstile })
     if (u.includes('/rest/v1/reglages')) return Response.json([{ cle: 'ratio_defaut', valeur: '1:10' }])
     if (u.includes('/rest/v1/rpc/recevoir_demande')) return Response.json({ id: 'x', numero: '27-G-200', deja: false })
+    // Accusé de réception préparé tout de suite (phase 5) : rien à préparer ici.
+    if (u.includes('/rest/v1/rpc/courriels_etat')) return Response.json([])
+    if (u.includes('/rest/v1/modeles_courriels') || u.includes('/rest/v1/compagnies') || u.includes('/rest/v1/reglages')) return Response.json([])
     throw new Error(`Appel inattendu : ${u}`)
   }
   return appels
