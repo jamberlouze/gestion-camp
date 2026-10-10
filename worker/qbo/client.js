@@ -33,10 +33,12 @@ function corpsPieceJointe(meta, nom, type, octets) {
       `--${frontiere}\r\nContent-Disposition: form-data; name="file_content_01"; filename="${nom.replace(/"/g, '')}"\r\nContent-Type: ${type}\r\n\r\n`,
   )
   const fin = t.encode(`\r\n--${frontiere}--\r\n`)
-  const corps = new Uint8Array(debut.length + octets.length + fin.length)
+  // ArrayBuffer (fichier téléchargé) ou Uint8Array : seul le second a .length.
+  const fichier = octets instanceof Uint8Array ? octets : new Uint8Array(octets)
+  const corps = new Uint8Array(debut.length + fichier.length + fin.length)
   corps.set(debut, 0)
-  corps.set(new Uint8Array(octets), debut.length)
-  corps.set(fin, debut.length + octets.length)
+  corps.set(fichier, debut.length)
+  corps.set(fin, debut.length + fichier.length)
   return { corps, type: `multipart/form-data; boundary=${frontiere}` }
 }
 

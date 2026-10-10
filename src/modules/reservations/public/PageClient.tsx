@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ui } from '@/lib/ui'
 import { heureLisible, remplacer } from '../demande'
+import { bilanFactures } from '../facturation'
 import type { Forfait } from '../types'
 import { db, messageDe } from './client'
 import { Entete, Page, Pied } from './commun'
@@ -256,9 +257,12 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
 
       {e.statut === 'accepte' ? (
         <p className="mt-4 text-sm font-medium text-foret-800">
-          {e.accepte_par
-            ? remplacer(t.estime_accepte, { n: e.accepte_par, d: dateLisible((e.accepte_le ?? '').slice(0, 10), langue) })
-            : remplacer(t.estime_accepte_court, { d: dateLisible((e.accepte_le ?? '').slice(0, 10), langue) })}
+          {/* Estimé importé des Sheets : accepté sans nom ni date. */}
+          {!e.accepte_le
+            ? t.estime_accepte_seul
+            : e.accepte_par
+              ? remplacer(t.estime_accepte, { n: e.accepte_par, d: dateLisible(e.accepte_le.slice(0, 10), langue) })
+              : remplacer(t.estime_accepte_court, { d: dateLisible(e.accepte_le.slice(0, 10), langue) })}
         </p>
       ) : (
         !infos.fermeture && (
@@ -330,7 +334,7 @@ function Factures({ jeton, langue, version }: { jeton: string; langue: 'fr' | 'e
     }
   }, [jeton, version])
   if (!liste.length) return null
-  const solde = liste.filter((f) => f.genre !== 'note_credit').reduce((s, f) => s + Number(f.solde), 0)
+  const { solde } = bilanFactures(liste.map((f) => ({ ...f, qbo_type: f.genre === 'note_credit' ? 'CreditMemo' : 'Invoice' })))
   return (
     <section className={`${ui.carte} p-5`}>
       <h2 className="mb-2 text-lg font-semibold">{t.factures}</h2>
@@ -346,7 +350,7 @@ function Factures({ jeton, langue, version }: { jeton: string; langue: 'fr' | 'e
               {f.genre !== 'note_credit' && (
                 <span className={Number(f.solde) > 0 ? 'text-pierre-700' : 'text-foret-700'}>
                   {Number(f.solde) > 0
-                    ? `${remplacer(t.solde_du, { m: dollars(f.solde, langue) })} · ${f.echeance ? remplacer(t.echeance_le, { d: dateLisible(f.echeance, langue) }) : t.sur_reception}`
+                    ? `${remplacer(t.solde_du, { m: dollars(f.solde, langue) })} · ${f.echeance && f.echeance > (f.date_facture ?? '') ? remplacer(t.echeance_le, { d: dateLisible(f.echeance, langue) }) : t.sur_reception}`
                     : t.payee}
                 </span>
               )}

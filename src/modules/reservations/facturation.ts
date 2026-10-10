@@ -154,6 +154,27 @@ export function lignesQbo(lignes: LigneApp[], article: (code: string | null) => 
 /** Le total de QBO et celui de l'app diffèrent-ils (au cent près) ? */
 export const ecart = (totalQbo: number, totalApp: number) => arrondi2(Number(totalQbo) - Number(totalApp))
 
+/**
+ * Bilan des factures d'une réservation, comme le solde du client dans QBO :
+ * une note de crédit appliquée baisse le solde d'une facture sans être un
+ * paiement ; celle qui n'est pas encore appliquée se retranche du solde.
+ * Solde négatif = crédit au client (à rembourser ou à appliquer).
+ */
+export function bilanFactures(liste: { qbo_type: string; total: number | string; solde: number | string }[]) {
+  const somme = (type: string, champ: 'total' | 'solde') =>
+    arrondi2(liste.filter((f) => f.qbo_type === type).reduce((t, f) => t + Number(f[champ]), 0))
+  const facture = somme('Invoice', 'total')
+  const soldeFactures = somme('Invoice', 'solde')
+  const credits = somme('CreditMemo', 'total')
+  const creditsDisponibles = somme('CreditMemo', 'solde')
+  return {
+    facture,
+    credits,
+    paye: arrondi2(facture - soldeFactures - (credits - creditsDisponibles)),
+    solde: arrondi2(soldeFactures - creditsDisponibles),
+  }
+}
+
 export interface OrganisationQbo {
   nom: string
   adresse: string | null

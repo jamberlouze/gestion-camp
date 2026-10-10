@@ -238,6 +238,8 @@ export async function document(env, reservationId, genre, lignesBrutes, note) {
   const entite = genre === 'note_credit' ? 'CreditMemo' : 'Invoice'
   const resultat = await qbo.creer(entite, {
     CustomerRef: { value: ctx.lien.qbo_id },
+    // Numéros personnalisés activés (pour le devis) : sans ça, la facture n'aurait pas de numéro (Q10).
+    AutoDocNumber: true,
     TxnDate: aujourdhui(),
     GlobalTaxCalculation: 'TaxExcluded',
     Line: lignesQbo(lignes, articleDe(produits, compagnie), reglages.taxes),

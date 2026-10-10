@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { clientQbo as payloadClient, echeancier, lignesQbo, tachesFacturation } from '../../src/modules/reservations/facturation.ts'
+import { bilanFactures, clientQbo as payloadClient, echeancier, lignesQbo, tachesFacturation } from '../../src/modules/reservations/facturation.ts'
 import { chiffrer, dechiffrer, signer, verifier } from './chiffre.js'
 import { routeQbo } from './api.js'
 import { lireCdc, normaliser } from './operations.js'
@@ -113,6 +113,15 @@ test('CDC : factures liées au devis, supprimées, notes de crédit', () => {
   assert.equal(normaliser('CreditMemo', changes.CreditMemo[0]).solde, 50)
 })
 
+test('bilan des factures : crédit non appliqué retranché, crédit appliqué pas compté comme paiement', () => {
+  const facture = (solde) => ({ qbo_type: 'Invoice', total: 141.93, solde })
+  const credit = (solde) => ({ qbo_type: 'CreditMemo', total: 57.49, solde })
+  assert.deepEqual(bilanFactures([facture(141.93), credit(57.49)]), { facture: 141.93, credits: 57.49, paye: 0, solde: 84.44 })
+  assert.deepEqual(bilanFactures([facture(84.44), credit(0)]), { facture: 141.93, credits: 57.49, paye: 0, solde: 84.44 })
+  assert.deepEqual(bilanFactures([facture(0), credit(0)]), { facture: 141.93, credits: 57.49, paye: 84.44, solde: 0 })
+  assert.equal(bilanFactures([facture(0), { qbo_type: 'CreditMemo', total: 200, solde: '200' }]).solde, -200)
+})
+
 // ------------------------------------------------------------------
 // Création du devis, réseau simulé (Supabase + QuickBooks)
 // ------------------------------------------------------------------
@@ -122,7 +131,7 @@ afterEach(() => {
   globalThis.fetch = fetchOriginal
 })
 
-async function simuler({ lien = null, devisExistant = null } = {}) {
+async function simuler({ lien = null, devisExistant = null, pieces = false } = {}) {
   const jetons = await chiffrer(env, { access: 'AT', refresh: 'RT', access_expire: Date.now() + 3_600_000 })
   const appels = []
   const rep = (corps, status = 200) => new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json' } })
@@ -132,7 +141,7 @@ async function simuler({ lien = null, devisExistant = null } = {}) {
     appels.push({ u, m, corps: init.body })
     if (u.endsWith('/rpc/peut_facturer')) return rep({ ok: true, nom: 'Adjointe' })
     if (u.includes('/rest/v1/reservations?id=eq.')) return rep([{ id: 'r1', numero: '27-G-592', nom: 'École', compagnie_id: 'c1', organisation_id: 'o1', contact_reservation_id: 'k1', contact_facturation_id: null, forfait: 'classe_nature', signe_le: '2026-10-09', date_arrivee: '2027-05-19', date_depart: '2027-05-21' }])
-    if (u.includes('/rest/v1/compagnies?')) return rep([{ entreprise_id: 'c1', nom_court: 'GBPA+', annexes: [], qbo: { article: { id: '1', nom: 'Services' }, taxes: { id: '9', nom: 'TPS/TVQ QC' }, terme: { id: '3', nom: 'Sur réception' } } }])
+    if (u.includes('/rest/v1/compagnies?')) return rep([{ entreprise_id: 'c1', nom_court: 'GBPA+', annexes: pieces ? [{ titre: 'Spécimen chèque', chemin: 'compagnies/c1/specimen.pdf' }] : [], qbo: { article: { id: '1', nom: 'Services' }, taxes: { id: '9', nom: 'TPS/TVQ QC' }, terme: { id: '3', nom: 'Sur réception' } } }])
     if (u.includes('/rest/v1/organisations?')) return rep([{ id: 'o1', nom: 'École des Érables', adresse: '1 rue', ville: 'Laval', province: 'QC', code_postal: 'H7A 1A1', telephone: null }])
     if (u.includes('/rest/v1/contacts?')) return rep([{ id: 'k1', nom: 'Sophie', courriel: 'sophie@x.ca', telephone: '450' }])
     if (u.includes('/rest/v1/qbo_clients?') && m === 'GET') return rep(lien ? [lien] : [])
@@ -142,9 +151,17 @@ async function simuler({ lien = null, devisExistant = null } = {}) {
     if (u.includes('/rest/v1/estimes?')) return rep([{ id: 'e1', version: 1, total: 15553.02, accepte_par: 'Sophie', accepte_le: '2026-10-09T12:00:00Z' }])
     if (u.includes('/rest/v1/lignes?')) return rep([{ code: 'CN-N', description: 'Forfait', note: null, quantite: 48, prix_unitaire: 271.3, montant: 13022.4, auto: true }, { code: 'GRAT', description: 'Gratuité', note: null, quantite: 2, prix_unitaire: 0, montant: 0, auto: true }])
     if (u.includes('/rest/v1/produits?')) return rep([{ code: 'CN-N', qbo_articles: { c1: { id: '7', nom: 'Classe nature' } } }])
-    if (u.includes('/rest/v1/documents?')) return rep([])
+    if (u.includes('/rest/v1/documents?')) return rep(pieces ? [{ titre: 'Contrat 27-G-592 signé', chemin: 'r1/contrat_signe.pdf' }] : [])
+    if (u.includes('/storage/v1/object/reservations-documents/')) return new Response(new TextEncoder().encode('%PDF-essai'), { headers: { 'content-type': 'application/pdf' } })
+    if (u.includes('sandbox-quickbooks.api.intuit.com') && u.includes('/upload') && m === 'POST') return rep({ AttachableResponse: [{ Attachable: { Id: '1' } }] })
     if (u.includes('/rest/v1/qbo_connexions?')) return rep(m === 'GET' ? [{ compagnie_id: 'c1', realm_id: '999', environnement: 'sandbox', jetons }] : [])
     if (u.includes('/rest/v1/rpc/qbo_taches')) return rep(null)
+    if (u.includes('/rest/v1/rpc/qbo_recevoir_factures')) return rep(1)
+    if (u.includes('sandbox-quickbooks.api.intuit.com') && /\/(invoice|creditmemo)\?/.test(u) && m === 'POST') {
+      const x = JSON.parse(init.body)
+      const corps = { Id: '77', DocNumber: x.AutoDocNumber ? '1017' : undefined, TxnDate: x.TxnDate, TotalAmt: 141.93, Balance: 141.93 }
+      return rep(u.includes('/creditmemo') ? { CreditMemo: corps } : { Invoice: corps })
+    }
     if (u.includes('sandbox-quickbooks.api.intuit.com') && u.includes('/customer') && m === 'POST') return rep({ Customer: { Id: '55', DisplayName: 'École des Érables' } })
     if (u.includes('sandbox-quickbooks.api.intuit.com') && u.includes('/estimate/') && m === 'GET') return rep({ Estimate: { Id: '12', SyncToken: '3' } })
     if (u.includes('sandbox-quickbooks.api.intuit.com') && u.includes('/estimate') && m === 'POST') {
@@ -179,6 +196,18 @@ test('devis : client créé, lignes de l’estimé accepté, total contrôlé, r
   assert.ok(appels.every((a) => !a.u.includes('/estimate/12') || a.m !== 'POST'))
 })
 
+test('devis : contrat signé et spécimen joints (fichiers reçus en ArrayBuffer)', async () => {
+  const appels = await simuler({ pieces: true })
+  const res = await routeQbo(requete('devis', { reservation: 'r1', client: { creer: true } }), env, 'devis')
+  const corps = await res.json()
+  assert.equal(res.status, 200, JSON.stringify(corps))
+  assert.deepEqual(corps.avertissements, [])
+  const envois = appels.filter((a) => a.u.includes('/upload'))
+  assert.equal(envois.length, 2)
+  for (const e of envois) assert.ok(new TextDecoder().decode(e.corps).includes('%PDF-essai'))
+  assert.ok(new TextDecoder().decode(envois[0].corps).includes('filename="Contrat 27-G-592 signé.pdf"'))
+})
+
 test('devis existant : mise à jour (SyncToken), pas de nouvelles pièces jointes', async () => {
   const appels = await simuler({ lien: { qbo_id: '55', nom: 'École' }, devisExistant: { qbo_id: '12' } })
   const res = await routeQbo(requete('devis', { reservation: 'r1' }), env, 'devis')
@@ -187,6 +216,20 @@ test('devis existant : mise à jour (SyncToken), pas de nouvelles pièces jointe
   assert.deepEqual([maj.Id, maj.SyncToken, maj.sparse], ['12', '3', true])
   assert.ok(!appels.some((a) => a.u.includes('/customer')))
   assert.ok(!appels.some((a) => a.u.includes('/upload')))
+})
+
+test('facture séparée : numérotée par QBO, client relié, reçue dans l’app', async () => {
+  const appels = await simuler({ lien: { qbo_id: '55', nom: 'École' } })
+  const res = await routeQbo(requete('document', { reservation: 'r1', genre: 'separee', lignes: [{ description: 'Bris', quantite: 1, prix_unitaire: 123.45 }, { description: '', quantite: 1, prix_unitaire: 5 }] }), env, 'document')
+  const corps = await res.json()
+  assert.equal(res.status, 200, JSON.stringify(corps))
+  const f = JSON.parse(appels.find((a) => a.u.includes('/invoice?') && a.m === 'POST').corps)
+  assert.equal(f.AutoDocNumber, true)
+  assert.equal(f.CustomerRef.value, '55')
+  assert.equal(f.Line.length, 1)
+  assert.equal(f.SalesTermRef.value, '3')
+  assert.deepEqual([corps.numero, corps.genre, corps.qbo_type], ['1017', 'separee', 'Invoice'])
+  assert.ok(appels.some((a) => a.u.endsWith('/rpc/qbo_recevoir_factures')))
 })
 
 test('sans session de l’équipe : refusé', async () => {

@@ -5,7 +5,7 @@ import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { appelerQbo, useActionQbo, useEstimes, useFactures, useQboConfiguration, useQboConnexions, useQboDevis } from './donnees'
-import { ecart, echeancier } from './facturation'
+import { bilanFactures, ecart, echeancier } from './facturation'
 import { argent, dateCourte, dateLongue } from './format'
 import { GENRES_FACTURE, type Facture, type Reservation } from './types'
 
@@ -38,10 +38,7 @@ export function Facturation({ r }: { r: Reservation }) {
   const etapes = r.signe_le && total ? echeancier({ forfait: r.forfait, total, signe_le: r.signe_le, date_arrivee: r.date_arrivee, date_depart: r.date_depart }) : null
   const liste = (factures.data ?? []).filter((f) => !f.supprimee)
   const factureProgressif = liste.filter((f) => f.genre === 'progressive').reduce((t, f) => t + Number(f.total), 0)
-  const facturesSeules = liste.filter((f) => f.qbo_type === 'Invoice')
-  const facture = facturesSeules.reduce((t, f) => t + Number(f.total), 0)
-  const solde = facturesSeules.reduce((t, f) => t + Number(f.solde), 0)
-  const credits = liste.filter((f) => f.qbo_type === 'CreditMemo').reduce((t, f) => t + Number(f.total), 0)
+  const { facture, paye, credits, solde } = bilanFactures(liste)
   const ecartDevis = d ? ecart(d.total, d.total_app) : 0
   const devisEnRetard = d && accepte && d.estime_version !== null && accepte.version > d.estime_version
 
@@ -190,9 +187,13 @@ export function Facturation({ r }: { r: Reservation }) {
             </table>
             <p className="mt-2 flex flex-wrap gap-x-4 text-pierre-600">
               <span>Facturé : {argent(facture)}</span>
-              <span>Payé : {argent(facture - solde)}</span>
+              <span>Payé : {argent(paye)}</span>
               {credits > 0 && <span>Crédits : {argent(credits)}</span>}
-              <span className={solde > 0 ? 'font-medium text-pierre-900' : ''}>Solde dû : {argent(solde)}</span>
+              {solde < 0 ? (
+                <span className="font-medium text-amber-800">Crédit au client : {argent(-solde)}</span>
+              ) : (
+                <span className={solde > 0 ? 'font-medium text-pierre-900' : ''}>Solde dû : {argent(solde)}</span>
+              )}
             </p>
           </div>
         )}
@@ -294,7 +295,7 @@ interface Candidat {
 /** Création (ou mise à jour) du devis : d'abord le client QBO, choisi ou créé. */
 function DialogueDevis({
   r,
-  miseAJour,
+  miseAJour: majAuDepart,
   fermer,
   resultat,
 }: {
@@ -307,6 +308,8 @@ function DialogueDevis({
   const [clients, setClients] = useState<{ lie: { id: string; nom: string } | null; nom?: string; candidats: Candidat[] } | null>(null)
   const [choix, setChoix] = useState<string>('')
   const [erreur, setErreur] = useState<string | null>(null)
+  // Figé à l'ouverture : le devis apparaît dans la fiche avant la fin de l'envoi (pièces jointes).
+  const [miseAJour] = useState(majAuDepart)
 
   useEffect(() => {
     appelerQbo<{ lie: { id: string; nom: string } | null; nom?: string; candidats: Candidat[] }>('clients', { reservation: r.id })
@@ -419,7 +422,7 @@ function DialogueDocument({ r, genre, fermer, fait }: { r: Reservation; genre: '
         </div>
         <label className="block">
           <span className={ui.etiquette}>Note au client (facultatif)</span>
-          <input className={ui.champ} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Bris d'une fenêtre, chambre 12…" />
+          <input className={ui.champ} value={note} onChange={(e) => setNote(e.target.value)} placeholder={genre === 'separee' ? "Bris d'une fenêtre, chambre 12…" : '8 élèves de moins que prévu…'} />
         </label>
         <p className="text-right text-pierre-700">Sous-total : {argent(sousTotal)} (avant taxes)</p>
         {erreur && <p className={ui.erreur}>{erreur}</p>}
