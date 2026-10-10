@@ -11,18 +11,19 @@ import { argent, champPetit, nomForfait, normaliser, periode } from './format'
 import { useAjouterReservation } from './donnees'
 import { ETAPES, FORFAITS, type Forfait, type Reservation } from './types'
 
-type Vue = 'actives' | 'nouvelles' | 'a_valider' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
+type Vue = 'nouvelles' | 'actives' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
+type Tri = 'arrivee' | 'arrivee_desc' | 'estime' | 'estime_desc'
 
 const rang = (r: Reservation) => ETAPES.findIndex((e) => e.valeur === r.etape)
 const RANG_CONFIRMEE = ETAPES.findIndex((e) => e.valeur === 'confirmee')
 const RANG_TERMINEE = ETAPES.findIndex((e) => e.valeur === 'terminee')
 
-// Les vues filtrées des Sheets (INFOS Demandes), en puces.
+// Les vues filtrées des Sheets (INFOS Demandes), en puces. Les demandes du
+// formulaire pas encore reliées au CRM sont des nouvelles demandes (étiquette
+// « Organisation à valider » dans la rangée) : pas de vue à part.
 const VUES: { id: Vue; nom: string; garde: (r: Reservation) => boolean }[] = [
-  { id: 'actives', nom: 'Actives', garde: (r) => !r.fermeture && rang(r) < RANG_TERMINEE },
   { id: 'nouvelles', nom: 'Nouvelles demandes', garde: (r) => !r.fermeture && r.etape === 'nouvelle' },
-  // Demandes du formulaire pas encore reliées au CRM (et toute réservation sans organisation).
-  { id: 'a_valider', nom: 'À valider', garde: (r) => !r.fermeture && !r.organisation_id },
+  { id: 'actives', nom: 'Actives', garde: (r) => !r.fermeture && rang(r) < RANG_TERMINEE },
   { id: 'non_confirmees', nom: 'Non confirmées', garde: (r) => !r.fermeture && rang(r) < RANG_CONFIRMEE },
   { id: 'confirmees', nom: 'Confirmées', garde: (r) => !r.fermeture && rang(r) >= RANG_CONFIRMEE },
   { id: 'a_facturer', nom: 'Factures finales à faire', garde: (r) => !r.fermeture && r.etape === 'terminee' },
@@ -30,14 +31,38 @@ const VUES: { id: Vue; nom: string; garde: (r: Reservation) => boolean }[] = [
   { id: 'toutes', nom: 'Toutes', garde: () => true },
 ]
 
+const SANS_RESPONSABLE = 'aucun'
+
+/**
+ * Arrivée la plus proche en haut par défaut ; l'estimé, le plus gros en haut
+ * au premier clic (sans estimé : toujours en bas).
+ */
+const comparer = (tri: Tri) => (a: Reservation, b: Reservation) => {
+  const arrivee = a.date_arrivee.localeCompare(b.date_arrivee) || a.numero.localeCompare(b.numero)
+  const sansEstime = Number(a.montant_estime == null) - Number(b.montant_estime == null)
+  const estime = Number(a.montant_estime ?? 0) - Number(b.montant_estime ?? 0)
+  switch (tri) {
+    case 'arrivee_desc':
+      return -arrivee
+    case 'estime':
+      return sansEstime || estime || arrivee
+    case 'estime_desc':
+      return sansEstime || -estime || arrivee
+    default:
+      return arrivee
+  }
+}
+
 /** Liste des réservations, avec les vues de l'ancien Sheets. */
 export function Liste() {
-  const { reservations, orgParId, nomResponsable, ecriture, auj } = useDonnees()
+  const { reservations, orgParId, responsables, nomResponsable, ecriture, auj } = useDonnees()
   const naviguer = useNavigate()
   const [params, setParams] = useSearchParams()
-  const vue = (params.get('vue') as Vue) || 'actives'
+  const vue = (VUES.some((v) => v.id === params.get('vue')) ? params.get('vue') : 'nouvelles') as Vue
   const exercice = params.get('exercice') ?? String(exerciceDe(auj))
   const forfait = (params.get('forfait') as Forfait | null) ?? ''
+  const responsable = params.get('responsable') ?? ''
+  const tri = (params.get('tri') as Tri | null) ?? 'arrivee'
   const [recherche, setRecherche] = useState('')
   const [nouvelle, setNouvelle] = useState(false)
 
@@ -54,7 +79,10 @@ export function Liste() {
   )
 
   const deLExercice = reservations.filter(
-    (r) => (!exercice || exerciceDe(r.date_arrivee) === Number(exercice)) && (!forfait || r.forfait === forfait),
+    (r) =>
+      (!exercice || exerciceDe(r.date_arrivee) === Number(exercice)) &&
+      (!forfait || r.forfait === forfait) &&
+      (!responsable || (responsable === SANS_RESPONSABLE ? !r.responsable_id : r.responsable_id === responsable)),
   )
   const q = normaliser(recherche)
   const affichees = deLExercice
@@ -66,14 +94,37 @@ export function Liste() {
         normaliser(r.nom).includes(q) ||
         (r.organisation_id && normaliser(orgParId.get(r.organisation_id)?.nom ?? '').includes(q)),
     )
-    .sort((a, b) => a.date_arrivee.localeCompare(b.date_arrivee) || a.numero.localeCompare(b.numero))
+    .sort(comparer(tri))
   const total = affichees.reduce((t, r) => t + Number(r.montant_estime ?? 0), 0)
+
+  // Un clic sur l'en-tête trie par cette colonne ; un 2e clic inverse le sens.
+  const entete = (colonne: 'arrivee' | 'estime', libelle: string, droite = false) => {
+    const actif = tri === colonne || tri === `${colonne}_desc`
+    const desc = tri === `${colonne}_desc`
+    const suivant: Tri = actif ? (desc ? colonne : `${colonne}_desc`) : colonne === 'estime' ? 'estime_desc' : 'arrivee'
+    return (
+      <th className={`px-3 py-2 font-medium ${droite ? 'text-right' : ''}`} aria-sort={actif ? (desc ? 'descending' : 'ascending') : 'none'}>
+        <button className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-pierre-900" onClick={() => changer('tri', suivant === 'arrivee' ? '' : suivant)}>
+          {libelle}
+          <span className="w-2 text-[0.6rem]">{actif ? (desc ? '▼' : '▲') : ''}</span>
+        </button>
+      </th>
+    )
+  }
 
   return (
     <div className="space-y-4">
+      <Puces options={VUES} valeur={vue} changer={(v) => changer('vue', v === 'nouvelles' ? '' : v)} compte={(id) => deLExercice.filter(VUES.find((v) => v.id === id)!.garde).length} />
       <div className="flex flex-wrap items-center gap-2">
-        <Puces options={VUES} valeur={vue} changer={(v) => changer('vue', v === 'actives' ? '' : v)} compte={(id) => deLExercice.filter(VUES.find((v) => v.id === id)!.garde).length} />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          aria-label="Chercher"
+          className={`${champPetit} min-w-48 flex-1`}
+          placeholder="Chercher un numéro, un groupe, une organisation…"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
           <select aria-label="Exercice" className={champPetit} value={exercice} onChange={(e) => changer('exercice', e.target.value)}>
             {exercices.map((x) => (
               <option key={x} value={x}>
@@ -90,7 +141,18 @@ export function Liste() {
               </option>
             ))}
           </select>
-          <input className={`${champPetit} w-44`} placeholder="Chercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+          <select aria-label="Responsable" className={champPetit} value={responsable} onChange={(e) => changer('responsable', e.target.value)}>
+            <option value="">Tous les responsables</option>
+            {responsable && responsable !== SANS_RESPONSABLE && !responsables.some((x) => x.id === responsable) && (
+              <option value={responsable}>{nomResponsable(responsable)}</option>
+            )}
+            {responsables.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nom}
+              </option>
+            ))}
+            <option value={SANS_RESPONSABLE}>Sans responsable</option>
+          </select>
           {ecriture && (
             <button className={ui.bouton} onClick={() => setNouvelle(true)}>
               + Nouvelle réservation
@@ -109,10 +171,10 @@ export function Liste() {
                 <th className="px-3 py-2 font-medium">N°</th>
                 <th className="px-3 py-2 font-medium">Groupe</th>
                 <th className="px-3 py-2 font-medium">Forfait</th>
-                <th className="px-3 py-2 font-medium">Dates</th>
+                {entete('arrivee', 'Dates')}
                 <th className="px-3 py-2 text-right font-medium">Pers.</th>
                 <th className="px-3 py-2 font-medium">Étape</th>
-                <th className="px-3 py-2 text-right font-medium">Estimé</th>
+                {entete('estime', 'Estimé', true)}
                 <th className="px-3 py-2 font-medium">Responsable</th>
               </tr>
             </thead>
@@ -158,7 +220,7 @@ export function Liste() {
   )
 }
 
-/** Saisie d'une réservation par l'équipe (les demandes du formulaire public arrivent toutes seules, « À valider »). */
+/** Saisie d'une réservation par l'équipe (les demandes du formulaire public arrivent toutes seules, dans Nouvelles demandes). */
 function NouvelleReservation({ fermer }: { fermer: () => void }) {
   const { reglages, compagnieDefaut, moi } = useDonnees()
   const ajouter = useAjouterReservation()
