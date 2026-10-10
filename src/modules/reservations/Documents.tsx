@@ -5,6 +5,7 @@ import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { garderDocument, garderEstime, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
+import { conflitsAirbnbDe } from './disponibilite'
 import { preparerCourriels, useDocuments, useEstimes, useSignatures } from './donnees'
 import { dateCourte, dateLongue } from './format'
 import type { Reservation } from './types'
@@ -14,7 +15,9 @@ const quand = (iso: string) =>
 
 /** Documents de la réservation : estimé, contrat et sa signature, pré-arrivée. */
 export function Documents({ r }: { r: Reservation }) {
-  const { sources, modeles, ecriture, auj } = useDonnees()
+  const { sources, modeles, ecriture, auj, reservations } = useDonnees()
+  // Pas de contrat sur une réservation Airbnb de la VF : il confirmerait par-dessus (§10).
+  const conflitAirbnb = conflitsAirbnbDe(r, reservations).length > 0
   const estimes = useEstimes(r.id)
   const documents = useDocuments(r.id)
   const signatures = useSignatures(r.id)
@@ -97,7 +100,12 @@ export function Documents({ r }: { r: Reservation }) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-medium">Contrat</span>
             {ecriture && sig?.statut !== 'signe' && (
-              <button className={ui.bouton} disabled={!accepte || !modeleContrat || occupe !== null} onClick={preparer}>
+              <button
+                className={ui.bouton}
+                disabled={!accepte || !modeleContrat || occupe !== null || conflitAirbnb}
+                title={conflitAirbnb ? 'Conflit avec une réservation Airbnb (voir en haut de la fiche)' : undefined}
+                onClick={preparer}
+              >
                 {occupe === 'contrat' ? 'Préparation…' : sig ? 'Refaire le contrat' : 'Préparer le contrat à signer'}
               </button>
             )}

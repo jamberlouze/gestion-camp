@@ -9,6 +9,7 @@ import { ui } from '@/lib/ui'
 import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, useModifierRelance, useRelances } from '@/modules/crm/donnees'
 import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
+import { AvisReservation } from './AvisDisponibilite'
 import { ChoixOrganisation } from './ChoixOrganisation'
 import { CourrielsReservation } from './CourrielsClients'
 import { DemandeRecue } from './DemandeRecue'
@@ -97,6 +98,8 @@ function Contenu({ r }: { r: Reservation }) {
           )}
         </div>
       </div>
+
+      <AvisReservation r={r} />
 
       {demande && <DemandeRecue demande={demande} />}
 

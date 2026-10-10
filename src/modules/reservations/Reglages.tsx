@@ -1,4 +1,5 @@
 import { ui } from '@/lib/ui'
+import { ReglagesAgenda } from './AvisDisponibilite'
 import { Section } from './commun'
 import { champPetit } from './format'
 import { useDonnees } from './contexte'
@@ -144,6 +145,7 @@ export function Reglages() {
         </label>
         <p className="mt-2 text-xs text-pierre-500">Habituellement l'adjointe, qui fait les factures progressives dans QBO (SOP).</p>
       </Section>
+      <ReglagesAgenda />
       {!ecriture && <p className={`${ui.erreur} lg:col-span-2`}>Lecture seule.</p>}
     </div>
   )

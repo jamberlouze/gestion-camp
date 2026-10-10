@@ -370,6 +370,14 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
   - Adresses iCal fournies par Maxime le 2026-10-08 : dans `.dev.vars` en DEV (hors Git), et en secrets Cloudflare `AIRBNB_ICAL_VF_COMPLET` et `AIRBNB_ICAL_VF_BAS` en PROD.
 - **Disponibilité** : à la saisie, l'app signale tout chevauchement de sections ou de salles avec une autre réservation confirmée.
 
+**Bâti en DEV le 2026-10-10 (phase 6), sans réponses de Maxime (« produis tout de suite ») : décisions prises seul, à confirmer.**
+- Calendrier selon l'étape : Demande (nouvelle, contact établi), Estimé (envoyé, accepté), Contrat (envoyé), puis Confirmée VF si la réservation occupe une section ou une salle de la VF (VFB, VFH, SVF, CVF), sinon Confirmée PP. Perdue, annulée ou en attente : retirée. Un seul calendrier à la fois (l'événement change de calendrier avec l'étape).
+- Événements d'une journée entière, nuits [arrivée, départ) comme Airbnb : le jour du départ reste libre pour l'arrivée suivante ; une journée sans nuit occupe son jour. Titre « 27-G-055 · Collège Citoyen (266) » ; description : forfait, personnes, heures, sections, salles, lien vers la fiche. Aucun nom de contact ni courriel.
+- **Écriture désactivée jusqu'à la bascule** (réglage « Écrire dans Google Agenda ») : les calendriers ont encore les événements d'Airtable. En DEV, jamais Google : simulé. Au plus 25 appels à Google par passage ; Confirmée VF d'abord. « Tout de suite » = à l'ouverture de la fiche (et aux 15 minutes) : une signature du client arrive au passage suivant.
+- Airbnb : seuls les « Reserved » de l'iCal (les « Not available » sont des blocages, dont les nôtres). Une réservation Airbnb est un Accueil de groupe confirmé, numéroté **AA-A-nnn** (pas dans la suite des groupes), au nom « Airbnb — Vieille-France complète » (VFB, VFH, SVF, CVF) ou « … étage du bas » (VFB), compagnie GBPA+, avec le lien Airbnb. Ses dates suivent Airbnb ; disparue du calendrier (à venir) : annulée ; de retour : rouverte. Le reste se complète à la main et n'est jamais écrasé.
+- Conflit : mêmes sections ou salles, mêmes nuits qu'une réservation Airbnb active. La base refuse à l'équipe de confirmer (ou de déplacer une réservation confirmée) sur Airbnb ; la signature du client n'est pas bloquée (le conflit s'affiche alors en rouge dans la fiche et en haut de la liste). « Préparer le contrat » est désactivé en conflit.
+- Disponibilité : en haut de la fiche, les réservations confirmées qui occupent les mêmes sections ou salles les mêmes nuits.
+
 ## 11. Fiches participants (données de santé)
 
 - Remplacent les « formulaires santé et allergies » exigés à J−21 par les contrats. Champs : allergies, Epipen, problèmes médicaux, diète, autorisation de médicaments, matricule ; aussi pour les professeurs et les accompagnateurs.
@@ -452,7 +460,11 @@ Chaque phase est testée en DEV, puis mise en ligne au go de Maxime.
    - pièces jointes : PDF de l'estimé, de la pré-arrivée et des factures (QBO) ; chaque envoi au journal et dans les échanges du CRM ;
    - essais dans Mailpit : facture 1019 (27-G-055), contrat (27-G-592), pré-arrivée (27-G-594), estimé (27-G-593) ;
    - reste pour la PROD : jeton Gmail d'inscriptions@ et `HOTE_PUBLIC` (README, section 13).
-6. **Google Agenda + Airbnb.**
+6. **Google Agenda + Airbnb** — **bâtie en DEV le 2026-10-10**, pas en PROD (décisions au §10) :
+   - les 5 calendriers suivis par le Worker (`worker/reservations/agenda.js`, règles dans `agenda.ts`), simulés en DEV, écriture désactivée jusqu'à la bascule ;
+   - réservations Airbnb lues dans l'iCal des deux annonces (`airbnb.js`) : 4 reçues en DEV (27-A-001 à 004) ;
+   - conflits avec Airbnb bloqués en base (`verifier_vf_airbnb`) et signalés (fiche, liste) ; chevauchements de sections et de salles en haut de la fiche ;
+   - reste pour la PROD : `GOOGLE_AGENDA_REFRESH_TOKEN`, identifiants des calendriers, secrets Airbnb (README, section 14).
 7. **Rapports.**
 8. **Bascule avec l'équipe** : import 2026-27, Jotform, Sheets et chiffrier retirés, Airtable fermé.
 

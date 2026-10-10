@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { exerciceDe, libelleExercice, repasProposes, varianteProposee } from './calcul'
+import { BandeauConflitsAirbnb } from './AvisDisponibilite'
 import { ChoixOrganisation } from './ChoixOrganisation'
 import { PuceEtape, Puces } from './commun'
 import { useDonnees } from './contexte'
@@ -114,6 +115,7 @@ export function Liste() {
 
   return (
     <div className="space-y-4">
+      <BandeauConflitsAirbnb />
       <Puces options={VUES} valeur={vue} changer={(v) => changer('vue', v === 'nouvelles' ? '' : v)} compte={(id) => deLExercice.filter(VUES.find((v) => v.id === id)!.garde).length} />
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -187,7 +189,11 @@ export function Liste() {
                     <td className="px-3 py-2">
                       <div className="font-medium text-pierre-900">{r.nom}</div>
                       {org && org.nom !== r.nom && <div className="text-xs text-pierre-500">{org.nom}</div>}
-                      {!r.organisation_id && <div className="text-xs text-amber-700">Organisation à valider</div>}
+                      {r.origine === 'airbnb' ? (
+                        <div className="text-xs text-rose-700">Airbnb · à compléter</div>
+                      ) : (
+                        !r.organisation_id && <div className="text-xs text-amber-700">Organisation à valider</div>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{nomForfait(r)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{periode(r)}</td>

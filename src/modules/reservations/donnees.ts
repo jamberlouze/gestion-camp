@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import type { CleCalendrier } from './agenda'
 import type {
   Compagnie,
   Courriel,
@@ -639,3 +640,38 @@ export function useEnvoyerCourriel() {
       Promise.all([['reservations', 'courriels'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey }))),
   })
 }
+
+// ------------------------------------------------------------------
+// Google Agenda et Airbnb (phase 6)
+// ------------------------------------------------------------------
+
+export interface LigneAgendaApp {
+  reservation_id: string
+  calendrier: CleCalendrier | null
+  google_id: string | null
+  synchronise_le: string | null
+  erreur: string | null
+}
+
+export function useAgenda(reservationId: string) {
+  const cle = ['reservations', 'agenda', reservationId]
+  useTempsReel('agenda', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('agenda').select('reservation_id,calendrier,google_id,synchronise_le,erreur').eq('reservation_id', reservationId).maybeSingle()
+      if (error) throw error
+      return data as LigneAgendaApp | null
+    },
+  })
+}
+
+export type ModeAgenda = 'simule' | 'google' | 'non_configure'
+
+/** Calendriers Google à jour tout de suite (une réservation, ou toutes). */
+export const synchroniserAgenda = (reservation?: string) =>
+  appelerWorker<{ actif: boolean; mode: ModeAgenda; faites: number; restantes: number; erreur?: string }>('/api/reservations/agenda', reservation ? { reservation } : {})
+
+/** Lecture des iCal d'Airbnb tout de suite. */
+export const lireAirbnb = () =>
+  appelerWorker<{ quand: string; annonces: Record<string, { reservations: number; ajoutees: number; modifiees: number; annulees: number }>; erreurs: string[] }>('/api/reservations/airbnb', {})

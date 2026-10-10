@@ -1,5 +1,6 @@
 // Réglages du module (table reservations.reglages), lus en clair. Fichier
 // pur, sans React : le Worker s'en sert aussi (formulaire public).
+import type { ReglageAgenda } from './agenda.ts'
 import type { HeuresRepas } from './calcul.ts'
 import type { Forfait, Ratio, Reglage } from './types'
 
@@ -12,6 +13,10 @@ export interface Reglages {
   variantesClasse: Record<string, string>
   /** Compte qui fait les factures dans QBO (relances de facturation) ; null = responsable de la réservation. */
   responsableFacturation: string | null
+  /** Google Agenda (phase 6) : écriture active ? identifiants des 5 calendriers. */
+  agenda: ReglageAgenda
+  /** Dernière lecture des iCal d'Airbnb (écrite par le Worker). */
+  airbnbLecture: { quand: string; annonces: Record<string, { reservations: number; ajoutees: number; modifiees: number; annulees: number }>; erreurs: string[] } | null
 }
 
 const valeur = <T,>(reglages: Reglage[], cle: string, defaut: T): T =>
@@ -26,6 +31,8 @@ export function lireReglages(r: Reglage[]): Reglages {
     diviseurHeuresExtra: Number(valeur(r, 'diviseur_heures_extra', 8)),
     variantesClasse: valeur(r, 'variantes_classe', {}),
     responsableFacturation: valeur<string | null>(r, 'responsable_facturation', null),
+    agenda: valeur<ReglageAgenda>(r, 'agenda', { actif: false, calendriers: { demande: '', estime: '', contrat: '', confirmee_pp: '', confirmee_vf: '' } }),
+    airbnbLecture: valeur(r, 'airbnb_lecture', null),
   }
 }
 

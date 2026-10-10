@@ -12,7 +12,9 @@
 // Routes de l'équipe (jeton de session + droit d'écrire dans Réservations) :
 //   POST /api/reservations/preparer {reservation} : courriels dus préparés
 //        tout de suite (sans attendre le cron) ; renvoie aussi le mode d'envoi ;
-//   POST /api/reservations/envoyer {courriel} : envoie un courriel préparé.
+//   POST /api/reservations/envoyer {courriel} : envoie un courriel préparé ;
+//   POST /api/reservations/agenda {reservation?} : Google Agenda à jour tout de suite ;
+//   POST /api/reservations/airbnb : lit les iCal d'Airbnb tout de suite.
 //
 // Secrets : SUPABASE_SECRET_KEY et TURNSTILE_SECRET (Cloudflare en PROD,
 // .dev.vars en DEV).
@@ -22,6 +24,8 @@ import { lireReglages } from '../../src/modules/reservations/parametres.ts'
 import { pdf, session } from '../qbo/api.js'
 import { qboConfigure } from '../qbo/oauth.js'
 import { base } from '../subventions/base.js'
+import { synchroniserAgenda } from './agenda.js'
+import { importerAirbnb } from './airbnb.js'
 import { envoyerCourriel, ErreurCourriel, modeEnvoi, preparerCourriels } from './courriels.js'
 
 const json = (corps, status = 200) =>
@@ -132,7 +136,7 @@ export async function routeReservations(request, env, chemin) {
   if (chemin === 'demande' && request.method === 'POST') return recevoirDemande(request, env)
   if (chemin === 'document' && request.method === 'GET') return documentClient(url, env)
   if (chemin === 'facture' && request.method === 'GET') return factureClient(url, env)
-  if ((chemin === 'preparer' || chemin === 'envoyer') && request.method === 'POST') return routeCourriels(request, env, chemin)
+  if (['preparer', 'envoyer', 'agenda', 'airbnb'].includes(chemin) && request.method === 'POST') return routeCourriels(request, env, chemin)
   return json({ erreur: 'introuvable' }, 404)
 }
 
@@ -147,6 +151,11 @@ async function routeCourriels(request, env, chemin) {
   }
   const uuid = (v) => /^[0-9a-f-]{36}$/i.test(String(v ?? ''))
   try {
+    if (chemin === 'agenda') {
+      if (corps.reservation !== undefined && !uuid(corps.reservation)) return json({ erreur: 'Réservation inconnue.' }, 400)
+      return json(await synchroniserAgenda(env, corps.reservation ?? null))
+    }
+    if (chemin === 'airbnb') return json(await importerAirbnb(env))
     if (chemin === 'preparer') {
       if (corps.reservation !== undefined && !uuid(corps.reservation)) return json({ erreur: 'Réservation inconnue.' }, 400)
       return json({ ...(await preparerCourriels(env, corps.reservation ?? null)), envoi: modeEnvoi(env) })

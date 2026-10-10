@@ -19,6 +19,8 @@
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
+import { synchroniserAgenda } from "./reservations/agenda.js";
+import { airbnbConfigure, importerAirbnb } from "./reservations/airbnb.js";
 import { preparerCourriels } from "./reservations/courriels.js";
 import { routeQbo } from "./qbo/api.js";
 import { qboConfigure } from "./qbo/oauth.js";
@@ -62,6 +64,13 @@ export default {
     if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
     // Courriels aux clients des Réservations : préparés (et envoyés, pour les types en mode automatique).
     ctx.waitUntil(preparerCourriels(env).catch((e) => console.error("Courriels non préparés :", e)));
+    // Réservations Airbnb de la Vieille-France (iCal), puis Google Agenda (rien tant que le réglage « agenda » est inactif).
+    ctx.waitUntil(
+      (async () => {
+        if (airbnbConfigure(env)) await importerAirbnb(env);
+        await synchroniserAgenda(env);
+      })().catch((e) => console.error("Agenda ou Airbnb :", e)),
+    );
   },
 
   async fetch(request, env, ctx) {

@@ -397,6 +397,33 @@ attend un clic (Réservations › Courriels, ou la fiche).
   jour où elle passe) ; aucun courriel pour un événement plus ancien, donc
   pas d'envoi en masse aux réservations importées.
 
+### 14. Réservations : Google Agenda et Airbnb
+
+L'app écrit les réservations dans les 5 calendriers Google (Demande, Estimé,
+Contrat, Confirmée PP, Confirmée VF), jamais l'inverse (plan des
+réservations, §10). **Confirmée VF bloque Airbnb.** Les réservations Airbnb
+de la Vieille-France arrivent dans l'app par l'iCal des deux annonces.
+
+- **Airbnb** : secrets Cloudflare `AIRBNB_ICAL_VF_COMPLET` et
+  `AIRBNB_ICAL_VF_BAS` (adresses « Exporter le calendrier » d'Airbnb ; déjà
+  dans `.dev.vars` en DEV). Lus aux 15 minutes ; seuls les « Reserved »
+  comptent. Côté Airbnb, chaque annonce importe l'adresse iCal secrète du
+  calendrier Google « Confirmée VF ».
+- **Google Agenda**, une seule fois :
+  1. le client OAuth « interne » de la section 8 sert aussi ici ;
+  2. [OAuth Playground](https://developers.google.com/oauthplayground), connecté
+     avec le compte qui possède les 5 calendriers, portée
+     `https://www.googleapis.com/auth/calendar.events` → **Refresh token** →
+     secret Cloudflare `GOOGLE_AGENDA_REFRESH_TOKEN` ;
+  3. Réservations › Réglages › Google Agenda : l'identifiant de chaque
+     calendrier (Google Agenda → paramètres du calendrier → « Identifiant de
+     l'agenda », `…@group.calendar.google.com`) ;
+  4. **à la bascule seulement** : retirer des calendriers les événements créés
+     par Airtable, puis cocher « Écrire dans Google Agenda » (sinon, doublons).
+- **DEV** : jamais Google. Avec le réglage coché, la synchro est simulée
+  (`reservations.agenda` montre ce qui serait écrit ; en DEV, des
+  calendriers « essai-… »).
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,
