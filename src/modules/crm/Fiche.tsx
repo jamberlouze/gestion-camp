@@ -15,6 +15,7 @@ import {
   useAjouterRegle,
   useAjouterRelance,
   useAjouterVisite,
+  useFusionnerOrganisations,
   useModifierContact,
   useModifierOrganisation,
   useSupprimerContact,
@@ -63,6 +64,7 @@ function Contenu({ id }: { id: string }) {
   const modifier = useModifierOrganisation()
   const supprimer = useSupprimerOrganisation()
   const naviguer = useNavigate()
+  const [fusion, setFusion] = useState(false)
   const changer = (champs: Partial<Organisation>) => modifier.mutate({ id: o.id, champs })
 
   return (
@@ -89,6 +91,11 @@ function Contenu({ id }: { id: string }) {
             enregistrer={(nom) => changer({ nom })}
           />
           <PuceStatut statut={c.statut} />
+          {ecriture && (
+            <button className={ui.boutonSecondaire} onClick={() => setFusion(true)}>
+              Fusionner avec…
+            </button>
+          )}
           {ecriture && (
             <BoutonSupprimer
               onClick={async () => {
@@ -131,7 +138,119 @@ function Contenu({ id }: { id: string }) {
           <ReglesPropres org={o} />
         </div>
       </div>
+      {fusion && <FenetreFusion org={o} fermer={() => setFusion(false)} />}
     </div>
+  )
+}
+
+const sansAccents = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+
+/**
+ * Fusionner deux fiches d'une même école (une école = une seule organisation,
+ * Maxime, 2026-10-11) : on choisit l'autre fiche, puis celle qui reste.
+ */
+function FenetreFusion({ org, fermer }: { org: Organisation; fermer: () => void }) {
+  const { calculs, parId, contacts, echanges } = useDonnees()
+  const fusionner = useFusionnerOrganisations()
+  const naviguer = useNavigate()
+  const [recherche, setRecherche] = useState('')
+  const [autreId, setAutreId] = useState<string | null>(null)
+  const [garderId, setGarderId] = useState<string | null>(null)
+
+  // Sans recherche : les fiches qui partagent le mot le plus long du nom (doublons probables).
+  const proposees = useMemo(() => {
+    const mots = sansAccents(recherche.trim())
+    const cle = mots || (sansAccents(org.nom).split(/[^a-z0-9]+/).filter((m) => m.length > 3).sort((a, b) => b.length - a.length)[0] ?? '')
+    if (!cle) return []
+    return calculs.filter((c) => c.org.id !== org.id && sansAccents(`${c.org.nom} ${c.org.ville ?? ''}`).includes(cle)).slice(0, 8)
+  }, [calculs, org, recherche])
+
+  const autre = autreId ? parId.get(autreId)?.org : undefined
+  const choisir = (id: string) => {
+    setAutreId(id)
+    const b = parId.get(id)!.org
+    // Par défaut, la plus ancienne reste (souvent celle de l'import).
+    setGarderId(b.created_at < org.created_at ? b.id : org.id)
+  }
+  const garder = autre && garderId === autre.id ? autre : org
+  const retirer = autre && garder.id === org.id ? autre : org
+  const compte = (id: string) => `${contacts.filter((c) => c.organisation_id === id).length} contact(s), ${echanges.filter((e) => e.organisation_id === id).length} échange(s)`
+
+  return (
+    <Dialogue titre={`Fusionner « ${org.nom} » avec…`} fermer={fermer}>
+      <div className="space-y-3 text-sm">
+        {!autre ? (
+          <>
+            <input
+              className={ui.champ}
+              autoFocus
+              placeholder="Chercher l'autre fiche de la même école…"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+            />
+            {!recherche && proposees.length > 0 && <p className="text-xs text-pierre-500">Noms semblables :</p>}
+            <div className="space-y-1">
+              {proposees.map((c) => (
+                <button key={c.org.id} className="flex w-full items-center justify-between gap-2 rounded-md border border-pierre-200 px-2 py-1.5 text-left hover:bg-pierre-50" onClick={() => choisir(c.org.id)}>
+                  <span>
+                    {c.org.nom}
+                    {c.org.ville && <span className="text-pierre-500"> · {c.org.ville}</span>}
+                  </span>
+                  <PuceStatut statut={c.statut} />
+                </button>
+              ))}
+              {proposees.length === 0 && <p className="text-pierre-500">{recherche ? 'Aucune organisation trouvée.' : "Tapez le nom de l'autre fiche."}</p>}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-pierre-600">Laquelle reste ?</p>
+            {[org, autre].map((x) => (
+              <label key={x.id} className="flex items-start gap-2 rounded-md border border-pierre-200 px-2 py-1.5">
+                <input type="radio" name="garder" className="mt-0.5" checked={garder.id === x.id} onChange={() => setGarderId(x.id)} />
+                <span>
+                  <span className="font-medium">{x.nom}</span>
+                  {x.ville && <span className="text-pierre-500"> · {x.ville}</span>}
+                  <span className="block text-xs text-pierre-500">
+                    {compte(x.id)} · créée le {dateCourte(x.created_at.slice(0, 10))}
+                  </span>
+                </span>
+              </label>
+            ))}
+            <p className="rounded-lg bg-pierre-50 px-3 py-2 text-pierre-700">
+              « {retirer.nom} » sera supprimée. Ses contacts, échanges, relances, visites, règles et réservations passent à « {garder.nom} », dont les
+              champs vides sont complétés ; ses notes y sont ajoutées. Irréversible.
+            </p>
+            {garder.airtable_client_id && retirer.airtable_client_id && garder.airtable_client_id !== retirer.airtable_client_id && (
+              <p className="text-amber-700">Les séjours Airtable de « {retirer.nom} » ne seront plus comptés (un seul lien Airtable par organisation).</p>
+            )}
+            {fusionner.error && <p className={ui.erreur}>{fusionner.error.message}</p>}
+            <div className="flex justify-between gap-2">
+              <button className={ui.boutonSecondaire} onClick={() => setAutreId(null)}>
+                ← Autre fiche
+              </button>
+              <button
+                className={ui.boutonDanger}
+                disabled={fusionner.isPending}
+                onClick={() =>
+                  fusionner.mutate(
+                    { garder: garder.id, retirer: retirer.id },
+                    {
+                      onSuccess: () => {
+                        fermer()
+                        naviguer(`/crm/o/${garder.id}`)
+                      },
+                    },
+                  )
+                }
+              >
+                {fusionner.isPending ? 'Fusion…' : `Fusionner dans « ${garder.nom} »`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Dialogue>
   )
 }
 

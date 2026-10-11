@@ -137,6 +137,37 @@ export const useAjouterOrganisation = () => useAjouter<Organisation>('organisati
 export const useModifierOrganisation = () => useModifier<Organisation>('organisations')
 export const useSupprimerOrganisation = () => useRetirer<Organisation>('organisations')
 
+/** Résultat d'une fusion : ce qui est passé à l'organisation qui reste. */
+export interface ResultatFusion {
+  contacts: number
+  echanges: number
+  relances: number
+  visites: number
+  reservations: number
+  details: string[]
+}
+
+/**
+ * Fusionne deux organisations en une transaction (crm.fusionner_organisations) :
+ * tout passe à `garder`, puis `retirer` est supprimée. Erreur affichée dans la fenêtre.
+ */
+export function useFusionnerOrganisations() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['crm-local', 'fusionner'],
+    networkMode: 'always',
+    mutationFn: async (p: { garder: string; retirer: string }) => {
+      const { data, error } = await db().rpc('fusionner_organisations', { p_garder: p.garder, p_retirer: p.retirer })
+      if (error) throw error
+      return data as ResultatFusion
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ['crm'] })
+      client.invalidateQueries({ queryKey: ['reservations'] })
+    },
+  })
+}
+
 export const useAjouterContact = () => useAjouter<Contact>('contacts')
 export const useModifierContact = () => useModifier<Contact>('contacts')
 export const useSupprimerContact = () => useRetirer<Contact>('contacts')
