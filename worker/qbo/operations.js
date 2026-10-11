@@ -100,7 +100,8 @@ export async function candidatsClients(env, reservationId) {
       })
     }
   }
-  // Un client QBO peut servir à plusieurs organisations : on montre à qui il est déjà relié.
+  // Un client QBO = une seule organisation (une école = une organisation) : celui qui est
+  // déjà relié à une autre est montré, grisé, avec son nom (doublon du CRM ou mauvais choix).
   const ids = [...vus.keys()]
   const liens = ids.length ? await db.lire(`qbo_clients?compagnie_id=eq.${r.compagnie_id}&qbo_id=in.(${ids.join(',')})&select=qbo_id,organisation_id`) : []
   const noms = liens.length
@@ -110,12 +111,20 @@ export async function candidatsClients(env, reservationId) {
   return { lie: null, nom, candidats: [...vus.values()].sort((a, b) => Number(b.exact) - Number(a.exact)) }
 }
 
+const dejaRelie = (nom) =>
+  new ErreurQbo(
+    'deja_relie',
+    `Ce client QBO est déjà relié à l'organisation « ${nom ?? 'une autre organisation'} ». Une même école = une seule organisation : si c'est la même, reliez la réservation à cette organisation (fiche › Client › Modifier) ; sinon, choisissez un autre client ou créez-le.`,
+  )
+
 /** Relie l'organisation à un client QBO existant, ou le crée. */
 async function relierClient(env, qbo, ctx, choix) {
   if (ctx.lien) return ctx.lien.qbo_id
   if (!ctx.org) throw new ErreurQbo('organisation', "Reliez d'abord la réservation à une organisation du CRM.")
   let client
   if (choix?.qbo_id) {
+    const autre = un(await ctx.db.lire(`qbo_clients?compagnie_id=eq.${ctx.r.compagnie_id}&qbo_id=eq.${encodeURIComponent(choix.qbo_id)}&select=organisation_id`))
+    if (autre) throw dejaRelie(un(await base(env, 'crm').lire(`organisations?id=eq.${autre.organisation_id}&select=nom`))?.nom)
     client = await qbo.lire('Customer', choix.qbo_id)
   } else if (choix?.creer) {
     try {
@@ -127,7 +136,13 @@ async function relierClient(env, qbo, ctx, choix) {
   } else {
     throw new ErreurQbo('client', 'Choisissez le client QBO, ou créez-le.')
   }
-  await ctx.db.inserer('qbo_clients', { organisation_id: ctx.org.id, compagnie_id: ctx.r.compagnie_id, qbo_id: client.Id, nom: client.DisplayName })
+  try {
+    await ctx.db.inserer('qbo_clients', { organisation_id: ctx.org.id, compagnie_id: ctx.r.compagnie_id, qbo_id: client.Id, nom: client.DisplayName })
+  } catch (e) {
+    // Relié entre-temps à une autre organisation (contrainte unique).
+    if (String(e.message).includes('23505')) throw dejaRelie(null)
+    throw e
+  }
   return client.Id
 }
 

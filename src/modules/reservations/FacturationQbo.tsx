@@ -516,7 +516,7 @@ interface Candidat {
   courriel: string | null
   ville: string | null
   exact: boolean
-  /** Organisations déjà reliées à ce client QBO (il peut en servir plusieurs). */
+  /** Organisation déjà reliée à ce client QBO (une seule permise : une école = une organisation). */
   relie_a: string[]
 }
 
@@ -547,7 +547,7 @@ function DialogueDevis({
     appelerQbo<{ lie: { id: string; nom: string } | null; nom?: string; candidats: Candidat[] }>('clients', { reservation: r.id })
       .then((c) => {
         setClients(c)
-        setChoix(c.lie ? c.lie.id : (c.candidats.find((x) => x.exact)?.id ?? (c.candidats.length ? '' : 'creer')))
+        setChoix(c.lie ? c.lie.id : (c.candidats.find((x) => x.exact && !x.relie_a.length)?.id ?? (c.candidats.some((x) => !x.relie_a.length) ? '' : 'creer')))
       })
       .catch((e: Error) => setErreur(e.message))
   }, [r.id])
@@ -578,13 +578,17 @@ function DialogueDevis({
           <div className="space-y-1.5">
             <p className="text-pierre-600">Client QBO de l'organisation (relié une fois pour toutes) :</p>
             {clients.candidats.map((c) => (
-              <label key={c.id} className="flex items-start gap-2 rounded-md border border-pierre-200 px-2 py-1.5">
-                <input type="radio" name="client" className="mt-0.5" checked={choix === c.id} onChange={() => setChoix(c.id)} />
+              <label key={c.id} className={`flex items-start gap-2 rounded-md border border-pierre-200 px-2 py-1.5 ${c.relie_a.length ? 'text-pierre-500' : ''}`}>
+                <input type="radio" name="client" className="mt-0.5" disabled={c.relie_a.length > 0} checked={choix === c.id} onChange={() => setChoix(c.id)} />
                 <span>
                   {c.nom}
                   <span className="text-pierre-500">{[c.ville, c.courriel].filter(Boolean).map((x) => ` · ${x}`).join('')}</span>
                   {c.exact && <span className="ml-1 rounded-full bg-foret-50 px-1.5 text-xs text-foret-800">même nom</span>}
-                  {c.relie_a.length > 0 && <span className="block text-xs text-amber-700">Déjà relié à {c.relie_a.join(', ')}</span>}
+                  {c.relie_a.length > 0 && (
+                    <span className="block text-xs text-amber-700">
+                      Déjà relié à « {c.relie_a.join(', ')} ». Si c'est la même école, reliez plutôt la réservation à cette organisation (Client › Modifier).
+                    </span>
+                  )}
                 </span>
               </label>
             ))}
