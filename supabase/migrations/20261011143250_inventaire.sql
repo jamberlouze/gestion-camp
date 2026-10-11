@@ -204,7 +204,8 @@ alter publication supabase_realtime add table
 -- (Véhicules), sauf le tracteur à gazon, rangé au Garage ; deux lignes
 -- « Tentes » vides du gabarit. Doublons exacts gardés une fois (bâtons
 -- de hockey et de golf, jeu de poche, cabane des tout-petits). Coquilles
--- corrigées ; « 3 » (sans nom dans le Sheets) devient « À nommer… ».
+-- corrigées ; « 3 » (sans nom dans le Sheets, inconnu de Maxime) devient
+-- « À identifier », avec une note.
 -- ============================================================
 -- Catégories (lignes grises du Sheets)
 insert into inventaire.categories (nom, ordre) values
@@ -369,10 +370,10 @@ select a.id::uuid, a.nom, a.variante, c.id, l.id, e.id, a.necessaire, a.note, a.
     ('fa897e6a-a45f-5a91-a0b9-98d950964484', 'Cornets', null, 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 119),
     ('9d086af2-0125-5902-ab78-a8aa3ae7c086', 'Matériel de cirque', 'Quilles', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 120),
     ('05f437af-fedf-5f72-ab6e-321961bb991a', 'Matériel de cirque', 'Cordes', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 121),
-    ('fabac270-67e4-5ee7-a016-f558cf589890', 'À nommer (« 3 » dans le Sheets)', 'Adulte - Small', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 122),
-    ('4a818a79-833c-51a7-a5eb-52b01cef8532', 'À nommer (« 3 » dans le Sheets)', 'Adulte - Medium', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 123),
-    ('fccadeff-04ca-5c74-ae74-087bdb96e70c', 'À nommer (« 3 » dans le Sheets)', 'Enfant - Small', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 124),
-    ('520c5c09-48c9-5d9e-a991-e522758ae4e2', 'À nommer (« 3 » dans le Sheets)', 'Enfant - Medium', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 125),
+    ('fabac270-67e4-5ee7-a016-f558cf589890', 'À identifier', 'Adulte - Small', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, 'Sans nom dans le Sheets (« 3 ») ; personne ne sait ce que c''est (2026-10-11). Tailles adulte et enfant, au Grill : à identifier au prochain comptage, puis renommer.', 122),
+    ('4a818a79-833c-51a7-a5eb-52b01cef8532', 'À identifier', 'Adulte - Medium', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, 'Sans nom dans le Sheets (« 3 ») ; personne ne sait ce que c''est (2026-10-11). Tailles adulte et enfant, au Grill : à identifier au prochain comptage, puis renommer.', 123),
+    ('fccadeff-04ca-5c74-ae74-087bdb96e70c', 'À identifier', 'Enfant - Small', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, 'Sans nom dans le Sheets (« 3 ») ; personne ne sait ce que c''est (2026-10-11). Tailles adulte et enfant, au Grill : à identifier au prochain comptage, puis renommer.', 124),
+    ('520c5c09-48c9-5d9e-a991-e522758ae4e2', 'À identifier', 'Enfant - Medium', 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, 'Sans nom dans le Sheets (« 3 ») ; personne ne sait ce que c''est (2026-10-11). Tailles adulte et enfant, au Grill : à identifier au prochain comptage, puis renommer.', 125),
     ('165d94bf-5e69-54f4-a211-15aee0c827ff', 'Traîneau', null, 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 126),
     ('6192ac0d-e0f1-5be7-acaa-f36d5063c9d6', 'Crazy carpet', null, 'Autre matériel d''animation', 'Grill', 'GBPA+', null::integer, null, 127),
     ('2869f926-fab5-55db-a1b7-8f3a09521faf', 'Crazy carpet', null, 'Autre matériel d''animation', 'Tanière', 'GBPA+', null::integer, null, 128),
