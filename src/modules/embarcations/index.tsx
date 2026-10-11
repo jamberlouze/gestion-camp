@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { useEnLigne, useModificationsEnAttente, useTempsReel } from './donnees'
+import { EquipementNautique } from './EquipementNautique'
 import { Inventaire } from './Inventaire'
 import { Modeles } from './Modeles'
 import { TableauDeBord } from './TableauDeBord'
@@ -20,9 +21,12 @@ export default function ModuleEmbarcations() {
       </div>
       {/* Adresses absolues : dans une route « embarcations/* », un lien relatif
           se résout depuis l'adresse courante (ex. /tableau/modeles). */}
-      <nav className="mb-4 mt-3 flex gap-6 border-b border-pierre-200">
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
         <NavLink to="/embarcations" end className={onglet}>
           Inventaire
+        </NavLink>
+        <NavLink to="/embarcations/equipement" className={onglet}>
+          Équipement
         </NavLink>
         <NavLink to="/embarcations/tableau" className={onglet}>
           Tableau de bord
@@ -34,6 +38,7 @@ export default function ModuleEmbarcations() {
       <BandeauErreurs racine="embarcations" />
       <Routes>
         <Route index element={<Inventaire />} />
+        <Route path="equipement" element={<EquipementNautique />} />
         <Route path="tableau" element={<TableauDeBord />} />
         <Route path="modeles" element={<Modeles />} />
       </Routes>

@@ -10,13 +10,14 @@
 
 -- Fiches participants : accès propre (données de santé), comme Coût par
 -- assiette ; admins seulement au départ (aucune ligne dans la grille).
+-- 'inventaire' (20261011143250) : ce module peut partir en PROD avant celui-ci.
 alter table core.acces_roles drop constraint acces_roles_module_check;
 alter table core.acces_roles add constraint acces_roles_module_check
-  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante'));
+  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire'));
 
 alter table core.acces_modules drop constraint acces_modules_module_check;
 alter table core.acces_modules add constraint acces_modules_module_check
-  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante'));
+  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire'));
 
 -- ------------------------------------------------------------
 -- Liens secrets d'une réservation : page client (le responsable du
