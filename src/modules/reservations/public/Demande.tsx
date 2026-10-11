@@ -316,7 +316,7 @@ export default function Demande() {
           {v.facturation && <Personne titre={t.fact_titre} t={t} err={err} prefixe="fact" texte={texte} />}
           {v.courriel_direction && (
             <Question libelle={t.courriel_direction} requis {...q('courriel_direction')}>
-              {texte('courriel_direction', 'email', { placeholder: 'exemple@exemple.com' })}
+              {texte('courriel_direction', 'email', { placeholder: t.exemple_courriel })}
             </Question>
           )}
         </section>
@@ -372,7 +372,7 @@ function Personne({
         </div>
       </Question>
       <Question libelle={t.courriel} requis id={`q-${c('courriel')}`} erreur={err[c('courriel')]}>
-        {texte(c('courriel'), 'email', { placeholder: 'exemple@exemple.com', autoComplete: prefixe === 'resp' ? 'email' : 'off' })}
+        {texte(c('courriel'), 'email', { placeholder: t.exemple_courriel, autoComplete: prefixe === 'resp' ? 'email' : 'off' })}
       </Question>
       <Question libelle={t.telephone} requis id={`q-${c('telephone')}`} erreur={err[c('telephone')]}>
         {texte(c('telephone'), 'tel', { autoComplete: prefixe === 'resp' ? 'tel' : 'off' })}

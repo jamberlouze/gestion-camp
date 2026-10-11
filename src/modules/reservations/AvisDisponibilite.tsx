@@ -5,7 +5,7 @@ import { CALENDRIERS, calendrierDe, NOMS_CALENDRIER, type CleCalendrier } from '
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { annonceAirbnb, chevauchements, conflitsAirbnb, conflitsAirbnbDe, lienAirbnb } from './disponibilite'
-import { lireAirbnb, synchroniserAgenda, useAgenda, useEnregistrerReglage, type ModeAgenda } from './donnees'
+import { lireAirbnb, synchroniserAgenda, useAgenda, useAlertesPaiement, useEnregistrerReglage, type ModeAgenda } from './donnees'
 import { dateCourte } from './format'
 import type { Reservation } from './types'
 
@@ -23,8 +23,14 @@ export function AvisReservation({ r }: { r: Reservation }) {
   const autres = chevauchements(r, reservations).filter((c) => c.autre.origine !== 'airbnb' || r.origine === 'airbnb')
   const annonce = annonceAirbnb(r)
   const lien = lienAirbnb(r)
+  const sansPaiement = useAlertesPaiement(auj).has(r.id)
   return (
     <div className="space-y-2">
+      {sansPaiement && (
+        <p className={ui.erreur}>
+          Aucun paiement reçu depuis la signature du contrat{r.signe_le && ` (${dateCourte(r.signe_le, auj)})`}. Relancez le client ou libérez les dates.
+        </p>
+      )}
       {r.origine === 'airbnb' && (
         <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
           Réservation <strong>Airbnb</strong> ({annonce ?? 'Vieille-France'}), lue dans le calendrier d'Airbnb : à compléter (nombre de personnes, client, notes).

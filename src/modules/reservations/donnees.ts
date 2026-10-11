@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRelances } from '@/modules/crm/donnees'
 import type { CleCalendrier } from './agenda'
 import type {
   Compagnie,
@@ -675,3 +676,16 @@ export const synchroniserAgenda = (reservation?: string) =>
 /** Lecture des iCal d'Airbnb tout de suite. */
 export const lireAirbnb = () =>
   appelerWorker<{ quand: string; annonces: Record<string, { reservations: number; ajoutees: number; modifiees: number; annulees: number }>; erreurs: string[] }>('/api/reservations/airbnb', {})
+
+/**
+ * Contrats signés sans aucun paiement reçu : relances « paiement » échues
+ * (posées par la base à la signature, fermées au premier paiement), par réservation.
+ */
+export function useAlertesPaiement(auj: string) {
+  const relances = useRelances()
+  return new Set(
+    (relances.data ?? [])
+      .filter((x) => x.reservation_id && x.statut === 'a_faire' && x.source_cle?.endsWith(':paiement') && x.echeance <= auj)
+      .map((x) => x.reservation_id!),
+  )
+}

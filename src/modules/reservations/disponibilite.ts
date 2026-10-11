@@ -9,6 +9,7 @@ export const ETAPES_CONFIRMEES = ['confirmee', 'pre_arrivee', 'terminee', 'factu
 
 type R = Pick<Reservation, 'id' | 'numero' | 'nom' | 'etape' | 'fermeture' | 'origine' | 'date_arrivee' | 'date_depart' | 'etages' | 'salles'> & {
   ref_externe?: string | null
+  lien_externe?: string | null
   description?: string | null
 }
 
@@ -65,5 +66,5 @@ export function conflitsAirbnb<T extends R>(toutes: T[]) {
 export const annonceAirbnb = (r: Pick<R, 'ref_externe'>) =>
   r.ref_externe?.startsWith('airbnb:vf_complet:') ? 'Vieille-France complète' : r.ref_externe?.startsWith('airbnb:vf_bas:') ? 'Vieille-France, étage du bas' : null
 
-/** Lien de la réservation dans Airbnb (gardé dans la description à la réception). */
-export const lienAirbnb = (r: Pick<R, 'description'>) => r.description?.match(/https:\/\/\S+/)?.[0] ?? null
+/** Lien de la réservation dans Airbnb (tenu par la lecture de l'iCal ; avant : dans la description). */
+export const lienAirbnb = (r: Pick<R, 'lien_externe' | 'description'>) => r.lien_externe ?? r.description?.match(/https:\/\/\S+/)?.[0] ?? null

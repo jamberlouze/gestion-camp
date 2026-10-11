@@ -13,6 +13,8 @@ export interface Reglages {
   variantesClasse: Record<string, string>
   /** Compte qui fait les factures dans QBO (relances de facturation) ; null = responsable de la réservation. */
   responsableFacturation: string | null
+  /** Jours après la signature avant l'alerte « aucun paiement reçu » (0 = jamais ; lu par la base à la signature). */
+  alertePaiementJours: number
   /** Google Agenda (phase 6) : écriture active ? identifiants des 5 calendriers. */
   agenda: ReglageAgenda
   /** Dernière lecture des iCal d'Airbnb (écrite par le Worker). */
@@ -31,6 +33,7 @@ export function lireReglages(r: Reglage[]): Reglages {
     diviseurHeuresExtra: Number(valeur(r, 'diviseur_heures_extra', 8)),
     variantesClasse: valeur(r, 'variantes_classe', {}),
     responsableFacturation: valeur<string | null>(r, 'responsable_facturation', null),
+    alertePaiementJours: Number(valeur(r, 'alerte_paiement_jours', 14)),
     agenda: valeur<ReglageAgenda>(r, 'agenda', { actif: false, calendriers: { demande: '', estime: '', contrat: '', confirmee_pp: '', confirmee_vf: '' } }),
     airbnbLecture: valeur(r, 'airbnb_lecture', null),
   }

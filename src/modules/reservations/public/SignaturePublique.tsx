@@ -72,7 +72,7 @@ function Contenu({ infos, jeton, relire }: { infos: Infos; jeton: string; relire
         <div className={`${ui.carte} p-6 text-center`}>
           <p className="text-lg font-medium text-foret-800">✓ Contrat signé</p>
           <p className="mt-1 text-sm text-pierre-600">
-            Signé par {infos.nom_signataire} le {infos.signe_le && quand(infos.signe_le)}. Merci ! Une copie signée vous sera transmise.
+            Signé par {infos.nom_signataire} le {infos.signe_le && quand(infos.signe_le)}. Merci ! Le contrat signé sera déposé sur votre page de réservation (lien reçu avec l'estimé).
           </p>
         </div>
       )}

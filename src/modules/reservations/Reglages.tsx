@@ -144,6 +144,27 @@ export function Reglages() {
           </select>
         </label>
         <p className="mt-2 text-xs text-pierre-500">Habituellement l'adjointe, qui fait les factures progressives dans QBO (SOP).</p>
+        <label className="mt-4 flex items-center gap-2 text-sm">
+          <span className="flex-1">Contrat signé sans aucun paiement reçu : alerte après</span>
+          <input
+            type="number"
+            min={0}
+            className={`${champPetit} w-20 text-right`}
+            defaultValue={reglages.alertePaiementJours}
+            disabled={d}
+            onBlur={(e) =>
+              e.target.value !== '' &&
+              Number(e.target.value) >= 0 &&
+              Number(e.target.value) !== reglages.alertePaiementJours &&
+              enregistrer.mutate({ cle: 'alerte_paiement_jours', valeur: Math.round(Number(e.target.value)) })
+            }
+          />
+          jours
+        </label>
+        <p className="mt-2 text-xs text-pierre-500">
+          Relance au responsable de la réservation, au plus tard 7 jours avant l'arrivée ; elle se ferme au premier paiement entré dans QBO. 0 = jamais. Vaut pour les
+          contrats signés ensuite.
+        </p>
       </Section>
       <ReglagesAgenda />
       {!ecriture && <p className={`${ui.erreur} lg:col-span-2`}>Lecture seule.</p>}

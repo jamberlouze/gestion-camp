@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
@@ -49,6 +49,18 @@ export function Documents({ r }: { r: Reservation }) {
       setOccupe(null)
     }
   }
+
+  // Contrat signé par le client : sa copie signée est produite à l'ouverture
+  // de la fiche (la page de signature promet qu'elle sera déposée sur la page
+  // client). Une seule tentative ; le bouton reste si elle échoue.
+  const signeTente = useRef(false)
+  const signeAProduire = ecriture && sig?.statut === 'signe' && !sig.document_signe_id && sig.document_id ? contratDe(sig.document_id) : undefined
+  useEffect(() => {
+    if (!signeAProduire || !sig || signeTente.current) return
+    signeTente.current = true
+    void agir('signe', () => produireContratSigne(sources(r), sig, signeAProduire))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signeAProduire?.id])
 
   const preparer = async () => {
     if (!accepte || !modeleContrat) return

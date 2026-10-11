@@ -84,6 +84,8 @@ export interface Reservation {
   annule_le: string | null
   origine: 'app' | 'formulaire' | 'import' | 'airbnb'
   ref_externe: string | null
+  /** Lien de la réservation chez Airbnb (tenu par la lecture de l'iCal). */
+  lien_externe: string | null
   /** Lien secret de la page client (/client/<jeton>). */
   jeton_client: string
   /** Lien secret des fiches participants (/fiches/<jeton>), transmis aux parents. */
