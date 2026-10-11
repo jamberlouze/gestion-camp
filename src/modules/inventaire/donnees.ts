@@ -3,8 +3,8 @@ import { useEffect, useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import { estErreurReseau } from '@/modules/embarcations/donnees'
-import { cleLigne } from './outils'
-import type { Article, Categorie, ChampsArticle, ChampsLigne, Compagnie, Comptage, Lieu, Ligne } from './types'
+import { historiques } from './outils'
+import type { Article, ChampsArticle, ChampsCompte, Compagnie, Compte, Lieu, Section } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne (comme Embarcations, voir CLAUDE.md)
@@ -17,20 +17,19 @@ import type { Article, Categorie, ChampsArticle, ChampsLigne, Compagnie, Comptag
 // Un compte n'envoie que les champs touchés (upsert) : deux personnes qui
 // comptent le même article ne s'écrasent pas.
 //
-// Comptages (commencer, terminer, rouvrir), catégories et lieux : en ligne
-// seulement, erreurs affichées sur place.
+// Sections et lieux : en ligne seulement, erreurs affichées sur place.
 // ------------------------------------------------------------------
 
 const RACINE = 'inventaire'
 const db = () => supabase.schema('inventaire')
 
 export const CLES = {
-  categories: [RACINE, 'categories'],
+  sections: [RACINE, 'sections'],
   lieux: [RACINE, 'lieux'],
   articles: [RACINE, 'articles'],
-  comptages: [RACINE, 'comptages'],
-  lignes: [RACINE, 'lignes'],
+  comptes: [RACINE, 'comptes'],
   compter: [RACINE, 'compter'],
+  supprimerCompte: [RACINE, 'supprimer-compte'],
   creerArticle: [RACINE, 'creer-article'],
   majArticle: [RACINE, 'maj-article'],
   supprimerArticle: [RACINE, 'supprimer-article'],
@@ -60,11 +59,10 @@ async function toutLire<T>(tranche: (debut: number, fin: number) => PromiseLike<
 const lister = <T,>(table: string, tri: string, depart: string) => () =>
   toutLire<T>((a, b) => db().from(table).select('*').order(tri).order(depart).range(a, b))
 
-const useCategories = () => useQuery({ queryKey: CLES.categories, queryFn: lister<Categorie>('categories', 'ordre', 'id') })
+const useSections = () => useQuery({ queryKey: CLES.sections, queryFn: lister<Section>('sections', 'ordre', 'id') })
 const useLieux = () => useQuery({ queryKey: CLES.lieux, queryFn: lister<Lieu>('lieux', 'ordre', 'id') })
 const useArticles = () => useQuery({ queryKey: CLES.articles, queryFn: lister<Article>('articles', 'ordre', 'id') })
-const useComptages = () => useQuery({ queryKey: CLES.comptages, queryFn: lister<Comptage>('comptages', 'debut', 'id') })
-const useLignes = () => useQuery({ queryKey: CLES.lignes, queryFn: lister<Ligne>('lignes', 'comptage_id', 'article_id') })
+const useComptes = () => useQuery({ queryKey: CLES.comptes, queryFn: lister<Compte>('comptes', 'jour', 'article_id') })
 
 /** Recharge le module quand quelqu'un d'autre modifie quelque chose. */
 export function useTempsReel() {
@@ -76,7 +74,7 @@ export function useTempsReel() {
       if (client.isMutating({ mutationKey: [RACINE] }) === 0) client.invalidateQueries({ queryKey: [RACINE] })
     }
     let canal = supabase.channel(`inventaire-${crypto.randomUUID()}`)
-    for (const table of ['categories', 'lieux', 'articles', 'comptages', 'lignes']) {
+    for (const table of ['sections', 'lieux', 'articles', 'comptes']) {
       canal = canal.on('postgres_changes', { event: '*', schema: 'inventaire', table }, recharger)
     }
     canal.subscribe()
@@ -90,11 +88,10 @@ const parId = <T extends { id: string }>(l: T[]) => new Map(l.map((x) => [x.id, 
 
 /** Tout ce qu'affiche le module, indexé. */
 export function useDonnees() {
-  const categories = useCategories().data
+  const sections = useSections().data
   const lieux = useLieux().data
   const articles = useArticles().data
-  const comptages = useComptages().data
-  const lignes = useLignes().data
+  const comptes = useComptes().data
   // Compagnies du référentiel (core.entreprises), lues par toute personne active.
   const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre').data
   const erreur = useQueryClient()
@@ -102,28 +99,25 @@ export function useDonnees() {
     .findAll({ queryKey: [RACINE] })
     .find((q) => q.state.error && q.state.data === undefined)?.state.error
   const donnees = useMemo(() => {
-    const c = categories ?? []
+    const s = sections ?? []
     const l = lieux ?? []
     const a = articles ?? []
     const cp = compagnies ?? []
-    const lg = lignes ?? []
+    const h = historiques(comptes ?? [])
     return {
-      categories: c,
+      sections: s,
       lieux: l,
       articles: a,
-      // Plus récent d'abord.
-      comptages: [...(comptages ?? [])].sort((x, y) => y.debut.localeCompare(x.debut) || y.created_at.localeCompare(x.created_at)),
       compagnies: cp,
-      lignes: lg,
-      categorie: parId(c),
+      section: parId(s),
       lieu: parId(l),
       article: parId(a),
       compagnie: parId(cp),
-      /** Nombres par comptage et article (`cleLigne`). */
-      ligne: new Map(lg.map((x) => [cleLigne(x.comptage_id, x.article_id), x])),
-      pret: !!(categories && lieux && articles && comptages && lignes && compagnies),
+      /** Comptes d'un article, du plus récent au plus ancien. */
+      historique: (id: string) => h.get(id) ?? [],
+      pret: !!(sections && lieux && articles && comptes && compagnies),
     }
-  }, [categories, lieux, articles, comptages, lignes, compagnies])
+  }, [sections, lieux, articles, comptes, compagnies])
   return { ...donnees, erreur: erreur ?? null }
 }
 
@@ -143,11 +137,13 @@ export function useModificationsEnAttente() {
 // ------------------------------------------------------------------
 
 export interface VariablesCompte {
-  comptage_id: string
   article_id: string
+  /** Jour de l'inventaire (AAAA-MM-JJ). */
+  jour: string
   /** Seulement les champs touchés. */
-  champs: ChampsLigne
+  champs: ChampsCompte
 }
+export type CleCompte = Pick<Compte, 'article_id' | 'jour'>
 export type NouvelArticle = Pick<Article, 'id' | 'nom'> & Partial<Omit<Article, 'id' | 'nom' | 'created_at' | 'updated_at'>>
 export interface VariablesMajArticle {
   id: string
@@ -192,48 +188,62 @@ export function enregistrerMutationsInventaire(client: QueryClient) {
     if (ctx) client.setQueryData<Article[]>(CLES.articles, (liste = []) => remplacer(liste, ctx.id, ctx.avant))
   }
 
-  // Nombres : une ligne par comptage et article.
+  // Comptes : un par article et par jour.
   interface ContexteCompte {
-    comptage_id: string
     article_id: string
-    avant: Ligne | null
+    jour: string
+    avant: Compte | null
   }
-  function poserLigne(liste: Ligne[], comptage: string, article: string, ligne: Ligne | null): Ligne[] {
-    const sans = liste.filter((l) => l.comptage_id !== comptage || l.article_id !== article)
-    return ligne ? [...sans, ligne] : sans
+  function poserCompte(liste: Compte[], article: string, jour: string, compte: Compte | null): Compte[] {
+    const sans = liste.filter((c) => c.article_id !== article || c.jour !== jour)
+    return compte ? [...sans, compte] : sans
+  }
+  async function optimisteCompte(article_id: string, jour: string, apres: (c: Compte | null) => Compte | null): Promise<ContexteCompte> {
+    await client.cancelQueries({ queryKey: CLES.comptes })
+    const liste = client.getQueryData<Compte[]>(CLES.comptes) ?? []
+    const avant = liste.find((c) => c.article_id === article_id && c.jour === jour) ?? null
+    client.setQueryData<Compte[]>(CLES.comptes, poserCompte(liste, article_id, jour, apres(avant)))
+    return { article_id, jour, avant }
+  }
+  function annulerCompte(_e: unknown, _v: unknown, ctx: ContexteCompte | undefined) {
+    if (ctx) client.setQueryData<Compte[]>(CLES.comptes, (liste = []) => poserCompte(liste, ctx.article_id, ctx.jour, ctx.avant))
   }
 
   client.setMutationDefaults<void, Error, VariablesCompte, ContexteCompte>(CLES.compter, {
     ...communes,
-    mutationFn: ({ comptage_id, article_id, champs }: VariablesCompte) =>
+    mutationFn: ({ article_id, jour, champs }) =>
       executer(
         db()
-          .from('lignes')
-          // Les champs absents gardent leur valeur (ou 0 pour une nouvelle ligne).
-          .upsert({ comptage_id, article_id, ...champs }, { onConflict: 'comptage_id,article_id', defaultToNull: false }),
+          .from('comptes')
+          // Les champs absents gardent leur valeur (ou 0 pour un nouveau compte).
+          .upsert({ article_id, jour, ...champs }, { onConflict: 'article_id,jour', defaultToNull: false }),
       ),
-    onMutate: async ({ comptage_id, article_id, champs }: VariablesCompte): Promise<ContexteCompte> => {
-      await client.cancelQueries({ queryKey: CLES.lignes })
-      const liste = client.getQueryData<Ligne[]>(CLES.lignes) ?? []
-      const avant = liste.find((l) => l.comptage_id === comptage_id && l.article_id === article_id) ?? null
-      const base: Ligne = avant ?? {
-        comptage_id,
-        article_id,
-        bon: 0,
-        brise: 0,
-        incomplet: 0,
-        note: null,
-        compte_par: null,
-        compte_par_nom: null,
-        created_at: maintenant(),
+    onMutate: ({ article_id, jour, champs }) =>
+      optimisteCompte(article_id, jour, (avant) => ({
+        ...(avant ?? {
+          article_id,
+          jour,
+          bon: 0,
+          brise: 0,
+          incomplet: 0,
+          note: null,
+          compte_par: null,
+          compte_par_nom: null,
+          created_at: maintenant(),
+          updated_at: maintenant(),
+        }),
+        ...champs,
         updated_at: maintenant(),
-      }
-      client.setQueryData<Ligne[]>(CLES.lignes, poserLigne(liste, comptage_id, article_id, { ...base, ...champs, updated_at: maintenant() }))
-      return { comptage_id, article_id, avant }
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx) client.setQueryData<Ligne[]>(CLES.lignes, (liste = []) => poserLigne(liste, ctx.comptage_id, ctx.article_id, ctx.avant))
-    },
+      })),
+    onError: annulerCompte,
+    onSettled: recharger,
+  })
+
+  client.setMutationDefaults<void, Error, CleCompte, ContexteCompte>(CLES.supprimerCompte, {
+    ...communes,
+    mutationFn: ({ article_id, jour }) => executer(db().from('comptes').delete().eq('article_id', article_id).eq('jour', jour)),
+    onMutate: ({ article_id, jour }) => optimisteCompte(article_id, jour, () => null),
+    onError: annulerCompte,
     onSettled: recharger,
   })
 
@@ -243,7 +253,7 @@ export function enregistrerMutationsInventaire(client: QueryClient) {
     onMutate: (a: NouvelArticle) =>
       optimisteArticle(a.id, () => ({
         variante: null,
-        categorie_id: null,
+        section_id: null,
         lieu_id: null,
         entreprise_id: null,
         necessaire: null,
@@ -277,27 +287,16 @@ export function enregistrerMutationsInventaire(client: QueryClient) {
 }
 
 export const useCompter = () => useMutation<void, Error, VariablesCompte>({ mutationKey: CLES.compter })
+export const useSupprimerCompte = () => useMutation<void, Error, CleCompte>({ mutationKey: CLES.supprimerCompte })
 export const useCreerArticle = () => useMutation<void, Error, NouvelArticle>({ mutationKey: CLES.creerArticle })
 export const useMajArticle = () => useMutation<void, Error, VariablesMajArticle>({ mutationKey: CLES.majArticle })
 export const useSupprimerArticle = () => useMutation<void, Error, string>({ mutationKey: CLES.supprimerArticle })
 
 // ------------------------------------------------------------------
-// En ligne seulement : comptages, catégories et lieux
+// En ligne seulement : sections et lieux
 // ------------------------------------------------------------------
 
-export async function commencerComptage(nom: string) {
-  await executer(db().from('comptages').insert({ nom }))
-}
-
-export async function majComptage(id: string, champs: Partial<Pick<Comptage, 'nom' | 'statut' | 'fin'>>) {
-  await executer(db().from('comptages').update(champs).eq('id', id))
-}
-
-export async function supprimerComptage(id: string) {
-  await executer(db().from('comptages').delete().eq('id', id))
-}
-
-type TableListe = 'categories' | 'lieux'
+type TableListe = 'sections' | 'lieux'
 
 /** Ajoute ou modifie une ligne d'une liste (selon la présence d'un id). */
 export async function enregistrerListe(table: TableListe, ligne: { id?: string; nom?: string; ordre?: number }) {

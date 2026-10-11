@@ -3,19 +3,20 @@ import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
-import { useCreerArticle, useMajArticle, useSupprimerArticle, type Donnees } from './donnees'
-import { cleLigne, nomArticle, total } from './outils'
+import { IconeCorbeille } from '@/lib/icones'
+import { useCreerArticle, useMajArticle, useSupprimerArticle, useSupprimerCompte, type Donnees } from './donnees'
+import { dateCourte, nomArticle, total } from './outils'
 import type { Article } from './types'
 
 interface Defauts {
-  categorie_id: string | null
+  section_id: string | null
   lieu_id: string | null
   entreprise_id: string | null
 }
 
 /**
- * Fiche d'un article : nom, type, catégorie, lieu, compagnie, nombre
- * nécessaire, note, et ses nombres à chaque comptage. `id` null = nouvel
+ * Fiche d'un article : nom, type, section, lieu, compagnie, nombre
+ * nécessaire, note, et l'historique de ses comptes. `id` null = nouvel
  * article. Marche sans réseau (file de l'inventaire).
  */
 export function Fiche({
@@ -31,23 +32,24 @@ export function Fiche({
   ecriture: boolean
   defauts: Defauts
   fermer: () => void
-  /** Ouvre le compte de cet article (comptage en cours, quelqu'un qui écrit). */
+  /** Ouvre le compte de cet article (quelqu'un qui écrit). */
   compter?: (id: string) => void
 }) {
   const article = id ? d.article.get(id) : undefined
   const creer = useCreerArticle()
   const maj = useMajArticle()
   const supprimer = useSupprimerArticle()
+  const supprimerCompte = useSupprimerCompte()
   const [nom, setNom] = useState(article?.nom ?? '')
   const [variante, setVariante] = useState(article?.variante ?? '')
-  const [categorie, setCategorie] = useState(article ? (article.categorie_id ?? '') : (defauts.categorie_id ?? ''))
+  const [section, setSection] = useState(article ? (article.section_id ?? '') : (defauts.section_id ?? ''))
   const [lieu, setLieu] = useState(article ? (article.lieu_id ?? '') : (defauts.lieu_id ?? ''))
   const [compagnie, setCompagnie] = useState(article ? (article.entreprise_id ?? '') : (defauts.entreprise_id ?? ''))
   const [necessaire, setNecessaire] = useState(article?.necessaire == null ? '' : String(article.necessaire))
   const [note, setNote] = useState(article?.note ?? '')
 
   if (id && !article) return null
-  const historique = article ? d.comptages.map((c) => ({ c, l: d.ligne.get(cleLigne(c.id, article.id)) })).filter((x) => x.l) : []
+  const historique = article ? d.historique(article.id) : []
   const jamaisCompte = historique.length === 0
 
   function soumettre(e: FormEvent) {
@@ -55,7 +57,7 @@ export function Fiche({
     const champs = {
       nom: nom.trim(),
       variante: variante.trim() || null,
-      categorie_id: categorie || null,
+      section_id: section || null,
       lieu_id: lieu || null,
       entreprise_id: compagnie || null,
       necessaire: necessaire === '' ? null : Math.max(0, Math.floor(Number(necessaire))),
@@ -64,8 +66,8 @@ export function Fiche({
     if (!champs.nom) return
     if (article) maj.mutate({ id: article.id, champs })
     else {
-      // À la fin de sa catégorie.
-      const ordre = Math.max(0, ...d.articles.filter((a) => a.categorie_id === champs.categorie_id).map((a) => a.ordre)) + 1
+      // À la fin de sa section.
+      const ordre = Math.max(0, ...d.articles.filter((a) => a.section_id === champs.section_id).map((a) => a.ordre)) + 1
       creer.mutate({ id: crypto.randomUUID(), ...champs, ordre })
     }
     fermer()
@@ -80,7 +82,7 @@ export function Fiche({
     } else if (
       await confirmer({
         titre: `Retirer « ${nomArticle(a)} » de l'inventaire ?`,
-        message: 'Il ne sera plus à compter. Ses nombres restent dans les anciens comptages ; on peut le remettre.',
+        message: 'Il ne sera plus à compter. Son historique est gardé ; on peut le remettre.',
         libelleOk: 'Retirer',
       })
     ) {
@@ -109,12 +111,12 @@ export function Fiche({
             <input id="art-variante" disabled={lecture} className={ui.champ} value={variante} placeholder="—" onChange={(e) => setVariante(e.target.value)} />
           </div>
           <div>
-            <label className={ui.etiquette} htmlFor="art-categorie">
-              Catégorie
+            <label className={ui.etiquette} htmlFor="art-section">
+              Section
             </label>
-            <select id="art-categorie" disabled={lecture} className={ui.champ} value={categorie} onChange={(e) => setCategorie(e.target.value)}>
+            <select id="art-section" disabled={lecture} className={ui.champ} value={section} onChange={(e) => setSection(e.target.value)}>
               <option value="">—</option>
-              {d.categories.map((c) => (
+              {d.sections.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nom}
                 </option>
@@ -173,17 +175,34 @@ export function Fiche({
 
         {article && (
           <section>
-            <h3 className={ui.etiquette}>Comptages</h3>
+            <h3 className={ui.etiquette}>Comptes</h3>
             {historique.length ? (
               <ul className="divide-y divide-pierre-100 rounded-lg border border-pierre-200 text-sm">
-                {historique.map(({ c, l }) => (
-                  <li key={c.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-1.5">
-                    <span className="w-24 font-medium">{c.nom}</span>
-                    <span className="tabular-nums">
-                      {l!.bon} bons{l!.brise ? `, ${l!.brise} brisés` : ''}
-                      {l!.incomplet ? `, ${l!.incomplet} incomplets` : ''} · total {total(l!)}
-                    </span>
-                    {l!.note && <span className="w-full text-xs text-pierre-500">{l!.note}</span>}
+                {historique.map((c, i) => (
+                  <li key={c.jour} className="flex items-start gap-2 px-3 py-1.5">
+                    <div className="min-w-0 flex-1">
+                      <span className={`mr-3 inline-block w-28 ${i === 0 ? 'font-semibold' : 'text-pierre-600'}`}>{dateCourte(c.jour)}</span>
+                      <span className="tabular-nums">
+                        {c.bon} bons{c.brise ? `, ${c.brise} brisés` : ''}
+                        {c.incomplet ? `, ${c.incomplet} incomplets` : ''} · total {total(c)}
+                      </span>
+                      {(c.note || c.compte_par_nom) && (
+                        <p className="text-xs text-pierre-500">{[c.note, c.compte_par_nom && `par ${c.compte_par_nom}`].filter(Boolean).join(' — ')}</p>
+                      )}
+                    </div>
+                    {ecriture && (
+                      <button
+                        type="button"
+                        className="rounded p-1 text-pierre-400 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Supprimer le compte du ${dateCourte(c.jour)}`}
+                        onClick={async () => {
+                          if (await confirmer({ titre: `Supprimer le compte du ${dateCourte(c.jour)} ?`, libelleOk: 'Supprimer', danger: true }))
+                            supprimerCompte.mutate({ article_id: c.article_id, jour: c.jour })
+                        }}
+                      >
+                        <IconeCorbeille className="size-4" />
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

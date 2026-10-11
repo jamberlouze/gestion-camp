@@ -5,7 +5,6 @@ import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { Comptages } from './Comptages'
 import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Equipement } from './Equipement'
 import { Reglages } from './Reglages'
@@ -31,9 +30,6 @@ export default function ModuleInventaire() {
         <NavLink to="/inventaire" end className={onglet}>
           Équipement
         </NavLink>
-        <NavLink to="/inventaire/comptages" className={onglet}>
-          Comptages
-        </NavLink>
         {ecriture && (
           <NavLink to="/inventaire/reglages" className={onglet}>
             Réglages
@@ -48,7 +44,6 @@ export default function ModuleInventaire() {
       ) : (
         <Routes>
           <Route index element={<Equipement d={d} ecriture={ecriture} />} />
-          <Route path="comptages" element={<Comptages d={d} ecriture={ecriture} />} />
           <Route path="reglages" element={<Reglages d={d} ecriture={ecriture} />} />
         </Routes>
       )}

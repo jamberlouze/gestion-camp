@@ -1,10 +1,10 @@
-/** Catégorie (Tir à l'arc, Camping…) ou lieu de rangement (Grill, Tanière…) : listes du module. */
+/** Section (Tir à l'arc, Camping…) ou lieu de rangement (Grill, Tanière…) : listes du module. */
 export interface Element {
   id: string
   nom: string
   ordre: number
 }
-export type Categorie = Element
+export type Section = Element
 export type Lieu = Element
 
 export interface Article {
@@ -12,7 +12,7 @@ export interface Article {
   nom: string
   /** « Type » du Sheets : taille, sorte, couleur… */
   variante: string | null
-  categorie_id: string | null
+  section_id: string | null
   lieu_id: string | null
   entreprise_id: string | null
   /** Nombre qu'il faut avoir ; null = pas de cible. */
@@ -20,32 +20,23 @@ export interface Article {
   /** Note permanente (où exactement…). */
   note: string | null
   ordre: number
-  /** false = retiré de l'inventaire (gardé dans les anciens comptages). */
+  /** false = retiré de l'inventaire (son historique est gardé). */
   actif: boolean
   created_at: string
   updated_at: string
 }
 
-export type ChampsArticle = Partial<Pick<Article, 'nom' | 'variante' | 'categorie_id' | 'lieu_id' | 'entreprise_id' | 'necessaire' | 'note' | 'actif'>>
+export type ChampsArticle = Partial<Pick<Article, 'nom' | 'variante' | 'section_id' | 'lieu_id' | 'entreprise_id' | 'necessaire' | 'note' | 'actif'>>
 
-export interface Comptage {
-  id: string
-  nom: string
-  statut: 'en_cours' | 'termine'
-  debut: string
-  fin: string | null
-  created_at: string
-  updated_at: string
-}
-
-/** Nombres d'un article dans un comptage (absente = pas encore compté). */
-export interface Ligne {
-  comptage_id: string
+/** Nombres d'un article un jour donné (le plus récent fait foi). */
+export interface Compte {
   article_id: string
+  /** Jour de l'inventaire, AAAA-MM-JJ. */
+  jour: string
   bon: number
   brise: number
   incomplet: number
-  /** État noté pendant ce comptage. */
+  /** État noté ce jour-là. */
   note: string | null
   /** Posés par la base. */
   compte_par: string | null
@@ -54,7 +45,7 @@ export interface Ligne {
   updated_at: string
 }
 
-export type ChampsLigne = Partial<Pick<Ligne, 'bon' | 'brise' | 'incomplet' | 'note'>>
+export type ChampsCompte = Partial<Pick<Compte, 'bon' | 'brise' | 'incomplet' | 'note'>>
 
 /** Compagnie du référentiel (core.entreprises). */
 export interface Compagnie {

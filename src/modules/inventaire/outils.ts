@@ -1,35 +1,30 @@
-import type { Article, Comptage, Element, Ligne } from './types'
+import type { Article, Compte, Element } from './types'
 
 // Fonctions pures : ni React ni Supabase.
 
-export const cleLigne = (comptage: string, article: string) => `${comptage}:${article}`
+/** Aujourd'hui au camp (AAAA-MM-JJ, heure de Montréal). */
+export const aujourdhui = (maintenant = new Date()) => maintenant.toLocaleDateString('en-CA', { timeZone: 'America/Montreal' })
 
-/** Le comptage en cours s'il y en a un, sinon le plus récent (liste triée du plus récent au plus ancien). */
-export function comptageParDefaut(comptages: Comptage[]): Comptage | null {
-  return comptages.find((c) => c.statut === 'en_cours') ?? comptages[0] ?? null
+/** Comptes de chaque article, du plus récent au plus ancien. */
+export function historiques(comptes: Compte[]): Map<string, Compte[]> {
+  const parArticle = new Map<string, Compte[]>()
+  for (const c of comptes) parArticle.set(c.article_id, [...(parArticle.get(c.article_id) ?? []), c])
+  for (const liste of parArticle.values()) liste.sort((a, b) => b.jour.localeCompare(a.jour))
+  return parArticle
 }
 
-/** Le comptage d'avant (pour comparer) : le suivant dans la liste triée du plus récent au plus ancien. */
-export function comptagePrecedent(comptages: Comptage[], c: Comptage | null): Comptage | null {
-  if (!c) return null
-  const i = comptages.findIndex((x) => x.id === c.id)
-  return i >= 0 ? (comptages[i + 1] ?? null) : null
-}
+/** Le compte de ce jour-là, s'il existe. */
+export const compteDuJour = (historique: Compte[], jour: string) => historique.find((c) => c.jour === jour)
 
-/** Nom proposé pour un nouveau comptage : l'année, sinon « 2026 (2) »… */
-export function nomNouveauComptage(comptages: Comptage[], aujourdhui = new Date()): string {
-  const annee = String(aujourdhui.getFullYear())
-  const pris = new Set(comptages.map((c) => c.nom.trim().toLowerCase()))
-  if (!pris.has(annee)) return annee
-  for (let n = 2; ; n++) if (!pris.has(`${annee} (${n})`)) return `${annee} (${n})`
-}
+/** Le dernier compte d'avant ce jour-là (pour comparer pendant qu'on compte). */
+export const compteAvant = (historique: Compte[], jour: string) => historique.find((c) => c.jour < jour)
 
-export const total = (l: Pick<Ligne, 'bon' | 'brise' | 'incomplet'>) => l.bon + l.brise + l.incomplet
+export const total = (c: Pick<Compte, 'bon' | 'brise' | 'incomplet'>) => c.bon + c.brise + c.incomplet
 
-/** Combien il en manque en bon état (0 s'il n'y a pas de cible ou si l'article n'est pas compté). */
-export function manque(article: Pick<Article, 'necessaire'>, ligne: Pick<Ligne, 'bon'> | undefined): number {
-  if (article.necessaire == null || !ligne) return 0
-  return Math.max(0, article.necessaire - ligne.bon)
+/** Combien il en manque en bon état (0 s'il n'y a pas de cible ou si l'article n'a jamais été compté). */
+export function manque(article: Pick<Article, 'necessaire'>, compte: Pick<Compte, 'bon'> | undefined): number {
+  if (article.necessaire == null || !compte) return 0
+  return Math.max(0, article.necessaire - compte.bon)
 }
 
 export const nomArticle = (a: Pick<Article, 'nom' | 'variante'>) => (a.variante ? `${a.nom} · ${a.variante}` : a.nom)
@@ -46,16 +41,16 @@ export interface Filtres {
   recherche: string
   compagnie: string
   lieu: string
-  categorie: string
-  /** Seulement ceux pas encore comptés (comptage en cours). */
+  section: string
+  /** Pendant un comptage : seulement ceux pas encore comptés ce jour-là. */
   aCompter: boolean
-  /** Seulement ceux dont il manque (nombre nécessaire). */
+  /** Seulement ceux dont il manque (nombre nécessaire, dernier compte). */
   manquants: boolean
 }
 
-export const FILTRES_VIDES: Filtres = { recherche: '', compagnie: '', lieu: '', categorie: '', aCompter: false, manquants: false }
+export const FILTRES_VIDES: Filtres = { recherche: '', compagnie: '', lieu: '', section: '', aCompter: false, manquants: false }
 
-/** « aucun » dans un filtre de lieu ou de catégorie = articles sans lieu / sans catégorie. */
+/** « aucun » dans un filtre de lieu ou de section = articles sans lieu / sans section. */
 export const AUCUN = 'aucun'
 
 function correspond(valeur: string | null, filtre: string) {
@@ -64,30 +59,23 @@ function correspond(valeur: string | null, filtre: string) {
   return valeur === filtre
 }
 
-/**
- * Articles à montrer pour un comptage : les articles actifs, plus ceux
- * retirés depuis qui ont des nombres dans ce comptage ; filtrés.
- */
-export function articlesVisibles(
-  articles: Article[],
-  ligneDe: (a: Article) => Ligne | undefined,
-  filtres: Filtres,
-): Article[] {
+/** Articles actifs, filtrés. `jour` = jour du comptage en cours (pour « À compter »). */
+export function articlesVisibles(articles: Article[], historiqueDe: (a: Article) => Compte[], filtres: Filtres, jour: string): Article[] {
   const recherche = normaliser(filtres.recherche)
   return articles.filter((a) => {
-    const l = ligneDe(a)
-    if (!a.actif && !l) return false
+    if (!a.actif) return false
+    const h = historiqueDe(a)
     if (recherche && !normaliser(`${a.nom} ${a.variante ?? ''} ${a.note ?? ''}`).includes(recherche)) return false
     if (!correspond(a.entreprise_id, filtres.compagnie)) return false
     if (!correspond(a.lieu_id, filtres.lieu)) return false
-    if (!correspond(a.categorie_id, filtres.categorie)) return false
-    if (filtres.aCompter && l) return false
-    if (filtres.manquants && manque(a, l) === 0) return false
+    if (!correspond(a.section_id, filtres.section)) return false
+    if (filtres.aCompter && compteDuJour(h, jour)) return false
+    if (filtres.manquants && manque(a, h[0]) === 0) return false
     return true
   })
 }
 
-export type Regroupement = 'categorie' | 'lieu'
+export type Regroupement = 'section' | 'lieu'
 
 export interface Groupe {
   id: string
@@ -96,11 +84,11 @@ export interface Groupe {
 }
 
 /**
- * Articles regroupés par catégorie ou par lieu, dans l'ordre des listes du
- * module (sans catégorie / sans lieu à la fin), puis dans l'ordre des articles.
+ * Articles regroupés par section ou par lieu, dans l'ordre des listes du
+ * module (sans section / sans lieu à la fin), puis dans l'ordre des articles.
  */
 export function regrouper(articles: Article[], par: Regroupement, liste: Element[]): Groupe[] {
-  const cle = (a: Article) => (par === 'categorie' ? a.categorie_id : a.lieu_id)
+  const cle = (a: Article) => (par === 'section' ? a.section_id : a.lieu_id)
   const parCle = new Map<string, Article[]>()
   for (const a of articles) {
     const k = cle(a) ?? AUCUN
@@ -113,27 +101,29 @@ export function regrouper(articles: Article[], par: Regroupement, liste: Element
     if (a?.length) groupes.push({ id: e.id, titre: e.nom, articles: a.sort(tri) })
   }
   const sans = parCle.get(AUCUN)
-  if (sans?.length) groupes.push({ id: AUCUN, titre: par === 'categorie' ? 'Sans catégorie' : 'Sans lieu', articles: sans.sort(tri) })
+  if (sans?.length) groupes.push({ id: AUCUN, titre: par === 'section' ? 'Sans section' : 'Sans lieu', articles: sans.sort(tri) })
   return groupes
 }
 
-/** Avancement d'un comptage : articles comptés sur articles actifs. */
-export function avancement(articles: Article[], ligneDe: (a: Article) => Ligne | undefined) {
-  const actifs = articles.filter((a) => a.actif)
-  return { comptes: actifs.filter((a) => ligneDe(a)).length, total: actifs.length }
+/** Quand une section (ou un lieu) a été comptée : jours du plus ancien et du plus récent dernier compte, et jamais comptés. */
+export function etatGroupe(articles: Article[], historiqueDe: (a: Article) => Compte[]) {
+  const derniers = articles.map((a) => historiqueDe(a)[0]?.jour).filter((j): j is string => !!j)
+  derniers.sort()
+  return { plusAncien: derniers[0] ?? null, plusRecent: derniers[derniers.length - 1] ?? null, jamais: articles.length - derniers.length }
 }
 
-/** Totaux d'un comptage (pour la liste des comptages). */
-export function bilan(lignes: Ligne[]) {
-  return lignes.reduce(
-    (b, l) => ({ articles: b.articles + 1, bon: b.bon + l.bon, brise: b.brise + l.brise, incomplet: b.incomplet + l.incomplet }),
-    { articles: 0, bon: 0, brise: 0, incomplet: 0 },
-  )
-}
-
-/** Date courte en français : « 6 août 2024 ». */
-export function dateCourte(iso: string | null) {
+/** Date en français : « 6 août 2024 » (« 6 août » si `sansAnnee`). */
+export function dateCourte(iso: string | null, sansAnnee = false) {
   if (!iso) return ''
   const [a, m, j] = iso.slice(0, 10).split('-').map(Number)
-  return new Date(a, m - 1, j).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })
+  return new Date(a, m - 1, j).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', ...(sansAnnee ? {} : { year: 'numeric' }) })
+}
+
+/** « compté le 6 août 2024 », « comptes du 6 août 2024 au 11 octobre 2026 », avec les jamais comptés. */
+export function texteEtatGroupe(e: ReturnType<typeof etatGroupe>) {
+  const parties: string[] = []
+  if (e.plusAncien && e.plusAncien === e.plusRecent) parties.push(`compté le ${dateCourte(e.plusAncien)}`)
+  else if (e.plusAncien) parties.push(`comptes du ${dateCourte(e.plusAncien)} au ${dateCourte(e.plusRecent)}`)
+  if (e.jamais) parties.push(e.plusAncien ? `${e.jamais} jamais compté${e.jamais > 1 ? 's' : ''}` : 'jamais compté')
+  return parties.join(' · ')
 }

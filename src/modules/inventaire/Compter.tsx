@@ -4,8 +4,8 @@ import { Dialogue } from '@/lib/Dialogue'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useCompter, type Donnees } from './donnees'
-import { cleLigne, manque, nomArticle, total } from './outils'
-import type { ChampsLigne, Comptage } from './types'
+import { compteAvant, compteDuJour, dateCourte, manque, nomArticle, total } from './outils'
+import type { ChampsCompte } from './types'
 
 const CHAMPS = [
   { champ: 'bon', libelle: 'En bon état' },
@@ -15,13 +15,12 @@ const CHAMPS = [
 
 /**
  * Compter un article sur place (téléphone) : seuls les champs touchés sont
- * envoyés, en passant à l'article suivant, au précédent ou en fermant.
- * Marche sans réseau (file de l'inventaire).
+ * envoyés, datés du jour du comptage, en passant à l'article suivant, au
+ * précédent ou en fermant. Marche sans réseau (file de l'inventaire).
  */
 export function Compter({
   d,
-  comptage,
-  precedent,
+  jour,
   ordre,
   id,
   aller,
@@ -29,8 +28,8 @@ export function Compter({
   fermer,
 }: {
   d: Donnees
-  comptage: Comptage
-  precedent: Comptage | null
+  /** Jour de l'inventaire (AAAA-MM-JJ). */
+  jour: string
   /** Articles affichés, dans l'ordre de la liste (pour Précédent / Suivant). */
   ordre: { id: string }[]
   id: string
@@ -40,22 +39,23 @@ export function Compter({
 }) {
   const compter = useCompter()
   const article = d.article.get(id)
-  const ligne = d.ligne.get(cleLigne(comptage.id, id))
-  const avant = precedent ? d.ligne.get(cleLigne(precedent.id, id)) : undefined
-  const [touches, setTouches] = useState<ChampsLigne>({})
+  const historique = d.historique(id)
+  const duJour = compteDuJour(historique, jour)
+  const avant = compteAvant(historique, jour)
+  const [touches, setTouches] = useState<ChampsCompte>({})
   if (!article) return null
 
-  const valeur = (c: (typeof CHAMPS)[number]['champ']) => touches[c] ?? ligne?.[c] ?? null
-  const note = touches.note !== undefined ? (touches.note ?? '') : (ligne?.note ?? '')
+  const valeur = (c: (typeof CHAMPS)[number]['champ']) => touches[c] ?? duJour?.[c] ?? null
+  const note = touches.note !== undefined ? (touches.note ?? '') : (duJour?.note ?? '')
   const i = ordre.findIndex((a) => a.id === id)
   const precedentId = i > 0 ? ordre[i - 1].id : null
   const suivantId = i >= 0 && i < ordre.length - 1 ? ordre[i + 1].id : null
 
   const enregistrer = () => {
-    const champs: ChampsLigne = { ...touches }
+    const champs: ChampsCompte = { ...touches }
     if (champs.note !== undefined) champs.note = champs.note?.trim() || null
-    const change = (Object.keys(champs) as (keyof ChampsLigne)[]).some((k) => champs[k] !== (ligne?.[k] ?? (k === 'note' ? null : undefined)))
-    if (change) compter.mutate({ comptage_id: comptage.id, article_id: id, champs })
+    const change = (Object.keys(champs) as (keyof ChampsCompte)[]).some((k) => champs[k] !== (duJour?.[k] ?? (k === 'note' ? null : undefined)))
+    if (change) compter.mutate({ article_id: id, jour, champs })
     setTouches({})
   }
   const partir = (vers: () => void) => {
@@ -64,7 +64,7 @@ export function Compter({
   }
 
   const lieu = article.lieu_id ? d.lieu.get(article.lieu_id)?.nom : null
-  const categorie = article.categorie_id ? d.categorie.get(article.categorie_id)?.nom : null
+  const section = article.section_id ? d.section.get(article.section_id)?.nom : null
   const cie = article.entreprise_id ? d.compagnie.get(article.entreprise_id) : undefined
   const enCours = { bon: valeur('bon'), brise: valeur('brise'), incomplet: valeur('incomplet') }
   const compte = enCours.bon != null || enCours.brise != null || enCours.incomplet != null
@@ -74,7 +74,7 @@ export function Compter({
   return (
     <Dialogue titre={nomArticle(article)} fermer={() => partir(fermer)}>
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-pierre-500">
-        {[categorie, lieu].filter(Boolean).join(' · ')}
+        {[section, lieu].filter(Boolean).join(' · ')}
         {cie && <PuceCompagnie compagnie={cie} court />}
         <button className="text-foret-700 underline" onClick={() => partir(() => fiche(id))}>
           Fiche
@@ -97,11 +97,11 @@ export function Compter({
           {article.necessaire != null && <span className="text-pierre-500"> · il en faut {article.necessaire}</span>}
           {m > 0 && <span className="ml-1 font-medium text-red-700">(manque {m})</span>}
         </span>
-        {precedent && (
-          <span className="text-xs text-pierre-500">
-            {precedent.nom} : {avant ? `${avant.bon} bons${avant.brise ? `, ${avant.brise} brisés` : ''}${avant.incomplet ? `, ${avant.incomplet} incomplets` : ''}` : 'pas compté'}
-          </span>
-        )}
+        <span className="text-xs text-pierre-500">
+          {avant
+            ? `Avant (${dateCourte(avant.jour)}) : ${avant.bon} bons${avant.brise ? `, ${avant.brise} brisés` : ''}${avant.incomplet ? `, ${avant.incomplet} incomplets` : ''}`
+            : 'Jamais compté avant'}
+        </span>
       </div>
 
       <label className={`${ui.etiquette} mt-4`} htmlFor="note-compte">
@@ -109,9 +109,9 @@ export function Compter({
       </label>
       <textarea id="note-compte" rows={2} className={ui.champ} value={note} onChange={(e) => setTouches({ ...touches, note: e.target.value })} />
 
-      {ligne?.compte_par_nom && (
+      {duJour?.compte_par_nom && (
         <p className="mt-2 text-xs text-pierre-500">
-          Compté par {ligne.compte_par_nom}, le {new Date(ligne.updated_at).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}
+          Compté le {dateCourte(jour)} par {duJour.compte_par_nom}
         </p>
       )}
 
@@ -124,7 +124,7 @@ export function Compter({
         </button>
       </div>
       <p className="mt-2 text-center text-xs text-pierre-400">
-        {i + 1} sur {ordre.length} dans la liste
+        {i + 1} sur {ordre.length} dans la liste · compte du {dateCourte(jour)}
       </p>
     </Dialogue>
   )

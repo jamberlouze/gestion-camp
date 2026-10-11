@@ -8,18 +8,18 @@ import { ui } from '@/lib/ui'
 import { enregistrerListe, ordonner, supprimerListe, useRelire, type Donnees } from './donnees'
 import type { Element } from './types'
 
-/** Catégories et lieux de rangement (en ligne) : ajouter, renommer, ordonner, retirer. */
+/** Sections et lieux de rangement (en ligne) : ajouter, renommer, ordonner, retirer. */
 export function Reglages({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
   if (!ecriture) return <p className="py-8 text-center text-sm text-pierre-500">Les réglages sont faits par qui modifie l'inventaire.</p>
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
       <Liste
-        table="categories"
-        titre="Catégories"
-        ajout="Ajouter une catégorie"
-        lignes={d.categories}
-        nombre={(id) => d.articles.filter((a) => a.categorie_id === id).length}
-        retrait={(n) => `${n} article(s) de cette catégorie passeront « sans catégorie ». Ils ne sont pas supprimés.`}
+        table="sections"
+        titre="Sections"
+        ajout="Ajouter une section"
+        lignes={d.sections}
+        nombre={(id) => d.articles.filter((a) => a.section_id === id).length}
+        retrait={(n) => `${n} article(s) de cette section passeront « sans section ». Ils ne sont pas supprimés.`}
       />
       <Liste
         table="lieux"
@@ -44,7 +44,7 @@ function Liste({
   nombre,
   retrait,
 }: {
-  table: 'categories' | 'lieux'
+  table: 'sections' | 'lieux'
   titre: string
   ajout: string
   lignes: Element[]
