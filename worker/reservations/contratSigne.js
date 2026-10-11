@@ -7,8 +7,8 @@
 
 import { telecharger } from '../qbo/operations.js'
 import { base } from '../subventions/base.js'
+import { adresseSignee, garderDocument, retirerDocument } from './documents.js'
 
-const SEAU = 'reservations-documents'
 const un = (l) => l?.[0] ?? null
 const CASE_DEFAUT = { page: 0, x: 54, y: 100, largeur: 220, hauteur: 50 }
 
@@ -18,12 +18,6 @@ export class ErreurContrat extends Error {
     this.code = code
   }
 }
-
-const entetes = (env, extra = {}) => {
-  const cle = env.SUPABASE_SECRET_KEY
-  return { apikey: cle, ...(cle?.startsWith('eyJ') ? { Authorization: `Bearer ${cle}` } : {}), ...extra }
-}
-const adresseObjet = (env, chemin) => `${env.SUPABASE_URL}/storage/v1/object/${SEAU}/${chemin.split('/').map(encodeURIComponent).join('/')}`
 
 /** Signature signée d'après son jeton, et son contrat signé s'il existe déjà. */
 async function lire(env, jeton) {
@@ -45,7 +39,7 @@ export async function produireContratSigne(env, jeton) {
   if (!contrat) throw new ErreurContrat('introuvable', 'Contrat envoyé introuvable.')
   const r = un(await db.lire(`reservations?id=eq.${sig.reservation_id}&select=id,numero,nom,compagnie_id`))
   const compagnie = un(await db.lire(`compagnies?entreprise_id=eq.${r.compagnie_id}&select=raison_sociale`))
-  const { pdfContratSigne, empreinte } = await import('../../src/modules/reservations/pdf/documents.ts')
+  const { pdfContratSigne } = await import('../../src/modules/reservations/pdf/documents.ts')
   const { octets: original } = await telecharger(env, contrat.chemin)
   const octets = await pdfContratSigne(new Uint8Array(original), contrat.meta?.signature ?? CASE_DEFAUT, sig, {
     numero: r.numero,
@@ -53,43 +47,20 @@ export async function produireContratSigne(env, jeton) {
     empreinteOriginal: contrat.empreinte,
     compagnie: compagnie?.raison_sociale ?? '',
   })
-
-  const id = crypto.randomUUID()
-  const chemin = `${r.id}/contrat_signe-${new Date().toISOString().replace(/[:.]/g, '-')}-${id.slice(0, 8)}.pdf`
-  const envoi = await fetch(adresseObjet(env, chemin), { method: 'POST', headers: entetes(env, { 'Content-Type': 'application/pdf' }), body: octets })
-  if (!envoi.ok) throw new Error(`Contrat signé non gardé (${envoi.status}) : ${await envoi.text()}`)
-  const retirerFichier = () => fetch(`${env.SUPABASE_URL}/storage/v1/object/${SEAU}`, {
-    method: 'DELETE',
-    headers: entetes(env, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ prefixes: [chemin] }),
+  const doc = await garderDocument(env, {
+    reservationId: r.id,
+    genre: 'contrat_signe',
+    titre: `Contrat ${r.numero} signé`,
+    octets,
+    estimeId: contrat.estime_id,
+    // Au journal, au nom du client (comme sa signature).
+    auteurNom: `${sig.nom_signataire ?? 'Client'} (client)`,
   })
-  let doc
-  try {
-    doc = await db.inserer('documents', {
-      id,
-      reservation_id: r.id,
-      genre: 'contrat_signe',
-      estime_id: contrat.estime_id,
-      titre: `Contrat ${r.numero} signé`,
-      chemin,
-      empreinte: await empreinte(octets),
-      meta: {},
-      // Au journal, au nom du client (comme sa signature).
-      cree_par_nom: `${sig.nom_signataire ?? 'Client'} (client)`,
-    })
-  } catch (e) {
-    await retirerFichier()
-    throw e
-  }
   // Seulement si personne (l'équipe, à l'ouverture de la fiche) ne l'a fait entre-temps.
   await db.modifier('signatures', `id=eq.${sig.id}&document_signe_id=is.null`, { document_signe_id: doc.id })
   const apres = await lire(env, jeton)
   if (apres.sig.document_signe_id !== doc.id) {
-    await fetch(`${env.SUPABASE_URL}/rest/v1/documents?id=eq.${doc.id}`, {
-      method: 'DELETE',
-      headers: entetes(env, { 'Content-Profile': 'reservations', 'Accept-Profile': 'reservations' }),
-    })
-    await retirerFichier()
+    await retirerDocument(env, doc)
     return apres.signe
   }
   return doc
@@ -99,13 +70,5 @@ export async function produireContratSigne(env, jeton) {
 export async function adresseContratSigne(env, jeton, telecharger = false) {
   const { signe } = await lire(env, jeton)
   if (!signe) return null
-  const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/sign/${SEAU}/${signe.chemin.split('/').map(encodeURIComponent).join('/')}`, {
-    method: 'POST',
-    headers: entetes(env, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ expiresIn: 300 }),
-  })
-  if (!res.ok) throw new Error(`Adresse signée impossible (${res.status}).`)
-  const { signedURL } = await res.json()
-  const nom = `${signe.titre}.pdf`
-  return `${env.SUPABASE_URL}/storage/v1${signedURL}${telecharger ? `&download=${encodeURIComponent(nom)}` : ''}`
+  return adresseSignee(env, signe.chemin, telecharger ? `${signe.titre}.pdf` : null)
 }

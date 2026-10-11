@@ -23,7 +23,7 @@ Mailpit. Gardez Mailpit ouvert dans un deuxième onglet.
 - [x] Relire les 10 modèles, en français **et** en anglais : ton, formule de fin, signature, modes de paiement (Interac, réponse de sécurité). — élision corrigée le 2026-10-11
 - [x] Modifier un modèle, puis Enregistrer : « Modifié par … » s'affiche. Seuls les courriels préparés **ensuite** changent.
 - [ ] Mettre un type en **Désactivé** : il n'est plus préparé. Le remettre « À approuver ». — pas cliqué ; vérifié dans le code du Worker
-- [x] La pré-arrivée ne peut pas passer en « Automatique » (option grisée).
+- [x] La pré-arrivée ne peut pas passer en « Automatique » (option grisée). — **changé le 2026-10-11** : elle le peut maintenant, son PDF est produit par le Worker (essayé avec 27-G-591).
 
 ## 3. Un parcours complet (nouvelle demande)
 
@@ -43,7 +43,7 @@ Mailpit. Gardez Mailpit ouvert dans un deuxième onglet.
 ## 5. Pré-arrivée
 
 - [x] Sur une Classe nature signée qui arrive dans moins de 30 jours : le courriel « Pré-arrivée et fiches participants » est préparé. — 27-G-594, le 10 oct.
-- [x] **Envoyer** produit d'abord le PDF de pré-arrivée (il apparaît dans Documents), puis le courriel part avec le PDF et le lien des fiches. — 27-G-594, le 10 oct.
+- [x] **Envoyer** produit d'abord le PDF de pré-arrivée (il apparaît dans Documents), puis le courriel part avec le PDF et le lien des fiches. — 27-G-594, le 10 oct. ; produit par le Worker depuis le 2026-10-11 (27-G-591)
 
 ## 6. Rappels (selon les dates)
 

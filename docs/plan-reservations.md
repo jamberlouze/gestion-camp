@@ -339,7 +339,7 @@ Tous les courriels partent de **inscriptions@camptremblant.com**, par l'API Gmai
 - destinataires : le responsable de la réservation ; factures et rappels au responsable de la facturation, copie au responsable ; contrat et rappel de signature, copie au courriel de la direction ; accusé à qui a rempli la demande ;
 - un courriel par événement, jamais deux (même annulé) ; un courriel préparé qui ne sert plus (estimé accepté, contrat signé, facture payée) est annulé tout seul (« plus nécessaire ») ;
 - mise en service (`courriels_depuis`) : rien pour un événement plus ancien ;
-- la pré-arrivée ne peut pas encore partir seule : son PDF est produit dans le navigateur au moment du clic.
+- la pré-arrivée peut partir seule depuis le 2026-10-11 (demande de Maxime) : son PDF est produit par le Worker au moment de l'envoi et gardé dans Documents. Comme les autres, elle reste « à approuver d'un clic » tant qu'on ne change pas son mode.
 
 | Courriel | Déclencheur | Mode par défaut |
 |---|---|---|

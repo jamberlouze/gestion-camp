@@ -26,6 +26,7 @@ import {
 import { clientQbo } from '../qbo/client.js'
 import { telecharger } from '../qbo/operations.js'
 import { base } from '../subventions/base.js'
+import { produirePreArrivee } from './preArrivee.js'
 
 export class ErreurCourriel extends Error {
   constructor(code, message) {
@@ -124,17 +125,22 @@ async function documentGarde(env, db, filtre, nom) {
   return { nom: `${(nom ?? d.titre).replace(/[\\/]/g, '-')}.pdf`, type: 'application/pdf', octets: new Uint8Array(octets) }
 }
 
-/** Pièces jointes selon le type : PDF de l'estimé, de la pré-arrivée, de la facture (QBO). */
-async function piecesJointes(env, db, c, e) {
+/** Pièces jointes selon le type : PDF de l'estimé, de la pré-arrivée (produite ici), de la facture (QBO). */
+async function piecesJointes(env, db, c, e, auteur) {
   if (c.genre === 'estime') {
     const p = await documentGarde(env, db, `reservation_id=eq.${c.reservation_id}&genre=eq.estime&estime_id=eq.${c.ref}`)
     if (!p) throw new ErreurCourriel('piece', "Le PDF de l'estimé envoyé n'est pas gardé : Documents › « Garder le PDF », puis envoyez.")
     return [p]
   }
   if (c.genre === 'pre_arrivee') {
-    const p = await documentGarde(env, db, `reservation_id=eq.${c.reservation_id}&genre=eq.pre_arrivee`)
-    if (!p) throw new ErreurCourriel('piece', 'Le PDF de pré-arrivée n’est pas gardé (Documents › Pré-arrivée › Garder).')
-    return [p]
+    // Produite au moment de l'envoi (horaire et nombres à jour), gardée dans Documents.
+    let pre
+    try {
+      pre = await produirePreArrivee(env, c.reservation_id, auteur)
+    } catch (err) {
+      throw new ErreurCourriel('piece', `PDF de pré-arrivée impossible : ${err.message}`)
+    }
+    return [{ nom: `${pre.doc.titre}.pdf`, type: 'application/pdf', octets: pre.octets }]
   }
   if (c.genre === 'facture' || c.genre === 'facture_finale' || c.genre === 'rappel_paiement') {
     const f = e.factures.find((x) => x.id === c.ref)
@@ -166,7 +172,7 @@ export async function envoyerCourriel(env, id, auteur) {
   const compagnie = un(await db.lire(`compagnies?entreprise_id=eq.${e.r.compagnie_id}&select=raison_sociale,nom_court`))
 
   try {
-    const pieces = await piecesJointes(env, db, c, e)
+    const pieces = await piecesJointes(env, db, c, e, auteur)
     const message = { nomDe: compagnie?.raison_sociale ?? compagnie?.nom_court ?? '', a: c.a, cc: c.cc ?? [], sujet: c.sujet, texte: c.corps, html: versHtml(c.corps), pieces }
     const messageId = mode === 'mailpit' ? await envoyerMailpit(env, message) : await envoyerGmail(env, message)
     await db.modifier('courriels', `id=eq.${id}`, {

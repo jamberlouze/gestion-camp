@@ -11,6 +11,8 @@
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist",
+    // Le code du Worker y lit les logos des PDF (pré-arrivée).
+    "binding": "ASSETS",
     // Toute adresse inconnue renvoie index.html : le routeur React s'en charge.
     "not_found_handling": "single-page-application",
     // Seules ces adresses passent par le code du Worker.

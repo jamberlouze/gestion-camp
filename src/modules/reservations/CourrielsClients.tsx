@@ -15,7 +15,6 @@ import {
   useModifierModeleCourriel,
   type ModeEnvoi,
 } from './donnees'
-import { estimeCourant, garderDocument, pdfDeLaPreArrivee } from './productionPdf'
 import type { Courriel, ModeleCourriel, Reservation } from './types'
 
 const quand = (ts: string) =>
@@ -106,7 +105,7 @@ const listeCourriels = (texte: string) =>
 
 /** Courriel préparé : destinataires, sujet et texte modifiables, puis Envoyer ou Annuler. */
 function CarteCourriel({ c, ouvert: ouvertDepart = false, avecReservation = false }: { c: Courriel; ouvert?: boolean; avecReservation?: boolean }) {
-  const { ecriture, parId, sources, modeles } = useDonnees()
+  const { ecriture } = useDonnees()
   const modifier = useModifierCourriel()
   const envoyer = useEnvoyerCourriel()
   const [ouvert, setOuvert] = useState(ouvertDepart)
@@ -128,14 +127,7 @@ function CarteCourriel({ c, ouvert: ouvertDepart = false, avecReservation = fals
     setOccupe(true)
     try {
       if (change) await enregistrer()
-      // La pré-arrivée se produit ici, au moment de l'envoi (PDF du navigateur), puis le Worker la joint.
-      if (c.genre === 'pre_arrivee') {
-        const r = parId.get(c.reservation_id)
-        const modele = r && modeles.find((m) => m.genre === 'pre_arrivee' && m.forfait === r.forfait)
-        if (!r || !modele) throw new Error('Pas de modèle de pré-arrivée pour ce forfait (Modèles et compagnies).')
-        const estime = await estimeCourant(r.id)
-        await garderDocument({ r, genre: 'pre_arrivee', titre: `Pré-arrivée ${r.numero}`, octets: await pdfDeLaPreArrivee(sources(r), estime, modele) })
-      }
+      // La pré-arrivée est produite par le Worker au moment de l'envoi, et jointe.
       await envoyer.mutateAsync(c.id)
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e))
@@ -327,7 +319,7 @@ function EditeurModele({ m }: { m: ModeleCourriel }) {
             {(Object.keys(MODES) as ModeCourriel[]).map((k) => (
               <option key={k} value={k} disabled={k === 'automatique' && !type.automatique}>
                 {MODES[k]}
-                {k === 'automatique' && !type.automatique ? ' (pas encore : PDF produit dans le navigateur)' : ''}
+                {k === 'automatique' && !type.automatique ? ' (pas offert pour ce courriel)' : ''}
               </option>
             ))}
           </select>

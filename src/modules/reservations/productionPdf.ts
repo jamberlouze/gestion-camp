@@ -3,10 +3,12 @@
 
 import { urlPublique } from '@/lib/pagesPubliques'
 import { supabase } from '@/lib/supabase'
-import type { Contact, Organisation } from '@/modules/crm/types'
 import type { Contexte } from './pdf/champs'
+import { contexte, type Sources } from './pdf/contexte'
 import { empreinte, pdfContrat, pdfContratSigne, pdfEstime, pdfPreArrivee, type LigneDoc, type Ressources } from './pdf/documents'
-import type { Compagnie, DocumentPdf, Estime, EtageRooming, GenreDocument, Modele, Reservation, Signature } from './types'
+import type { DocumentPdf, Estime, GenreDocument, Modele, Reservation, Signature } from './types'
+
+export { contexte, type Sources }
 
 export const SEAU = 'reservations-documents'
 const db = () => supabase.schema('reservations')
@@ -21,31 +23,6 @@ export const ressources: Ressources = {
     const { data } = await supabase.storage.from(SEAU).download(chemin)
     return data ? new Uint8Array(await data.arrayBuffer()) : null
   },
-}
-
-export interface Sources {
-  r: Reservation
-  compagnies: Compagnie[]
-  orgParId: Map<string, Organisation>
-  contactParId: Map<string, Contact>
-  etages: EtageRooming[]
-}
-
-export function contexte(s: Sources, estime: Contexte['estime']): Contexte {
-  const { r } = s
-  const compagnie = s.compagnies.find((c) => c.entreprise_id === r.compagnie_id) ?? s.compagnies[0]
-  if (!compagnie) throw new Error('Coordonnées de la compagnie introuvables (Réglages › Compagnies).')
-  const org = r.organisation_id ? s.orgParId.get(r.organisation_id) : undefined
-  const contact = r.contact_reservation_id ? s.contactParId.get(r.contact_reservation_id) : undefined
-  return {
-    r,
-    compagnie,
-    client: org ? { nom: org.nom, adresse: org.adresse, ville: org.ville, province: org.province, code_postal: org.code_postal } : null,
-    contact: contact ? { nom: contact.nom, courriel: contact.courriel, telephone: contact.telephone } : null,
-    estime,
-    etages: s.etages,
-    maintenant: new Date(),
-  }
 }
 
 async function lignesDe(estimeId: string): Promise<LigneDoc[]> {
