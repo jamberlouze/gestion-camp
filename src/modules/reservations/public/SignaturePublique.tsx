@@ -57,7 +57,25 @@ export default function SignaturePublique() {
   )
 }
 
+/** Contrat signé produit par le Worker juste après la signature (sans effet s'il existe déjà). */
+function useContratSigne(jeton: string, signe: boolean) {
+  const [etat, setEtat] = useState<'attente' | 'pret' | 'erreur'>('attente')
+  useEffect(() => {
+    if (!signe) return
+    let actif = true
+    fetch('/api/reservations/contrat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jeton }) })
+      .then((r) => actif && setEtat(r.ok ? 'pret' : 'erreur'))
+      .catch(() => actif && setEtat('erreur'))
+    return () => {
+      actif = false
+    }
+  }, [jeton, signe])
+  return etat
+}
+
 function Contenu({ infos, jeton, relire }: { infos: Infos; jeton: string; relire: (i: Infos) => void }) {
+  const signe = useContratSigne(jeton, infos.statut === 'signe')
+  const adresseSigne = `/api/reservations/contrat?jeton=${jeton}`
   return (
     <>
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -72,8 +90,16 @@ function Contenu({ infos, jeton, relire }: { infos: Infos; jeton: string; relire
         <div className={`${ui.carte} p-6 text-center`}>
           <p className="text-lg font-medium text-foret-800">✓ Contrat signé</p>
           <p className="mt-1 text-sm text-pierre-600">
-            Signé par {infos.nom_signataire} le {infos.signe_le && quand(infos.signe_le)}. Merci ! Le contrat signé sera déposé sur votre page de réservation (lien reçu avec l'estimé).
+            Signé par {infos.nom_signataire} le {infos.signe_le && quand(infos.signe_le)}. Merci !{' '}
+            {signe === 'attente' && 'Préparation du contrat signé…'}
+            {signe === 'pret' && "Votre contrat signé est ci-dessous ; il est aussi sur votre page de réservation (lien reçu avec l'estimé)."}
+            {signe === 'erreur' && "Le contrat signé sera déposé sur votre page de réservation (lien reçu avec l'estimé)."}
           </p>
+          {signe === 'pret' && (
+            <a href={`${adresseSigne}&telecharger=1`} className={`${ui.bouton} mt-3 inline-block`}>
+              Télécharger le contrat signé (PDF)
+            </a>
+          )}
         </div>
       )}
       {infos.statut === 'annule' && (
@@ -83,15 +109,18 @@ function Contenu({ infos, jeton, relire }: { infos: Infos; jeton: string; relire
         </div>
       )}
 
-      <section className={`${ui.carte} overflow-hidden`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pierre-200 px-4 py-2">
-          <span className="text-sm font-medium">Le contrat</span>
-          <a href={infos.adresse_pdf} target="_blank" rel="noreferrer" className="text-sm text-foret-700 underline">
-            Ouvrir le PDF dans un nouvel onglet
-          </a>
-        </div>
-        <iframe title="Contrat" src={infos.adresse_pdf} className="h-[70dvh] w-full bg-white" />
-      </section>
+      {/* Une fois signé : le contrat signé (dès qu'il est prêt), jamais l'original sans signature. */}
+      {(infos.statut !== 'signe' || signe !== 'attente') && (
+        <section className={`${ui.carte} overflow-hidden`}>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pierre-200 px-4 py-2">
+            <span className="text-sm font-medium">{signe === 'pret' ? 'Le contrat signé' : 'Le contrat'}</span>
+            <a href={signe === 'pret' ? adresseSigne : infos.adresse_pdf} target="_blank" rel="noreferrer" className="text-sm text-foret-700 underline">
+              Ouvrir le PDF dans un nouvel onglet
+            </a>
+          </div>
+          <iframe title="Contrat" src={signe === 'pret' ? adresseSigne : infos.adresse_pdf} className="h-[70dvh] w-full bg-white" />
+        </section>
+      )}
 
       {infos.statut === 'en_attente' && <Formulaire infos={infos} jeton={jeton} relire={relire} />}
 

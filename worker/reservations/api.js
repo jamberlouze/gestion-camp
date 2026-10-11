@@ -9,6 +9,10 @@
 //        privé (le client n'a jamais la clé ni un lien permanent).
 //   GET  /api/reservations/facture?jeton=…&id=… : PDF officiel d'une facture
 //        QBO de la page client.
+//   POST /api/reservations/contrat {jeton} : produit le contrat signé
+//        juste après la signature (jeton de la page de signature) ;
+//   GET  /api/reservations/contrat?jeton=…[&telecharger=1] : ce contrat
+//        signé (adresse signée de 5 minutes).
 // Routes de l'équipe (jeton de session + droit d'écrire dans Réservations) :
 //   POST /api/reservations/preparer {reservation} : courriels dus préparés
 //        tout de suite (sans attendre le cron) ; renvoie aussi le mode d'envoi ;
@@ -26,6 +30,7 @@ import { qboConfigure } from '../qbo/oauth.js'
 import { base } from '../subventions/base.js'
 import { synchroniserAgenda } from './agenda.js'
 import { importerAirbnb } from './airbnb.js'
+import { adresseContratSigne, ErreurContrat, produireContratSigne } from './contratSigne.js'
 import { envoyerCourriel, ErreurCourriel, modeEnvoi, preparerCourriels } from './courriels.js'
 
 const json = (corps, status = 200) =>
@@ -130,12 +135,39 @@ async function factureClient(url, env) {
   }
 }
 
+/** Contrat signé de la page de signature : produit (POST), puis montré ou téléchargé (GET). */
+async function contratSigne(request, url, env) {
+  try {
+    if (request.method === 'POST') {
+      let jeton = ''
+      try {
+        jeton = String((await request.json()).jeton ?? '')
+      } catch {
+        // Corps illisible : jeton vide, refusé plus bas.
+      }
+      if (!/^[0-9a-f]{48}$/.test(jeton)) return json({ erreur: 'Lien de signature invalide.' }, 400)
+      const doc = await produireContratSigne(env, jeton)
+      return json({ ok: true, titre: doc?.titre ?? null })
+    }
+    if (request.method !== 'GET') return json({ erreur: 'introuvable' }, 404)
+    const jeton = url.searchParams.get('jeton') ?? ''
+    if (!/^[0-9a-f]{48}$/.test(jeton)) return introuvable()
+    const adresse = await adresseContratSigne(env, jeton, url.searchParams.get('telecharger') === '1')
+    return adresse ? Response.redirect(adresse, 302) : introuvable()
+  } catch (e) {
+    if (e instanceof ErreurContrat) return request.method === 'POST' ? json({ erreur: e.message }, 409) : introuvable()
+    console.error('Contrat signé :', e)
+    return request.method === 'POST' ? json({ erreur: 'Contrat signé indisponible pour le moment.' }, 502) : introuvable()
+  }
+}
+
 export async function routeReservations(request, env, chemin) {
   if (!env.SUPABASE_SECRET_KEY) return json({ erreur: 'serveur' }, 503)
   const url = new URL(request.url)
   if (chemin === 'demande' && request.method === 'POST') return recevoirDemande(request, env)
   if (chemin === 'document' && request.method === 'GET') return documentClient(url, env)
   if (chemin === 'facture' && request.method === 'GET') return factureClient(url, env)
+  if (chemin === 'contrat') return contratSigne(request, url, env)
   if (['preparer', 'envoyer', 'agenda', 'airbnb'].includes(chemin) && request.method === 'POST') return routeCourriels(request, env, chemin)
   return json({ erreur: 'introuvable' }, 404)
 }
