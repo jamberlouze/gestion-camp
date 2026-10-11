@@ -77,7 +77,7 @@ export async function listes(env, compagnieId) {
 
 /** Client QBO déjà relié, ou candidats du dossier QBO (même nom, nom semblable). */
 export async function candidatsClients(env, reservationId) {
-  const { r, org, lien } = await contexteReservation(env, reservationId)
+  const { db, r, org, lien } = await contexteReservation(env, reservationId)
   if (!org) throw new ErreurQbo('organisation', "Reliez d'abord la réservation à une organisation du CRM.")
   if (lien) return { lie: { id: lien.qbo_id, nom: lien.nom }, candidats: [] }
   const qbo = await clientQbo(env, r.compagnie_id)
@@ -96,9 +96,17 @@ export async function candidatsClients(env, reservationId) {
         courriel: c.PrimaryEmailAddr?.Address ?? null,
         ville: c.BillAddr?.City ?? null,
         exact: c.DisplayName.toLowerCase() === nom.toLowerCase(),
+        relie_a: [],
       })
     }
   }
+  // Un client QBO peut servir à plusieurs organisations : on montre à qui il est déjà relié.
+  const ids = [...vus.keys()]
+  const liens = ids.length ? await db.lire(`qbo_clients?compagnie_id=eq.${r.compagnie_id}&qbo_id=in.(${ids.join(',')})&select=qbo_id,organisation_id`) : []
+  const noms = liens.length
+    ? new Map((await base(env, 'crm').lire(`organisations?id=in.(${[...new Set(liens.map((l) => l.organisation_id))].join(',')})&select=id,nom`)).map((o) => [o.id, o.nom]))
+    : new Map()
+  for (const l of liens) vus.get(l.qbo_id)?.relie_a.push(noms.get(l.organisation_id) ?? 'une autre organisation')
   return { lie: null, nom, candidats: [...vus.values()].sort((a, b) => Number(b.exact) - Number(a.exact)) }
 }
 

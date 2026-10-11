@@ -516,6 +516,8 @@ interface Candidat {
   courriel: string | null
   ville: string | null
   exact: boolean
+  /** Organisations déjà reliées à ce client QBO (il peut en servir plusieurs). */
+  relie_a: string[]
 }
 
 /** Création (ou mise à jour) du devis : d'abord le client QBO, choisi ou créé. */
@@ -582,6 +584,7 @@ function DialogueDevis({
                   {c.nom}
                   <span className="text-pierre-500">{[c.ville, c.courriel].filter(Boolean).map((x) => ` · ${x}`).join('')}</span>
                   {c.exact && <span className="ml-1 rounded-full bg-foret-50 px-1.5 text-xs text-foret-800">même nom</span>}
+                  {c.relie_a.length > 0 && <span className="block text-xs text-amber-700">Déjà relié à {c.relie_a.join(', ')}</span>}
                 </span>
               </label>
             ))}
