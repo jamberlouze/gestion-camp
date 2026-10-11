@@ -1,10 +1,10 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
-import { reduireImage } from '@/lib/photos'
+import { reduireImage, type FichierJoint } from '@/lib/photos'
 import { supabase } from '@/lib/supabase'
 import { parVehicule } from './outils'
-import type { Entretien, Inspection, Proprietaire, Vehicule } from './types'
+import type { CategorieDocument, DocumentVehicule, Entretien, Inspection, Proprietaire, Vehicule } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne, contrairement
 // à Embarcations) : sans réseau, une modification échoue tout de suite
@@ -13,6 +13,7 @@ import type { Entretien, Inspection, Proprietaire, Vehicule } from './types'
 const S = 'vehicules'
 const db = () => supabase.schema(S)
 const SEAU = 'vehicules-photos'
+const SEAU_DOCUMENTS = 'vehicules-documents'
 
 type Table = 'vehicules' | 'inspections' | 'entretiens'
 
@@ -21,6 +22,7 @@ export const useProprietaires = () => useListe<Proprietaire>('core', 'entreprise
 export const useVehicules = () => useListe<Vehicule>(S, 'vehicules', 'ordre')
 export const useInspections = () => useListe<Inspection>(S, 'inspections', 'date')
 export const useEntretiens = () => useListe<Entretien>(S, 'entretiens', 'date')
+export const useDocuments = () => useListe<DocumentVehicule>(S, 'documents', 'created_at')
 
 /** Flotte, propriétaires et registres, prêts à afficher. */
 export function useFlotte() {
@@ -108,11 +110,14 @@ export function useSupprimerLigne(table: Table) {
   })
 }
 
-/** Supprime un véhicule, ses registres (cascade) et sa photo. */
+/** Supprime un véhicule, ses registres et ses documents (cascade), puis leurs fichiers. */
 export async function supprimerVehicule(v: Vehicule) {
+  const docs = await db().from('documents').select('chemin').eq('vehicule_id', v.id)
+  if (docs.error) throw docs.error
   const { error } = await db().from('vehicules').delete().eq('id', v.id)
   if (error) throw error
   if (v.photo) await supabase.storage.from(SEAU).remove([v.photo])
+  if (docs.data.length) await supabase.storage.from(SEAU_DOCUMENTS).remove(docs.data.map((d) => d.chemin))
 }
 
 export const adressePhoto = (chemin: string) => supabase.storage.from(SEAU).getPublicUrl(chemin).data.publicUrl
@@ -131,4 +136,49 @@ export async function changerPhoto(v: Vehicule, fichier: File | null) {
     throw error
   }
   if (v.photo) await supabase.storage.from(SEAU).remove([v.photo])
+}
+
+// ------------------------------------------------------------------
+// Documents (immatriculation, assurance, inspection…) : seau privé,
+// lu par adresses signées
+// ------------------------------------------------------------------
+
+/** Durée d'une adresse signée ; relue avant d'expirer. */
+const DUREE_ADRESSE = 3600
+
+/** Adresse signée d'un document (jamais gardée sur l'appareil : voir requetes.ts). */
+export function useAdresseDocument(d: Pick<DocumentVehicule, 'chemin'>) {
+  return (
+    useQuery({
+      queryKey: ['vehicules-adresses', d.chemin],
+      queryFn: async () => {
+        const { data, error } = await supabase.storage.from(SEAU_DOCUMENTS).createSignedUrl(d.chemin, DUREE_ADRESSE)
+        if (error) throw error
+        return data.signedUrl
+      },
+      staleTime: (DUREE_ADRESSE - 600) * 1000,
+      refetchInterval: (DUREE_ADRESSE - 600) * 1000,
+    }).data ?? null
+  )
+}
+
+/** Envoie une photo (déjà réduite) ou un PDF, puis l'inscrit sous sa rubrique. */
+export async function ajouterDocument(vehiculeId: string, categorie: CategorieDocument, { fichier, extension, nom }: FichierJoint) {
+  const id = crypto.randomUUID()
+  const chemin = `${vehiculeId}/${id}.${extension}`
+  const envoi = await supabase.storage
+    .from(SEAU_DOCUMENTS)
+    .upload(chemin, fichier, { contentType: extension === 'pdf' ? 'application/pdf' : 'image/jpeg' })
+  if (envoi.error) throw envoi.error
+  const { error } = await db().from('documents').insert({ id, vehicule_id: vehiculeId, categorie, chemin, nom })
+  if (error) {
+    await supabase.storage.from(SEAU_DOCUMENTS).remove([chemin])
+    throw error
+  }
+}
+
+export async function retirerDocument(d: Pick<DocumentVehicule, 'id' | 'chemin'>) {
+  const { error } = await db().from('documents').delete().eq('id', d.id)
+  if (error) throw error
+  await supabase.storage.from(SEAU_DOCUMENTS).remove([d.chemin])
 }

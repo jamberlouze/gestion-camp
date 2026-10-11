@@ -21,6 +21,21 @@ export const RESULTATS: { id: Resultat; libelle: string }[] = [
   { id: 'majeures', libelle: 'Défectuosités majeures' },
 ]
 
+/** Rubrique de la fiche où un document s'affiche. */
+export type CategorieDocument = 'immatriculation' | 'assurance' | 'inspection' | 'autre'
+
+/** Photo ou PDF d'un document du véhicule (seau privé vehicules-documents). */
+export interface DocumentVehicule {
+  id: string
+  vehicule_id: string
+  categorie: CategorieDocument
+  /** Chemin dans le seau : <vehicule_id>/<id>.jpg ou .pdf */
+  chemin: string
+  /** Nom d'origine d'un PDF (null pour une photo). */
+  nom: string | null
+  created_at: string
+}
+
 /** Compagnie propriétaire (référentiel commun, core.entreprises). */
 export interface Proprietaire {
   id: string

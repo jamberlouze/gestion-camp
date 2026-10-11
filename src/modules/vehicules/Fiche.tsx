@@ -6,13 +6,25 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
+import { BoutonAjouterPiece, GaleriePieces } from '@/lib/PiecesJointes'
+import { preparerFichier } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { BadgeStatut, DateEcheance, Photo } from './commun'
-import { changerPhoto, supprimerVehicule, useFlotte, useModifier, type Flotte } from './donnees'
+import {
+  ajouterDocument,
+  changerPhoto,
+  retirerDocument,
+  supprimerVehicule,
+  useAdresseDocument,
+  useDocuments,
+  useFlotte,
+  useModifier,
+  type Flotte,
+} from './donnees'
 import { Champ, FormEntretien, FormInspection } from './Formulaires'
 import { argent, aujourdhui, compteurLisible, dateLisible, echeancesDe, lireNombre } from './outils'
-import { RESULTATS, STATUTS, TYPES, type Entretien, type Inspection, type Vehicule } from './types'
+import { RESULTATS, STATUTS, TYPES, type CategorieDocument, type DocumentVehicule, type Entretien, type Inspection, type Vehicule } from './types'
 
 export function Fiche() {
   const { id } = useParams()
@@ -50,6 +62,11 @@ function FicheVehicule({ v, flotte }: { v: Vehicule; flotte: Flotte }) {
   const entretiens = flotte.entretiens.filter((e) => e.vehicule_id === v.id).sort((a, b) => b.date.localeCompare(a.date))
   const [immatriculation, assurance, inspection] = echeancesDe(v, inspections, jour)
   const remise = v.statut === 'remise'
+  const tousDocuments = useDocuments().data
+  /** Documents d'une rubrique, ajoutés à la suite. */
+  const documents = (categorie: CategorieDocument) => (
+    <Documents v={v} categorie={categorie} documents={(tousDocuments ?? []).filter((d) => d.vehicule_id === v.id && d.categorie === categorie)} ecriture={ecriture} />
+  )
 
   /** Champ texte enregistré à la sortie ; vide = null. */
   const texte = (champ: keyof Vehicule, majuscules?: boolean) => (
@@ -164,6 +181,7 @@ function FicheVehicule({ v, flotte }: { v: Vehicule; flotte: Flotte }) {
               <Champ libelle="Plaque">{texte('plaque', true)}</Champ>
               <Champ libelle="Échéance">{date('immatriculation_echeance')}</Champ>
             </div>
+            {documents('immatriculation')}
           </Section>
           <Section titre="Assurance">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -171,16 +189,20 @@ function FicheVehicule({ v, flotte }: { v: Vehicule; flotte: Flotte }) {
               <Champ libelle="Numéro de police">{texte('police_assurance')}</Champ>
               <Champ libelle="Échéance">{date('assurance_echeance')}</Champ>
             </div>
+            {documents('assurance')}
           </Section>
         </div>
       </div>
 
-      <Inspections v={v} inspections={inspections} flotte={flotte} ecriture={ecriture} />
+      <Inspections v={v} inspections={inspections} flotte={flotte} ecriture={ecriture} documents={documents('inspection')} />
       <Entretiens v={v} entretiens={entretiens} flotte={flotte} ecriture={ecriture} />
 
-      <Section titre="Notes" className="mt-5">
-        <ChampNotes valeur={v.notes ?? ''} disabled={!ecriture} enregistrer={(x) => maj({ notes: x || null })} />
-      </Section>
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Section titre="Notes">
+          <ChampNotes valeur={v.notes ?? ''} disabled={!ecriture} enregistrer={(x) => maj({ notes: x || null })} />
+        </Section>
+        <Section titre="Autres documents">{documents('autre')}</Section>
+      </div>
 
       {ecriture && <Suppression v={v} />}
     </div>
@@ -344,10 +366,76 @@ function ZonePhoto({ v, ecriture }: { v: Vehicule; ecriture: boolean }) {
   )
 }
 
+/** Titre au-dessus des documents d'une rubrique (« Autres documents » a déjà le sien). */
+const TITRES_DOCUMENTS: Record<CategorieDocument, string | null> = {
+  immatriculation: 'Certificat d’immatriculation',
+  assurance: 'Preuve d’assurance',
+  inspection: 'Certificats de vérification',
+  autre: null,
+}
+
+/** Photos et PDF d'une rubrique de la fiche, envoyés tout de suite. */
+function Documents({ v, categorie, documents, ecriture }: { v: Vehicule; categorie: CategorieDocument; documents: DocumentVehicule[]; ecriture: boolean }) {
+  const client = useQueryClient()
+  const [lecture, setLecture] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const relire = () => client.invalidateQueries({ queryKey: ['vehicules', 'documents'] })
+
+  async function choisir(liste: File[]) {
+    if (!liste.length) return
+    setLecture(true)
+    setErreur(null)
+    try {
+      for (const f of liste) await ajouterDocument(v.id, categorie, await preparerFichier(f))
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setLecture(false)
+      relire()
+    }
+  }
+
+  async function retirer(d: DocumentVehicule) {
+    if (!(await confirmer({ titre: d.nom ? `Retirer « ${d.nom} » ?` : 'Retirer cette photo ?', libelleOk: 'Retirer', danger: true }))) return
+    try {
+      await retirerDocument(d)
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      relire()
+    }
+  }
+
+  if (!documents.length && !ecriture) {
+    return categorie === 'autre' ? <p className="text-sm text-pierre-500">Aucun document.</p> : null
+  }
+  return (
+    <div className={TITRES_DOCUMENTS[categorie] ? 'mt-4' : ''}>
+      {TITRES_DOCUMENTS[categorie] && <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-pierre-500">{TITRES_DOCUMENTS[categorie]}</p>}
+      <GaleriePieces pieces={documents} useAdresse={useAdresseDocument} retirer={ecriture ? (d) => () => retirer(d) : undefined}>
+        {ecriture && <BoutonAjouterPiece lecture={lecture} choisir={choisir} />}
+      </GaleriePieces>
+      {erreur && <p className="mt-1 text-xs text-red-700">{erreur}</p>}
+    </div>
+  )
+}
+
 const LIBELLES_RESULTAT = Object.fromEntries(RESULTATS.map((r) => [r.id, r.libelle]))
 const COULEURS_RESULTAT = { conforme: 'text-foret-700', mineures: 'text-amber-700', majeures: 'text-red-700' }
 
-function Inspections({ v, inspections, flotte, ecriture }: { v: Vehicule; inspections: Inspection[]; flotte: Flotte; ecriture: boolean }) {
+function Inspections({
+  v,
+  inspections,
+  flotte,
+  ecriture,
+  documents,
+}: {
+  v: Vehicule
+  inspections: Inspection[]
+  flotte: Flotte
+  ecriture: boolean
+  documents: ReactNode
+}) {
   const [ouverte, setOuverte] = useState<Inspection | 'nouvelle' | null>(null)
   const ateliers = [...[...flotte.inspections.values()].flat().map((i) => i.atelier), ...flotte.entretiens.map((e) => e.fournisseur)]
   return (
@@ -399,6 +487,7 @@ function Inspections({ v, inspections, flotte, ecriture }: { v: Vehicule; inspec
           </table>
         </div>
       )}
+      {documents}
       {ouverte && (
         <FormInspection
           vehicule={v}
@@ -522,7 +611,7 @@ function Suppression({ v }: { v: Vehicule }) {
   async function supprimer() {
     const ok = await confirmer({
       titre: `Supprimer ${v.surnom} ?`,
-      message: 'La fiche, sa photo, ses inspections et tout son registre d’entretien seront effacés. Pour un véhicule rangé pour la saison, choisissez plutôt « Remisé ».',
+      message: 'La fiche, sa photo, ses documents, ses inspections et tout son registre d’entretien seront effacés. Pour un véhicule rangé pour la saison, choisissez plutôt « Remisé ».',
       libelleOk: 'Supprimer',
       danger: true,
     })
