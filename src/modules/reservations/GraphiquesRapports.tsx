@@ -33,14 +33,16 @@ function Legende({ series, forme }: { series: { nom: string; couleur: string }[]
   )
 }
 
-function Infobulle({ x, children }: { x: number; children: ReactNode }) {
-  // x en fraction de la largeur ; l'infobulle reste dans le cadre.
-  const gauche = Math.min(Math.max(x * 100, 12), 88)
+/**
+ * Infobulle à côté du point survolé (x en fraction de la largeur), jamais
+ * par-dessus : à droite dans la première moitié, à gauche dans la seconde.
+ * `ecart` = demi-largeur de la bande survolée (fraction), pour ne pas cacher ses marques.
+ */
+function Infobulle({ x, ecart = 0.012, children }: { x: number; ecart?: number; children: ReactNode }) {
+  const aDroite = x < 0.55
+  const position = aDroite ? { left: `${(x + ecart) * 100}%` } : { right: `${(1 - x + ecart) * 100}%` }
   return (
-    <div
-      className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-lg border border-pierre-200 bg-white px-2.5 py-1.5 text-xs shadow-md"
-      style={{ left: `${gauche}%` }}
-    >
+    <div className="pointer-events-none absolute top-0 z-10 rounded-lg border border-pierre-200 bg-white px-2.5 py-1.5 text-xs shadow-md" style={position}>
       {children}
     </div>
   )
@@ -123,7 +125,7 @@ export function Colonnes({ categories, series, format, formatAxe }: { categories
           <line x1={G} x2={L - D} y1={BAS} y2={BAS} stroke="var(--color-pierre-300)" strokeWidth={1} />
         </svg>
         {survol !== null && (
-          <Infobulle x={(G + bande * (survol + 0.5)) / L}>
+          <Infobulle x={(G + bande * (survol + 0.5)) / L} ecart={bande / 2 / L}>
             <div className="mb-0.5 font-medium text-pierre-700">{categories[survol]}</div>
             {series.map((s) => (
               <LigneInfobulle key={s.nom} couleur={s.couleur} valeur={s.valeurs[survol] === null ? '—' : format(s.valeurs[survol]!)} nom={s.nom} />
@@ -131,6 +133,105 @@ export function Colonnes({ categories, series, format, formatAxe }: { categories
           </Infobulle>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Mêmes données que Colonnes, en courbes : un point par catégorie, une ligne par série (null = la ligne s'arrête). */
+export function CourbesMois({ categories, series, format, formatAxe }: { categories: string[]; series: Serie[]; format: (v: number) => string; formatAxe: (v: number) => string }) {
+  const [survol, setSurvol] = useState<number | null>(null)
+  const max = Math.max(0, ...series.flatMap((s) => s.valeurs.map((v) => v ?? 0)))
+  const { max: haut, graduations } = echelle(max)
+  const y = (v: number) => BAS - (v / haut) * (BAS - HAUT)
+  const bande = (L - G - D) / categories.length
+  const cx = (i: number) => G + bande * (i + 0.5)
+  const trace = (valeurs: (number | null)[]) => {
+    let d = ''
+    let dedans = false
+    valeurs.forEach((v, i) => {
+      if (v === null || v === undefined) {
+        dedans = false
+        return
+      }
+      d += `${dedans ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`
+      dedans = true
+    })
+    return d
+  }
+  return (
+    <div>
+      <Legende series={series} forme="ligne" />
+      <div className="relative">
+        <svg viewBox={`0 0 ${L} ${H}`} className="h-auto w-full" role="img" aria-label="Graphique en courbes (chiffres dans le tableau)">
+          {graduations.map((g) => (
+            <g key={g}>
+              <line x1={G} x2={L - D} y1={y(g)} y2={y(g)} stroke="var(--color-pierre-200)" strokeWidth={1} />
+              <text x={G - 8} y={y(g) + 4} textAnchor="end" className="fill-pierre-500 text-[11px]">
+                {formatAxe(g)}
+              </text>
+            </g>
+          ))}
+          {categories.map((c, i) => (
+            <text key={c} x={cx(i)} y={BAS + 18} textAnchor="middle" className="fill-pierre-600 text-[11px]">
+              {c}
+            </text>
+          ))}
+          <line x1={G} x2={L - D} y1={BAS} y2={BAS} stroke="var(--color-pierre-300)" strokeWidth={1} />
+          {survol !== null && <line x1={cx(survol)} x2={cx(survol)} y1={HAUT} y2={BAS} stroke="var(--color-pierre-400)" strokeWidth={1} />}
+          {/* La série de l'exercice choisi (la première) est dessinée en dernier : par-dessus les autres. */}
+          {[...series].reverse().map((s) => (
+            <g key={s.nom}>
+              <path d={trace(s.valeurs)} fill="none" stroke={s.couleur} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {s.valeurs.map((v, i) =>
+                v === null || v === undefined ? null : <circle key={i} cx={cx(i)} cy={y(v)} r={survol === i ? 5 : 4} fill={s.couleur} stroke="white" strokeWidth={2} />,
+              )}
+            </g>
+          ))}
+          {categories.map((c, i) => (
+            <rect
+              key={c}
+              x={G + bande * i}
+              y={0}
+              width={bande}
+              height={H}
+              fill="transparent"
+              tabIndex={0}
+              aria-label={`${c} : ${series.map((s) => `${s.nom} ${s.valeurs[i] === null ? '—' : format(s.valeurs[i]!)}`).join(', ')}`}
+              onMouseEnter={() => setSurvol(i)}
+              onMouseLeave={() => setSurvol(null)}
+              onFocus={() => setSurvol(i)}
+              onBlur={() => setSurvol(null)}
+            />
+          ))}
+        </svg>
+        {survol !== null && (
+          <Infobulle x={cx(survol) / L} ecart={bande / 4 / L}>
+            <div className="mb-0.5 font-medium text-pierre-700">{categories[survol]}</div>
+            {series.map((s) => (
+              <LigneInfobulle key={s.nom} couleur={s.couleur} valeur={s.valeurs[survol] === null ? '—' : format(s.valeurs[survol]!)} nom={s.nom} />
+            ))}
+          </Infobulle>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Choix de la forme des graphiques par mois (courbes ou colonnes). */
+export function ChoixForme({ forme, changer }: { forme: 'courbes' | 'colonnes'; changer: (f: 'courbes' | 'colonnes') => void }) {
+  return (
+    <div className="flex gap-1 text-xs" role="group" aria-label="Forme du graphique">
+      {(['courbes', 'colonnes'] as const).map((f) => (
+        <button
+          key={f}
+          type="button"
+          aria-pressed={forme === f}
+          className={`rounded-full px-2.5 py-1 ${forme === f ? 'bg-foret-700 text-white' : 'bg-pierre-100 text-pierre-700 hover:bg-pierre-200'}`}
+          onClick={() => changer(f)}
+        >
+          {f === 'courbes' ? 'Courbes' : 'Colonnes'}
+        </button>
+      ))}
     </div>
   )
 }

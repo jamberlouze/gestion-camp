@@ -12,7 +12,7 @@ import { useDonnees } from './contexte'
 import { useHistoriqueMensuel, useTotauxAcceptes, useToutesFactures } from './donnees'
 import { argent, champPetit, dateCourte, nomEtape } from './format'
 import { COULEURS, kdollars } from './echelles'
-import { BarresHorizontales, Colonnes, Courbes } from './GraphiquesRapports'
+import { BarresHorizontales, ChoixForme, Colonnes, Courbes, CourbesMois } from './GraphiquesRapports'
 import {
   anneeDuMois,
   delais,
@@ -34,6 +34,22 @@ import {
   type R,
 } from './rapports'
 import { FORFAITS, RAISONS_PERTE, VARIANTES, type Forfait } from './types'
+
+type Forme = 'courbes' | 'colonnes'
+const CLE_FORME = 'reservations-rapports-forme'
+/** Forme des graphiques par mois, gardée sur l'appareil (courbes par défaut). */
+function lireForme(): Forme {
+  try {
+    return localStorage.getItem(CLE_FORME) === 'colonnes' ? 'colonnes' : 'courbes'
+  } catch {
+    return 'courbes'
+  }
+}
+
+/** Graphique par mois dans la forme choisie. */
+function GraphiqueMois({ forme, ...p }: { forme: Forme } & Parameters<typeof Colonnes>[0]) {
+  return forme === 'courbes' ? <CourbesMois {...p} /> : <Colonnes {...p} />
+}
 
 const NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
@@ -108,6 +124,15 @@ export function OngletRapports() {
 
   const exercices = useMemo(() => [...new Set(rs.filter((r) => r.origine !== 'airbnb').map((r) => r.exercice))].sort(), [rs])
   const courant = exerciceDe(auj)
+  const [forme, setForme] = useState<Forme>(lireForme)
+  const changerForme = (f: Forme) => {
+    setForme(f)
+    try {
+      localStorage.setItem(CLE_FORME, f)
+    } catch {
+      // Stockage indisponible (navigation privée) : le choix vaut pour cette visite.
+    }
+  }
   const [exercice, setExercice] = useState(exercices.includes(courant) ? courant : (exercices.at(-1) ?? courant))
   const ref = historique.data ?? []
   const precedent = exercice - 1
@@ -166,8 +191,8 @@ export function OngletRapports() {
         <Tuile libelle="Taux de signature" valeur={pct(total.demandes ? total.signees / total.demandes : null)} detail={`${total.signees} signées sur ${total.demandes} demandes`} />
       </div>
 
-      <Section titre="Revenus par mois">
-        <Colonnes categories={MOIS_EXERCICE.map((m) => COURTS[m - 1])} series={seriesRevenus} format={dollars} formatAxe={kdollars} />
+      <Section titre="Revenus par mois" action={<ChoixForme forme={forme} changer={changerForme} />}>
+        <GraphiqueMois forme={forme} categories={MOIS_EXERCICE.map((m) => COURTS[m - 1])} series={seriesRevenus} format={dollars} formatAxe={kdollars} />
         <div className="mt-3">
           <Tableau
             entetes={['Mois', ...seriesRevenus.map((s) => s.nom)]}
@@ -232,7 +257,7 @@ export function OngletRapports() {
 
       <GroupesParMois mois={mois} auj={auj} />
 
-      <Occupation rs={rs} exercice={exercice} auj={auj} lits={etages} />
+      <Occupation rs={rs} exercice={exercice} auj={auj} lits={etages} forme={forme} changerForme={changerForme} />
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Section titre="Raisons de perte">
@@ -446,7 +471,21 @@ function GroupesParMois({ mois, auj }: { mois: ReturnType<typeof groupesParMois>
   )
 }
 
-function Occupation({ rs, exercice, auj, lits }: { rs: R[]; exercice: number; auj: string; lits: { code: string; nom: string; lits: number }[] }) {
+function Occupation({
+  rs,
+  exercice,
+  auj,
+  lits,
+  forme,
+  changerForme,
+}: {
+  rs: R[]
+  exercice: number
+  auj: string
+  lits: { code: string; nom: string; lits: number }[]
+  forme: Forme
+  changerForme: (f: Forme) => void
+}) {
   const moisAuj = Number(auj.slice(5, 7))
   const [mois, setMois] = useState(MOIS_EXERCICE.includes(moisAuj) && anneeDuMois(exercice, moisAuj) === Number(auj.slice(0, 4)) ? moisAuj : 10)
   const [survol, setSurvol] = useState<{ code: string; jour: string; r: R | null } | null>(null)
@@ -455,9 +494,10 @@ function Occupation({ rs, exercice, auj, lits }: { rs: R[]; exercice: number; au
   const ceMois = parMois.find((m) => m.mois === mois)!
   const nomSection = (code: string) => lits.find((l) => l.code === code)?.nom ?? code
   return (
-    <Section titre="Occupation des sections">
+    <Section titre="Occupation des sections" action={<ChoixForme forme={forme} changer={changerForme} />}>
       <p className="mb-2 text-sm text-pierre-600">Lits × nuits occupés par des réservations confirmées (Airbnb compris), sur les lits des sections dans Rooming.</p>
-      <Colonnes
+      <GraphiqueMois
+        forme={forme}
         categories={MOIS_EXERCICE.map((m) => COURTS[m - 1])}
         series={[{ nom: 'Occupation', couleur: COULEURS[0], valeurs: parMois.map((m) => Math.round(m.taux * 1000) / 10) }]}
         format={(v) => `${v.toLocaleString('fr-CA')} %`}
