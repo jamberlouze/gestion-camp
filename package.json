@@ -20,7 +20,8 @@
     "deploy": "npm run build && wrangler deploy",
     "worker:dev": "wrangler dev --port 8787",
     "test:worker": "node --test \"worker/**/*.test.js\"",
-    "test:calcul": "node --test src/modules/reservations/calcul.test.mjs"
+    "test:calcul": "node --test src/modules/reservations/calcul.test.mjs",
+    "test:rapports": "node --test src/modules/reservations/rapports.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

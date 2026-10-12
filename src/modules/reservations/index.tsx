@@ -24,6 +24,7 @@ import {
 import { Fiche } from './Fiche'
 import { Liste } from './Liste'
 import { Modeles } from './Modeles'
+import { OngletRapports } from './OngletRapports'
 import { Reglages } from './Reglages'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -147,6 +148,9 @@ export default function ModuleReservations() {
         <NavLink to="/reservations/courriels" className={onglet}>
           Courriels
         </NavLink>
+        <NavLink to="/reservations/rapports" className={onglet}>
+          Rapports
+        </NavLink>
         <NavLink to="/reservations/modeles" className={onglet}>
           Modèles et compagnies
         </NavLink>
@@ -167,6 +171,7 @@ export default function ModuleReservations() {
             <Route path="r/:id" element={<Fiche />} />
             <Route path="catalogue" element={<Catalogue />} />
             <Route path="courriels" element={<OngletCourriels />} />
+            <Route path="rapports" element={<OngletRapports />} />
             <Route path="modeles" element={<Modeles />} />
             <Route path="reglages" element={<Reglages />} />
             <Route path="*" element={<Navigate to="/reservations" replace />} />

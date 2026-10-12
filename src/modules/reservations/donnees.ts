@@ -689,3 +689,66 @@ export function useAlertesPaiement(auj: string) {
       .map((x) => x.reservation_id!),
   )
 }
+
+// ------------------------------------------------------------------
+// Rapports (phase 7)
+// ------------------------------------------------------------------
+
+/** Revenus mensuels des exercices d'avant l'app (référence importée du Sheets). */
+export function useHistoriqueMensuel() {
+  return useQuery({
+    queryKey: ['reservations', 'historique_mensuel'],
+    queryFn: async () => {
+      const { data, error } = await db().from('historique_mensuel').select('exercice,mois,montant')
+      if (error) throw error
+      return data as { exercice: number; mois: number; montant: number }[]
+    },
+    staleTime: Infinity,
+  })
+}
+
+/** Toutes les factures QBO connues (signé, facturé, encaissé). */
+export function useToutesFactures() {
+  const cle = ['reservations', 'factures', 'toutes']
+  useTempsReel('factures', cle)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const lignes: Pick<Facture, 'reservation_id' | 'qbo_type' | 'total' | 'solde' | 'supprimee'>[] = []
+      for (let debut = 0; ; debut += 1000) {
+        const { data, error } = await db().from('factures').select('reservation_id,qbo_type,total,solde,supprimee').order('id').range(debut, debut + 999)
+        if (error) throw error
+        lignes.push(...(data as typeof lignes))
+        if (data.length < 1000) return lignes
+      }
+    },
+  })
+}
+
+/**
+ * Total taxes comprises de l'estimé accepté le plus récent de chaque
+ * réservation ({ réservation: total }). Objet simple, pas un Map : le cache
+ * est gardé dans le navigateur (JSON).
+ */
+export function useTotauxAcceptes() {
+  const cle = ['reservations', 'estimes', 'acceptes']
+  useTempsReel('estimes', cle)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const totaux: Record<string, number> = {}
+      const versions: Record<string, number> = {}
+      for (let debut = 0; ; debut += 1000) {
+        const { data, error } = await db().from('estimes').select('reservation_id,version,total').eq('statut', 'accepte').order('id').range(debut, debut + 999)
+        if (error) throw error
+        for (const e of data as { reservation_id: string; version: number; total: number }[]) {
+          if ((versions[e.reservation_id] ?? -1) < e.version) {
+            versions[e.reservation_id] = e.version
+            totaux[e.reservation_id] = Number(e.total)
+          }
+        }
+        if (data.length < 1000) return totaux
+      }
+    },
+  })
+}

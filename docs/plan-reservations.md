@@ -405,6 +405,16 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
 - Occupation par section et par date (lits × nuits).
 - Trois mesures distinctes : **signé** (contrat), **facturé au réel** (facture finale), **encaissé** (QBO). Aujourd'hui, tout repose sur l'estimé.
 
+**Bâti en DEV le 2026-10-12 (phase 7)**, onglet Rapports, un seul filtre (l'exercice). Décisions prises seul :
+- montants **avant taxes, par mois d'arrivée**, comme le Sheets ; « signé » = contrat signé, ni perdu ni annulé ; les réservations Airbnb ne comptent que dans l'occupation ;
+- jours-usagers = (participants + accompagnateurs) × (nuits + 1), la formule de la colonne « Jours/Usager » du Sheets ;
+- référence 2023-24 et 2024-25 : les 24 montants mensuels de l'onglet « Comparatif par mois » (Sheets 2024-25), **tels quels** (avec leurs erreurs connues), dans `reservations.historique_mensuel` ; 2025-26 est recalculé d'après l'import ;
+- rythme : montant signé cumulé par date de signature, comparé au même jour un an plus tôt (contrats encore valides) ;
+- prévision : signé + estimés en cours × taux de signature **de leur étape** (estimé envoyé, accepté, contrat envoyé), mesuré sur l'exercice précédent, tous forfaits ensemble (2025-26 : 43 %, 92 %, 93 %) ;
+- entonnoir : demandes → estimé envoyé → contrat signé (même annulé ensuite) → séjour fait, par forfait ou par type d'organisation ;
+- occupation : réservations confirmées (Airbnb compris), lits des sections dans Rooming ; un groupe sans section choisie n'est pas compté (signalé sous la grille ; souvent des classes nature) ;
+- signé, facturé, encaissé : **taxes comprises**, comme QBO (estimé accepté, factures moins notes de crédit, paiements).
+
 ## 13. Liens avec les autres modules
 
 - **CRM** : organisations, contacts, échanges, relances (§1, §7).
