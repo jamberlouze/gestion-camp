@@ -12,8 +12,10 @@
 --
 -- Choix de Maxime (2026-10-11) : kayaks, canots et paddleboards restent
 -- dans Embarcations, les véhicules dans Véhicules ; les VFI, rames et
--- pagaies passent dans Embarcations (table embarcations.equipement,
--- nombres à jour). Les onglets « BPA » = GBPA+.
+-- pagaies vont dans Embarcations, et fonctionnent comme le reste de
+-- l'inventaire (2026-10-12, « uniformiser ») : ce sont des articles de
+-- sections dont `module` = 'embarcations', montrés dans Embarcations ›
+-- Équipement, avec les droits d'Embarcations. Les onglets « BPA » = GBPA+.
 -- Comptage sur téléphone, même sans réseau (comme Embarcations).
 -- ============================================================
 
@@ -37,6 +39,9 @@ insert into core.acces_roles (role, module, niveau) values ('direction','inventa
 create table inventaire.sections (
   id uuid primary key default gen_random_uuid(),
   nom text not null unique check (btrim(nom) <> ''),
+  -- Module où la section est montrée et qui donne les droits sur ses
+  -- articles et leurs comptes (VFI, rames, pagaies : Embarcations).
+  module text not null default 'inventaire' check (module in ('inventaire','embarcations')),
   ordre integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -111,68 +116,65 @@ create trigger trg_articles_updated_at before update on inventaire.articles
 for each row execute function core.maj_updated_at();
 
 -- ------------------------------------------------------------
--- Équipement nautique d'Embarcations : VFI, rames, pagaies, par taille
--- ou par sorte. Nombres à jour (bons, à réparer), comme l'état des
--- embarcations : pas d'historique. Hors ligne comme le reste du
--- module (identifiants créés par l'appareil).
--- ------------------------------------------------------------
-create table embarcations.equipement (
-  id uuid primary key default gen_random_uuid(),
-  type text not null check (type in ('VFI','Rame','Pagaie')),
-  variante text not null check (btrim(variante) <> ''),
-  entreprise_utilisation text check (entreprise_utilisation in ('BPA lac','BPA rivière','R&D','AQB')),
-  bon integer not null default 0 check (bon >= 0),
-  a_reparer integer not null default 0 check (a_reparer >= 0),
-  notes text,
-  ordre integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create trigger trg_equipement_updated_at before update on embarcations.equipement
-for each row execute function core.maj_updated_at();
-
--- ------------------------------------------------------------
 -- Droits et RLS
 -- ------------------------------------------------------------
 grant usage on schema inventaire to authenticated, service_role;
 grant select, insert, update, delete on all tables in schema inventaire to authenticated, service_role;
-grant select, insert, update, delete on embarcations.equipement to authenticated, service_role;
+
+-- Module qui donne les droits sur un article : celui de sa section
+-- (sans section : l'inventaire).
+create function inventaire.module_section(p_section uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((select s.module from inventaire.sections s where s.id = p_section), 'inventaire')
+$$;
+
+create function inventaire.module_article(p_article uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select inventaire.module_section((select a.section_id from inventaire.articles a where a.id = p_article))
+$$;
+
+revoke execute on function inventaire.module_section(uuid), inventaire.module_article(uuid) from public, anon;
+grant execute on function inventaire.module_section(uuid), inventaire.module_article(uuid) to authenticated;
 
 alter table inventaire.sections enable row level security;
 alter table inventaire.lieux enable row level security;
 alter table inventaire.articles enable row level security;
 alter table inventaire.comptes enable row level security;
-alter table embarcations.equipement enable row level security;
 
 create policy "Lire sections" on inventaire.sections for select to authenticated
-  using (core.peut_lire('inventaire'));
+  using (core.peut_lire(module));
 create policy "Écrire sections" on inventaire.sections for all to authenticated
   using (core.peut_ecrire('inventaire')) with check (core.peut_ecrire('inventaire'));
 
 create policy "Lire lieux" on inventaire.lieux for select to authenticated
-  using (core.peut_lire('inventaire'));
+  using (core.peut_lire('inventaire') or core.peut_lire('embarcations'));
 create policy "Écrire lieux" on inventaire.lieux for all to authenticated
   using (core.peut_ecrire('inventaire')) with check (core.peut_ecrire('inventaire'));
 
 create policy "Lire articles" on inventaire.articles for select to authenticated
-  using (core.peut_lire('inventaire'));
+  using (core.peut_lire(inventaire.module_section(section_id)));
 create policy "Écrire articles" on inventaire.articles for all to authenticated
-  using (core.peut_ecrire('inventaire')) with check (core.peut_ecrire('inventaire'));
+  using (core.peut_ecrire(inventaire.module_section(section_id)))
+  with check (core.peut_ecrire(inventaire.module_section(section_id)));
 
 create policy "Lire comptes" on inventaire.comptes for select to authenticated
-  using (core.peut_lire('inventaire'));
+  using (core.peut_lire(inventaire.module_article(article_id)));
 create policy "Écrire comptes" on inventaire.comptes for all to authenticated
-  using (core.peut_ecrire('inventaire')) with check (core.peut_ecrire('inventaire'));
-
-create policy "Lire équipement" on embarcations.equipement for select to authenticated
-  using (core.peut_lire('embarcations'));
-create policy "Écrire équipement" on embarcations.equipement for all to authenticated
-  using (core.peut_ecrire('embarcations')) with check (core.peut_ecrire('embarcations'));
+  using (core.peut_ecrire(inventaire.module_article(article_id)))
+  with check (core.peut_ecrire(inventaire.module_article(article_id)));
 
 alter publication supabase_realtime add table
-  inventaire.sections, inventaire.lieux, inventaire.articles, inventaire.comptes,
-  embarcations.equipement;
+  inventaire.sections, inventaire.lieux, inventaire.articles, inventaire.comptes;
 
 -- ============================================================
 -- Import du Sheets « Inventaire - Matériel »
@@ -585,32 +587,66 @@ insert into inventaire.comptes (jour, article_id, bon, brise, incomplet, note, c
   ('2024-08-06', 'e3446f21-70c3-586f-a971-9c760a06206f', 1, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
   ('2024-08-06', '203780c8-fe88-5eb1-acd3-3f32a6d697b1', 1, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
   ('2024-08-06', '5ab634b1-c332-54b3-ab65-68e75e7e1648', 4, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)');
--- VFI, rames et pagaies (onglets BPA et Rouge et Diable du Sheets « Inventaire - Matériel »).
--- BPA : VFI comptés en 2024, rames et pagaies en 2026 ; R&D : liste sans nombres.
-insert into embarcations.equipement (type, variante, entreprise_utilisation, bon, a_reparer, notes, ordre) values
-  ('VFI', 'Enfant - Small', null, 4, 0, 'Nombres de 2024', 1),
-  ('VFI', 'Enfant - Medium', null, 23, 0, 'Nombres de 2024', 2),
-  ('VFI', 'Adulte - Small', null, 32, 0, 'Nombres de 2024', 3),
-  ('VFI', 'Adulte - Medium', null, 20, 0, 'Nombres de 2024', 4),
-  ('VFI', 'Adulte - Large', null, 21, 0, 'Nombres de 2024', 5),
-  ('VFI', 'Adulte - X-Large', null, 17, 0, 'Nombres de 2024', 6),
-  ('Rame', 'Très petit', null, 5, 0, null, 7),
-  ('Rame', 'Petit-moyen', null, 28, 0, null, 8),
-  ('Rame', 'Moyen-grand', null, 15, 0, null, 9),
-  ('Rame', 'Très grand', null, 9, 0, null, 10),
-  ('Pagaie', 'Kayak', null, 1, 5, null, 11),
-  ('Pagaie', 'Kayak/paddle', null, 5, 0, null, 12),
-  ('Pagaie', 'Paddle', null, 3, 0, null, 13),
-  ('VFI', 'Enfant - Small', 'R&D', 0, 0, null, 14),
-  ('VFI', 'Enfant - Medium', 'R&D', 0, 0, null, 15),
-  ('VFI', 'Adulte - Small', 'R&D', 0, 0, null, 16),
-  ('VFI', 'Adulte - Medium', 'R&D', 0, 0, null, 17),
-  ('VFI', 'Adulte - Large', 'R&D', 0, 0, null, 18),
-  ('VFI', 'Adulte - X-Large', 'R&D', 0, 0, null, 19),
-  ('Pagaie', 'Jaune', 'R&D', 0, 0, null, 20),
-  ('Pagaie', 'Noire', 'R&D', 0, 0, null, 21),
-  ('Pagaie', 'Noire carrée', 'R&D', 0, 0, null, 22),
-  ('Pagaie', 'Enfant (orange)', 'R&D', 0, 0, null, 23);
+-- VFI, rames et pagaies : sections d'Embarcations (onglets BPA et Rouge et
+-- Diable). BPA : VFI comptés en 2024, rames et pagaies dans l'onglet 2026
+-- (jour inconnu : dernière modification du Sheets, 23 août 2026) ; R&D :
+-- liste sans nombres.
+insert into inventaire.sections (nom, module, ordre) values
+  ('VFI', 'embarcations', 101),
+  ('Rames', 'embarcations', 102),
+  ('Pagaies', 'embarcations', 103);
+
+insert into inventaire.articles (id, nom, variante, section_id, lieu_id, entreprise_id, ordre)
+select a.id::uuid, a.nom, a.variante, c.id, l.id, e.id, a.ordre
+  from (values
+    ('29439575-bae4-587e-a880-c8e334515c23', 'VFI', 'Enfant - Small', 'VFI', 'Cabane nautique', 'GBPA+', 1001),
+    ('75e3ed2e-e653-5b71-a330-8ee79a409256', 'VFI', 'Enfant - Medium', 'VFI', 'Cabane nautique', 'GBPA+', 1002),
+    ('40d4f98e-ae2d-5689-ac70-b069531f2971', 'VFI', 'Adulte - Small', 'VFI', 'Cabane nautique', 'GBPA+', 1003),
+    ('6cac0b93-9996-54a1-a409-fa2cfa24f8c4', 'VFI', 'Adulte - Medium', 'VFI', 'Cabane nautique', 'GBPA+', 1004),
+    ('bf573acd-19e3-55c6-a3fc-f840b5677746', 'VFI', 'Adulte - Large', 'VFI', 'Cabane nautique', 'GBPA+', 1005),
+    ('5f8324c7-c1c3-52fd-a64b-80fecc311553', 'VFI', 'Adulte - X-Large', 'VFI', 'Cabane nautique', 'GBPA+', 1006),
+    ('b0f68691-2805-55e0-a4e5-be48bd81122c', 'Rame', 'Très petit', 'Rames', 'Cabane nautique', 'GBPA+', 1007),
+    ('b84adf60-60b5-50a4-a677-d456741bdff4', 'Rame', 'Petit-moyen', 'Rames', 'Cabane nautique', 'GBPA+', 1008),
+    ('a52f4514-dc6e-5d14-ad31-f6ccfd31a6bf', 'Rame', 'Moyen-grand', 'Rames', 'Cabane nautique', 'GBPA+', 1009),
+    ('6371951b-633c-507e-a88a-b32aa448214e', 'Rame', 'Très grand', 'Rames', 'Cabane nautique', 'GBPA+', 1010),
+    ('42d8083b-b459-5668-ad31-c8ebe5dd7dd3', 'Pagaie', 'Kayak', 'Pagaies', 'Cabane nautique', 'GBPA+', 1011),
+    ('e5babae8-40d1-58df-a53a-e8e6c8b20427', 'Pagaie', 'Kayak/paddle', 'Pagaies', 'Cabane nautique', 'GBPA+', 1012),
+    ('f2c2305f-48b7-5804-af69-f8304664f5b8', 'Pagaie', 'Paddle', 'Pagaies', 'Cabane nautique', 'GBPA+', 1013),
+    ('87616bea-b0c6-5614-a1f5-6309adf8ded0', 'VFI', 'Enfant - Small', 'VFI', 'R&D – stationnement', 'R&D', 1014),
+    ('49f0f1c5-7182-5f37-abcf-f554c1b97c7a', 'VFI', 'Enfant - Medium', 'VFI', 'R&D – stationnement', 'R&D', 1015),
+    ('8131ba5e-ab02-539d-aa17-9c6ea7e1d389', 'VFI', 'Adulte - Small', 'VFI', 'R&D – stationnement', 'R&D', 1016),
+    ('9c2abd7b-7927-57bd-a5c3-8e93415ab721', 'VFI', 'Adulte - Medium', 'VFI', 'R&D – stationnement', 'R&D', 1017),
+    ('d81e2280-8de7-5aee-a9c8-04dfb2e515ca', 'VFI', 'Adulte - Large', 'VFI', 'R&D – stationnement', 'R&D', 1018),
+    ('df0e7131-407c-580b-a194-333f7f182504', 'VFI', 'Adulte - X-Large', 'VFI', 'R&D – stationnement', 'R&D', 1019),
+    ('74566adc-39ab-5bc9-adb7-95c26dd60ae4', 'Pagaie', 'Jaune', 'Pagaies', 'R&D – stationnement', 'R&D', 1020),
+    ('aa8c5e70-8df7-5725-a5c1-ca1013a4ec50', 'Pagaie', 'Noire', 'Pagaies', 'R&D – stationnement', 'R&D', 1021),
+    ('32c725ff-2d17-577c-ae3d-a67cf4304f47', 'Pagaie', 'Noire carrée', 'Pagaies', 'R&D – stationnement', 'R&D', 1022),
+    ('153e0fb2-e438-54e2-aa7f-fe5444211295', 'Pagaie', 'Enfant (orange)', 'Pagaies', 'R&D – stationnement', 'R&D', 1023)
+  ) as a(id, nom, variante, section, lieu, compagnie, ordre)
+  join inventaire.sections c on c.nom = a.section
+  join inventaire.lieux l on l.nom = a.lieu
+  left join lateral (
+    select x.id from core.entreprises x
+     where x.abreviation = a.compagnie or x.nom = a.compagnie
+        or (a.compagnie = 'R&D' and x.nom ilike 'rouge%diable%')
+     order by (x.abreviation = a.compagnie) desc nulls last, (x.nom = a.compagnie) desc
+     limit 1
+  ) e on true;
+
+insert into inventaire.comptes (jour, article_id, bon, brise, incomplet, note, compte_par_nom) values
+  ('2024-08-06', '29439575-bae4-587e-a880-c8e334515c23', 4, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2024-08-06', '75e3ed2e-e653-5b71-a330-8ee79a409256', 23, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2024-08-06', '40d4f98e-ae2d-5689-ac70-b069531f2971', 32, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2024-08-06', '6cac0b93-9996-54a1-a409-fa2cfa24f8c4', 20, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2024-08-06', 'bf573acd-19e3-55c6-a3fc-f840b5677746', 21, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2024-08-06', '5f8324c7-c1c3-52fd-a64b-80fecc311553', 17, 0, 0, null, 'import du Sheets, onglet 2024 (jour approximatif)'),
+  ('2026-08-23', 'b0f68691-2805-55e0-a4e5-be48bd81122c', 5, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', 'b84adf60-60b5-50a4-a677-d456741bdff4', 28, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', 'a52f4514-dc6e-5d14-ad31-f6ccfd31a6bf', 15, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', '6371951b-633c-507e-a88a-b32aa448214e', 9, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', '42d8083b-b459-5668-ad31-c8ebe5dd7dd3', 1, 5, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', 'e5babae8-40d1-58df-a53a-e8e6c8b20427', 5, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)'),
+  ('2026-08-23', 'f2c2305f-48b7-5804-af69-f8304664f5b8', 3, 0, 0, null, 'import du Sheets, onglet 2026 (jour approximatif)');
 
 -- ------------------------------------------------------------
 -- Après l'import : la base note qui a compté ; pas de compte dans le

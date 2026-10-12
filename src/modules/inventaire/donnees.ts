@@ -4,7 +4,7 @@ import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import { estErreurReseau } from '@/modules/embarcations/donnees'
 import { historiques } from './outils'
-import type { Article, ChampsArticle, ChampsCompte, Compagnie, Compte, Lieu, Section } from './types'
+import type { Article, ChampsArticle, ChampsCompte, Compagnie, Compte, Lieu, ModuleSection, Section } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne (comme Embarcations, voir CLAUDE.md)
@@ -118,10 +118,30 @@ export function useDonnees() {
       pret: !!(sections && lieux && articles && comptes && compagnies),
     }
   }, [sections, lieux, articles, comptes, compagnies])
-  return { ...donnees, erreur: erreur ?? null }
+  return useMemo(() => ({ ...donnees, erreur: erreur ?? null }), [donnees, erreur])
 }
 
 export type Donnees = ReturnType<typeof useDonnees>
+
+/** Module d'une section (une copie gardée d'avant la colonne n'en a pas : l'inventaire). */
+export const moduleDe = (s: Pick<Section, 'module'> | undefined): ModuleSection => s?.module ?? 'inventaire'
+
+/**
+ * Ce que montre un module : ses sections et leurs articles (sans section :
+ * l'inventaire). Embarcations › Équipement = les sections 'embarcations'.
+ */
+export function filtrerPour(d: Donnees, module: ModuleSection): Donnees {
+  const sections = d.sections.filter((s) => moduleDe(s) === module)
+  const ids = new Set(sections.map((s) => s.id))
+  const articles = d.articles.filter((a) => (a.section_id && d.section.has(a.section_id) ? ids.has(a.section_id) : module === 'inventaire'))
+  return { ...d, sections, articles, section: parId(sections), article: parId(articles) }
+}
+
+/** Les données d'un module (voir `filtrerPour`). */
+export function useDonneesDe(module: ModuleSection) {
+  const d = useDonnees()
+  return useMemo(() => filtrerPour(d, module), [d, module])
+}
 
 // ------------------------------------------------------------------
 // État de la synchronisation
@@ -299,7 +319,7 @@ export const useSupprimerArticle = () => useMutation<void, Error, string>({ muta
 type TableListe = 'sections' | 'lieux'
 
 /** Ajoute ou modifie une ligne d'une liste (selon la présence d'un id). */
-export async function enregistrerListe(table: TableListe, ligne: { id?: string; nom?: string; ordre?: number }) {
+export async function enregistrerListe(table: TableListe, ligne: { id?: string; nom?: string; ordre?: number; module?: ModuleSection }) {
   const { id, ...champs } = ligne
   await executer(id ? db().from(table).update(champs).eq('id', id) : db().from(table).insert(champs))
 }

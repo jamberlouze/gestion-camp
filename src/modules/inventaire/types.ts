@@ -4,7 +4,12 @@ export interface Element {
   nom: string
   ordre: number
 }
-export type Section = Element
+/** Module où une section est montrée et qui donne les droits sur ses articles. */
+export type ModuleSection = 'inventaire' | 'embarcations'
+export interface Section extends Element {
+  /** VFI, rames, pagaies : 'embarcations' (Embarcations › Équipement). */
+  module: ModuleSection
+}
 export type Lieu = Element
 
 export interface Article {

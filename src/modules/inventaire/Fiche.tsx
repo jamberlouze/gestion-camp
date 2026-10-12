@@ -23,6 +23,7 @@ export function Fiche({
   d,
   id,
   ecriture,
+  sectionObligatoire,
   defauts,
   fermer,
   compter,
@@ -30,6 +31,8 @@ export function Fiche({
   d: Donnees
   id: string | null
   ecriture: boolean
+  /** Pas de « sans section » (Embarcations : les droits suivent la section). */
+  sectionObligatoire?: boolean
   defauts: Defauts
   fermer: () => void
   /** Ouvre le compte de cet article (quelqu'un qui écrit). */
@@ -42,7 +45,7 @@ export function Fiche({
   const supprimerCompte = useSupprimerCompte()
   const [nom, setNom] = useState(article?.nom ?? '')
   const [variante, setVariante] = useState(article?.variante ?? '')
-  const [section, setSection] = useState(article ? (article.section_id ?? '') : (defauts.section_id ?? ''))
+  const [section, setSection] = useState(article ? (article.section_id ?? '') : (defauts.section_id ?? (sectionObligatoire ? (d.sections[0]?.id ?? '') : '')))
   const [lieu, setLieu] = useState(article ? (article.lieu_id ?? '') : (defauts.lieu_id ?? ''))
   const [compagnie, setCompagnie] = useState(article ? (article.entreprise_id ?? '') : (defauts.entreprise_id ?? ''))
   const [necessaire, setNecessaire] = useState(article?.necessaire == null ? '' : String(article.necessaire))
@@ -114,8 +117,8 @@ export function Fiche({
             <label className={ui.etiquette} htmlFor="art-section">
               Section
             </label>
-            <select id="art-section" disabled={lecture} className={ui.champ} value={section} onChange={(e) => setSection(e.target.value)}>
-              <option value="">—</option>
+            <select id="art-section" required={sectionObligatoire} disabled={lecture} className={ui.champ} value={section} onChange={(e) => setSection(e.target.value)}>
+              {!sectionObligatoire && <option value="">—</option>}
               {d.sections.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nom}

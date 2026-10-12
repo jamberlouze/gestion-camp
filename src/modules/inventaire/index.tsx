@@ -5,7 +5,7 @@ import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
+import { filtrerPour, useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Equipement } from './Equipement'
 import { Reglages } from './Reglages'
 
@@ -43,7 +43,8 @@ export default function ModuleInventaire() {
         <p className="py-8 text-center text-sm text-pierre-500">Chargement de l'inventaire…</p>
       ) : (
         <Routes>
-          <Route index element={<Equipement d={d} ecriture={ecriture} />} />
+          {/* VFI, rames et pagaies : dans Embarcations › Équipement. */}
+          <Route index element={<Equipement d={filtrerPour(d, 'inventaire')} ecriture={ecriture} />} />
           <Route path="reglages" element={<Reglages d={d} ecriture={ecriture} />} />
         </Routes>
       )}

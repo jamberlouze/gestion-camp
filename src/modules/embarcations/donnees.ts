@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { ChampsEmbarcation, ChampsEquipement, ChampsModele, ChampsNote, Embarcation, Equipement, Modele, Note } from './types'
+import type { ChampsEmbarcation, ChampsModele, ChampsNote, Embarcation, Modele, Note } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne
@@ -34,10 +34,6 @@ export const CLES = {
   majNote: [RACINE, 'maj-note'],
   creerNote: [RACINE, 'creer-note'],
   supprimerNote: [RACINE, 'supprimer-note'],
-  equipement: [RACINE, 'equipement'],
-  majEquipement: [RACINE, 'maj-equipement'],
-  creerEquipement: [RACINE, 'creer-equipement'],
-  supprimerEquipement: [RACINE, 'supprimer-equipement'],
 } as const
 
 const db = () => supabase.schema('embarcations')
@@ -96,18 +92,6 @@ export function useNotes() {
   })
 }
 
-/** VFI, rames et pagaies, dans l'ordre de la liste. */
-export function useEquipement() {
-  return useQuery({
-    queryKey: CLES.equipement,
-    queryFn: async () => {
-      const { data, error } = await db().from('equipement').select('*').order('ordre').order('id')
-      if (error) throw error
-      return data as Equipement[]
-    },
-  })
-}
-
 /** Recharge les listes quand quelqu'un d'autre modifie la flotte. */
 export function useTempsReel() {
   const client = useQueryClient()
@@ -126,7 +110,6 @@ export function useTempsReel() {
       .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'embarcations' }, recharger)
       .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'modeles' }, recharger)
       .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'notes' }, recharger)
-      .on('postgres_changes', { event: '*', schema: 'embarcations', table: 'equipement' }, recharger)
       .subscribe()
     return () => {
       supabase.removeChannel(canal)
@@ -147,8 +130,9 @@ export function useEnLigne() {
 
 /** Nombre de modifications pas encore confirmées par la base. */
 export function useModificationsEnAttente() {
+  // L'onglet Équipement envoie par la file de l'inventaire (VFI, rames, pagaies).
   return useMutationState({
-    filters: { mutationKey: [RACINE], status: 'pending' },
+    filters: { status: 'pending', predicate: (m) => ['embarcations', 'inventaire'].includes(String(m.options.mutationKey?.[0])) },
     select: (m) => m.mutationId,
   }).length
 }
@@ -306,41 +290,6 @@ export function enregistrerMutationsEmbarcations(client: QueryClient) {
     onSettled: recharger,
   })
 
-  client.setMutationDefaults(CLES.creerEquipement, {
-    ...communes,
-    // Envoi refait après une coupure alors que la ligne était déjà en base : rien à faire.
-    mutationFn: (nouveau: NouvelEquipement) =>
-      executer(db().from('equipement').upsert(nouveau, { onConflict: 'id', ignoreDuplicates: true })),
-    onMutate: (nouveau: NouvelEquipement) =>
-      optimiste<Equipement>(CLES.equipement, nouveau.id, () => ({
-        entreprise_utilisation: null,
-        bon: 0,
-        a_reparer: 0,
-        notes: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        ...nouveau,
-      }))(),
-    onError: annuler,
-    onSettled: recharger,
-  })
-
-  client.setMutationDefaults(CLES.majEquipement, {
-    ...communes,
-    mutationFn: ({ id, champs }: VariablesMaj<ChampsEquipement>) => executer(db().from('equipement').update(champs).eq('id', id)),
-    onMutate: ({ id, champs }: VariablesMaj<ChampsEquipement>) =>
-      optimiste<Equipement>(CLES.equipement, id, (e) => (e ? { ...e, ...champs } : null))(),
-    onError: annuler,
-    onSettled: recharger,
-  })
-
-  client.setMutationDefaults(CLES.supprimerEquipement, {
-    ...communes,
-    mutationFn: (id: string) => executer(db().from('equipement').delete().eq('id', id)),
-    onMutate: (id: string) => optimiste<Equipement>(CLES.equipement, id, () => null)(),
-    onError: annuler,
-    onSettled: recharger,
-  })
 }
 
 // Les identifiants sont créés dans le navigateur : une embarcation ajoutée
@@ -349,7 +298,6 @@ export type NouvelleEmbarcation = Pick<Embarcation, 'id' | 'modele_id'> &
   Partial<Pick<Embarcation, 'entreprise_utilisation' | 'notes'>>
 export type NouveauModele = Pick<Modele, 'id' | 'type' | 'nom' | 'prefix_id' | 'bouchon'>
 export type NouvelleNote = Pick<Note, 'id' | 'texte'> & Partial<Pick<Note, 'embarcation_id'>>
-export type NouvelEquipement = Pick<Equipement, 'id' | 'type' | 'variante' | 'ordre'> & Partial<Pick<Equipement, 'entreprise_utilisation'>>
 
 export function useMajEmbarcation() {
   return useMutation<void, Error, VariablesMaj<ChampsEmbarcation>>({ mutationKey: CLES.majEmbarcation })
@@ -371,13 +319,4 @@ export function useMajNote() {
 }
 export function useSupprimerNote() {
   return useMutation<void, Error, string>({ mutationKey: CLES.supprimerNote })
-}
-export function useCreerEquipement() {
-  return useMutation<void, Error, NouvelEquipement>({ mutationKey: CLES.creerEquipement })
-}
-export function useMajEquipement() {
-  return useMutation<void, Error, VariablesMaj<ChampsEquipement>>({ mutationKey: CLES.majEquipement })
-}
-export function useSupprimerEquipement() {
-  return useMutation<void, Error, string>({ mutationKey: CLES.supprimerEquipement })
 }

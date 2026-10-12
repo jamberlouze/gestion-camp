@@ -40,7 +40,16 @@ const CHAMPS = [
  * On compte quand on veut, une section à la fois : le mode comptage date
  * les nombres entrés du jour choisi (aujourd'hui par défaut).
  */
-export function Equipement({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
+export function Equipement({
+  d,
+  ecriture,
+  sectionObligatoire,
+}: {
+  d: Donnees
+  ecriture: boolean
+  /** Un nouvel article doit être dans une des sections (Embarcations : les droits en dépendent). */
+  sectionObligatoire?: boolean
+}) {
   const grandEcran = useMediaQuery('(min-width: 768px)')
   const [filtres, setFiltres] = useState<Filtres>(FILTRES_VIDES)
   const [par, setPar] = useState<Regroupement>('section')
@@ -132,6 +141,7 @@ export function Equipement({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
           d={d}
           id={fenetre.id}
           ecriture={ecriture}
+          sectionObligatoire={sectionObligatoire}
           defauts={{
             section_id: filtres.section && filtres.section !== AUCUN ? filtres.section : null,
             lieu_id: filtres.lieu && filtres.lieu !== AUCUN ? filtres.lieu : null,

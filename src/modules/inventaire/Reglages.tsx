@@ -5,8 +5,8 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
-import { enregistrerListe, ordonner, supprimerListe, useRelire, type Donnees } from './donnees'
-import type { Element } from './types'
+import { enregistrerListe, moduleDe, ordonner, supprimerListe, useRelire, type Donnees } from './donnees'
+import type { Element, ModuleSection, Section } from './types'
 
 /** Sections et lieux de rangement (en ligne) : ajouter, renommer, ordonner, retirer. */
 export function Reglages({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
@@ -20,6 +20,7 @@ export function Reglages({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
         lignes={d.sections}
         nombre={(id) => d.articles.filter((a) => a.section_id === id).length}
         retrait={(n) => `${n} article(s) de cette section passeront « sans section ». Ils ne sont pas supprimés.`}
+        avecModule
       />
       <Liste
         table="lieux"
@@ -30,7 +31,7 @@ export function Reglages({ d, ecriture }: { d: Donnees; ecriture: boolean }) {
         retrait={(n) => `${n} article(s) rangés à ce lieu passeront « sans lieu ». Ils ne sont pas supprimés.`}
       />
       <p className="text-sm text-pierre-500 lg:col-span-2">
-        Les compagnies se gèrent dans Référentiel › Compagnies. Les VFI, rames et pagaies sont dans Embarcations › Équipement.
+        Une section « Embarcations » s'affiche dans Embarcations › Équipement (VFI, rames, pagaies), avec les droits de ce module. Les compagnies se gèrent dans Référentiel › Compagnies.
       </p>
     </div>
   )
@@ -43,6 +44,7 @@ function Liste({
   lignes,
   nombre,
   retrait,
+  avecModule,
 }: {
   table: 'sections' | 'lieux'
   titre: string
@@ -50,6 +52,8 @@ function Liste({
   lignes: Element[]
   nombre: (id: string) => number
   retrait: (n: number) => string
+  /** Sections : choix du module où elles s'affichent. */
+  avecModule?: boolean
 }) {
   const relire = useRelire()
   const [ajouter, setAjouter] = useState(false)
@@ -90,6 +94,17 @@ function Liste({
               obligatoire
               enregistrer={(nom) => faire(() => enregistrerListe(table, { id: l.id, nom }))}
             />
+            {avecModule && (
+              <select
+                aria-label={`Module de la section ${l.nom}`}
+                className="fleche-serree rounded-md border border-pierre-200 bg-white px-1.5 py-1 text-xs text-pierre-700"
+                value={moduleDe(l as Section)}
+                onChange={(e) => faire(() => enregistrerListe(table, { id: l.id, module: e.target.value as ModuleSection }))}
+              >
+                <option value="inventaire">Inventaire</option>
+                <option value="embarcations">Embarcations</option>
+              </select>
+            )}
             <span className="w-8 text-right text-xs tabular-nums text-pierre-400" title="Articles">
               {nombre(l.id) || ''}
             </span>

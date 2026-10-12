@@ -53,23 +53,3 @@ export interface Note {
 }
 
 export type ChampsNote = Partial<Pick<Note, 'texte' | 'embarcation_id' | 'statut' | 'suivi'>>
-
-export const TYPES_EQUIPEMENT = ['VFI', 'Rame', 'Pagaie'] as const
-export type TypeEquipement = (typeof TYPES_EQUIPEMENT)[number]
-
-/** VFI, rames, pagaies : nombres à jour par taille ou par sorte (pas un par un). */
-export interface Equipement {
-  id: string
-  type: TypeEquipement
-  /** Taille ou sorte : « Adulte - Large », « Petit-moyen », « Kayak »… */
-  variante: string
-  entreprise_utilisation: Entreprise | null
-  bon: number
-  a_reparer: number
-  notes: string | null
-  ordre: number
-  created_at: string
-  updated_at: string
-}
-
-export type ChampsEquipement = Partial<Pick<Equipement, 'variante' | 'entreprise_utilisation' | 'bon' | 'a_reparer' | 'notes'>>
