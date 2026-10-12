@@ -5,6 +5,10 @@
 // des renseignements personnels : il se garde HORS du dépôt (scratchpad).
 //
 //   AIRTABLE_TOKEN_RH=… node scripts/migration/rh-airtable.mjs --sortie <import.sql>
+//     [--depuis <dossier>]   lit des extraits JSON au lieu de l'API (réponses du
+//                            connecteur Airtable de Claude : candidatures-*.json,
+//                            humains.json, embauches.json, banque.json, au format
+//                            {records: [{id, createdTime, cellValuesByFieldId}]})
 //     [--avec-paie]          NAS et comptes bancaires (chiffrés par la base) ;
 //                            jamais en DEV, seulement pour l'import final en PROD
 //     [--fichiers <dossier>] télécharge les pièces jointes (CV, contrats, cartes,
@@ -21,7 +25,7 @@
 // casse pas l'import.
 
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,12 +35,14 @@ const option = (nom) => (args.includes(nom) ? args[args.indexOf(nom) + 1] : null
 const sortie = option('--sortie')
 const avecPaie = args.includes('--avec-paie')
 const dossierFichiers = option('--fichiers')
+const depuis = option('--depuis')
 if (!sortie) {
   console.error('Usage : --sortie <import.sql> [--avec-paie] [--fichiers <dossier>]')
   process.exit(1)
 }
 
 function jeton() {
+  if (depuis) return null
   if (process.env.AIRTABLE_TOKEN_RH) return process.env.AIRTABLE_TOKEN_RH
   const f = join(ici, '.env.rh')
   if (existsSync(f)) {
@@ -55,7 +61,15 @@ const TABLES = {
   banque: 'tbldztPhR7k9y7ptL',
 }
 
+/** Extraits du connecteur : {records: [{id, createdTime, cellValuesByFieldId}]}, un ou plusieurs fichiers par table. */
+function lireExtraits(nom) {
+  const fichiers = readdirSync(depuis).filter((f) => f === `${nom}.json` || (f.startsWith(`${nom}-`) && f.endsWith('.json')))
+  if (!fichiers.length) throw new Error(`Extrait absent : ${nom}.json dans ${depuis}`)
+  return fichiers.flatMap((f) => JSON.parse(readFileSync(join(depuis, f), 'utf8')).records.map((r) => ({ id: r.id, createdTime: r.createdTime, fields: r.cellValuesByFieldId ?? r.fields ?? {} })))
+}
+
 async function lire(table) {
+  if (depuis) return lireExtraits(Object.keys(TABLES).find((k) => TABLES[k] === table))
   const lignes = []
   let offset
   do {
@@ -108,7 +122,11 @@ const txt = (v) => {
   return s || null
 }
 const liste = (v) => (Array.isArray(v) ? v.map((x) => txt(x)).filter(Boolean) : [])
-const courriel = (v) => txt(v)?.toLowerCase().replace(/\s+/g, '') || null
+// Un courriel invalide (« n.a », « - ») est ignoré : sinon toutes ces fiches seraient réunies en une.
+const courriel = (v) => {
+  const c = txt(v)?.toLowerCase().replace(/\s+/g, '')
+  return c && /^[^@]+@[^@]+\.[a-z]{2,}$/.test(c) ? c : null
+}
 const date = (v) => (txt(v) && /^\d{4}-\d{2}-\d{2}/.test(txt(v)) ? txt(v).slice(0, 10) : null)
 const chiffres = (v) => (v === null || v === undefined ? null : String(v).replace(/\D/g, '') || null)
 const arr = (ids) => (ids.length ? `array[${ids.join(',')}]::uuid[]` : `'{}'::uuid[]`)
@@ -279,7 +297,7 @@ for (const h of humains) {
 
 const personneDeCandidature = (r) => {
   const f = r.fields
-  const lien = (f[C.humains] ?? []).map((id) => parHumain.get(id)).find(Boolean)
+  const lien = (f[C.humains] ?? []).map((x) => parHumain.get(x?.id ?? x)).find(Boolean)
   const p = lien ?? personnePour({ cle: r.id, courriel: courriel(f[C.courriel]), prenom: txt(f[C.prenom]), nom: txt(f[C.nom]) })
   p.surnom = p.surnom ?? txt(f[C.surnom])
   p.telephone = p.telephone ?? txt(f[C.telephone])
@@ -291,7 +309,7 @@ const personneDeCandidature = (r) => {
 }
 const personneDEmbauche = (r) => {
   const f = r.fields
-  const lien = (f[E.humains] ?? []).map((id) => parHumain.get(id)).find(Boolean)
+  const lien = (f[E.humains] ?? []).map((x) => parHumain.get(x?.id ?? x)).find(Boolean)
   return lien ?? personnePour({ cle: r.id, courriel: courriel(f[E.courriel]), prenom: txt(f[E.prenom]), nom: txt(f[E.nom]) })
 }
 
@@ -380,8 +398,10 @@ for (const r of embauches) {
   dossiersParPersonne.set(p, [...(dossiersParPersonne.get(p) ?? []), r])
 }
 
-const embaucheSql = (cle, p, champs) =>
-  `insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, remuneration, vacances, type_employe, action_paie, date_embauche, disponibilites, disponibilites_note, code_ethique_le, commentaires, presentation, dossier_recu_le, airtable_id) values (` +
+const saisonsEmbauchees = new Map() // personne → Set('ete-2026')
+const embaucheSql = (cle, p, champs) => {
+  saisonsEmbauchees.set(p, (saisonsEmbauchees.get(p) ?? new Set()).add(`${champs.saison.genre}-${champs.saison.annee}`))
+  return `insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, remuneration, vacances, type_employe, action_paie, date_embauche, disponibilites, disponibilites_note, code_ethique_le, commentaires, presentation, dossier_recu_le, airtable_id) values (` +
   [
     q(uuid(`embauche:${cle}`)),
     personneExpr(p),
@@ -405,6 +425,10 @@ const embaucheSql = (cle, p, champs) =>
     q(champs.airtable ?? null),
   ].join(', ') +
   `) on conflict (id) do update set statut = excluded.statut, remuneration = excluded.remuneration, vacances = excluded.vacances, type_employe = excluded.type_employe, action_paie = excluded.action_paie, date_embauche = excluded.date_embauche, disponibilites = excluded.disponibilites, disponibilites_note = excluded.disponibilites_note;`
+}
+
+// « Ancien = Oui » d'un dossier : a travaillé avec nous avant (saisons pas toujours connues).
+for (const [p, ds] of dossiersParPersonne) if (ds.some((d) => txt(d.fields[E.ancien]) === 'Oui')) p.deja = true
 
 const personnesTouchees = new Set([...accepteesParPersonne.keys(), ...dossiersParPersonne.keys()])
 for (const p of personnesTouchees) {
@@ -520,6 +544,8 @@ for (const r of banque) {
   p.surnom = p.surnom ?? txt(f[B.surnom])
   p.telephone = p.telephone ?? txt(f[B.telephone])
   if (txt(f[B.nePas])) p.nePas = true
+  // La banque ne garde que la dernière saison : « a déjà travaillé » dit qu'il y en a eu d'autres.
+  if (txt(f[B.dejaTravaille]) === 'Oui') p.deja = true
   const saisons = liste(f[B.saisons]).map(saisonDe).filter(Boolean)
   const compagnies = liste(f[B.compagnies]).map((x) => COMPAGNIES[x]).filter(Boolean)
   const postes = liste(f[B.postes])
@@ -536,8 +562,8 @@ for (const r of banque) {
   )
   for (const s of saisons) {
     noterSaison(s)
-    // Saisons passées seulement (l'été 2026 vient des candidatures et des dossiers).
-    if (s.annee >= 2026) continue
+    // Une saison déjà couverte par une candidature acceptée ou un dossier n'est pas recréée.
+    if (saisonsEmbauchees.get(p)?.has(`${s.genre}-${s.annee}`)) continue
     sql.push(embaucheSql(`banque:${r.id}:${s.genre}${s.annee}`, p, { saison: s, compagnie: compagnies.length === 1 ? compagnies[0] : null, statut: 'complete', airtable: null }))
   }
 }
@@ -563,11 +589,11 @@ const sqlPersonnes = [...personnes.values()].map((p) => {
   const ids = [...p.ids]
   const notes = p.notes.filter(Boolean).join('\n\n') || null
   return (
-    `insert into rh.personnes (id, prenom, nom_famille, surnom, courriel, telephone, date_naissance, sexe, notes, ne_pas_reembaucher, raison_ne_pas, vaj_le, vaj_note, airtable_ids) ` +
-    `select ${q(uuid(`personne:${p.cle}`))}, ${q(p.prenom)}, ${q(p.nom)}, ${q(p.surnom ?? null)}, ${q(p.courriel)}, ${q(p.telephone ?? null)}, ${q(p.naissance ?? null)}, ${q(p.sexe ?? null)}, ${q(notes)}, ${p.nePas ? 'true' : 'false'}, ${q(p.nePas ? 'Ne reprendrait pas (banque d’employés 2025)' : null)}, ${q(p.vaj_le ?? null)}, ${q(p.vaj_note ?? null)}, array[${ids.map(q).join(',')}] ` +
+    `insert into rh.personnes (id, prenom, nom_famille, surnom, courriel, telephone, date_naissance, sexe, notes, ne_pas_reembaucher, raison_ne_pas, deja_travaille, vaj_le, vaj_note, airtable_ids) ` +
+    `select ${q(uuid(`personne:${p.cle}`))}, ${q(p.prenom)}, ${q(p.nom)}, ${q(p.surnom ?? null)}, ${q(p.courriel)}, ${q(p.telephone ?? null)}, ${q(p.naissance ?? null)}, ${q(p.sexe ?? null)}, ${q(notes)}, ${p.nePas ? 'true' : 'false'}, ${q(p.nePas ? 'Ne reprendrait pas (banque d’employés 2025)' : null)}, ${p.deja ? 'true' : 'false'}, ${q(p.vaj_le ?? null)}, ${q(p.vaj_note ?? null)}, array[${ids.map(q).join(',')}] ` +
     `where not exists (select 1 from rh.personnes where airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)}));\n` +
     // Une fiche déjà là (même courriel, ou fusionnée) reçoit les identifiants Airtable.
-    `update rh.personnes set airtable_ids = array(select distinct unnest(airtable_ids || array[${ids.map(q).join(',')}])) where (airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)})) and not airtable_ids @> array[${ids.map(q).join(',')}];`
+    `update rh.personnes set airtable_ids = array(select distinct unnest(airtable_ids || array[${ids.map(q).join(',')}])), deja_travaille = deja_travaille or ${p.deja ? 'true' : 'false'} where airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)});`
   )
 })
 

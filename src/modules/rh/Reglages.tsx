@@ -24,7 +24,9 @@ import { champPetit } from './styles'
 /** Saisons (et leurs dates) et postes du module. */
 export function Reglages() {
   const { saisons } = useRh()
-  const [choisie, setChoisie] = useState<string | null>(saisons.find((s) => s.ouverte && s.genre === 'ete')?.id ?? saisons.at(-1)?.id ?? null)
+  const [choix, setChoisie] = useState<string | null>(saisons.find((s) => s.ouverte && s.genre === 'ete')?.id ?? saisons.at(-1)?.id ?? null)
+  // Une saison supprimée n'est plus choisie.
+  const choisie = choix && saisons.some((s) => s.id === choix) ? choix : null
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <div className="space-y-5">

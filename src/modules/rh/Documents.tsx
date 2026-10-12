@@ -9,8 +9,6 @@ import { dateCourte, horodatage, tailleFichier } from './outils'
 import { GENRES_DOCUMENT, type Document, type GenreDocument } from './types'
 import { champPetit } from './styles'
 
-const ACCEPTE = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx'
-
 /**
  * Documents d'une personne (seau privé). `genres` : seulement ces genres
  * (ex. le CV dans la fiche d'une candidature). `candidatureId` : un fichier
@@ -81,7 +79,7 @@ export function ListeDocuments({ personneId, genres, candidatureId, genreParDefa
       {ecriture && (
         <div className="flex flex-wrap items-center gap-2">
           {(!genres || genres.length > 1) && (
-            <select className={champPetit} value={genre} onChange={(e) => setGenre(e.target.value as GenreDocument)}>
+            <select className={`${champPetit} min-w-0 max-w-full`} value={genre} onChange={(e) => setGenre(e.target.value as GenreDocument)}>
               {GENRES_DOCUMENT.filter((g) => !genres || genres.includes(g.id)).map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.nom}
@@ -94,7 +92,6 @@ export function ListeDocuments({ personneId, genres, candidatureId, genreParDefa
             <input
               type="file"
               className="hidden"
-              accept={ACCEPTE}
               multiple
               disabled={ajouter.isPending}
               onChange={(e) => {
@@ -102,8 +99,8 @@ export function ListeDocuments({ personneId, genres, candidatureId, genreParDefa
                 e.target.value = ''
                 setErreur(null)
                 for (const fichier of fichiers) {
-                  if (fichier.size > 20 * 1024 * 1024) {
-                    setErreur(`« ${fichier.name} » dépasse 20 Mo.`)
+                  if (fichier.size > 50 * 1024 * 1024) {
+                    setErreur(`« ${fichier.name} » dépasse 50 Mo.`)
                     continue
                   }
                   ajouter.mutate(

@@ -15,6 +15,7 @@ export function Employes() {
   const saison = params.get('saison') || saisonParDefaut(saisons, embauches, auj)
   const compagnie = params.get('compagnie')
   const statut = params.get('statut') as StatutEmbauche | 'actives' | null
+  const genre = params.get('genre')
   const [recherche, setRecherche] = useState('')
 
   const changer = (cle: string, valeur: string | null) => {
@@ -28,6 +29,7 @@ export function Employes() {
   const base = embauches.filter((e) => {
     if (e.saison_id !== saison) return false
     if (compagnie && e.entreprise_id !== compagnie) return false
+    if (genre && e.genre !== genre) return false
     const p = personneParId.get(e.personne_id)
     if (!p) return false
     return !recherche.trim() || correspond(texteRecherche(p), recherche)
@@ -51,6 +53,11 @@ export function Employes() {
       <div className="flex flex-wrap items-end gap-2">
         <MenuSaison className={champPetit} valeur={saison} changer={(v) => changer('saison', v)} />
         <MenuCompagnie className={champPetit} valeur={compagnie} changer={(v) => changer('compagnie', v)} vide="Toutes les compagnies" />
+        <select className={champPetit} value={genre ?? ''} onChange={(e) => changer('genre', e.target.value || null)}>
+          <option value="">Employés et bénévoles</option>
+          <option value="emploi">Employés</option>
+          <option value="benevolat">Bénévoles</option>
+        </select>
         <input className={`${champPetit} w-64`} placeholder="Chercher un nom…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
       </div>
 
@@ -98,17 +105,26 @@ export function Employes() {
                       <Link to={`/rh/p/${p.id}`} className="font-medium text-pierre-900 hover:underline">
                         {p.nom_complet}
                       </Link>{' '}
-                      {estAncien(embauchesDe.get(p.id) ?? [], saisonParId, rang) && <PuceAncien />}
+                      {estAncien(p, embauchesDe.get(p.id) ?? [], saisonParId, rang) && <PuceAncien />}
+                      {e.genre === 'benevolat' && <span className="ml-1 rounded-full bg-teal-50 px-1.5 py-0.5 text-[11px] font-medium text-teal-800 ring-1 ring-teal-200">Bénévole</span>}
                     </td>
                     <td className="px-3 py-2 text-pierre-700">{p.surnom}</td>
                     <td className="px-3 py-2">
                       <span className="inline-flex flex-wrap items-center gap-1">
-                        {poste?.nom ?? <span className="text-pierre-400">À préciser</span>}
+                        {poste?.nom ?? <span className="text-pierre-400">{e.genre === 'benevolat' ? '—' : 'À préciser'}</span>}
                         {c && <PuceCompagnie compagnie={c} court />}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-pierre-700">{e.echelon ?? ''}</td>
-                    <td className="px-3 py-2">{paieComplete ? <span className="text-foret-700">✓</span> : <span className="text-xs text-amber-700">À compléter</span>}</td>
+                    <td className="px-3 py-2">
+                      {e.genre === 'benevolat' ? (
+                        <span className="text-pierre-400">—</span>
+                      ) : paieComplete ? (
+                        <span className="text-foret-700">✓</span>
+                      ) : (
+                        <span className="text-xs text-amber-700">À compléter</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <PuceStatutEmbauche statut={e.statut} />
                     </td>

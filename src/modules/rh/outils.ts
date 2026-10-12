@@ -51,11 +51,11 @@ export const nomAffiche = (p: Pick<Personne, 'prenom' | 'nom_famille' | 'surnom'
   `${p.prenom} ${p.nom_famille}`.trim() + (p.surnom ? ` (${p.surnom})` : '')
 
 /**
- * Un ancien : une embauche complète dans une saison antérieure à `rang`
- * (sans rang : n'importe quelle embauche complète).
+ * Un ancien : a déjà travaillé avec nous avant la base RH, ou une embauche
+ * complète dans une saison antérieure à `rang` (sans rang : n'importe quelle).
  */
-export function estAncien(embauches: Embauche[], saisons: Map<string, Saison>, rang?: number) {
-  return embauches.some((e) => e.statut === 'complete' && (rang === undefined || (saisons.get(e.saison_id)?.rang ?? 0) < rang))
+export function estAncien(p: Pick<Personne, 'deja_travaille'>, embauches: Embauche[], saisons: Map<string, Saison>, rang?: number) {
+  return p.deja_travaille || embauches.some((e) => e.statut === 'complete' && (rang === undefined || (saisons.get(e.saison_id)?.rang ?? 0) < rang))
 }
 
 /**

@@ -101,7 +101,7 @@ function NouvellePersonne({ fermer }: { fermer: () => void }) {
   const [f, setF] = useState({ prenom: '', nom_famille: '', surnom: '', courriel: '', telephone: '' })
   const memeCourriel = f.courriel.trim() ? personnes.find((p) => p.courriel === f.courriel.trim().toLowerCase()) : undefined
   const champ = (cle: keyof typeof f, placeholder: string, type = 'text') => (
-    <input className={ui.champ} type={type} placeholder={placeholder} value={f[cle]} onChange={(e) => setF({ ...f, [cle]: e.target.value })} />
+    <input className={ui.champ} type={type} placeholder={placeholder} autoFocus={cle === 'prenom'} value={f[cle]} onChange={(e) => setF({ ...f, [cle]: e.target.value })} />
   )
   return (
     <Dialogue titre="Nouvelle personne" fermer={fermer}>

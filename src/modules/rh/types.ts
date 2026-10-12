@@ -68,6 +68,8 @@ export interface Personne {
   notes: string | null
   ne_pas_reembaucher: boolean
   raison_ne_pas: string | null
+  /** A travaillé avec nous avant la base RH (saisons inconnues) : un ancien. */
+  deja_travaille: boolean
   vaj_le: string | null
   vaj_note: string | null
   employe_id: string | null
@@ -233,9 +235,13 @@ export const TYPES_EMPLOYE = {
 } as const
 export const ACTIONS_PAIE = { A: 'A — Ajout', M: 'M — Modification' } as const
 
+/** Emploi (payé) ou bénévolat (sans paie, entente de bénévolat au lieu d'un contrat). */
+export type GenreEmbauche = 'emploi' | 'benevolat'
+
 export interface Embauche {
   id: string
   personne_id: string
+  genre: GenreEmbauche
   saison_id: string
   entreprise_id: string | null
   poste_id: string | null
@@ -253,6 +259,7 @@ export interface Embauche {
   disponibilites: string[]
   disponibilites_note: string | null
   code_ethique_le: string | null
+  entente_benevolat_le: string | null
   commentaires: string | null
   presentation: Record<string, string>
   dossier_recu_le: string | null

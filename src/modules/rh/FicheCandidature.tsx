@@ -54,7 +54,7 @@ function Contenu({ c }: { c: Candidature }) {
   const [modifierDemande, setModifierDemande] = useState(false)
   const changer = (champs: Partial<Candidature>) => modifier.mutate({ id: c.id, champs })
   const embauches = embauchesDe.get(p.id) ?? []
-  const ancien = c.source === 'retour' || estAncien(embauches, saisonParId)
+  const ancien = c.source === 'retour' || estAncien(p, embauches, saisonParId)
   const autres = (candidaturesDe.get(p.id) ?? []).filter((x) => x.id !== c.id).sort((a, b) => b.recue_le.localeCompare(a.recue_le))
   const sesEmbauches = embauches.filter((e) => e.candidature_id === c.id)
 
@@ -331,21 +331,22 @@ function Demande({ c }: { c: Candidature }) {
 }
 
 function Reponses({ c }: { c: Candidature }) {
-  const lignes = REPONSES.filter((r) => c.reponses[r.cle])
-  const autres = Object.keys(c.reponses).filter((k) => !REPONSES.some((r) => r.cle === k) && c.reponses[k])
+  const reponses = c.reponses ?? {}
+  const lignes = REPONSES.filter((r) => reponses[r.cle])
+  const autres = Object.keys(reponses).filter((k) => !REPONSES.some((r) => r.cle === k) && reponses[k])
   if (!lignes.length && !autres.length) return <p className="text-sm text-pierre-500">Aucune réponse.</p>
   return (
     <dl className="space-y-2 text-sm">
       {lignes.map((r) => (
         <div key={r.cle}>
           <dt className="text-xs font-medium text-pierre-500">{r.nom}</dt>
-          <dd className={r.long ? 'whitespace-pre-line text-pierre-800' : 'text-pierre-800'}>{r.cle === 'date_debut' ? dateCourte(c.reponses[r.cle]) : c.reponses[r.cle]}</dd>
+          <dd className={r.long ? 'whitespace-pre-line text-pierre-800' : 'text-pierre-800'}>{r.cle === 'date_debut' ? dateCourte(reponses[r.cle]) : reponses[r.cle]}</dd>
         </div>
       ))}
       {autres.map((k) => (
         <div key={k}>
           <dt className="text-xs font-medium text-pierre-500">{k}</dt>
-          <dd className="whitespace-pre-line text-pierre-800">{c.reponses[k]}</dd>
+          <dd className="whitespace-pre-line text-pierre-800">{reponses[k]}</dd>
         </div>
       ))}
     </dl>

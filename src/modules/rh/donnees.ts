@@ -124,7 +124,12 @@ export function useDossiers() {
 // ------------------------------------------------------------
 type Ligne = { id: string }
 
-function useAjouter<T extends Ligne>(table: string) {
+/**
+ * Ajout optimiste. `completer` : la ligne telle que la base la rendra
+ * (valeurs par défaut, colonnes calculées), pour que les écrans ne voient
+ * jamais une ligne incomplète en attendant la relecture.
+ */
+function useAjouter<T extends Ligne>(table: string, completer: (l: Partial<T> & Ligne) => T = (l) => l as T) {
   const client = useQueryClient()
   const cle: QueryKey = ['rh', table]
   return useMutation({
@@ -136,7 +141,7 @@ function useAjouter<T extends Ligne>(table: string) {
     },
     onMutate: async (ligne) => {
       await client.cancelQueries({ queryKey: cle, exact: true })
-      client.setQueryData<T[]>(cle, (l) => (l ? [...l, ligne as T] : l))
+      client.setQueryData<T[]>(cle, (l) => (l ? [...l, completer(ligne)] : l))
     },
     onError: (_e, ligne) => client.setQueryData<T[]>(cle, (l) => l?.filter((x) => x.id !== ligne.id)),
     onSettled: () => client.invalidateQueries({ queryKey: cle }),
@@ -162,8 +167,13 @@ function useModifier<T extends Ligne>(table: string) {
     onError: (_e, { id }, ctx) => {
       if (ctx?.avant) client.setQueryData<T[]>(cle, (l) => l?.map((x) => (x.id === id ? ctx.avant! : x)))
     },
-    // Le journal suit les changements de statut.
-    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: cle }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+    // Le journal suit les changements de statut ; « A refusé le poste » annule des embauches (déclencheur).
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: cle }),
+        client.invalidateQueries({ queryKey: ['rh', 'journal'] }),
+        table === 'candidatures' && client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }),
+      ]),
   })
 }
 
@@ -181,7 +191,20 @@ function useRetirer(table: string) {
   })
 }
 
-export const useAjouterSaison = () => useAjouter<Saison>('saisons')
+const NOMS_SAISON = { hiver: 'Hiver', printemps: 'Printemps', ete: 'Été', automne: 'Automne' } as const
+const RANGS_SAISON = { hiver: 1, printemps: 2, ete: 3, automne: 4 } as const
+export const useAjouterSaison = () =>
+  useAjouter<Saison>('saisons', (l) => ({
+    genre: 'ete',
+    annee: 0,
+    debut: null,
+    fin: null,
+    ouverte: false,
+    ...l,
+    // Colonnes calculées par la base (nom, rang)
+    nom: `${NOMS_SAISON[l.genre ?? 'ete']} ${l.annee}`,
+    rang: (l.annee ?? 0) * 10 + RANGS_SAISON[l.genre ?? 'ete'],
+  }))
 export const useModifierSaison = () => useModifier<Saison>('saisons')
 export const useRetirerSaison = () => useRetirer('saisons')
 export const useAjouterDate = () => useAjouter<DateSaison>('saisons_dates')
@@ -190,11 +213,81 @@ export const useRetirerDate = () => useRetirer('saisons_dates')
 export const useAjouterPoste = () => useAjouter<Poste>('postes')
 export const useModifierPoste = () => useModifier<Poste>('postes')
 export const useRetirerPoste = () => useRetirer('postes')
-export const useAjouterPersonne = () => useAjouter<Personne>('personnes')
+export const useAjouterPersonne = () =>
+  useAjouter<Personne>('personnes', (l) => ({
+    prenom: '',
+    nom_famille: '',
+    surnom: null,
+    telephone: null,
+    date_naissance: null,
+    sexe: null,
+    notes: null,
+    ne_pas_reembaucher: false,
+    raison_ne_pas: null,
+    deja_travaille: false,
+    vaj_le: null,
+    vaj_note: null,
+    employe_id: null,
+    airtable_ids: [],
+    created_at: new Date().toISOString(),
+    ...l,
+    courriel: l.courriel?.toLowerCase() ?? null,
+    nom_complet: l.nom_famille ? `${l.nom_famille}, ${l.prenom}` : (l.prenom ?? ''),
+  }))
 export const useModifierPersonne = () => useModifier<Personne>('personnes')
-export const useAjouterCandidature = () => useAjouter<Candidature>('candidatures')
+export const useAjouterCandidature = () =>
+  useAjouter<Candidature>('candidatures', (l) => ({
+    personne_id: '',
+    source: 'manuel',
+    recue_le: new Date().toISOString(),
+    saison_ids: [],
+    poste_ids: [],
+    reponses: {},
+    statut: 'recue',
+    pre_decision: null,
+    commentaires: null,
+    entrevue_le: null,
+    notes_entrevue: null,
+    entreprise_id: null,
+    saison_id: null,
+    poste_id: null,
+    echelon: null,
+    efface_le: null,
+    airtable_id: null,
+    created_at: new Date().toISOString(),
+    ...l,
+  }))
 export const useModifierCandidature = () => useModifier<Candidature>('candidatures')
 export const useRetirerCandidature = () => useRetirer('candidatures')
+export const useAjouterEmbauche = () =>
+  useAjouter<Embauche>('embauches', (l) => ({
+    personne_id: '',
+    genre: 'emploi',
+    saison_id: '',
+    entreprise_id: null,
+    poste_id: null,
+    echelon: null,
+    candidature_id: null,
+    statut: 'a_envoyer',
+    debut: null,
+    fin: null,
+    remuneration: null,
+    taux: null,
+    vacances: null,
+    type_employe: null,
+    action_paie: null,
+    date_embauche: null,
+    disponibilites: [],
+    disponibilites_note: null,
+    code_ethique_le: null,
+    entente_benevolat_le: null,
+    commentaires: null,
+    presentation: {},
+    dossier_recu_le: null,
+    airtable_id: null,
+    created_at: new Date().toISOString(),
+    ...l,
+  }))
 export const useModifierEmbauche = () => useModifier<Embauche>('embauches')
 export const useRetirerEmbauche = () => useRetirer('embauches')
 

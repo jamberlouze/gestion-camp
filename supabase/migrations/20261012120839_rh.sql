@@ -911,9 +911,8 @@ create policy "Lire journal" on rh.journal for select to authenticated using (co
 -- ------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
-  ('rh-documents', 'rh-documents', false, 20971520,
-   array['application/pdf','image/jpeg','image/png','image/webp','image/heic',
-         'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  -- Tous les types (CV en Pages, courriels .eml… reçus dans Airtable), 50 Mo au plus.
+  ('rh-documents', 'rh-documents', false, 52428800, null),
   ('rh-paie', 'rh-paie', false, 10485760,
    array['application/pdf','image/jpeg','image/png','image/webp','image/heic'])
 on conflict (id) do nothing;

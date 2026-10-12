@@ -47,14 +47,14 @@ Inventaire détaillé de l'existant (champs, formulaires, textes des courriels, 
 
 ## 2. Données (schéma `rh`)
 
-- **`personnes`** : une par humain. Prénom, nom de famille, nom de camp, courriel (unique, normalisé), téléphone, date de naissance, notes internes, « ne pas réembaucher » (+ raison), VAJ (date, statut), lien vers `core.employes`.
+- **`personnes`** : une par humain. Prénom, nom de famille, nom de camp, courriel (unique, normalisé), téléphone, date de naissance, notes internes, « ne pas réembaucher » (+ raison), « a déjà travaillé avec nous » (avant la base RH, saisons inconnues), VAJ (date, statut), lien vers `core.employes`.
 - **`saisons`** : Printemps / Été / Automne / Hiver + année, dates, genre `ete` / `hors_ete` (choisit la version du dossier et du code d'éthique), ouverte aux candidatures ou non.
 - **`saisons_dates`** : formations, classes vertes, semaines d'été, avec dates et « obligatoire ». Sert aux disponibilités du dossier et aux colonnes de la planification. Plus aucune date en dur.
 - **`postes`** : une seule liste (nom, compagnie = `core.entreprises`, genres de saison où il est offert, lien vers la description, actif). Fin des libellés en double.
 - **`postes_saison`** : postes offerts dans une saison (les « offres d'emploi ») et besoin prévu.
 - **`candidatures`** : personne, saisons et postes demandés, source (`formulaire`, `retour`, `manuel`, `import`), réponses du formulaire, statut, pré-décision, commentaires, entrevue (date, notes), décision.
 - **`journal`** : chaque changement de statut, chaque courriel, chaque note, avec auteur et date.
-- **`embauches`** : une par personne et par saison (+ compagnie, poste, échelon). Statut `a_envoyer` → `envoyee` → `dossier_recu` → `complete` (ou `annulee`). Champs de paie : type de rémunération, 4 %, type d'employé (B, C, E, P, R, T), action A/M, date d'embauche. Disponibilités, code d'éthique accepté (date + version du texte), réponses « médias sociaux ».
+- **`embauches`** : une par personne et par saison (+ compagnie, poste, échelon) ; genre emploi ou bénévolat (sans paie, entente de bénévolat). Statut `a_envoyer` → `envoyee` → `dossier_recu` → `complete` (ou `annulee`). Champs de paie : type de rémunération, 4 %, type d'employé (B, C, E, P, R, T), action A/M, date d'embauche. Disponibilités, code d'éthique accepté (date + version du texte), réponses « médias sociaux ».
 - **`dossiers`** : ce qui dure d'une année à l'autre : adresse, assurance maladie, études, allergies, diète, tailles, contacts d'urgence. Mis à jour par chaque dossier d'embauche.
 - **`paie`** (table à part, accès à part) : NAS, transit, institution, compte, spécimen de chèque. **Chiffrés en base**, lus seulement par une fonction qui vérifie l'accès et note chaque consultation (§3).
 - **`documents`** : CV, contrat signé, consentement parental, cartes de premiers soins et SN (avec date d'expiration), pièce d'identité, photo. Seau **privé** `rh-documents` ; le spécimen de chèque va dans le seau `rh-paie`.
@@ -131,7 +131,8 @@ Mêmes fondations que les Réservations : pages chargées avant la connexion, cl
 
 ## 10. Import d'Airtable
 
-- Script dans `scripts/migration/` ; le SQL produit reste hors dépôt (données personnelles), appliqué par l'API Management comme pour le CRM.
+- Script `scripts/migration/rh-airtable.mjs` ; le SQL produit reste hors dépôt (données personnelles), appliqué par l'API Management comme pour le CRM.
+- Source : l'API Airtable (jeton en lecture) **ou** des extraits du connecteur Airtable de Claude (`--depuis`, réponses enregistrées telles quelles, jamais recopiées). Import DEV fait le 2026-10-12 par le connecteur, sans les champs de paie : 684 personnes, 320 candidatures (mêmes statuts qu'Airtable), 252 embauches (dont les saisons 2022 à 2025 de la banque 2025), 70 dossiers, 647 disponibilités ; relancé une 2e fois sans doublon.
 - Personnes (Humains + Banque 2025 + Volontariat), candidatures, embauches, dossiers, paie (chiffrée), fichiers (téléchargés d'Airtable vers les seaux privés).
 - Relançable sans doublons (`airtable_id`), pour importer une première fois à l'essai puis une dernière fois à la bascule.
 - Libellés corrigés au passage (postes, compagnies, saisons, tailles).
@@ -157,11 +158,11 @@ Prises par Maxime le 2026-10-11 :
 3. **Accès** : direction en écriture dès le départ ; `rh_paie` (NAS, banque) : direction et admins.
 4. **Conservation** des candidatures non retenues : **pas d'effacement automatique** (on efface à la main au besoin). Aucune durée n'est donc annoncée dans le formulaire.
 
-Encore à préciser (pas bloquant pour la phase 1) :
+Réponses de Maxime du 2026-10-12 :
 
-5. **Système de paie** : lequel (pour le format de l'export, phase 4) ?
-6. **Bénévoles** (table Volontariat) : dans le module, avec une embauche « bénévole » sans paie ?
-7. **« CDJ »** dans le Sheets : que veut dire ce code ?
+5. **Système de paie** : **Employeur D** (Desjardins). L'export de la phase 4 suit son format d'importation ; les champs Action (A/M) et Type d'employé (B, C, E, P, R, T) d'Airtable en viennent.
+6. **Bénévoles** : oui, « la portion embauche ». Une embauche de genre `benevolat` : même dossier, sans paie ni échelon, entente de bénévolat au lieu d'un contrat (fait le 2026-10-12, migration `rh_benevoles`). La table Volontariat d'Airtable est vide : rien à importer.
+7. **« CDJ »** = camp de jour, par opposition à **CDV** = camp de vacances. À reprendre dans les codes de la planification (phase 4).
 
 ## 13. Choix de Claude (à confirmer si le sujet revient)
 

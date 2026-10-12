@@ -7,13 +7,14 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { Champ, MenuCompagnie, MenuPoste, PuceAncien, PuceStatut, PuceStatutEmbauche, Section, ZoneTexte } from './commun'
+import { Champ, MenuCompagnie, MenuPoste, MenuSaison, PuceAncien, PuceStatut, PuceStatutEmbauche, Section, ZoneTexte } from './commun'
 import { useRh } from './contexte'
 import { ListeDocuments } from './Documents'
 import {
   envoyerSpecimen,
   lirePaie,
   ouvrirSpecimen,
+  useAjouterEmbauche,
   useAjouterNote,
   useConsultations,
   useDossier,
@@ -42,6 +43,7 @@ import {
   VACANCES,
   type Dossier,
   type Embauche,
+  type GenreEmbauche,
   type GenreNote,
   type PaieEnClair,
   type Personne,
@@ -72,6 +74,7 @@ function Contenu({ p }: { p: Personne }) {
   const supprimer = useSupprimerPersonne()
   const naviguer = useNavigate()
   const [fusion, setFusion] = useState(false)
+  const [nouvelleEmbauche, setNouvelleEmbauche] = useState(false)
   const changer = (champs: Partial<Personne>) => modifier.mutate({ id: p.id, champs })
   const embauches = [...(embauchesDe.get(p.id) ?? [])].sort((a, b) => (saisonParId.get(b.saison_id)?.rang ?? 0) - (saisonParId.get(a.saison_id)?.rang ?? 0))
   const candidatures = [...(candidaturesDe.get(p.id) ?? [])].sort((a, b) => b.recue_le.localeCompare(a.recue_le))
@@ -102,7 +105,7 @@ function Contenu({ p }: { p: Personne }) {
             disabled={!ecriture}
             enregistrer={(nom_famille) => changer({ nom_famille })}
           />
-          {estAncien(embauches, saisonParId) && <PuceAncien />}
+          {estAncien(p, embauches, saisonParId) && <PuceAncien />}
           <div className="flex-1" />
           {ecriture && (
             <button className={ui.boutonSecondaire} onClick={() => setFusion(true)}>
@@ -134,9 +137,18 @@ function Contenu({ p }: { p: Personne }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
-          <Section titre="Embauches">
+          <Section
+            titre="Embauches"
+            action={
+              ecriture && (
+                <button className={ui.boutonSecondaire} onClick={() => setNouvelleEmbauche(true)}>
+                  + Embauche
+                </button>
+              )
+            }
+          >
             {embauches.length === 0 ? (
-              <p className="text-sm text-pierre-500">Aucune embauche. On en crée une en acceptant une candidature.</p>
+              <p className="text-sm text-pierre-500">Aucune embauche. On en crée une en acceptant une candidature, ou avec « + Embauche » (bénévole, ancien sans candidature).</p>
             ) : (
               <div className="space-y-3">
                 {embauches.map((e) => (
@@ -237,6 +249,10 @@ function Contenu({ p }: { p: Personne }) {
                 </Champ>
               </div>
               <label className="flex items-center gap-2">
+                <input type="checkbox" disabled={!ecriture} checked={p.deja_travaille} onChange={(e) => changer({ deja_travaille: e.target.checked })} />
+                A déjà travaillé avec nous avant la base RH (saisons inconnues)
+              </label>
+              <label className="flex items-center gap-2">
                 <input type="checkbox" disabled={!ecriture} checked={p.ne_pas_reembaucher} onChange={(e) => changer({ ne_pas_reembaucher: e.target.checked })} />
                 Ne pas réembaucher
               </label>
@@ -252,6 +268,7 @@ function Contenu({ p }: { p: Personne }) {
         </div>
       </div>
       {fusion && <FenetreFusion p={p} fermer={() => setFusion(false)} />}
+      {nouvelleEmbauche && <FenetreEmbauche p={p} fermer={() => setNouvelleEmbauche(false)} />}
     </div>
   )
 }
@@ -273,6 +290,7 @@ function CarteEmbauche({ e }: { e: Embauche }) {
     <div className="rounded-lg border border-pierre-200">
       <button className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left text-sm" onClick={() => setOuverte(!ouverte)}>
         <span className="font-semibold">{s?.nom}</span>
+        {e.genre === 'benevolat' && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-800 ring-1 ring-teal-200">Bénévolat</span>}
         <EnTeteEmbauche e={e} />
         <span className="flex-1" />
         <PuceStatutEmbauche statut={e.statut} />
@@ -296,50 +314,54 @@ function CarteEmbauche({ e }: { e: Embauche }) {
             <Champ etiquette="Poste">
               <MenuPoste valeur={e.poste_id} compagnie={e.entreprise_id} disabled={!ecriture} changer={(v) => changer({ poste_id: v })} />
             </Champ>
-            <Champ etiquette="Échelon">
-              <select className={ui.champ} disabled={!ecriture} value={e.echelon ?? ''} onChange={(x) => changer({ echelon: x.target.value ? Number(x.target.value) : null })}>
-                <option value="">—</option>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </Champ>
+            {e.genre === 'emploi' && (
+              <Champ etiquette="Échelon">
+                <select className={ui.champ} disabled={!ecriture} value={e.echelon ?? ''} onChange={(x) => changer({ echelon: x.target.value ? Number(x.target.value) : null })}>
+                  <option value="">—</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </Champ>
+            )}
             <ChampDate etiquette="Début" valeur={e.debut} disabled={!ecriture} enregistrer={(debut) => changer({ debut })} />
             <ChampDate etiquette="Fin" valeur={e.fin} disabled={!ecriture} enregistrer={(fin) => changer({ fin })} />
           </div>
 
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-pierre-600">Paie</p>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <Champ etiquette="Rémunération">
-                <MenuValeurs valeurs={REMUNERATIONS} valeur={e.remuneration} disabled={!ecriture} changer={(remuneration) => changer({ remuneration })} />
-              </Champ>
-              <Champ etiquette={e.remuneration === 'semaine' ? 'Taux ($ / semaine)' : 'Taux ($ / heure)'}>
-                <ChampTexte
-                  className={ui.champ}
-                  inputMode="decimal"
-                  valeur={e.taux === null ? '' : String(e.taux).replace('.', ',')}
-                  disabled={!ecriture}
-                  enregistrer={(v) => {
-                    const n = Number(v.replace(',', '.').replace(/[^\d.]/g, ''))
-                    changer({ taux: v.trim() === '' || Number.isNaN(n) ? null : n })
-                  }}
-                />
-              </Champ>
-              <Champ etiquette="4 %">
-                <MenuValeurs valeurs={VACANCES} valeur={e.vacances} disabled={!ecriture} changer={(vacances) => changer({ vacances })} />
-              </Champ>
-              <Champ etiquette="Type d'employé">
-                <MenuValeurs valeurs={TYPES_EMPLOYE} valeur={e.type_employe} disabled={!ecriture} changer={(type_employe) => changer({ type_employe })} />
-              </Champ>
-              <Champ etiquette="Action (paie)">
-                <MenuValeurs valeurs={ACTIONS_PAIE} valeur={e.action_paie} disabled={!ecriture} changer={(action_paie) => changer({ action_paie })} />
-              </Champ>
-              <ChampDate etiquette="Date d'embauche" valeur={e.date_embauche} disabled={!ecriture} enregistrer={(date_embauche) => changer({ date_embauche })} />
+          {e.genre === 'emploi' && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-pierre-600">Paie</p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <Champ etiquette="Rémunération">
+                  <MenuValeurs valeurs={REMUNERATIONS} valeur={e.remuneration} disabled={!ecriture} changer={(remuneration) => changer({ remuneration })} />
+                </Champ>
+                <Champ etiquette={e.remuneration === 'semaine' ? 'Taux ($ / semaine)' : 'Taux ($ / heure)'}>
+                  <ChampTexte
+                    className={ui.champ}
+                    inputMode="decimal"
+                    valeur={e.taux === null ? '' : String(e.taux).replace('.', ',')}
+                    disabled={!ecriture}
+                    enregistrer={(v) => {
+                      const n = Number(v.replace(',', '.').replace(/[^\d.]/g, ''))
+                      changer({ taux: v.trim() === '' || Number.isNaN(n) ? null : n })
+                    }}
+                  />
+                </Champ>
+                <Champ etiquette="4 %">
+                  <MenuValeurs valeurs={VACANCES} valeur={e.vacances} disabled={!ecriture} changer={(vacances) => changer({ vacances })} />
+                </Champ>
+                <Champ etiquette="Type d'employé">
+                  <MenuValeurs valeurs={TYPES_EMPLOYE} valeur={e.type_employe} disabled={!ecriture} changer={(type_employe) => changer({ type_employe })} />
+                </Champ>
+                <Champ etiquette="Action (paie)">
+                  <MenuValeurs valeurs={ACTIONS_PAIE} valeur={e.action_paie} disabled={!ecriture} changer={(action_paie) => changer({ action_paie })} />
+                </Champ>
+                <ChampDate etiquette="Date d'embauche" valeur={e.date_embauche} disabled={!ecriture} enregistrer={(date_embauche) => changer({ date_embauche })} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -360,6 +382,12 @@ function CarteEmbauche({ e }: { e: Embauche }) {
                 <span className={ui.etiquette}>Code d'éthique</span>
                 {e.code_ethique_le ? `Accepté le ${dateCourte(e.code_ethique_le)}` : <span className="text-pierre-400">Pas encore accepté</span>}
               </p>
+              {e.genre === 'benevolat' && (
+                <p>
+                  <span className={ui.etiquette}>Entente de bénévolat</span>
+                  {e.entente_benevolat_le ? `Acceptée le ${dateCourte(e.entente_benevolat_le)}` : <span className="text-pierre-400">Pas encore acceptée</span>}
+                </p>
+              )}
               {e.dossier_recu_le && (
                 <p>
                   <span className={ui.etiquette}>Dossier reçu</span>
@@ -421,7 +449,7 @@ function EnTeteEmbauche({ e }: { e: Embauche }) {
   const compagnie = e.entreprise_id ? compagnieParId.get(e.entreprise_id) : undefined
   return (
     <span className="text-pierre-700">
-      {poste?.nom ?? 'Poste à préciser'}
+      {poste?.nom ?? (e.genre === 'benevolat' ? 'Bénévole' : 'Poste à préciser')}
       {compagnie && <span className="text-pierre-500"> · {compagnie.abreviation ?? compagnie.nom}</span>}
       {e.echelon && <span className="text-pierre-500"> · échelon {e.echelon}</span>}
     </span>
@@ -453,6 +481,100 @@ function ChampDate({ etiquette, valeur, enregistrer, disabled }: { etiquette: st
         onBlur={(e) => e.target.value !== (valeur ?? '') && enregistrer(e.target.value || null)}
       />
     </Champ>
+  )
+}
+
+/**
+ * Ajouter une embauche sans passer par une candidature : un bénévole, ou un
+ * ancien réembauché directement. Un emploi d'un ancien est proposé en « M ».
+ */
+function FenetreEmbauche({ p, fermer }: { p: Personne; fermer: () => void }) {
+  const { saisons, saisonParId, embauchesDe, posteParId } = useRh()
+  const ajouter = useAjouterEmbauche()
+  const [genre, setGenre] = useState<GenreEmbauche>('emploi')
+  const [saison, setSaison] = useState<string | null>(saisons.find((s) => s.ouverte)?.id ?? null)
+  const [compagnie, setCompagnie] = useState<string | null>(null)
+  const [poste, setPoste] = useState<string | null>(null)
+  const [echelon, setEchelon] = useState<number | null>(null)
+  const siennes = embauchesDe.get(p.id) ?? []
+  const deja = saison ? siennes.some((e) => e.saison_id === saison && e.statut !== 'annulee') : false
+  const pret = !!saison && !!compagnie && (genre === 'benevolat' || !!poste)
+
+  return (
+    <Dialogue titre="Nouvelle embauche" fermer={fermer}>
+      <div className="space-y-3 text-sm">
+        <div className="flex gap-2">
+          {(['emploi', 'benevolat'] as const).map((g) => (
+            <button
+              key={g}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${genre === g ? 'border-foret-700 bg-foret-700 text-white' : 'border-pierre-200 text-pierre-700'}`}
+              onClick={() => setGenre(g)}
+            >
+              {g === 'emploi' ? 'Emploi' : 'Bénévolat'}
+            </button>
+          ))}
+        </div>
+        <Champ etiquette="Saison">
+          <MenuSaison valeur={saison} changer={setSaison} vide="À choisir" />
+        </Champ>
+        {deja && <p className="text-xs text-amber-700">Cette personne a déjà une embauche pour cette saison.</p>}
+        <Champ etiquette="Compagnie">
+          <MenuCompagnie
+            valeur={compagnie}
+            changer={(v) => {
+              setCompagnie(v)
+              if (poste && posteParId.get(poste)?.entreprise_id !== v) setPoste(null)
+            }}
+            vide="À choisir"
+          />
+        </Champ>
+        <Champ etiquette={genre === 'benevolat' ? 'Poste (facultatif)' : 'Poste'}>
+          <MenuPoste valeur={poste} changer={setPoste} compagnie={compagnie} />
+        </Champ>
+        {genre === 'emploi' && (
+          <Champ etiquette="Échelon">
+            <select className={ui.champ} value={echelon ?? ''} onChange={(e) => setEchelon(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">—</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </Champ>
+        )}
+        {ajouter.error && <p className={ui.erreur}>{messageErreur(ajouter.error)}</p>}
+        <div className="flex justify-end gap-2">
+          <button className={ui.boutonSecondaire} onClick={fermer}>
+            Annuler
+          </button>
+          <button
+            className={ui.bouton}
+            disabled={!pret || ajouter.isPending}
+            onClick={() => {
+              const s = saisonParId.get(saison!)
+              ajouter.mutate(
+                {
+                  id: crypto.randomUUID(),
+                  personne_id: p.id,
+                  genre,
+                  saison_id: saison!,
+                  entreprise_id: compagnie,
+                  poste_id: poste,
+                  echelon: genre === 'emploi' ? echelon : null,
+                  debut: s?.debut ?? null,
+                  fin: s?.fin ?? null,
+                  action_paie: genre === 'emploi' ? (estAncien(p, siennes, saisonParId) ? 'M' : 'A') : null,
+                },
+                { onSuccess: fermer },
+              )
+            }}
+          >
+            Ajouter
+          </button>
+        </div>
+      </div>
+    </Dialogue>
   )
 }
 
@@ -833,6 +955,13 @@ function FenetreFusion({ p, fermer }: { p: Personne; fermer: () => void }) {
   }, [personnes, p, recherche])
 
   const autre = autreId ? personneParId.get(autreId) : undefined
+  // Par défaut, la fiche qui a le plus d'historique reste ; à égalité, la plus ancienne.
+  const poids = (x: Personne) => (candidaturesDe.get(x.id) ?? []).length + (embauchesDe.get(x.id) ?? []).length
+  const choisir = (id: string) => {
+    setAutreId(id)
+    const b = personneParId.get(id)!
+    setGarderId(poids(b) > poids(p) || (poids(b) === poids(p) && b.created_at < p.created_at) ? b.id : p.id)
+  }
   const garder = autre && garderId === autre.id ? autre : p
   const retirer = autre && garder.id === p.id ? autre : p
   const resume = (x: Personne) => `${(candidaturesDe.get(x.id) ?? []).length} candidature(s), ${(embauchesDe.get(x.id) ?? []).length} embauche(s)`
@@ -845,7 +974,7 @@ function FenetreFusion({ p, fermer }: { p: Personne; fermer: () => void }) {
             <input className={ui.champ} autoFocus placeholder="Chercher l'autre fiche…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
             <div className="space-y-1">
               {proposees.map((x) => (
-                <button key={x.id} className="block w-full rounded-md border border-pierre-200 px-2 py-1.5 text-left hover:bg-pierre-50" onClick={() => setAutreId(x.id)}>
+                <button key={x.id} className="block w-full rounded-md border border-pierre-200 px-2 py-1.5 text-left hover:bg-pierre-50" onClick={() => choisir(x.id)}>
                   {nomAffiche(x)} {x.courriel && <span className="text-pierre-500">· {x.courriel}</span>}
                   <span className="block text-xs text-pierre-500">{resume(x)}</span>
                 </button>

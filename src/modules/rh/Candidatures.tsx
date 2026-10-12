@@ -44,7 +44,7 @@ export function Candidatures() {
         if (!p) return false
         if (saison && !viseSaison(c, saison)) return false
         if (compagnie && c.entreprise_id !== compagnie && !c.poste_ids.some((id) => posteParId.get(id)?.entreprise_id === compagnie)) return false
-        const ancien = c.source === 'retour' || estAncien(embauchesDe.get(p.id) ?? [], saisonParId)
+        const ancien = c.source === 'retour' || estAncien(p, embauchesDe.get(p.id) ?? [], saisonParId)
         if (provenance === 'anciens' && !ancien) return false
         if (provenance === 'nouveaux' && ancien) return false
         if (recherche.trim() && !correspond(texteRecherche(p), recherche)) return false
@@ -126,7 +126,7 @@ export function Candidatures() {
 function LigneCandidature({ c, auj }: { c: Candidature; auj: string }) {
   const { personneParId, embauchesDe, saisonParId, posteParId, compagnieParId } = useRh()
   const p = personneParId.get(c.personne_id)!
-  const ancien = c.source === 'retour' || estAncien(embauchesDe.get(p.id) ?? [], saisonParId)
+  const ancien = c.source === 'retour' || estAncien(p, embauchesDe.get(p.id) ?? [], saisonParId)
   const postes = c.poste_ids.map((id) => posteParId.get(id)).filter((x) => !!x)
   const decision = c.statut === 'acceptee' && c.poste_id ? posteParId.get(c.poste_id) : undefined
   return (
@@ -192,7 +192,7 @@ function NouvelleCandidature({ fermer, ouvrir }: { fermer: () => void; ouvrir: (
 
   const trouvees = recherche.trim().length >= 2 ? personnes.filter((p) => correspond(texteRecherche(p), recherche)).slice(0, 6) : []
   // Même courriel qu'une fiche existante : on la propose plutôt qu'un doublon.
-  const memeCourriel = nouvelle.courriel.trim() ? personnes.find((p) => p.courriel === nouvelle.courriel.trim().toLowerCase()) : undefined
+  const memeCourriel = !personne && nouvelle.courriel.trim() ? personnes.find((p) => p.courriel === nouvelle.courriel.trim().toLowerCase()) : undefined
 
   const creer = async () => {
     setErreur(null)
@@ -238,7 +238,7 @@ function NouvelleCandidature({ fermer, ouvrir }: { fermer: () => void; ouvrir: (
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <p className={ui.etiquette}>Une personne déjà connue</p>
-              <input className={ui.champ} placeholder="Nom, courriel…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+              <input className={ui.champ} autoFocus placeholder="Nom, courriel…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
               <div className="mt-1 space-y-1">
                 {trouvees.map((p) => (
                   <button key={p.id} className="block w-full rounded-md border border-pierre-200 px-2 py-1 text-left hover:bg-pierre-50" onClick={() => setPersonne(p)}>
