@@ -7,12 +7,15 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { Champ, MenuCompagnie, MenuPoste, MenuSaison, PuceAncien, PuceStatut, PuceStatutEmbauche, Section, ZoneTexte } from './commun'
+import { BoutonCopier, Champ, MenuCompagnie, MenuPoste, MenuSaison, PuceAncien, PuceStatut, PuceStatutEmbauche, Section, ZoneTexte } from './commun'
 import { useRh } from './contexte'
 import { ListeDocuments } from './Documents'
+import { PuceInvitation } from './IntentionRetour'
+import { lienDossier, lienRetour } from './liens'
 import {
   envoyerSpecimen,
   lirePaie,
+  messageValidation,
   ouvrirSpecimen,
   useAjouterEmbauche,
   useAjouterNote,
@@ -21,6 +24,7 @@ import {
   useEnregistrerDossier,
   useEnregistrerPaie,
   useFusionnerPersonnes,
+  useLienDossier,
   useModifierEmbauche,
   useModifierPersonne,
   useNotes,
@@ -28,6 +32,7 @@ import {
   useRetirerEmbauche,
   useRetirerNote,
   useSupprimerPersonne,
+  useValiderEmbauche,
 } from './donnees'
 import { Journal } from './Journal'
 import { age, correspond, dateCourte, estAncien, horodatage, libelleDate, nasLisible, nasMasque, nomAffiche, texteRecherche } from './outils'
@@ -69,7 +74,7 @@ export function FichePersonne() {
 }
 
 function Contenu({ p }: { p: Personne }) {
-  const { embauchesDe, candidaturesDe, saisonParId, ecriture, paie, auj } = useRh()
+  const { embauchesDe, candidaturesDe, saisonParId, invitations, ecriture, paie, auj } = useRh()
   const modifier = useModifierPersonne()
   const supprimer = useSupprimerPersonne()
   const naviguer = useNavigate()
@@ -181,6 +186,29 @@ function Contenu({ p }: { p: Personne }) {
             )}
           </Section>
 
+          {invitations.some((i) => i.personne_id === p.id) && (
+            <Section titre="Intention de retour">
+              <ul className="space-y-1.5 text-sm">
+                {invitations
+                  .filter((i) => i.personne_id === p.id)
+                  .sort((a, b) => (saisonParId.get(b.saison_id)?.rang ?? 0) - (saisonParId.get(a.saison_id)?.rang ?? 0))
+                  .map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{saisonParId.get(i.saison_id)?.nom}</span>
+                      <PuceInvitation i={i} />
+                      {i.candidature_id && (
+                        <Link to={`/rh/c/${i.candidature_id}`} className="text-xs text-foret-700 underline">
+                          Candidature
+                        </Link>
+                      )}
+                      <span className="flex-1" />
+                      <BoutonCopier url={lienRetour(i)} className="rounded-md border border-pierre-300 px-2 py-1 text-xs font-medium text-pierre-700 hover:bg-pierre-50" />
+                    </li>
+                  ))}
+              </ul>
+            </Section>
+          )}
+
           <Section titre="Notes au dossier">
             <NotesDossier personneId={p.id} />
           </Section>
@@ -277,7 +305,7 @@ function Contenu({ p }: { p: Personne }) {
 // Embauche d'une saison
 // ------------------------------------------------------------
 function CarteEmbauche({ e }: { e: Embauche }) {
-  const { saisonParId, dates, ecriture } = useRh()
+  const { saisonParId, dates, textes, ecriture } = useRh()
   const modifier = useModifierEmbauche()
   const retirer = useRetirerEmbauche()
   const [ouverte, setOuverte] = useState(e.statut !== 'complete' && e.statut !== 'annulee')
@@ -285,6 +313,11 @@ function CarteEmbauche({ e }: { e: Embauche }) {
   const s = saisonParId.get(e.saison_id)
   const dispos = dates.filter((d) => e.disponibilites.includes(d.id))
   const presentation = Object.entries(e.presentation).filter(([, v]) => v)
+  /** « (version 2) » d'un texte accepté. */
+  const version = (id: string | null) => {
+    const t = id ? textes.find((x) => x.id === id) : undefined
+    return t ? ` (version ${t.version})` : ''
+  }
 
   return (
     <div className="rounded-lg border border-pierre-200">
@@ -301,7 +334,8 @@ function CarteEmbauche({ e }: { e: Embauche }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Champ etiquette="Statut">
               <select className={ui.champ} disabled={!ecriture} value={e.statut} onChange={(x) => changer({ statut: x.target.value as StatutEmbauche })}>
-                {STATUTS_EMBAUCHE.map((st) => (
+                {/* « Complète » passe par « Valider l'embauche » (champs de paie exigés). */}
+                {STATUTS_EMBAUCHE.filter((st) => st.id !== 'complete' || e.statut === 'complete').map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.nom}
                   </option>
@@ -329,6 +363,8 @@ function CarteEmbauche({ e }: { e: Embauche }) {
             <ChampDate etiquette="Début" valeur={e.debut} disabled={!ecriture} enregistrer={(debut) => changer({ debut })} />
             <ChampDate etiquette="Fin" valeur={e.fin} disabled={!ecriture} enregistrer={(fin) => changer({ fin })} />
           </div>
+
+          <DossierEmbauche e={e} />
 
           {e.genre === 'emploi' && (
             <div>
@@ -380,12 +416,12 @@ function CarteEmbauche({ e }: { e: Embauche }) {
             <div className="space-y-2">
               <p>
                 <span className={ui.etiquette}>Code d'éthique</span>
-                {e.code_ethique_le ? `Accepté le ${dateCourte(e.code_ethique_le)}` : <span className="text-pierre-400">Pas encore accepté</span>}
+                {e.code_ethique_le ? `Accepté le ${dateCourte(e.code_ethique_le)}${version(e.code_ethique_texte)}` : <span className="text-pierre-400">Pas encore accepté</span>}
               </p>
               {e.genre === 'benevolat' && (
                 <p>
                   <span className={ui.etiquette}>Entente de bénévolat</span>
-                  {e.entente_benevolat_le ? `Acceptée le ${dateCourte(e.entente_benevolat_le)}` : <span className="text-pierre-400">Pas encore acceptée</span>}
+                  {e.entente_benevolat_le ? `Acceptée le ${dateCourte(e.entente_benevolat_le)}${version(e.entente_benevolat_texte)}` : <span className="text-pierre-400">Pas encore acceptée</span>}
                 </p>
               )}
               {e.dossier_recu_le && (
@@ -439,6 +475,89 @@ function CarteEmbauche({ e }: { e: Embauche }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Lien personnel du dossier d'embauche (/dossier/<jeton>) : créer, copier,
+ * refaire ; « Marquer comme envoyé » ; « Valider » (→ complète, le lien se
+ * ferme). Pas de courriel en phase 2 : on copie le lien.
+ */
+function DossierEmbauche({ e }: { e: Embauche }) {
+  const { ecriture } = useRh()
+  const lien = useLienDossier()
+  const valider = useValiderEmbauche()
+  const modifier = useModifierEmbauche()
+  if (e.statut === 'complete' || e.statut === 'annulee')
+    return e.jeton ? <p className="text-xs text-pierre-500">Lien du dossier d'embauche fermé ({e.statut === 'complete' ? 'embauche complète' : 'embauche annulée'}).</p> : null
+  const url = e.jeton ? lienDossier(e.jeton) : null
+  const petit = 'rounded-md border border-pierre-300 bg-white px-2 py-1 text-xs font-medium text-pierre-700 hover:bg-pierre-50 disabled:opacity-50'
+  const aide =
+    e.statut === 'dossier_recu'
+      ? "Dossier reçu : vérifie-le, complète la paie, puis valide. D'ici là, la personne peut le corriger avec le même lien."
+      : url
+        ? e.statut === 'a_envoyer'
+          ? "Copie le lien et envoie-le à la personne (les courriels viendront plus tard), puis « Marquer comme envoyé »."
+          : 'En attente du dossier.'
+        : 'La personne remplit son dossier (coordonnées, paie, santé, urgence, disponibilités, code d’éthique, documents) par un lien personnel, sans compte.'
+
+  return (
+    <div className="space-y-2 rounded-lg border border-pierre-200 bg-pierre-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-pierre-600">Dossier d'embauche</p>
+      {url ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <a href={url} target="_blank" rel="noreferrer" className="max-w-full truncate font-mono text-xs text-foret-700 underline">
+            {url}
+          </a>
+          <BoutonCopier url={url} className={petit} />
+          {ecriture && e.statut === 'a_envoyer' && (
+            <button className={petit} disabled={modifier.isPending} onClick={() => modifier.mutate({ id: e.id, champs: { statut: 'envoyee' } })}>
+              Marquer comme envoyé
+            </button>
+          )}
+          {ecriture && (
+            <button
+              className="text-xs text-pierre-500 underline hover:text-pierre-800"
+              disabled={lien.isPending}
+              onClick={async () => {
+                if (await confirmer({ titre: 'Refaire le lien du dossier ?', message: "L'ancien lien ne fonctionnera plus.", libelleOk: 'Refaire' }))
+                  lien.mutate({ embauche: e.id, refaire: true })
+              }}
+            >
+              Refaire le lien
+            </button>
+          )}
+        </div>
+      ) : (
+        ecriture && (
+          <button className={ui.boutonSecondaire} disabled={lien.isPending} onClick={() => lien.mutate({ embauche: e.id })}>
+            Créer le lien du dossier
+          </button>
+        )
+      )}
+      <p className="text-xs text-pierre-500">{aide}</p>
+      {ecriture && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <button
+            className={e.statut === 'dossier_recu' ? ui.bouton : ui.boutonSecondaire}
+            disabled={valider.isPending}
+            onClick={async () => {
+              if (
+                e.statut !== 'dossier_recu' &&
+                !(await confirmer({ titre: "Valider sans dossier reçu ?", message: "La personne n'a pas encore envoyé son dossier par le lien. Une fois validée, l'embauche est complète et le lien se ferme.", libelleOk: 'Valider' }))
+              )
+                return
+              valider.mutate(e.id)
+            }}
+          >
+            Valider l'embauche
+          </button>
+          <span className="text-xs text-pierre-500">{e.genre === 'emploi' ? 'Exige la paie complète, le NAS et le compte bancaire.' : 'Exige la compagnie.'}</span>
+        </div>
+      )}
+      {valider.error && <p className={ui.erreur}>{messageValidation(valider.error) ?? messageErreur(valider.error)}</p>}
+      {lien.error && <p className={ui.erreur}>{messageErreur(lien.error)}</p>}
     </div>
   )
 }

@@ -424,6 +424,30 @@ de la Vieille-France arrivent dans l'app par l'iCal des deux annonces.
   (`reservations.agenda` montre ce qui serait écrit ; en DEV, des
   calendriers « essai-… »).
 
+### 15. RH : pages publiques (emplois.camptremblant.com)
+
+Pages sans compte du module RH : `/emplois` (formulaire de candidature, FR et
+EN), `/retour/<jeton>` (intention de retour), `/dossier/<jeton>` (dossier
+d'embauche). Elles parlent seulement au Worker (`/api/rh/*`, voir
+`worker/rh/api.js`) : l'anonyme n'a aucun droit sur le schéma `rh`.
+
+1. **Sous-domaine** `emplois.camptremblant.com` : Cloudflare → Workers →
+   `gestion-camp` → Settings → Domains & Routes → **Add custom domain** (même
+   démarche que la section 11 ; CNAME chez Squarespace si le DNS n'est pas chez
+   Cloudflare).
+2. **Turnstile** : ajouter `emplois.camptremblant.com` aux domaines du widget
+   de la section 11 (même clé du site, même secret `TURNSTILE_SECRET`).
+3. `.env.production` : `VITE_HOTE_EMPLOIS=emplois.camptremblant.com` (sur cet
+   hôte, seules les pages du RH s'affichent ; les liens copiés dans l'app y
+   mènent). À ajouter **une fois le sous-domaine en service**, sinon les liens
+   copiés ne marcheraient pas.
+4. Site camptremblant.com (page Emploi) : remplacer le lien du formulaire
+   Airtable par `https://emplois.camptremblant.com/emplois` (`?lang=en` pour
+   l'anglais) à la bascule.
+
+`SUPABASE_SECRET_KEY` (section 8) sert aussi à ces pages. Pas de courriel en
+phase 2 : les liens personnels se copient depuis l'app.
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,

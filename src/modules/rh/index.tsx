@@ -6,7 +6,7 @@ import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Candidatures } from './Candidatures'
 import { ContexteRh, type DonneesRh } from './contexte'
-import { useCandidatures, useCompagnies, useDatesSaisons, useEmbauches, usePersonnes, usePostes, useSaisons } from './donnees'
+import { useCandidatures, useCompagnies, useDatesSaisons, useEmbauches, useInvitations, usePersonnes, usePostes, useSaisons, useTextes } from './donnees'
 import { Employes } from './Employes'
 import { FicheCandidature } from './FicheCandidature'
 import { FichePersonne } from './FichePersonne'
@@ -36,11 +36,14 @@ export default function ModuleRh() {
   const personnes = usePersonnes()
   const candidatures = useCandidatures()
   const embauches = useEmbauches()
+  const invitations = useInvitations()
+  const textes = useTextes()
   const chemin = useLocation().pathname
   const auj = aujourdhui()
 
   const donnees = useMemo<DonneesRh | null>(() => {
-    if (!saisons.data || !dates.data || !postes.data || !compagnies.data || !personnes.data || !candidatures.data || !embauches.data) return null
+    if (!saisons.data || !dates.data || !postes.data || !compagnies.data || !personnes.data || !candidatures.data || !embauches.data || !invitations.data || !textes.data)
+      return null
     return {
       saisons: saisons.data,
       dates: dates.data,
@@ -49,6 +52,8 @@ export default function ModuleRh() {
       personnes: personnes.data,
       candidatures: candidatures.data,
       embauches: embauches.data,
+      invitations: invitations.data,
+      textes: textes.data,
       saisonParId: new Map(saisons.data.map((s) => [s.id, s])),
       posteParId: new Map(postes.data.map((p) => [p.id, p])),
       compagnieParId: new Map(compagnies.data.map((c) => [c.id, c])),
@@ -59,9 +64,13 @@ export default function ModuleRh() {
       paie: { lecture: peutLire('rh_paie'), ecriture: peutEcrire('rh_paie') },
       auj,
     }
-  }, [saisons.data, dates.data, postes.data, compagnies.data, personnes.data, candidatures.data, embauches.data, peutEcrire, peutLire, auj])
+  }, [saisons.data, dates.data, postes.data, compagnies.data, personnes.data, candidatures.data, embauches.data, invitations.data, textes.data, peutEcrire, peutLire, auj])
 
-  const erreur = saisons.error ?? dates.error ?? postes.error ?? compagnies.error ?? personnes.error ?? candidatures.error ?? embauches.error
+  const erreur =
+    saisons.error ?? dates.error ?? postes.error ?? compagnies.error ?? personnes.error ?? candidatures.error ?? embauches.error ?? invitations.error ?? textes.error
+  // Pastilles des onglets : nouveautés des pages publiques (pas de courriel en phase 2).
+  const aTraiter = candidatures.data?.filter((c) => c.statut === 'recue').length ?? 0
+  const dossiersRecus = embauches.data?.filter((e) => e.statut === 'dossier_recu').length ?? 0
 
   return (
     <div>
@@ -70,9 +79,11 @@ export default function ModuleRh() {
       <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
         <NavLink to="/rh" end className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/c/') })}>
           Candidatures
+          <Pastille n={aTraiter} titre="Candidatures à traiter" />
         </NavLink>
         <NavLink to="/rh/employes" className={onglet}>
           Employés
+          <Pastille n={dossiersRecus} titre="Dossiers d'embauche reçus, à valider" />
         </NavLink>
         <NavLink to="/rh/personnes" className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/p/') })}>
           Personnes
@@ -100,5 +111,14 @@ export default function ModuleRh() {
         </ContexteRh.Provider>
       )}
     </div>
+  )
+}
+
+function Pastille({ n, titre }: { n: number; titre: string }) {
+  if (!n) return null
+  return (
+    <span title={titre} className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-xs font-semibold text-amber-800">
+      {n}
+    </span>
   )
 }

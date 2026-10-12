@@ -9,6 +9,8 @@ import type {
   Dossier,
   Embauche,
   GenreDocument,
+  GenreTexte,
+  Invitation,
   LigneJournal,
   Note,
   PaieEnClair,
@@ -16,6 +18,7 @@ import type {
   Personne,
   Poste,
   Saison,
+  Texte,
 } from './types'
 
 // Module en ligne seulement (networkMode « always »), sans temps réel ni
@@ -52,6 +55,8 @@ export const usePostes = () => useTable<Poste>('postes', 'ordre')
 export const usePersonnes = () => useTable<Personne>('personnes', 'nom_complet')
 export const useCandidatures = () => useTable<Candidature>('candidatures', 'recue_le')
 export const useEmbauches = () => useTable<Embauche>('embauches', 'created_at')
+export const useInvitations = () => useTable<Invitation>('invitations', 'created_at')
+export const useTextes = () => useTable<Texte>('textes', 'version')
 
 /** Compagnies du référentiel (lues par toute personne active). */
 export function useCompagnies() {
@@ -253,6 +258,7 @@ export const useAjouterCandidature = () =>
     poste_id: null,
     echelon: null,
     efface_le: null,
+    cle: null,
     airtable_id: null,
     created_at: new Date().toISOString(),
     ...l,
@@ -280,10 +286,13 @@ export const useAjouterEmbauche = () =>
     disponibilites: [],
     disponibilites_note: null,
     code_ethique_le: null,
+    code_ethique_texte: null,
     entente_benevolat_le: null,
+    entente_benevolat_texte: null,
     commentaires: null,
     presentation: {},
     dossier_recu_le: null,
+    jeton: null,
     airtable_id: null,
     created_at: new Date().toISOString(),
     ...l,
@@ -354,6 +363,89 @@ export function useAccepter() {
       return data as string
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['rh'] }),
+  })
+}
+
+/** Lien du dossier d'embauche : créé au besoin, ou refait (l'ancien ne fonctionne plus). Rend le jeton. */
+export function useLienDossier() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'lien-dossier'],
+    networkMode: 'always',
+    mutationFn: async ({ embauche, refaire = false }: { embauche: string; refaire?: boolean }) => {
+      const { data, error } = await db().rpc('lien_dossier', { p_embauche: embauche, p_refaire: refaire })
+      if (error) throw error
+      return data as string
+    },
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+  })
+}
+
+/** Champs que rh.valider_embauche exige (CHAMPS_MANQUANTS:…), en mots. */
+const CHAMPS_VALIDATION: Record<string, string> = {
+  compagnie: 'la compagnie',
+  poste: 'le poste',
+  remuneration: 'la rémunération',
+  taux: 'le taux',
+  vacances: 'le 4 %',
+  type_employe: "le type d'employé",
+  action_paie: "l'action (paie)",
+  date_embauche: "la date d'embauche",
+  nas: 'le NAS',
+  compte: 'le compte bancaire',
+}
+
+/** Message lisible d'un refus de validation. */
+export function messageValidation(e: unknown) {
+  const m = /CHAMPS_MANQUANTS:([a-z_,]+)/.exec(String((e as { message?: string })?.message ?? ''))
+  if (!m) return null
+  const champs = m[1].split(',').map((c) => CHAMPS_VALIDATION[c] ?? c)
+  return `Il manque ${champs.length > 1 ? `${champs.slice(0, -1).join(', ')} et ${champs.at(-1)}` : champs[0]}.`
+}
+
+/** Valider une embauche : elle devient complète (champs de paie, NAS et compte exigés pour un emploi). */
+export function useValiderEmbauche() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'valider'],
+    networkMode: 'always',
+    mutationFn: async (embauche: string) => {
+      const { error } = await db().rpc('valider_embauche', { p_embauche: embauche })
+      if (error) throw error
+    },
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+  })
+}
+
+/** Inviter des personnes à l'intention de retour d'une saison. Rend le nombre de nouvelles invitations. */
+export function useInviterRetour() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'inviter'],
+    networkMode: 'always',
+    mutationFn: async ({ saison, personnes }: { saison: string; personnes: string[] }) => {
+      const { data, error } = await db().rpc('inviter_retour', { p_saison: saison, p_personnes: personnes })
+      if (error) throw error
+      return data as number
+    },
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'invitations'] }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+  })
+}
+
+/** Retirer une invitation sans réponse (la base refuse les autres). */
+export const useRetirerInvitation = () => useRetirer('invitations')
+
+/** Nouvelle version d'un texte des pages publiques (même texte = version relue). */
+export function useNouveauTexte() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'texte'],
+    networkMode: 'always',
+    mutationFn: async ({ genre, texte }: { genre: GenreTexte; texte: string }) => {
+      const { error } = await db().rpc('nouveau_texte', { p_genre: genre, p_texte: texte })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'textes'] }),
   })
 }
 

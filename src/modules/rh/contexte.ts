@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Candidature, Compagnie, DateSaison, Embauche, Personne, Poste, Saison } from './types'
+import type { Candidature, Compagnie, DateSaison, Embauche, Invitation, Personne, Poste, Saison, Texte } from './types'
 
 /** Données chargées une fois par le module (index.tsx). */
 export interface DonneesRh {
@@ -10,6 +10,10 @@ export interface DonneesRh {
   personnes: Personne[]
   candidatures: Candidature[]
   embauches: Embauche[]
+  /** Intentions de retour envoyées (une par personne et saison visée) */
+  invitations: Invitation[]
+  /** Textes des pages publiques, toutes les versions */
+  textes: Texte[]
   saisonParId: Map<string, Saison>
   posteParId: Map<string, Poste>
   compagnieParId: Map<string, Compagnie>

@@ -4,19 +4,21 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { MenuCompagnie, MenuSaison, PuceAncien, PuceStatutEmbauche } from './commun'
 import { useRh } from './contexte'
+import { FenetreRetour } from './IntentionRetour'
 import { correspond, estAncien, saisonParDefaut, texteRecherche } from './outils'
 import { STATUTS_EMBAUCHE, type StatutEmbauche } from './types'
 import { champPetit } from './styles'
 
 /** Les embauches d'une saison : qui travaille, à quel poste, où en est son dossier. */
 export function Employes() {
-  const { saisons, embauches, personneParId, posteParId, compagnieParId, saisonParId, embauchesDe, compagnies, auj } = useRh()
+  const { saisons, embauches, personneParId, posteParId, compagnieParId, saisonParId, embauchesDe, compagnies, ecriture, auj } = useRh()
   const [params, setParams] = useSearchParams()
   const saison = params.get('saison') || saisonParDefaut(saisons, embauches, auj)
   const compagnie = params.get('compagnie')
   const statut = params.get('statut') as StatutEmbauche | 'actives' | null
   const genre = params.get('genre')
   const [recherche, setRecherche] = useState('')
+  const [retour, setRetour] = useState(false)
 
   const changer = (cle: string, valeur: string | null) => {
     const p = new URLSearchParams(params)
@@ -24,6 +26,10 @@ export function Employes() {
     else p.delete(cle)
     setParams(p, { replace: true })
   }
+
+  // Dossiers d'embauche reçus par la page publique, à valider, par saison.
+  const recus = new Map<string, number>()
+  for (const e of embauches) if (e.statut === 'dossier_recu') recus.set(e.saison_id, (recus.get(e.saison_id) ?? 0) + 1)
 
   const rang = saison ? saisonParId.get(saison)?.rang : undefined
   const base = embauches.filter((e) => {
@@ -59,7 +65,35 @@ export function Employes() {
           <option value="benevolat">Bénévoles</option>
         </select>
         <input className={`${champPetit} w-64`} placeholder="Chercher un nom…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        <div className="flex-1" />
+        {ecriture && (
+          <button className={ui.boutonSecondaire} onClick={() => setRetour(true)}>
+            Intention de retour…
+          </button>
+        )}
       </div>
+
+      {recus.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>Dossiers d'embauche reçus, à valider :</span>
+          {[...recus]
+            .sort(([a], [b]) => (saisonParId.get(a)?.rang ?? 0) - (saisonParId.get(b)?.rang ?? 0))
+            .map(([id, n]) => (
+              <button
+                key={id}
+                className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-xs font-medium hover:bg-amber-100"
+                onClick={() => {
+                  const p = new URLSearchParams(params)
+                  p.set('saison', id)
+                  p.set('statut', 'dossier_recu')
+                  setParams(p, { replace: true })
+                }}
+              >
+                {saisonParId.get(id)?.nom} · {n}
+              </button>
+            ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         {[{ id: 'actives', nom: 'Toutes (sans les annulées)' }, ...STATUTS_EMBAUCHE].map((f) => {
@@ -136,6 +170,7 @@ export function Employes() {
         </div>
       )}
       <p className="text-xs text-pierre-500">{lignes.length} personne(s).</p>
+      {retour && <FenetreRetour saisonSource={saison} fermer={() => setRetour(false)} />}
     </div>
   )
 }

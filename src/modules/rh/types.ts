@@ -189,6 +189,10 @@ export const REPONSES: { cle: string; nom: string; long?: boolean }[] = [
   { cle: 'refere_par', nom: 'Référé par' },
   { cle: 'autre', nom: 'Autres informations', long: true },
   { cle: 'postes_texte', nom: 'Postes demandés (texte)' },
+  { cle: 'langue', nom: 'Langue du formulaire' },
+  // Formulaire public, fiche retrouvée par le courriel : ce qui diffère de la fiche
+  { cle: 'nom_donne', nom: 'Nom donné (différent de la fiche)' },
+  { cle: 'telephone_donne', nom: 'Téléphone donné (différent de la fiche)' },
 ]
 
 export interface Candidature {
@@ -209,6 +213,8 @@ export interface Candidature {
   poste_id: string | null
   echelon: number | null
   efface_le: string | null
+  /** Anti-doublon du formulaire public (clé tirée par la page) */
+  cle: string | null
   airtable_id: string | null
   created_at: string
 }
@@ -259,11 +265,53 @@ export interface Embauche {
   disponibilites: string[]
   disponibilites_note: string | null
   code_ethique_le: string | null
+  /** Version du code d'éthique acceptée (rh.textes) */
+  code_ethique_texte: string | null
   entente_benevolat_le: string | null
+  entente_benevolat_texte: string | null
   commentaires: string | null
   presentation: Record<string, string>
   dossier_recu_le: string | null
+  /** Lien personnel du dossier d'embauche (/dossier/<jeton>) ; null = pas encore créé */
+  jeton: string | null
   airtable_id: string | null
+  created_at: string
+}
+
+/** Intention de retour : une invitation par personne et saison visée (lien /retour/<jeton>). */
+export interface Invitation {
+  id: string
+  personne_id: string
+  saison_id: string
+  jeton: string
+  reponse: 'oui' | 'non' | null
+  repondu_le: string | null
+  candidature_id: string | null
+  invite_par_nom: string | null
+  created_at: string
+}
+
+/** Textes modifiables des pages publiques ; une ligne par version, jamais réécrite. */
+export type GenreTexte = 'ethique_ete' | 'ethique_hors_ete' | 'entente_benevolat' | 'intro_retour'
+export const GENRES_TEXTE: { id: GenreTexte; nom: string; aide: string }[] = [
+  { id: 'ethique_ete', nom: "Code d'éthique — été", aide: "Dossier d'embauche d'une saison d'été." },
+  { id: 'ethique_hors_ete', nom: "Code d'éthique — hors été", aide: "Dossier d'embauche des autres saisons." },
+  { id: 'entente_benevolat', nom: 'Entente de bénévolat', aide: "Dossier d'un bénévole, sous le code d'éthique." },
+  {
+    id: 'intro_retour',
+    nom: "Intention de retour — introduction",
+    aide: 'Haut de la page /retour. {{prenom}}, {{saison}} et {{lien_emplois}} sont remplacés.',
+  },
+]
+
+export interface Texte {
+  id: string
+  genre: GenreTexte
+  version: number
+  texte: string
+  /** Brouillon que la direction n'a pas encore relu */
+  a_valider: boolean
+  cree_par_nom: string | null
   created_at: string
 }
 

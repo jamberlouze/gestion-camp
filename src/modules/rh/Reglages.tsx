@@ -4,24 +4,27 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { MenuCompagnie, Section } from './commun'
+import { BoutonCopier, MenuCompagnie, Section } from './commun'
 import { useRh } from './contexte'
+import { lienEmplois } from './liens'
 import {
   useAjouterDate,
   useAjouterPoste,
   useAjouterSaison,
   useModifierDate,
+  useNouveauTexte,
   useModifierPoste,
   useModifierSaison,
   useRetirerDate,
   useRetirerPoste,
   useRetirerSaison,
 } from './donnees'
-import { plageDates } from './outils'
-import { GENRES_DATE, GENRES_SAISON, type DateSaison, type GenreDate, type GenreSaison, type Poste, type Saison } from './types'
+import { horodatage, plageDates } from './outils'
+import { TexteFormate } from './TexteFormate'
+import { GENRES_DATE, GENRES_SAISON, GENRES_TEXTE, type DateSaison, type GenreDate, type GenreSaison, type GenreTexte, type Poste, type Saison } from './types'
 import { champPetit } from './styles'
 
-/** Saisons (et leurs dates) et postes du module. */
+/** Saisons (et leurs dates), postes, textes et liens des pages publiques. */
 export function Reglages() {
   const { saisons } = useRh()
   const [choix, setChoisie] = useState<string | null>(saisons.find((s) => s.ouverte && s.genre === 'ete')?.id ?? saisons.at(-1)?.id ?? null)
@@ -33,7 +36,132 @@ export function Reglages() {
         <Saisons choisie={choisie} choisir={setChoisie} />
         {choisie && <DatesSaison saisonId={choisie} />}
       </div>
-      <Postes />
+      <div className="space-y-5">
+        <Postes />
+        <PagesPubliques />
+      </div>
+      <Textes />
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Pages publiques (sans compte)
+// ------------------------------------------------------------
+function PagesPubliques() {
+  const { saisons } = useRh()
+  const url = lienEmplois()
+  const ouvertes = saisons.filter((s) => s.ouverte)
+  return (
+    <Section titre="Pages publiques">
+      <div className="space-y-2 text-sm">
+        <p className="text-pierre-600">
+          Formulaire de candidature (français et anglais) : saisons cochées « Ouverte » ({ouvertes.map((s) => s.nom).join(', ') || 'aucune'}), postes actifs offerts dans leur genre ; trois
+          postes au plus.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <a href={url} target="_blank" rel="noreferrer" className="font-mono text-xs text-foret-700 underline">
+            {url}
+          </a>
+          <BoutonCopier url={url} />
+        </div>
+        <p className="text-xs text-pierre-500">
+          L'intention de retour (onglet Employés) et le dossier d'embauche (fiche d'une personne, carte de l'embauche) passent par des liens personnels.
+        </p>
+      </div>
+    </Section>
+  )
+}
+
+// ------------------------------------------------------------
+// Textes des pages publiques : une version par modification ; une
+// embauche garde la version acceptée.
+// ------------------------------------------------------------
+function Textes() {
+  return (
+    <Section titre="Textes des pages publiques" className="xl:col-span-2">
+      <p className="mb-3 text-sm text-pierre-600">
+        Chaque modification crée une nouvelle version ; le dossier d'embauche garde la version acceptée et sa date. Syntaxe : « - » en début de ligne pour une puce,
+        deux espaces puis « - » pour une sous-puce, une ligne vide entre deux paragraphes, **gras**.
+      </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {GENRES_TEXTE.map((g) => (
+          <TexteModifiable key={g.id} genre={g.id} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+function TexteModifiable({ genre }: { genre: GenreTexte }) {
+  const { textes, ecriture } = useRh()
+  const nouveau = useNouveauTexte()
+  const g = GENRES_TEXTE.find((x) => x.id === genre)!
+  const versions = textes.filter((t) => t.genre === genre).sort((a, b) => b.version - a.version)
+  const courant = versions[0]
+  const [edition, setEdition] = useState<string | null>(null)
+  const exemple = { prenom: 'Léa', saison: 'Été 2027', lien_emplois: lienEmplois() }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-pierre-200 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-semibold">{g.nom}</h3>
+        {courant && <span className="text-xs text-pierre-500">version {courant.version}</span>}
+        {courant?.a_valider && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800" title="Brouillon que la direction n'a pas encore relu">
+            À valider
+          </span>
+        )}
+        <span className="flex-1" />
+        {ecriture && edition === null && (
+          <button className="text-xs text-foret-700 underline" onClick={() => setEdition(courant?.texte ?? '')}>
+            {courant?.a_valider ? 'Relire et valider' : 'Modifier'}
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-pierre-500">{g.aide}</p>
+      {edition !== null ? (
+        <div className="space-y-2">
+          <textarea className={`${ui.champ} font-mono text-xs`} rows={14} value={edition} onChange={(e) => setEdition(e.target.value)} />
+          <p className="text-xs font-medium text-pierre-500">Aperçu</p>
+          <div className="max-h-64 overflow-y-auto rounded-md bg-pierre-50 p-2">
+            <TexteFormate texte={edition} valeurs={exemple} />
+          </div>
+          {nouveau.error && <p className={ui.erreur}>{messageErreur(nouveau.error)}</p>}
+          <div className="flex justify-end gap-2">
+            <button className={ui.boutonSecondaire} onClick={() => setEdition(null)}>
+              Annuler
+            </button>
+            <button
+              className={ui.bouton}
+              disabled={nouveau.isPending || (edition.trim() === (courant?.texte ?? '').trim() && !courant?.a_valider)}
+              onClick={() => nouveau.mutate({ genre, texte: edition }, { onSuccess: () => setEdition(null) })}
+            >
+              {courant?.a_valider && edition.trim() === courant.texte.trim() ? 'Valider ce texte' : 'Enregistrer (nouvelle version)'}
+            </button>
+          </div>
+        </div>
+      ) : courant?.texte.trim() ? (
+        <div className="max-h-64 overflow-y-auto rounded-md bg-pierre-50 p-2">
+          <TexteFormate texte={courant.texte} valeurs={exemple} />
+        </div>
+      ) : (
+        <p className="text-sm text-pierre-400">Aucun texte.</p>
+      )}
+      {versions.length > 0 && (
+        <details className="text-xs text-pierre-500">
+          <summary className="cursor-pointer">Versions ({versions.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {versions.map((t) => (
+              <li key={t.id}>
+                Version {t.version} · {horodatage(t.created_at)}
+                {t.cree_par_nom ? ` · ${t.cree_par_nom}` : ' · texte de départ'}
+                {t.a_valider ? ' · à valider' : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

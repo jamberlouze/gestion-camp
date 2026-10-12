@@ -227,3 +227,30 @@ export function MenuSaison({ valeur, changer, className = ui.champ, disabled, vi
     </select>
   )
 }
+
+/**
+ * Copier un lien personnel (dossier d'embauche, intention de retour). Si le
+ * presse-papiers refuse, l'adresse s'affiche, sélectionnée, pour la copier à la main.
+ */
+export function BoutonCopier({ url, libelle = 'Copier le lien', className = ui.boutonSecondaire }: { url: string; libelle?: string; className?: string }) {
+  const [etat, setEtat] = useState<'' | 'copie' | 'manuel'>('')
+  const copier = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setEtat('copie')
+      setTimeout(() => setEtat(''), 2000)
+    } catch {
+      setEtat('manuel')
+    }
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button type="button" className={className} onClick={copier} title={url}>
+        {etat === 'copie' ? 'Copié ✓' : libelle}
+      </button>
+      {etat === 'manuel' && (
+        <input readOnly autoFocus className={`${ui.champ} w-72 font-mono text-xs`} value={url} onFocus={(e) => e.target.select()} onBlur={() => setEtat('')} />
+      )}
+    </span>
+  )
+}

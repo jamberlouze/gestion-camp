@@ -3,7 +3,8 @@
 // hebdomadaire de la Vigie de subventions (voir subventions/pipeline.js),
 // la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js),
 // les routes publiques des Réservations (formulaire de demande, documents et
-// factures de la page client : reservations/api.js) et QuickBooks Online
+// factures de la page client : reservations/api.js), celles du module RH
+// (candidature, intention de retour, dossier d'embauche : rh/api.js) et QuickBooks Online
 // (connexion, devis, factures, synchro aux 15 minutes : qbo/).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
@@ -19,6 +20,7 @@
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
+import { routeRh } from "./rh/api.js";
 import { synchroniserAgenda } from "./reservations/agenda.js";
 import { airbnbConfigure, importerAirbnb } from "./reservations/airbnb.js";
 import { preparerCourriels } from "./reservations/courriels.js";
@@ -81,6 +83,8 @@ export default {
     if (cal) return routeCalendrier(request, env, cal[1]);
     const res = url.pathname.match(/^\/api\/reservations\/([a-z]+)$/);
     if (res) return routeReservations(request, env, res[1]);
+    const rh = url.pathname.match(/^\/api\/rh\/([a-z]+)$/);
+    if (rh) return routeRh(request, env, rh[1]);
     const qbo = url.pathname.match(/^\/api\/qbo\/([a-z]+)$/);
     if (qbo) return routeQbo(request, env, qbo[1]);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping

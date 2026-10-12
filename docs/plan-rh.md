@@ -1,6 +1,6 @@
 # Plan — module RH (recrutement, embauche et dossiers d'employés)
 
-Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12.
+Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12 ; phase 2 (pages publiques) bâtie en DEV le 2026-10-12.
 Inventaire détaillé de l'existant (champs, formulaires, textes des courriels, Sheets) : `docs/rh-existant.md`.
 
 ## 0. Ce que le module remplace
@@ -73,17 +73,20 @@ Inventaire détaillé de l'existant (champs, formulaires, textes des courriels, 
 
 ## 4. Pages publiques (sans compte)
 
-Mêmes fondations que les Réservations : pages chargées avant la connexion, client Supabase anonyme, envoi par le Worker avec Turnstile, fonctions `security definer` comme seules portes d'entrée.
+Bâties en DEV le 2026-10-12 (phase 2). Adresse : **emplois.camptremblant.com** (décision de Maxime ; variable `VITE_HOTE_EMPLOIS`, toute autre adresse de ce sous-domaine mène à `/emplois`) ; d'ici là, l'adresse de l'app.
 
-- **`/emplois`** : postes ouverts par saison, puis le formulaire de candidature (CV en pièce jointe, 3 postes au plus, vraiment imposé).
-- **`/retour/<jeton>`** : intention de retour d'un employé, déjà identifié par son lien. Fini le rattachement par courriel.
-- **`/dossier/<jeton>`** : dossier d'embauche d'une embauche précise.
-  - Version été ou hors été selon la saison.
-  - Disponibilités tirées des dates de la saison.
-  - Pré-rempli pour un ancien. Le NAS déjà connu n'est jamais réaffiché : « NAS au dossier (finit par 123) — le changer ? ».
-  - Signature du contrat (et du consentement parental pour un mineur, §6).
-  - Lien valable jusqu'à ce que le dossier soit validé ; peut être renvoyé.
-- Fichiers déposés par le Worker dans le seau privé (taille et type vérifiés).
+- **Sécurité** : l'anonyme n'a **aucun droit** sur le schéma `rh` (pas même `usage`). Les pages parlent seulement au Worker (`/api/rh/*`) : Turnstile (candidature) ou jeton de 48 caractères hexadécimaux (retour, dossier), mêmes vérifications que la page (fichiers purs partagés), fichiers déposés avec la clé secrète dans les seaux privés (jamais d'adresse publique ; retirés si la base refuse), puis fonctions `rh.*` exécutables par `service_role` seulement, qui revérifient le jeton et l'état.
+- **Socle commun avec les Réservations** (`src/lib/public/` : habillage, Turnstile, langue, client anonyme ; `worker/commun/turnstile.js`) : RH peut partir en PROD sans les Réservations (décision de Maxime).
+- **`/emplois`** (français et anglais, `?lang=en`) : saisons ouvertes, postes actifs du genre de la saison groupés par compagnie (lien vers camptremblant.com/emploi et vers la description du poste s'il y en a une), **3 postes au plus, vraiment imposé** (cases grisées, Worker, base), CV obligatoire (PDF, Word ou photo, 20 Mo). Personne retrouvée par courriel identique (ses coordonnées ne sont pas réécrites : un nom ou un téléphone différent est noté dans la candidature), sinon créée. Candidature `source = 'formulaire'`, CV au dossier, ligne au journal « Formulaire web ». Mention de confidentialité (qui voit, pourquoi, à qui écrire) ; pas de durée de conservation annoncée (pas d'effacement automatique).
+- **`/retour/<jeton>`** : une invitation par personne et saison visée (`rh.invitations`). Onglet Employés › « Intention de retour… » : les employés de la saison affichée cochés (sauf « ne pas réembaucher »), d'autres anciens à cocher ; pas de lien générique (décision de Maxime). « Copier le lien » dans la fenêtre et la fiche. « Oui » = candidature `retour` à traiter ; « Non » = `ne_revient_pas`. Réponse modifiable tant que la direction n'a pas traité la candidature. Introduction modifiable (Réglages), avec `{{prenom}}`, `{{saison}}`, `{{lien_emplois}}`.
+- **`/dossier/<jeton>`** : un lien par embauche (créer, copier, refaire depuis la carte de l'embauche ; « Marquer comme envoyé »).
+  - Version été ou hors été selon la saison (t-shirt, hoodie, présentation et commentaires l'été) ; disponibilités = dates de la saison.
+  - Bénévole : pas de section paie, entente de bénévolat sous le code d'éthique.
+  - Pré-rempli pour un ancien. Le NAS et le compte déjà connus ne sont **jamais** renvoyés : « NAS au dossier (finit par 123) — le changer ? ». NAS, compte et spécimen exigés seulement s'il n'y en a pas (nouveau compte = nouveau spécimen).
+  - Consentement parental demandé à une personne mineure au début de l'embauche (le document signé ; la signature en ligne viendra en phase 3, avec le contrat).
+  - Code d'éthique : la version affichée est gardée avec la date (`rh.textes`, modifiable dans Réglages, une version par modification).
+  - L'envoi passe l'embauche à « Dossier reçu » ; on peut renvoyer pour corriger tant qu'elle n'est pas complète. « Valider l'embauche » (champs de paie, NAS et compte exigés pour un emploi) la rend complète et ferme le lien.
+- Pas de courriel en phase 2 : pastilles « à traiter » et « dossiers reçus » sur les onglets, bandeau des dossiers reçus dans Employés.
 
 ## 5. Courriels
 
@@ -142,7 +145,7 @@ Mêmes fondations que les Réservations : pages chargées avant la connexion, cl
 | Phase | Contenu | Visé |
 |---|---|---|
 | 1 | Schéma, accès, chiffrement ; saisons et postes ; Candidatures (liste, fiche, journal) ; Employés et fiche d'une personne ; import Airtable à l'essai | — |
-| 2 | Pages publiques : candidature, intention de retour, dossier d'embauche ; dépôt de fichiers ; alertes | avant décembre |
+| 2 | Pages publiques : candidature, intention de retour, dossier d'embauche ; dépôt de fichiers ; alertes | bâtie en DEV le 2026-10-12 |
 | 3 | Courriels (modèles, envoi Gmail, journal) ; contrat produit et signé en ligne | avant le pic de janvier (122 candidatures en janvier 2026) |
 | 4 | Planification, diètes par semaine, conformité, exports, lien avec le référentiel | avant les formations de mai |
 | Bascule | Import final, formulaires Airtable fermés et redirigés, automatisations coupées | après la phase 3 |
@@ -164,10 +167,24 @@ Réponses de Maxime du 2026-10-12 :
 6. **Bénévoles** : oui, « la portion embauche ». Une embauche de genre `benevolat` : même dossier, sans paie ni échelon, entente de bénévolat au lieu d'un contrat (fait le 2026-10-12, migration `rh_benevoles`). La table Volontariat d'Airtable est vide : rien à importer.
 7. **« CDJ »** = camp de jour, par opposition à **CDV** = camp de vacances. À reprendre dans les codes de la planification (phase 4).
 
+Réponses de Maxime du 2026-10-12 (phase 2) :
+
+8. **Adresse des pages publiques** : emplois.camptremblant.com (sous-domaine propre).
+9. **Socle commun** des pages publiques sorti des Réservations (`src/lib/public/`) : RH peut être publié sans elles.
+10. **Anglais** : le formulaire de candidature en français et en anglais ; l'intention de retour et le dossier d'embauche en français.
+11. **Intention de retour** : aux employés de la saison, cochés à la main (plus des « A déjà travaillé » au besoin) ; pas de lien générique.
+12. **Entente de bénévolat** : brouillon rédigé par Claude, marqué « à valider » dans Réglages.
+13. **Codes d'éthique** : ceux d'Airtable, mots inchangés, mise en forme corrigée ; modifiables dans Réglages.
+
 ## 13. Choix de Claude (à confirmer si le sujet revient)
 
 - Les postes ouverts par saison sont tenus dans l'app ; les descriptions restent sur camptremblant.com/emploi (lien).
 - Une candidature peut viser plusieurs saisons ; chaque acceptation crée une embauche distincte.
 - Une personne est retrouvée **automatiquement** seulement si son courriel est identique ; sinon une nouvelle fiche est créée, avec un bouton « Fusionner » si on repère un doublon.
 - Un ancien qui revient n'a pas d'entrevue obligatoire ; l'échelon de l'an passé est proposé.
-- Formulaires publics en français seulement au départ (anglais possible ensuite, comme les Réservations).
+- Phase 2 : tout passe par le Worker (l'anonyme n'a aucun droit sur le schéma `rh`), y compris la lecture des pages à jeton.
+- « Valider l'embauche » exige aussi le NAS et le compte bancaire au dossier (un emploi complet doit pouvoir être payé) ; « Complète » ne se choisit plus dans le menu du statut.
+- Courriel en double au dossier d'embauche (déjà pris par une autre fiche) : gardé tel quel et noté au journal (à fusionner au besoin).
+- Une réponse « Oui » à l'intention de retour peut viser plusieurs saisons ouvertes ; pas de maximum de postes (comme Airtable).
+- Adresse à écrire pour les renseignements personnels : inscriptions@camptremblant.com en attendant (`COURRIEL_EMPLOIS`, à confirmer).
+- Photos de plus de 1,5 Mo réduites dans le navigateur avant l'envoi du dossier (1600 px).
