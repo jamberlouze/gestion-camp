@@ -32,9 +32,10 @@ const Reunions = lazy(() => import('@/modules/reunions'))
 const Crm = lazy(() => import('@/modules/crm'))
 const Reservations = lazy(() => import('@/modules/reservations'))
 const Rh = lazy(() => import('@/modules/rh'))
-// Pages publiques des Réservations (clients sans compte) : formulaire de
-// demande, page client, signature, fiches participants.
-const PagesPubliques = lazy(() => import('@/modules/reservations/public'))
+// Pages publiques (visiteurs sans compte) : Réservations (formulaire de
+// demande, page client, signature, fiches participants) et RH (candidature,
+// intention de retour, dossier d'embauche). Aiguillage : src/lib/public.
+const PagesPubliques = lazy(() => import('@/lib/public/PagesPubliques'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -47,7 +48,7 @@ export default function App() {
       </div>
     )
   }
-  // Pages publiques : ni connexion ni menu (le client n'a pas de compte).
+  // Pages publiques : ni connexion ni menu (le visiteur n'a pas de compte).
   if (estPagePublique())
     return (
       <Suspense fallback={<Chargement />}>

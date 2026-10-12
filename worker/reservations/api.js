@@ -25,6 +25,7 @@
 
 import { aujourdhui, erreurs, nettoyer, REPONSES_VIDES, versReservation } from '../../src/modules/reservations/demande.ts'
 import { lireReglages } from '../../src/modules/reservations/parametres.ts'
+import { verifierTurnstile } from '../commun/turnstile.js'
 import { pdf, session } from '../qbo/api.js'
 import { qboConfigure } from '../qbo/oauth.js'
 import { base } from '../subventions/base.js'
@@ -37,16 +38,6 @@ const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
 
 const introuvable = () => new Response('Document introuvable.', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } })
-
-export async function verifierTurnstile(env, jeton, ip) {
-  if (!env.TURNSTILE_SECRET || typeof jeton !== 'string' || !jeton) return false
-  const corps = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: jeton })
-  if (ip) corps.set('remoteip', ip)
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: corps })
-  if (!res.ok) return false
-  const r = await res.json()
-  return r.success === true
-}
 
 /** Seules les réponses connues, en texte. */
 function lireReponses(brutes) {

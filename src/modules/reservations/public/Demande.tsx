@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ChampPiege, fusionnerErreurs } from '@/lib/public/habillage'
+import { Turnstile } from '@/lib/public/Turnstile'
 import { ui } from '@/lib/ui'
 import { exerciceDe } from '../calcul'
 import {
@@ -10,7 +12,6 @@ import {
   REPONSES_VIDES,
   TEXTES,
   visibles,
-  type Langue,
   type Reponses,
   type TypeGroupe,
 } from '../demande'
@@ -58,7 +59,8 @@ export default function Demande() {
   }, [])
 
   const v = visibles(rep)
-  const err = { ...(tente ? erreurs(rep, langue, auj) : {}), ...champsServeur }
+  // Une erreur du serveur effacée (champ corrigé) ne masque pas celle de la page.
+  const err = fusionnerErreurs<keyof Reponses>(tente ? erreurs(rep, langue, auj) : {}, champsServeur)
   const changer = <K extends keyof Reponses>(cle: K, valeur: Reponses[K]) => {
     setRep((r) => ({ ...r, [cle]: valeur }))
     setChampsServeur((c) => ({ ...c, [cle]: undefined }))
@@ -325,17 +327,7 @@ export default function Demande() {
           <Question libelle={t.commentaires} {...q('commentaires')}>
             <textarea rows={3} className={ui.champ} value={rep.commentaires} onChange={(e) => changer('commentaires', e.target.value)} />
           </Question>
-          {/* Champ piège : invisible pour une personne, rempli par les robots. */}
-          <input
-            type="text"
-            name="site_web"
-            tabIndex={-1}
-            autoComplete="off"
-            aria-hidden="true"
-            className="absolute -left-[9999px] h-0 w-0 opacity-0"
-            value={piege}
-            onChange={(e) => setPiege(e.target.value)}
-          />
+          <ChampPiege valeur={piege} changer={setPiege} />
           <Turnstile langue={langue} cle={reinit} changer={setJeton} />
           {message && <p className={ui.erreur}>{message}</p>}
           <button className={`${ui.bouton} w-full sm:w-auto`} disabled={envoi}>
@@ -379,57 +371,4 @@ function Personne({
       </Question>
     </div>
   )
-}
-
-// ------------------------------------------------------------------
-// Cloudflare Turnstile (anti-robot, gratuit)
-// ------------------------------------------------------------------
-interface ApiTurnstile {
-  render: (el: HTMLElement, options: Record<string, unknown>) => string
-  remove: (id: string) => void
-}
-
-let chargement: Promise<void> | null = null
-function chargerTurnstile(): Promise<void> {
-  chargement ??= new Promise((resolve, reject) => {
-    const s = document.createElement('script')
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    s.async = true
-    s.onload = () => resolve()
-    s.onerror = () => {
-      chargement = null
-      reject(new Error('Turnstile'))
-    }
-    document.head.appendChild(s)
-  })
-  return chargement
-}
-
-function Turnstile({ langue, cle, changer }: { langue: Langue; cle: number; changer: (jeton: string) => void }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const site = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined
-  useEffect(() => {
-    if (!site) return
-    let id: string | undefined
-    let fini = false
-    changer('')
-    chargerTurnstile()
-      .then(() => {
-        const api = (window as unknown as { turnstile?: ApiTurnstile }).turnstile
-        if (fini || !ref.current || !api) return
-        id = api.render(ref.current, {
-          sitekey: site,
-          language: langue,
-          callback: (jeton: string) => changer(jeton),
-          'expired-callback': () => changer(''),
-          'error-callback': () => changer(''),
-        })
-      })
-      .catch(() => changer(''))
-    return () => {
-      fini = true
-      if (id) (window as unknown as { turnstile?: ApiTurnstile }).turnstile?.remove(id)
-    }
-  }, [site, langue, cle, changer])
-  return <div ref={ref} className="min-h-16" />
 }

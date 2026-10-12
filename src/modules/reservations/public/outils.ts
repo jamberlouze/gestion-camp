@@ -1,32 +1,8 @@
-import { useEffect, useState } from 'react'
 import type { Langue } from '../demande'
 
-// Outils des pages publiques : langue, montants, dates.
-
-const langueDeLAdresse = (): Langue | null => {
-  const l = new URLSearchParams(window.location.search).get('lang')
-  return l === 'en' || l === 'fr' ? l : null
-}
-
-/**
- * Langue de la page : celle choisie (?lang=en dans l'adresse, ou le
- * bouton FR/EN), sinon la langue par défaut (celle du groupe, connue après
- * le chargement). Le choix est remis dans l'adresse pour le partage.
- */
-export function useLangue(defaut: Langue): [Langue, (l: Langue) => void] {
-  const [choisie, setChoisie] = useState<Langue | null>(langueDeLAdresse)
-  const langue = choisie ?? defaut
-  useEffect(() => {
-    document.documentElement.lang = langue
-  }, [langue])
-  const changer = (l: Langue) => {
-    setChoisie(l)
-    const url = new URL(window.location.href)
-    url.searchParams.set('lang', l)
-    window.history.replaceState(null, '', url)
-  }
-  return [langue, changer]
-}
+// Outils des pages publiques : langue, montants, dates. Le choix de la
+// langue (?lang=en, bouton FR/EN) vient du socle commun.
+export { useLangue } from '@/lib/public/langue'
 
 /** Langue d'un groupe (« Anglais », « English »…) → langue des pages. */
 export const langueDuGroupe = (langue: string | null | undefined): Langue => (/^(anglais|english)$/i.test(langue?.trim() ?? '') ? 'en' : 'fr')
