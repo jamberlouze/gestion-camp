@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
 import { aEnvoyer, affichageStatut, nomReunion, nouveauPoint, ordreEnFin, reunionsAVenir, useDonnees } from './contexte'
 import { useAjouterPoint, useModifierPoint, useSupprimerPoint } from './donnees'
+import { NoteAffichee } from './Note'
 import { initiales, jourDe, jourLisible, teinte } from './outils'
 import type { Point, StatutPoint } from './types'
+
+// L'éditeur (Tiptap) n'est chargé qu'à l'ouverture d'une note.
+const Editeur = lazy(() => import('./Editeur'))
 
 /** Pastille de la personne qui a ajouté le point (initiales, nom au survol). */
 export function Auteur({ nom }: { nom: string | null }) {
@@ -17,6 +21,30 @@ export function Auteur({ nom }: { nom: string | null }) {
     >
       {initiales(nom)}
     </span>
+  )
+}
+
+/** ★ Décision (ou point important), reprise dans le PV : un clic l'ajoute ou la retire. */
+export function Etoile({ point, lecture }: { point: Point; lecture?: boolean }) {
+  const { ecriture } = useDonnees()
+  const modifier = useModifierPoint()
+  if (!ecriture || lecture)
+    return point.important ? (
+      <span className="shrink-0 px-1 text-lg leading-none text-amber-500" title="Décision (PV)">
+        ★
+      </span>
+    ) : null
+  return (
+    <button
+      type="button"
+      aria-pressed={point.important}
+      aria-label={point.important ? `Retirer « ${point.texte} » du PV` : `Décision : mettre « ${point.texte} » au PV`}
+      title={point.important ? 'Décision (PV) : cliquer pour retirer' : 'Décision : la mettre au PV'}
+      className={`shrink-0 rounded px-1 text-lg leading-none ${point.important ? 'text-amber-500 hover:text-amber-600' : 'text-pierre-300 hover:text-amber-500'}`}
+      onClick={() => modifier.mutate({ id: point.id, champs: { important: !point.important } })}
+    >
+      {point.important ? '★' : '☆'}
+    </button>
   )
 }
 
@@ -123,6 +151,7 @@ export function CartePoint({
         >
           {point.texte}
         </button>
+        <Etoile point={point} lecture={!actif} />
         {actif && (
           <div className="flex shrink-0 items-center gap-0.5">
             {avantActions}
@@ -157,7 +186,7 @@ export function CartePoint({
       </div>
       {(point.details || mentions || (!ouvert && !afficherJour && point.traite_le)) && (
         <div className="pl-[2.375rem]">
-          {point.details && <p className="whitespace-pre-line text-sm text-pierre-600">{point.details}</p>}
+          <NoteAffichee valeur={point.details} className="text-sm text-pierre-600" replier />
           {mentions && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {reports > 0 && ouvert && (
@@ -186,12 +215,12 @@ export function CartePoint({
 function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
   const modifier = useModifierPoint()
   const [texte, setTexte] = useState(point.texte)
-  const [details, setDetails] = useState(point.details ?? '')
+  const [details, setDetails] = useState(point.details)
   const auj = aujourdhui()
 
   const enregistrer = () => {
     if (!texte.trim()) return
-    modifier.mutate({ id: point.id, champs: { texte: texte.trim(), details: details.trim() || null } })
+    modifier.mutate({ id: point.id, champs: { texte: texte.trim(), details: details?.trim() || null } })
     fermer()
   }
 
@@ -208,10 +237,14 @@ function FenetrePoint({ point, fermer }: { point: Point; fermer: () => void }) {
           <span className={ui.etiquette}>Point</span>
           <input className={ui.champ} value={texte} onChange={(e) => setTexte(e.target.value)} required autoFocus />
         </label>
-        <label className="block">
+        <div>
           <span className={ui.etiquette}>Note</span>
-          <textarea className={ui.champ} rows={3} value={details} onChange={(e) => setDetails(e.target.value)} />
-        </label>
+          <div className="rounded-lg border border-pierre-300 bg-white px-3 py-2 text-sm focus-within:border-foret-600 focus-within:ring-2 focus-within:ring-foret-600/20">
+            <Suspense fallback={<p className="min-h-20 text-pierre-400">Chargement…</p>}>
+              <Editeur valeur={point.details} changer={setDetails} barre className="max-h-[45dvh] min-h-20 overflow-y-auto" />
+            </Suspense>
+          </div>
+        </div>
         <p className="text-xs text-pierre-500">
           Ajouté par {point.auteur_nom ?? '?'} le {jourLisible(jourDe(point.created_at), auj)}
           {point.traite_le && ` · traité par ${point.traite_par_nom ?? '?'} le ${jourLisible(jourDe(point.traite_le), auj)}`}
