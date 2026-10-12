@@ -21,6 +21,7 @@ const Vigie = lazy(() => import('@/modules/vigie'))
 const Calendrier = lazy(() => import('@/modules/calendrier'))
 const Temps = lazy(() => import('@/modules/temps'))
 const Vehicules = lazy(() => import('@/modules/vehicules'))
+const Inventaire = lazy(() => import('@/modules/inventaire'))
 const Travaux = lazy(() => import('@/modules/travaux'))
 const Achats = lazy(() => import('@/modules/achats'))
 const Rooming = lazy(() => import('@/modules/rooming'))
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="calendrier/*" element={<GardeModule module="calendrier"><Calendrier /></GardeModule>} />
           <Route path="temps/*" element={<GardeModule module="temps"><Temps /></GardeModule>} />
           <Route path="vehicules/*" element={<GardeModule module="vehicules"><Vehicules /></GardeModule>} />
+          <Route path="inventaire/*" element={<GardeModule module="inventaire"><Inventaire /></GardeModule>} />
           <Route path="travaux/*" element={<GardeModule module="travaux"><Travaux /></GardeModule>} />
           <Route path="achats/*" element={<GardeModule module="achats"><Achats /></GardeModule>} />
           <Route path="rooming/*" element={<GardeModule module="rooming"><Rooming /></GardeModule>} />

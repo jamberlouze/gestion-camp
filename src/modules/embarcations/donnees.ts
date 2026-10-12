@@ -130,8 +130,9 @@ export function useEnLigne() {
 
 /** Nombre de modifications pas encore confirmées par la base. */
 export function useModificationsEnAttente() {
+  // L'onglet Équipement envoie par la file de l'inventaire (VFI, rames, pagaies).
   return useMutationState({
-    filters: { mutationKey: [RACINE], status: 'pending' },
+    filters: { status: 'pending', predicate: (m) => ['embarcations', 'inventaire'].includes(String(m.options.mutationKey?.[0])) },
     select: (m) => m.mutationId,
   }).length
 }
@@ -288,6 +289,7 @@ export function enregistrerMutationsEmbarcations(client: QueryClient) {
     onError: annuler,
     onSettled: recharger,
   })
+
 }
 
 // Les identifiants sont créés dans le navigateur : une embarcation ajoutée

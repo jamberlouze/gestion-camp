@@ -1,6 +1,7 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { defaultShouldDehydrateQuery, QueryClient, type Query } from '@tanstack/react-query'
 import { enregistrerMutationsEmbarcations } from '@/modules/embarcations/donnees'
+import { enregistrerMutationsInventaire } from '@/modules/inventaire/donnees'
 import { enregistrerMutationsTravaux } from '@/modules/travaux/donnees'
 import { oublierToutesLesPhotos } from '@/modules/travaux/photosLocales'
 
@@ -24,6 +25,7 @@ export const clientRequetes = new QueryClient({
 // retrouvent ainsi leur fonction d'envoi.
 enregistrerMutationsEmbarcations(clientRequetes)
 enregistrerMutationsTravaux(clientRequetes)
+enregistrerMutationsInventaire(clientRequetes)
 
 /**
  * Cache conservé dans le navigateur : données lues et modifications pas
