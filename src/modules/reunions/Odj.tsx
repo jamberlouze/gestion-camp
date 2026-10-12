@@ -32,6 +32,9 @@ export function Odj() {
           <p className="text-sm text-pierre-500">
             Semaine du {jourLisible(lundi(auj), auj, true)} · {total} point{total > 1 ? 's' : ''} à l'ordre du jour
           </p>
+          <Link to={`/reunions/jour/${auj}`} className={`${ui.bouton} ml-auto`}>
+            📝 {ecriture ? 'Prendre des notes' : 'Voir les notes'}
+          </Link>
         </div>
 
         {joursSans.has(auj) && (

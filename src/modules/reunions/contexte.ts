@@ -52,6 +52,7 @@ export function nouveauPoint(champs: Partial<Point> & { texte: string }, moi: Pr
     ordre: 0,
     pour_le: null,
     recurrent_id: null,
+    important: false,
     decision: null,
     traite_par_nom: statut === 'ouvert' ? null : moi.nom,
     traite_le: statut === 'ouvert' ? null : maintenant,
@@ -66,8 +67,8 @@ export function nouveauPoint(champs: Partial<Point> & { texte: string }, moi: Pr
 
 /** Champs qu'on envoie à la base (sans ceux qu'elle pose elle-même). */
 export function aEnvoyer(p: Point): Partial<Point> & { id: string } {
-  const { id, texte, details, reunion_id, ordre, pour_le, recurrent_id, statut, decision } = p
-  return { id, texte, details, reunion_id, ordre, pour_le, recurrent_id, statut, decision }
+  const { id, texte, details, reunion_id, ordre, pour_le, recurrent_id, statut, important, decision } = p
+  return { id, texte, details, reunion_id, ordre, pour_le, recurrent_id, statut, important, decision }
 }
 
 /** Champs d'affichage optimiste quand un point change de statut. */

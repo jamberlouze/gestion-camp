@@ -32,6 +32,12 @@ export function jourLisible(jour: string, aujourdhui?: string, sansJour?: boolea
   }).format(enDate(jour))
 }
 
+/** « 9 h », « 13 h 30 ». */
+export const heureLisible = (h: string) => {
+  const [hh, mm] = h.split(':')
+  return `${Number(hh)} h${mm && mm !== '00' ? ` ${mm}` : ''}`
+}
+
 /** Jour de Montréal d'un horodatage. */
 export const jourDe = (horodatage: string) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(horodatage))
@@ -65,6 +71,23 @@ export function teinte(nom: string | null): string {
   let h = 0
   for (const c of nom ?? '') h = (h * 31 + c.charCodeAt(0)) >>> 0
   return TEINTES[h % TEINTES.length]
+}
+
+export const parTraitement = (a: Point, b: Point) => (a.traite_le ?? '').localeCompare(b.traite_le ?? '')
+export const parAjout = (a: Point, b: Point) => a.created_at.localeCompare(b.created_at)
+
+/**
+ * Points du quotidien d'un jour (vue Semaine, document du jour) : traités ce
+ * jour-là ; aujourd'hui, aussi ceux à l'ordre du jour ; un jour à venir,
+ * ceux ajoutés pour lui.
+ */
+export function pointsDuJour(points: Point[], jour: string, aujourdhui: string): Point[] {
+  const quotidien = points.filter((p) => !p.reunion_id)
+  const traites = quotidien.filter((p) => p.statut === 'traite' && p.traite_jour === jour).sort(parTraitement)
+  const ouverts = quotidien.filter((p) => p.statut === 'ouvert')
+  if (jour === aujourdhui) return [...traites, ...ouverts.filter((p) => !p.pour_le || p.pour_le <= aujourdhui).sort(parAjout)]
+  if (jour > aujourdhui) return ouverts.filter((p) => p.pour_le === jour).sort(parAjout)
+  return traites
 }
 
 /**

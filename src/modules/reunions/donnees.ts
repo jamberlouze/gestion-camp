@@ -13,6 +13,24 @@ import type { Point, Recurrent, Reunion } from './types'
 const db = () => supabase.schema('reunions')
 const clePoints = ['reunions', 'points']
 
+/** Erreur passagère (base qui recharge son schéma, réseau coupé) : on réessaie avant d'annuler. */
+function passagere(e: unknown) {
+  const { code, message } = (e ?? {}) as { code?: string; message?: string }
+  return ['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003'].includes(code ?? '') || /fetch|network|timeout/i.test(message ?? '')
+}
+
+/**
+ * Toutes les modifications du module dans une seule file (elles partent dans
+ * l'ordre : une note réessayée n'écrase jamais une version plus récente),
+ * réessayées 3 fois (1 s, 2 s, 4 s) si l'erreur est passagère. L'affichage
+ * optimiste, lui, est immédiat.
+ */
+const FILE = {
+  scope: { id: 'reunions' },
+  retry: (n: number, e: unknown) => n < 3 && passagere(e),
+  retryDelay: (n: number) => 1000 * 2 ** n,
+}
+
 /** Tous les points (lus par tranches de 1000), rechargés à chaque changement fait ailleurs. */
 export function usePoints() {
   const client = useQueryClient()
@@ -52,6 +70,7 @@ function useAjouter<T extends Ligne>(table: string, cle: QueryKey) {
   return useMutation({
     mutationKey: ['reunions', table, 'ajouter'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async ({ ligne }: { ligne: Partial<T> & Ligne; affiche: T }) => {
       const { error } = await db().from(table).insert(ligne)
       if (error) throw error
@@ -71,6 +90,7 @@ function useModifier<T extends Ligne>(table: string, cle: QueryKey) {
   return useMutation({
     mutationKey: ['reunions', table, 'modifier'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async ({ id, champs }: { id: string; champs: Partial<T>; affiche?: Partial<T> }) => {
       const { error } = await db().from(table).update(champs as Record<string, unknown>).eq('id', id)
       if (error) throw error
@@ -93,6 +113,7 @@ function useRetirer<T extends Ligne>(table: string, cle: QueryKey) {
   return useMutation({
     mutationKey: ['reunions', table, 'supprimer'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async (id: string) => {
       const { error } = await db().from(table).delete().eq('id', id)
       if (error) throw error
@@ -125,6 +146,7 @@ export function useSupprimerReunion() {
   return useMutation({
     mutationKey: ['reunions', 'reunion', 'supprimer'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async (id: string) => {
       const { error } = await db().rpc('supprimer_reunion', { p_reunion: id })
       if (error) throw error
@@ -142,6 +164,7 @@ export function useAjouterPoints() {
   return useMutation({
     mutationKey: ['reunions', 'points', 'gabarit'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async (lignes: Partial<Point>[]) => {
       if (!lignes.length) return
       const { error } = await db().from('points').insert(lignes)
@@ -163,6 +186,7 @@ export function useBasculerJourSans() {
   return useMutation({
     mutationKey: ['reunions', 'jours_sans'],
     networkMode: 'always',
+    ...FILE,
     mutationFn: async ({ jour, sans }: { jour: string; sans: boolean }) => {
       const { error } = sans ? await db().from('jours_sans').upsert({ jour }) : await db().from('jours_sans').delete().eq('jour', jour)
       if (error) throw error

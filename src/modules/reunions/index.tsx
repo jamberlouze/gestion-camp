@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
@@ -8,9 +8,15 @@ import { ContexteReunions, type Donnees } from './contexte'
 import { useEntreprises, useJoursSans, usePoints, useRecurrents, useReunions } from './donnees'
 import { Odj } from './Odj'
 import { joursDeReunion } from './outils'
+import { Pv } from './Pv'
 import { Reglages } from './Reglages'
 import { Semaine } from './Semaine'
 import { Speciale, Speciales } from './Speciales'
+
+// Les documents (et leur éditeur) ne sont chargés qu'à l'ouverture.
+const DocumentReunion = lazy(() => import('./Document'))
+const DocumentJour = lazy(() => import('./DocumentJour'))
+const chargement = <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
@@ -45,9 +51,9 @@ export default function ModuleReunions() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Réunions</h1>
+      <h1 className="text-2xl font-semibold print:hidden">Réunions</h1>
       {/* Adresses absolues : voir Embarcations. */}
-      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/reunions" end className={onglet}>
           Ordre du jour
         </NavLink>
@@ -56,6 +62,9 @@ export default function ModuleReunions() {
         </NavLink>
         <NavLink to="/reunions/speciales" className={(p) => onglet({ isActive: p.isActive || surSpeciale })}>
           Réunions spéciales
+        </NavLink>
+        <NavLink to="/reunions/pv" className={onglet}>
+          PV
         </NavLink>
         <NavLink to="/reunions/reglages" className={onglet}>
           Réglages
@@ -73,6 +82,23 @@ export default function ModuleReunions() {
             <Route path="semaine" element={<Semaine />} />
             <Route path="speciales" element={<Speciales />} />
             <Route path="speciales/:id" element={<Speciale />} />
+            <Route
+              path="speciales/:id/notes"
+              element={
+                <Suspense fallback={chargement}>
+                  <DocumentReunion />
+                </Suspense>
+              }
+            />
+            <Route
+              path="jour/:jour"
+              element={
+                <Suspense fallback={chargement}>
+                  <DocumentJour />
+                </Suspense>
+              }
+            />
+            <Route path="pv" element={<Pv />} />
             <Route path="reglages" element={<Reglages />} />
             <Route path="*" element={<Navigate to="/reunions" replace />} />
           </Routes>

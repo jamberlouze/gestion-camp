@@ -6,11 +6,8 @@ import { aujourdhui } from '@/shell/pokes'
 import { AjoutPoint, CartePoint } from './commun'
 import { nomReunion, useDonnees } from './contexte'
 import { useBasculerJourSans } from './donnees'
-import { ajouterJours, jourLisible, lundi, normaliser } from './outils'
-import type { Point } from './types'
-
-const parTraitement = (a: Point, b: Point) => (a.traite_le ?? '').localeCompare(b.traite_le ?? '')
-const parAjout = (a: Point, b: Point) => a.created_at.localeCompare(b.created_at)
+import { texteBrut } from './texteRiche'
+import { ajouterJours, jourLisible, lundi, normaliser, parTraitement, pointsDuJour } from './outils'
 
 /**
  * La semaine jour par jour (comme une diapo de l'ancienne présentation) :
@@ -31,7 +28,7 @@ export function Semaine() {
   if (mot) {
     // Tous les points passés (traités), toutes semaines et réunions confondues.
     const resultats = points
-      .filter((p) => p.statut === 'traite' && normaliser(`${p.texte} ${p.details ?? ''} ${p.auteur_nom ?? ''}`).includes(mot))
+      .filter((p) => p.statut === 'traite' && normaliser(`${p.texte} ${texteBrut(p.details)} ${p.auteur_nom ?? ''}`).includes(mot))
       .sort((a, b) => parTraitement(b, a))
     return (
       <div className="max-w-4xl space-y-4">
@@ -52,16 +49,7 @@ export function Semaine() {
     )
   }
 
-  const quotidien = points.filter((p) => !p.reunion_id)
-  // Les points de chaque jour : traités ce jour-là, plus, aujourd'hui, ceux à
-  // l'ordre du jour, et, un jour à venir, ceux ajoutés pour ce jour.
-  const pointsDu = (jour: string) => {
-    const traites = quotidien.filter((p) => p.statut === 'traite' && p.traite_jour === jour).sort(parTraitement)
-    const ouverts = quotidien.filter((p) => p.statut === 'ouvert')
-    if (jour === auj) return [...traites, ...ouverts.filter((p) => !p.pour_le || p.pour_le <= auj).sort(parAjout)]
-    if (jour > auj) return ouverts.filter((p) => p.pour_le === jour).sort(parAjout)
-    return traites
-  }
+  const pointsDu = (jour: string) => pointsDuJour(points, jour, auj)
   const speciales = (jour: string) => reunions.filter((r) => r.jour === jour)
   const jours = Array.from({ length: 7 }, (_, i) => ajouterJours(debut, i))
   // Fin de semaine : seulement s'il y a quelque chose.
@@ -104,6 +92,12 @@ export function Semaine() {
                   {jour === auj && <span className="ml-2 text-xs font-normal text-foret-700">aujourd'hui</span>}
                 </h3>
                 <div className="ml-auto flex items-center gap-1">
+                  {/* Le document du jour : prise de notes aujourd'hui, compte rendu ensuite. */}
+                  {(jour === auj || (passe && liste.length > 0)) && (
+                    <Link to={`/reunions/jour/${jour}`} className="rounded-lg px-2 py-1 text-sm text-foret-800 hover:bg-foret-50">
+                      {passe ? '📄 Compte rendu' : ecriture ? '📝 Prendre des notes' : '📄 Notes'}
+                    </Link>
+                  )}
                   {ecriture && !passe && ajoutSur !== jour && (
                     <button type="button" className="rounded-lg px-2 py-1 text-sm text-foret-800 hover:bg-foret-50" onClick={() => setAjoutSur(jour)}>
                       + Ajouter un point

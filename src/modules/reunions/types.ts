@@ -50,6 +50,8 @@ export interface Point {
   pour_le: string | null
   recurrent_id: string | null
   statut: StatutPoint
+  /** ⭐ Point important : repris dans le PV. */
+  important: boolean
   decision: string | null
   traite_le: string | null
   traite_jour: string | null

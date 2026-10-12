@@ -9,14 +9,9 @@ import { aujourdhui } from '@/shell/pokes'
 import { AjoutPoint, CartePoint } from './commun'
 import { nomReunion, useDonnees } from './contexte'
 import { useAjouterPoints, useAjouterReunion, useModifierPoint, useModifierReunion, useSupprimerReunion } from './donnees'
-import { jourLisible } from './outils'
+import { NoteAffichee } from './Note'
+import { heureLisible, jourLisible } from './outils'
 import { GABARITS, GENRES, type GenreReunion, type Point, type Reunion } from './types'
-
-/** « 9 h », « 13 h 30 ». */
-const heureLisible = (h: string) => {
-  const [hh, mm] = h.split(':')
-  return `${Number(hh)} h${mm && mm !== '00' ? ` ${mm}` : ''}`
-}
 
 /** Liste des réunions spéciales : à venir (et sans date), puis passées. */
 export function Speciales() {
@@ -52,7 +47,7 @@ export function Speciales() {
   return (
     <div className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-pierre-600">MT Lab, post-mortem, planification : chaque réunion a son ordre du jour et son compte rendu.</p>
+        <p className="text-sm text-pierre-600">MT Lab, post-mortem, planification : chaque réunion a son ordre du jour et ses notes.</p>
         {ecriture && (
           <button className={ui.bouton} onClick={() => setNouvelle(true)}>
             + Nouvelle réunion
@@ -101,6 +96,7 @@ export function Speciale() {
   const ouverts = siens.filter((p) => p.statut === 'ouvert')
   const compagnie = entreprises.find((e) => e.id === r.entreprise_id)
   const passee = !!r.jour && r.jour < auj
+  const importants = siens.filter((p) => p.important).length
 
   const deplacer = (p: Point, sens: -1 | 1) => {
     const i = siens.indexOf(p)
@@ -131,7 +127,17 @@ export function Speciale() {
             {compagnie && <PuceCompagnie compagnie={compagnie} />}
           </p>
         </div>
-        {ecriture && <BoutonModifier onClick={() => setFiche(true)} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {importants > 0 && (
+            <Link to={`/reunions/pv?reunion=${r.id}`} className={ui.boutonSecondaire} title="Décisions de cette réunion">
+              <span className="text-amber-500">★</span> PV ({importants})
+            </Link>
+          )}
+          {ecriture && <BoutonModifier onClick={() => setFiche(true)} />}
+          <Link to={`/reunions/speciales/${r.id}/notes`} className={ui.bouton}>
+            📝 {ecriture ? 'Prendre des notes' : 'Voir les notes'}
+          </Link>
+        </div>
       </div>
 
       {(r.objectif || r.participants) && (
@@ -186,33 +192,22 @@ export function Speciale() {
       </section>
 
       <section>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Compte rendu</h3>
-        <CompteRendu key={`${r.id}-${r.compte_rendu ?? ''}`} reunion={r} />
+        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Notes générales</h3>
+        {r.compte_rendu ? (
+          <NoteAffichee valeur={r.compte_rendu} className={`${ui.carte} p-4 text-sm`} />
+        ) : (
+          <Link
+            to={`/reunions/speciales/${r.id}/notes`}
+            className="block rounded-xl border border-dashed border-pierre-300 px-4 py-5 text-center text-sm text-pierre-500 hover:border-pierre-400 hover:text-pierre-700"
+          >
+            {ecriture ? '📝 Prendre des notes : chaque point devient un titre, on écrit dessous.' : 'Aucune note pour l’instant.'}
+          </Link>
+        )}
       </section>
 
       {r.creee_par_nom && <p className="text-xs text-pierre-400">Créée par {r.creee_par_nom}</p>}
       {fiche && <FenetreReunion reunion={r} fermer={() => setFiche(false)} />}
     </div>
-  )
-}
-
-/** Compte rendu, enregistré quand on quitte le champ (repart de la base si quelqu'un d'autre l'a changé). */
-function CompteRendu({ reunion }: { reunion: Reunion }) {
-  const { ecriture } = useDonnees()
-  const modifier = useModifierReunion()
-  const [texte, setTexte] = useState(reunion.compte_rendu ?? '')
-  return (
-    <textarea
-      className={ui.champ + ' min-h-40'}
-      value={texte}
-      readOnly={!ecriture}
-      placeholder="Notes prises pendant la réunion (enregistrées quand on quitte le champ)"
-      onChange={(e) => setTexte(e.target.value)}
-      onBlur={() => {
-        const propre = texte.trim() || null
-        if (propre !== (reunion.compte_rendu ?? null)) modifier.mutate({ id: reunion.id, champs: { compte_rendu: propre } })
-      }}
-    />
   )
 }
 
@@ -355,7 +350,7 @@ function FenetreReunion({ reunion, fermer }: { reunion?: Reunion; fermer: () => 
                 if (
                   await confirmer({
                     titre: `Supprimer ${reunion.titre} ?`,
-                    message: 'Les points non traités retournent au quotidien ; les points traités et le compte rendu sont effacés.',
+                    message: 'Les points non traités retournent au quotidien ; les points traités et les notes sont effacés.',
                     libelleOk: 'Supprimer',
                     danger: true,
                   })
