@@ -1,0 +1,104 @@
+import { useMemo } from 'react'
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router'
+import { BandeauErreurs } from '@/lib/BandeauErreurs'
+import { messageErreur } from '@/lib/donnees'
+import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
+import { Candidatures } from './Candidatures'
+import { ContexteRh, type DonneesRh } from './contexte'
+import { useCandidatures, useCompagnies, useDatesSaisons, useEmbauches, usePersonnes, usePostes, useSaisons } from './donnees'
+import { Employes } from './Employes'
+import { FicheCandidature } from './FicheCandidature'
+import { FichePersonne } from './FichePersonne'
+import { aujourdhui } from './outils'
+import { Personnes } from './Personnes'
+import { Reglages } from './Reglages'
+import type { Candidature, Embauche } from './types'
+
+const onglet = ({ isActive }: { isActive: boolean }) =>
+  `whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
+    isActive ? 'border-foret-700 text-foret-800' : 'border-transparent text-pierre-500 hover:text-pierre-800'
+  }`
+
+function grouper<T>(lignes: T[], cle: (l: T) => string) {
+  const m = new Map<string, T[]>()
+  for (const l of lignes) m.set(cle(l), [...(m.get(cle(l)) ?? []), l])
+  return m
+}
+
+/** RH : candidatures, embauches et dossiers d'employés (plan : docs/plan-rh.md). */
+export default function ModuleRh() {
+  const { peutEcrire, peutLire } = useAuth()
+  const saisons = useSaisons()
+  const dates = useDatesSaisons()
+  const postes = usePostes()
+  const compagnies = useCompagnies()
+  const personnes = usePersonnes()
+  const candidatures = useCandidatures()
+  const embauches = useEmbauches()
+  const chemin = useLocation().pathname
+  const auj = aujourdhui()
+
+  const donnees = useMemo<DonneesRh | null>(() => {
+    if (!saisons.data || !dates.data || !postes.data || !compagnies.data || !personnes.data || !candidatures.data || !embauches.data) return null
+    return {
+      saisons: saisons.data,
+      dates: dates.data,
+      postes: postes.data,
+      compagnies: compagnies.data,
+      personnes: personnes.data,
+      candidatures: candidatures.data,
+      embauches: embauches.data,
+      saisonParId: new Map(saisons.data.map((s) => [s.id, s])),
+      posteParId: new Map(postes.data.map((p) => [p.id, p])),
+      compagnieParId: new Map(compagnies.data.map((c) => [c.id, c])),
+      personneParId: new Map(personnes.data.map((p) => [p.id, p])),
+      candidaturesDe: grouper<Candidature>(candidatures.data, (c) => c.personne_id),
+      embauchesDe: grouper<Embauche>(embauches.data, (e) => e.personne_id),
+      ecriture: peutEcrire('rh'),
+      paie: { lecture: peutLire('rh_paie'), ecriture: peutEcrire('rh_paie') },
+      auj,
+    }
+  }, [saisons.data, dates.data, postes.data, compagnies.data, personnes.data, candidatures.data, embauches.data, peutEcrire, peutLire, auj])
+
+  const erreur = saisons.error ?? dates.error ?? postes.error ?? compagnies.error ?? personnes.error ?? candidatures.error ?? embauches.error
+
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold">RH</h1>
+      {/* Adresses absolues : voir Embarcations. */}
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+        <NavLink to="/rh" end className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/c/') })}>
+          Candidatures
+        </NavLink>
+        <NavLink to="/rh/employes" className={onglet}>
+          Employés
+        </NavLink>
+        <NavLink to="/rh/personnes" className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/p/') })}>
+          Personnes
+        </NavLink>
+        <NavLink to="/rh/reglages" className={onglet}>
+          Réglages
+        </NavLink>
+      </nav>
+      <BandeauErreurs racine="rh" />
+      {erreur ? (
+        <p className={ui.erreur}>{messageErreur(erreur)}</p>
+      ) : !donnees ? (
+        <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+      ) : (
+        <ContexteRh.Provider value={donnees}>
+          <Routes>
+            <Route index element={<Candidatures />} />
+            <Route path="c/:id" element={<FicheCandidature />} />
+            <Route path="employes" element={<Employes />} />
+            <Route path="personnes" element={<Personnes />} />
+            <Route path="p/:id" element={<FichePersonne />} />
+            <Route path="reglages" element={<Reglages />} />
+            <Route path="*" element={<Navigate to="/rh" replace />} />
+          </Routes>
+        </ContexteRh.Provider>
+      )}
+    </div>
+  )
+}

@@ -132,6 +132,23 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/vigie',
   },
   {
+    id: 'rh',
+    nom: 'RH',
+    description: 'Candidatures, embauches et dossiers des employés',
+    icone: '👥',
+    chemin: '/rh',
+  },
+  {
+    // NAS, numéro de compte et spécimen de chèque : accès propre (direction
+    // et admins, décision de Maxime du 2026-10-11). Chaque affichage est noté.
+    id: 'rh_paie',
+    nom: 'RH › Paie',
+    description: 'NAS, compte bancaire et spécimen de chèque',
+    icone: '🔒',
+    chemin: '/rh',
+    parent: 'rh',
+  },
+  {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
     // base : temps.role_autorise, temps.mon_employe et les politiques du
     // schéma temps). Un employé coché « Remplit sa feuille » dans le

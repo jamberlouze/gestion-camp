@@ -333,3 +333,73 @@ insert into crm.echanges (organisation_id, genre, jour, texte, auteur_nom) value
   ('c0000000-0000-0000-0000-000000000001', 'rencontre', '2026-02-10', 'Appel Zoom avec Vincent : programme aligné sur le PFEQ, envoi du PDF compétences transversales.', 'Julie Tremblay'),
   ('c0000000-0000-0000-0000-000000000003', 'appel', '2026-09-22', 'Intéressés pour le printemps 2027 ; rappeler après leur conseil d''établissement.', 'Julie Tremblay'),
   ('c0000000-0000-0000-0000-000000000007', 'courriel', '2026-09-30', 'Envoi de la brochure et du formulaire de demande.', 'Olivier Lavoie');
+
+-- ------------------------------------------------------------
+-- RH (module rh) : personnes fictives, candidatures et embauches.
+-- NAS d'essai valide (clé de Luhn) : 046 454 286.
+-- ------------------------------------------------------------
+insert into rh.personnes (id, prenom, nom_famille, surnom, courriel, telephone, date_naissance, sexe, vaj_le) values
+  ('d0000000-0000-0000-0000-000000000001', 'Rosalie', 'Gauthier', null, 'rosalie@essai.test', '514 555-0201', '2006-04-12', 'f', null),
+  ('d0000000-0000-0000-0000-000000000002', 'Thomas', 'Pelletier', 'Hibou', 'thomas@essai.test', '819 555-0202', '2004-09-03', 'm', '2025-05-20'),
+  ('d0000000-0000-0000-0000-000000000003', 'Maya', 'Nguyen', null, 'maya@essai.test', null, '2008-11-30', 'f', null),
+  ('d0000000-0000-0000-0000-000000000004', 'Samuel', 'Leblanc', 'Castor', 'samuel@essai.test', '450 555-0204', '2003-02-14', 'm', '2024-06-01'),
+  ('d0000000-0000-0000-0000-000000000005', 'Inès', 'Haddad', null, 'ines@essai.test', '514 555-0205', '2005-07-22', 'f', null)
+on conflict (id) do nothing;
+
+insert into rh.candidatures (id, personne_id, source, recue_le, saison_ids, poste_ids, reponses, statut, pre_decision, commentaires, entrevue_le)
+select v.id::uuid, v.personne::uuid, v.source, v.recue::timestamptz,
+       array(select s.id from rh.saisons s where s.nom = any (v.saisons)),
+       array(select p.id from rh.postes p where p.nom = any (v.postes) and p.entreprise_id = rh.entreprise(v.compagnie)),
+       v.reponses::jsonb, v.statut, v.pre, v.commentaires, v.entrevue::date
+  from (values
+    ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'formulaire', '2026-10-02 14:10-04', array['Été 2027'], array['Animateur - Camp d''été', 'Animateur - Programme EXPÉ'], 'GBPA+',
+     '{"niveau_etudes": "Cégep - En cours", "citoyennete": "Citoyen·ne canadien·ne", "francais": "Langue maternelle", "anglais": "Intermédiaire", "motivation": "J''ai été campeuse pendant 5 ans et je rêve d''être monitrice.", "connu_par": "Référence d''un ami", "refere_par": "Hibou"}',
+     'recue', null, null, null),
+    ('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000003', 'formulaire', '2026-09-28 09:00-04', array['Hiver 2027', 'Printemps 2027'], array['Animateur - Classe nature'], 'GBPA+',
+     '{"niveau_etudes": "Secondaire 5 - En cours", "citoyennete": "Citoyen·ne canadien·ne", "francais": "Excellent", "anglais": "Excellent", "motivation": "Disponible les fins de semaine et pendant la relâche."}',
+     'entrevue_proposee', 'oui', 'Très bonne candidate au téléphone.', '2026-10-15'),
+    ('e0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000002', 'retour', '2026-09-20 18:30-04', array['Été 2027'], array['Coordonnateur'], 'GBPA+',
+     '{"intention": "Oui, veut revenir"}',
+     'acceptee', 'oui', null, null),
+    ('e0000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000005', 'formulaire', '2026-09-15 11:45-04', array['Été 2027'], array['Sauveteur sur structure gonflable'], 'AQB',
+     '{"niveau_etudes": "Université - En cours", "citoyennete": "Étranger·ère avec un permis de travail valide au Canada", "francais": "Intermédiaire", "anglais": "Langue maternelle"}',
+     'en_attente', 'peut_etre', 'Attendre la confirmation de son permis.', '2026-09-25')
+  ) as v(id, personne, source, recue, saisons, postes, compagnie, reponses, statut, pre, commentaires, entrevue)
+on conflict (id) do nothing;
+
+-- Thomas : ancien (Été 2026 complète), réembauché pour l'Été 2027.
+insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, remuneration, taux, vacances, type_employe, action_paie, date_embauche, code_ethique_le, dossier_recu_le)
+select 'f0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000002', s.id, rh.entreprise('GBPA+'),
+       (select id from rh.postes where nom = 'Animateur - Camp d''été' and entreprise_id = rh.entreprise('GBPA+')), 2, null,
+       'complete', 'semaine', 650, 'chaque_paie', 'E', 'A', '2026-06-20', '2026-03-12 10:00-04', '2026-03-12 10:00-04'
+  from rh.saisons s where s.nom = 'Été 2026'
+on conflict (id) do nothing;
+insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, action_paie)
+select 'f0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000002', s.id, rh.entreprise('GBPA+'),
+       (select id from rh.postes where nom = 'Coordonnateur' and entreprise_id = rh.entreprise('GBPA+')), 3,
+       'e0000000-0000-0000-0000-000000000003', 'a_envoyer', 'M'
+  from rh.saisons s where s.nom = 'Été 2027'
+on conflict (id) do nothing;
+update rh.candidatures set saison_id = (select id from rh.saisons where nom = 'Été 2027'), entreprise_id = rh.entreprise('GBPA+'),
+       poste_id = (select id from rh.postes where nom = 'Coordonnateur' and entreprise_id = rh.entreprise('GBPA+')), echelon = 3
+ where id = 'e0000000-0000-0000-0000-000000000003';
+
+-- Samuel : ancien, Été 2026, « ne pas réembaucher ».
+insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, statut)
+select 'f0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000004', s.id, rh.entreprise('GBPA+'),
+       (select id from rh.postes where nom = 'Sauveteur plage' and entreprise_id = rh.entreprise('GBPA+')), 1, 'complete'
+  from rh.saisons s where s.nom = 'Été 2026'
+on conflict (id) do nothing;
+update rh.personnes set ne_pas_reembaucher = true, raison_ne_pas = 'Retards répétés, deux avis écrits (été 2026).' where id = 'd0000000-0000-0000-0000-000000000004';
+
+insert into rh.dossiers (personne_id, adresse, ville, province, code_postal, pays, assurance_maladie, etudiant_temps_plein, etudes, allergies, diete, taille_tshirt, taille_hoodie, urgence1_nom, urgence1_lien, urgence1_telephone)
+values ('d0000000-0000-0000-0000-000000000002', '123, rue des Érables', 'Mont-Tremblant', 'QC', 'J8E 1A1', 'Canada', 'PELT 0409 0312', true, 'Techniques de loisir, Cégep de Saint-Jérôme', 'Arachides', 'vegetarienne', 'L', 'L', 'Nathalie Pelletier', 'Mère', '819 555-0299')
+on conflict (personne_id) do nothing;
+
+insert into rh.paie (personne_id, nas, nas_fin, transit, institution, compte, compte_fin, updated_by_nom)
+values ('d0000000-0000-0000-0000-000000000002', rh.chiffrer('046454286'), '286', '81530', '815', rh.chiffrer('1234567'), '567', 'Essai')
+on conflict (personne_id) do nothing;
+
+insert into rh.notes (personne_id, genre, jour, texte, auteur_nom) values
+  ('d0000000-0000-0000-0000-000000000004', 'avis_ecrit', '2026-07-10', 'Retard de 45 minutes à la plage, groupe sans surveillance.', 'Julie Tremblay')
+on conflict do nothing;

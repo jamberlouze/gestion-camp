@@ -1,0 +1,334 @@
+import { useState } from 'react'
+import { ChampTexte } from '@/lib/ChampTexte'
+import { confirmer } from '@/lib/Confirmation'
+import { messageErreur } from '@/lib/donnees'
+import { IconeCorbeille } from '@/lib/icones'
+import { ui } from '@/lib/ui'
+import { MenuCompagnie, Section } from './commun'
+import { useRh } from './contexte'
+import {
+  useAjouterDate,
+  useAjouterPoste,
+  useAjouterSaison,
+  useModifierDate,
+  useModifierPoste,
+  useModifierSaison,
+  useRetirerDate,
+  useRetirerPoste,
+  useRetirerSaison,
+} from './donnees'
+import { plageDates } from './outils'
+import { GENRES_DATE, GENRES_SAISON, type DateSaison, type GenreDate, type GenreSaison, type Poste, type Saison } from './types'
+import { champPetit } from './styles'
+
+/** Saisons (et leurs dates) et postes du module. */
+export function Reglages() {
+  const { saisons } = useRh()
+  const [choisie, setChoisie] = useState<string | null>(saisons.find((s) => s.ouverte && s.genre === 'ete')?.id ?? saisons.at(-1)?.id ?? null)
+  return (
+    <div className="grid gap-5 xl:grid-cols-2">
+      <div className="space-y-5">
+        <Saisons choisie={choisie} choisir={setChoisie} />
+        {choisie && <DatesSaison saisonId={choisie} />}
+      </div>
+      <Postes />
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Saisons
+// ------------------------------------------------------------
+function Saisons({ choisie, choisir }: { choisie: string | null; choisir: (id: string) => void }) {
+  const { saisons, candidatures, embauches, ecriture, auj } = useRh()
+  const ajouter = useAjouterSaison()
+  const modifier = useModifierSaison()
+  const retirer = useRetirerSaison()
+  const [genre, setGenre] = useState<GenreSaison>('ete')
+  const [annee, setAnnee] = useState(Number(auj.slice(0, 4)) + 1)
+  const utilisee = (s: Saison) => embauches.some((e) => e.saison_id === s.id) || candidatures.some((c) => c.saison_ids.includes(s.id) || c.saison_id === s.id)
+  const existe = saisons.some((s) => s.genre === genre && s.annee === annee)
+
+  return (
+    <Section titre="Saisons">
+      <p className="mb-3 text-sm text-pierre-600">« Ouverte » : offerte dans le formulaire de candidature. Cliquer une saison pour voir ses dates.</p>
+      <ul className="divide-y divide-pierre-100 text-sm">
+        {[...saisons].reverse().map((s) => (
+          <li key={s.id} className={`flex flex-wrap items-center gap-2 px-2 py-1.5 ${s.id === choisie ? 'rounded-md bg-foret-50' : ''}`}>
+            <button className="min-w-28 text-left font-medium hover:underline" onClick={() => choisir(s.id)}>
+              {s.nom}
+            </button>
+            <label className="flex items-center gap-1 text-xs text-pierre-600">
+              <input type="checkbox" disabled={!ecriture} checked={s.ouverte} onChange={(e) => modifier.mutate({ id: s.id, champs: { ouverte: e.target.checked } })} />
+              Ouverte
+            </label>
+            <span className="flex items-center gap-1 text-xs text-pierre-500">
+              du
+              <ChampDateCourt valeur={s.debut} disabled={!ecriture} enregistrer={(debut) => modifier.mutate({ id: s.id, champs: { debut } })} />
+              au
+              <ChampDateCourt valeur={s.fin} disabled={!ecriture} enregistrer={(fin) => modifier.mutate({ id: s.id, champs: { fin } })} />
+            </span>
+            <span className="flex-1" />
+            {ecriture && !utilisee(s) && (
+              <button
+                className="text-pierre-400 hover:text-red-700"
+                title="Supprimer"
+                onClick={async () => (await confirmer({ titre: `Supprimer ${s.nom} ?`, message: 'Ses dates seront effacées.', libelleOk: 'Supprimer', danger: true })) && retirer.mutate(s.id)}
+              >
+                <IconeCorbeille className="size-4" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {ecriture && (
+        <form
+          className="mt-3 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (existe) return
+            const id = crypto.randomUUID()
+            ajouter.mutate({ id, genre, annee, ouverte: false }, { onSuccess: () => choisir(id) })
+          }}
+        >
+          <select className={champPetit} value={genre} onChange={(e) => setGenre(e.target.value as GenreSaison)}>
+            {GENRES_SAISON.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nom}
+              </option>
+            ))}
+          </select>
+          <input className={`${champPetit} w-24`} type="number" min={2020} max={2100} value={annee} onChange={(e) => setAnnee(Number(e.target.value))} />
+          <button className={ui.boutonSecondaire} disabled={existe || ajouter.isPending}>
+            + Saison
+          </button>
+          {existe && <span className="text-xs text-pierre-500">Elle existe déjà.</span>}
+        </form>
+      )}
+      {(modifier.error || ajouter.error || retirer.error) && <p className={`${ui.erreur} mt-2`}>{messageErreur(modifier.error ?? ajouter.error ?? retirer.error)}</p>}
+    </Section>
+  )
+}
+
+function ChampDateCourt({ valeur, enregistrer, disabled }: { valeur: string | null; enregistrer: (v: string | null) => void; disabled?: boolean }) {
+  return (
+    <input
+      type="date"
+      disabled={disabled}
+      className="rounded border border-pierre-200 px-1 py-0.5 text-xs"
+      defaultValue={valeur ?? ''}
+      key={valeur ?? ''}
+      onBlur={(e) => e.target.value !== (valeur ?? '') && enregistrer(e.target.value || null)}
+    />
+  )
+}
+
+// ------------------------------------------------------------
+// Dates d'une saison (formations, séjours, semaines)
+// ------------------------------------------------------------
+function DatesSaison({ saisonId }: { saisonId: string }) {
+  const { saisonParId, saisons, dates, ecriture } = useRh()
+  const ajouter = useAjouterDate()
+  const modifier = useModifierDate()
+  const retirer = useRetirerDate()
+  const s = saisonParId.get(saisonId)!
+  const siennes = dates.filter((d) => d.saison_id === saisonId).sort((a, b) => (a.debut ?? '').localeCompare(b.debut ?? '') || a.ordre - b.ordre)
+  // Saison du même genre l'an passé, pour recopier ses dates (+ 1 an, même jour de semaine).
+  const modele = saisons.find((x) => x.genre === s.genre && x.annee === s.annee - 1)
+  const datesModele = modele ? dates.filter((d) => d.saison_id === modele.id) : []
+
+  const copier = async () => {
+    const decaler = (iso: string | null) => (iso ? decalerUnAn(iso) : null)
+    for (const d of datesModele) {
+      await ajouter.mutateAsync({
+        id: crypto.randomUUID(),
+        saison_id: saisonId,
+        genre: d.genre,
+        nom: d.nom,
+        debut: decaler(d.debut),
+        fin: decaler(d.fin),
+        obligatoire: d.obligatoire,
+        note: d.note,
+        ordre: d.ordre,
+      })
+    }
+  }
+
+  return (
+    <Section titre={`Dates — ${s.nom}`}>
+      <p className="mb-3 text-sm text-pierre-600">Formations, séjours et semaines : ce sont les disponibilités du dossier d'embauche.</p>
+      {siennes.length === 0 ? (
+        <div className="space-y-2 text-sm text-pierre-500">
+          <p>Aucune date.</p>
+          {ecriture && datesModele.length > 0 && (
+            <button className={ui.boutonSecondaire} disabled={ajouter.isPending} onClick={copier}>
+              Reprendre les {datesModele.length} dates de {modele!.nom} (+ 1 an, même jour de la semaine)
+            </button>
+          )}
+        </div>
+      ) : (
+        <ul className="divide-y divide-pierre-100 text-sm">
+          {siennes.map((d) => (
+            <LigneDate key={d.id} d={d} modifier={(champs) => modifier.mutate({ id: d.id, champs })} retirer={() => retirer.mutate(d.id)} />
+          ))}
+        </ul>
+      )}
+      {ecriture && (
+        <button
+          className={`${ui.boutonSecondaire} mt-3`}
+          onClick={() => ajouter.mutate({ id: crypto.randomUUID(), saison_id: saisonId, genre: 'semaine', nom: 'Nouvelle date', ordre: siennes.length + 1, obligatoire: false })}
+        >
+          + Date
+        </button>
+      )}
+      {(ajouter.error || modifier.error) && <p className={`${ui.erreur} mt-2`}>{messageErreur(ajouter.error ?? modifier.error)}</p>}
+    </Section>
+  )
+}
+
+/** Même date l'an prochain, au même jour de la semaine (52 semaines plus tard). */
+function decalerUnAn(iso: string) {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 364)
+  return d.toISOString().slice(0, 10)
+}
+
+function LigneDate({ d, modifier, retirer }: { d: DateSaison; modifier: (c: Partial<DateSaison>) => void; retirer: () => void }) {
+  const { ecriture } = useRh()
+  if (!ecriture)
+    return (
+      <li className="py-1.5">
+        {d.nom} · {plageDates(d.debut, d.fin)}
+        {d.obligatoire && <span className="ml-1 text-xs text-amber-700">obligatoire</span>}
+      </li>
+    )
+  return (
+    <li className="flex flex-wrap items-center gap-2 py-1.5">
+      <select className="rounded border border-pierre-200 px-1 py-0.5 text-xs" value={d.genre} onChange={(e) => modifier({ genre: e.target.value as GenreDate })}>
+        {GENRES_DATE.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.nom}
+          </option>
+        ))}
+      </select>
+      <ChampTexte className="w-36 rounded border border-pierre-200 px-1.5 py-0.5" valeur={d.nom} obligatoire enregistrer={(nom) => modifier({ nom })} />
+      <ChampDateCourt valeur={d.debut} enregistrer={(debut) => modifier({ debut })} />
+      <ChampDateCourt valeur={d.fin} enregistrer={(fin) => modifier({ fin })} />
+      <label className="flex items-center gap-1 text-xs text-pierre-600">
+        <input type="checkbox" checked={d.obligatoire} onChange={(e) => modifier({ obligatoire: e.target.checked })} />
+        Obligatoire
+      </label>
+      <ChampTexte className="w-28 rounded border border-pierre-200 px-1.5 py-0.5 text-xs" placeholder="Précision" valeur={d.note ?? ''} enregistrer={(note) => modifier({ note: note || null })} />
+      <span className="flex-1" />
+      <button className="text-pierre-400 hover:text-red-700" title="Supprimer" onClick={retirer}>
+        <IconeCorbeille className="size-4" />
+      </button>
+    </li>
+  )
+}
+
+// ------------------------------------------------------------
+// Postes
+// ------------------------------------------------------------
+function Postes() {
+  const { postes, compagnies, compagnieParId, candidatures, embauches, ecriture } = useRh()
+  const ajouter = useAjouterPoste()
+  const [nom, setNom] = useState('')
+  const [compagnie, setCompagnie] = useState<string | null>(compagnies[0]?.id ?? null)
+  const [voirInactifs, setVoirInactifs] = useState(false)
+  const ordre = new Map(compagnies.map((c) => [c.id, c.ordre]))
+  const liste = postes
+    .filter((p) => voirInactifs || p.actif)
+    .sort((a, b) => (ordre.get(a.entreprise_id) ?? 99) - (ordre.get(b.entreprise_id) ?? 99) || a.ordre - b.ordre)
+  const groupes = new Map<string, Poste[]>()
+  for (const p of liste) groupes.set(p.entreprise_id, [...(groupes.get(p.entreprise_id) ?? []), p])
+  const utilise = (p: Poste) => embauches.some((e) => e.poste_id === p.id) || candidatures.some((c) => c.poste_ids.includes(p.id) || c.poste_id === p.id)
+
+  return (
+    <Section
+      titre="Postes"
+      action={
+        <label className="flex items-center gap-1 text-xs text-pierre-600">
+          <input type="checkbox" checked={voirInactifs} onChange={(e) => setVoirInactifs(e.target.checked)} />
+          Voir les postes retirés
+        </label>
+      }
+    >
+      <p className="mb-3 text-sm text-pierre-600">Les saisons cochées sont celles où le poste est offert dans le formulaire de candidature.</p>
+      <div className="space-y-4">
+        {[...groupes].map(([cid, ps]) => (
+          <div key={cid}>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-pierre-500">{compagnieParId.get(cid)?.nom}</p>
+            <ul className="divide-y divide-pierre-100 text-sm">
+              {ps.map((p) => (
+                <LignePoste key={p.id} p={p} utilise={utilise(p)} />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      {ecriture && (
+        <form
+          className="mt-4 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!nom.trim() || !compagnie) return
+            ajouter.mutate({ id: crypto.randomUUID(), nom: nom.trim(), entreprise_id: compagnie, genres: ['ete'], actif: true, ordre: postes.length + 1 }, { onSuccess: () => setNom('') })
+          }}
+        >
+          <input className={`${champPetit} w-56`} placeholder="Nouveau poste" value={nom} onChange={(e) => setNom(e.target.value)} />
+          <MenuCompagnie className={champPetit} valeur={compagnie} changer={setCompagnie} />
+          <button className={ui.boutonSecondaire} disabled={!nom.trim() || !compagnie}>
+            + Poste
+          </button>
+        </form>
+      )}
+      {ajouter.error && <p className={`${ui.erreur} mt-2`}>{messageErreur(ajouter.error)}</p>}
+    </Section>
+  )
+}
+
+function LignePoste({ p, utilise }: { p: Poste; utilise: boolean }) {
+  const { ecriture } = useRh()
+  const modifier = useModifierPoste()
+  const retirer = useRetirerPoste()
+  const changer = (champs: Partial<Poste>) => modifier.mutate({ id: p.id, champs })
+  return (
+    <li className={`flex flex-wrap items-center gap-2 py-1.5 ${p.actif ? '' : 'opacity-60'}`}>
+      <ChampTexte className="min-w-0 flex-1 rounded border border-transparent px-1.5 py-0.5 hover:border-pierre-200 focus:border-foret-600 focus:outline-none" valeur={p.nom} obligatoire disabled={!ecriture} enregistrer={(nom) => changer({ nom })} />
+      <span className="flex gap-1">
+        {GENRES_SAISON.map((g) => {
+          const coche = p.genres.includes(g.id)
+          return (
+            <button
+              key={g.id}
+              disabled={!ecriture}
+              title={g.nom}
+              onClick={() => changer({ genres: coche ? p.genres.filter((x) => x !== g.id) : [...p.genres, g.id] })}
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${coche ? 'bg-foret-100 text-foret-800' : 'bg-pierre-50 text-pierre-400'}`}
+            >
+              {g.nom.slice(0, 3)}
+            </button>
+          )
+        })}
+      </span>
+      {ecriture &&
+        (p.actif ? (
+          <button
+            className="text-xs text-pierre-500 hover:text-red-700"
+            onClick={async () => {
+              if (!utilise) {
+                if (await confirmer({ titre: `Supprimer « ${p.nom} » ?`, libelleOk: 'Supprimer', danger: true })) retirer.mutate(p.id)
+              } else changer({ actif: false })
+            }}
+          >
+            {utilise ? 'Retirer' : 'Supprimer'}
+          </button>
+        ) : (
+          <button className="text-xs text-foret-700 hover:underline" onClick={() => changer({ actif: true })}>
+            Remettre
+          </button>
+        ))}
+    </li>
+  )
+}

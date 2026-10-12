@@ -31,6 +31,7 @@ const Ameliorations = lazy(() => import('@/modules/ameliorations'))
 const Reunions = lazy(() => import('@/modules/reunions'))
 const Crm = lazy(() => import('@/modules/crm'))
 const Reservations = lazy(() => import('@/modules/reservations'))
+const Rh = lazy(() => import('@/modules/rh'))
 // Pages publiques des Réservations (clients sans compte) : formulaire de
 // demande, page client, signature, fiches participants.
 const PagesPubliques = lazy(() => import('@/modules/reservations/public'))
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="reunions/*" element={<GardeModule module="reunions"><Reunions /></GardeModule>} />
           <Route path="crm/*" element={<GardeModule module="crm"><Crm /></GardeModule>} />
           <Route path="reservations/*" element={<GardeModule module="reservations"><Reservations /></GardeModule>} />
+          <Route path="rh/*" element={<GardeModule module="rh"><Rh /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="employes" replace />} />
             <Route path="groupes" element={<Groupes />} />
