@@ -20,11 +20,11 @@ create schema if not exists rh;
 -- La liste garde aussi les modules de Réservations (pas encore en PROD).
 alter table core.acces_roles drop constraint acces_roles_module_check;
 alter table core.acces_roles add constraint acces_roles_module_check
-  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire','rh','rh_paie'));
+  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire','rh','rh_paie','batiments'));
 
 alter table core.acces_modules drop constraint acces_modules_module_check;
 alter table core.acces_modules add constraint acces_modules_module_check
-  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire','rh','rh_paie'));
+  check (module in ('embarcations','commande','horaire','mastertimeline','subventions','vigie','calendrier','vehicules','travaux','rooming','achats','caisse','cuisine_couts','reunions','crm','reservations','reservations_sante','inventaire','rh','rh_paie','batiments'));
 
 insert into core.acces_roles (role, module, niveau) values
   ('direction','rh','ecriture'),

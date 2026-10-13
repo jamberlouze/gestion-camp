@@ -71,6 +71,13 @@ export const MODULES: DefinitionModule[] = [
     chemin: '/rooming',
   },
   {
+    id: 'batiments',
+    nom: 'Bâtiments',
+    description: 'Disjoncteurs et valves d’eau de chaque bâtiment',
+    icone: '🏘️',
+    chemin: '/batiments',
+  },
+  {
     id: 'commande',
     nom: 'Cuisine',
     description: 'Menus, commandes et horaire du personnel',

@@ -1,5 +1,6 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { defaultShouldDehydrateQuery, QueryClient, type Query } from '@tanstack/react-query'
+import { enregistrerMutationsBatiments } from '@/modules/batiments/donnees'
 import { enregistrerMutationsEmbarcations } from '@/modules/embarcations/donnees'
 import { enregistrerMutationsInventaire } from '@/modules/inventaire/donnees'
 import { enregistrerMutationsTravaux } from '@/modules/travaux/donnees'
@@ -26,6 +27,7 @@ export const clientRequetes = new QueryClient({
 enregistrerMutationsEmbarcations(clientRequetes)
 enregistrerMutationsTravaux(clientRequetes)
 enregistrerMutationsInventaire(clientRequetes)
+enregistrerMutationsBatiments(clientRequetes)
 
 /**
  * Cache conservé dans le navigateur : données lues et modifications pas
@@ -43,7 +45,7 @@ export const persistance = {
   // Feuilles de temps, petite caisse et coût par assiette : jamais gardés sur
   // l'appareil (renseignements personnels, argent, noms des clients, salaires).
   dehydrateOptions: {
-    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && !['temps', 'caisse', 'cuisine-couts', 'mastertimeline-adresses', 'vehicules-adresses', 'reservations-sante', 'rh', 'rh-adresses'].includes(String(q.queryKey[0])),
+    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && !['temps', 'caisse', 'cuisine-couts', 'mastertimeline-adresses', 'vehicules-adresses', 'batiments-adresses', 'reservations-sante', 'rh', 'rh-adresses'].includes(String(q.queryKey[0])),
   },
 }
 
