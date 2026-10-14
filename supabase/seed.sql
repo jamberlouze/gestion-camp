@@ -544,3 +544,46 @@ select v.id::uuid, v.grant_id::uuid, e.id, v.libre, v.taux, v.heures, v.montant,
   ) as v(id, grant_id, surnom, libre, taux, heures, montant, debut, fin, subv, empl, note)
   left join core.employes e on e.surnom = v.surnom
 on conflict (id) do nothing;
+
+-- ------------------------------------------------------------
+-- Calendrier : horaire de la direction. « + » choisit d'office la
+-- personne liée au compte (en DEV, Maxime = compte Admin Test) ;
+-- Frédérique est à la direction et aussi à l'horaire de cuisine (Cuisine
+-- › Horaire lit ses journées du Calendrier). Rien n'est ajouté si les
+-- personnes existent déjà (données de la maquette 3D).
+-- ------------------------------------------------------------
+insert into commande.personnel (id, nom, fonction_id)
+select 'ca1e0000-0000-4000-8000-000000000021', 'Frédérique', f.id
+  from commande.fonctions f
+ where f.nom = 'Gestionnaire'
+   and not exists (select 1 from commande.personnel where nom = 'Frédérique');
+
+insert into calendrier.personnel (id, nom, secteur_principal, ordre)
+select v.id::uuid, v.nom, 'direction', v.ordre
+  from (values ('ca1e0000-0000-4000-8000-000000000001', 'Maxime', 1),
+               ('ca1e0000-0000-4000-8000-000000000002', 'Frédérique', 2)) as v(id, nom, ordre)
+ where not exists (select 1 from calendrier.personnel p where p.nom = v.nom and p.deleted_at is null);
+
+update calendrier.personnel set courriel = 'admin@camp.test'
+ where nom = 'Maxime' and deleted_at is null and courriel is null
+   and not exists (select 1 from calendrier.personnel where courriel = 'admin@camp.test');
+update calendrier.personnel
+   set secteur_principal = 'direction',
+       personne_cuisine_id = (select id from commande.personnel where nom = 'Frédérique' order by created_at, id limit 1)
+ where nom = 'Frédérique' and deleted_at is null and personne_cuisine_id is null;
+
+insert into calendrier.presences_simples (personnel_id, date, secteur, statut, description)
+select p.id, v.jour::date, 'direction', v.statut, v.note
+  from (values
+    ('Frédérique', '2026-10-12', 'terrain', null),
+    ('Frédérique', '2026-10-13', 'terrain', null),
+    ('Frédérique', '2026-10-14', 'terrain', 'Inventaire de la chambre froide'),
+    ('Frédérique', '2026-10-15', 'teletravail', null),
+    ('Frédérique', '2026-10-16', 'conge', null),
+    ('Frédérique', '2026-10-19', 'terrain', null),
+    ('Frédérique', '2026-10-20', 'terrain', null),
+    ('Maxime', '2026-10-13', 'terrain', null),
+    ('Maxime', '2026-10-15', 'teletravail', null)
+  ) as v(nom, jour, statut, note)
+  join calendrier.personnel p on p.nom = v.nom and p.deleted_at is null
+on conflict (personnel_id, date, secteur) do nothing;

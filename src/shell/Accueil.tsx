@@ -6,10 +6,10 @@ import { NouvelAccueil } from './accueil/NouvelAccueil'
 import { voitNouvelAccueil } from './accueil/outils'
 
 export function Accueil() {
-  const { profil, peutLire } = useAuth()
+  const { profil, peutOuvrir } = useAuth()
   // Nouvel accueil à l'essai : seulement les comptes d'essai (voir accueil/outils.ts).
   if (voitNouvelAccueil(profil?.courriel)) return <NouvelAccueil />
-  const modules = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
+  const modules = MODULES.filter((m) => estEntree(m) && peutOuvrir(m.id))
 
   return (
     <div>

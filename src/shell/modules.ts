@@ -13,6 +13,12 @@ export interface DefinitionModule {
   /** Réservé aux admins (avec `accesFixe` pour le texte de la grille). */
   adminsSeulement?: true
   /**
+   * Caché à tous sauf les admins (menu, accueil, adresse) ; le texte dit
+   * jusqu'à quand. Les droits ne changent pas : d'autres écrans (accueil,
+   * Cuisine…) lisent encore ses données selon `peutLire` (`peutOuvrir` dans auth.tsx).
+   */
+  cacheSaufAdmins?: string
+  /**
    * Partie d'un autre module (un espace de ce module, pas une entrée du menu
    * ni de l'accueil) qui a son propre accès dans la grille.
    */
@@ -34,6 +40,8 @@ export const MODULES: DefinitionModule[] = [
     description: 'Séjours, événements et qui travaille chaque jour',
     icone: '🗓️',
     chemin: '/calendrier',
+    // Décision de Maxime (2026-10-14) : les séjours viendront des Réservations.
+    cacheSaufAdmins: "jusqu'à ce que les Réservations soient en place",
   },
   {
     id: 'embarcations',

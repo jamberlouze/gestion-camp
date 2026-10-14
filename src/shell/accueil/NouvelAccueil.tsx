@@ -17,8 +17,8 @@ const dateDuJour = () =>
 
 /** Accueil « Ma journée » (maquette A + alertes de la maquette C, 2026-10-08). */
 export function NouvelAccueil() {
-  const { profil, peutLire } = useAuth()
-  const modules = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
+  const { profil, peutLire, peutOuvrir } = useAuth()
+  const modules = MODULES.filter((m) => estEntree(m) && peutOuvrir(m.id))
   const prenom = profil?.nom?.split(' ')[0]
 
   return (

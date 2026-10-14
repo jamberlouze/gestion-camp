@@ -5,6 +5,8 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
+import { useHoraireCuisineLie, type JourneeLiee } from '../calendrier/donnees'
+import { STATUTS_PRESENCE } from '../calendrier/types'
 import { SurLeCamp } from './SurLeCamp'
 import { trierNoms, useEcrireQuart, useLireQuarts, useQuarts, useReglagesHoraire, useRemplacerQuarts, useTable } from './donnees'
 import {
@@ -79,7 +81,7 @@ interface Poignee {
 const cleCase = (personneId: string, jour: string) => `${personneId}|${jour}`
 
 export function HoraireCuisine() {
-  const { peutEcrire, peutLire } = useAuth()
+  const { peutEcrire, peutLire, peutOuvrir } = useAuth()
   const ecriture = peutEcrire('commande')
   const [params, setParams] = useSearchParams()
   const aujourdhui = versIso(new Date())
@@ -96,6 +98,9 @@ export function HoraireCuisine() {
   const parametres = useTable('parametres')
   const reglages = useReglagesHoraire()
   const quarts = useQuarts(lundi, dimanche)
+  // Personnes de la direction aussi à l'horaire de cuisine (Frédérique) :
+  // leurs journées sont lues dans le Calendrier, jamais saisies ici.
+  const lies = useHoraireCuisineLie(lundi, dimanche)
   const ecrire = useEcrireQuart(lundi, dimanche)
   const remplacer = useRemplacerQuarts(lundi, dimanche)
   const lireQuarts = useLireQuarts()
@@ -116,7 +121,7 @@ export function HoraireCuisine() {
 
   const aller = (iso: string) => setParams({ semaine: lundiDe(iso) }, { replace: true })
 
-  const erreur = personnel.error ?? fonctions.error ?? parametres.error ?? quarts.error
+  const erreur = personnel.error ?? fonctions.error ?? parametres.error ?? quarts.error ?? lies.error
   /** Navigation entre les semaines, titre (aussi imprimé) et actions à droite. */
   const entete = (actions?: ReactNode) => (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -143,7 +148,7 @@ export function HoraireCuisine() {
   // L'en-tête reste le premier enfant dans tous les cas (chargement, erreur,
   // grille) : React le garde, et le champ de date ou les flèches ne perdent
   // pas le focus en arrivant sur une semaine pas encore chargée.
-  if (!personnel.data || !fonctions.data || !parametres.data || !quarts.data) {
+  if (!personnel.data || !fonctions.data || !parametres.data || !quarts.data || (!lies.data && !lies.error)) {
     return (
       <div>
         {entete()}
@@ -174,22 +179,48 @@ export function HoraireCuisine() {
   const texteDe = (personneId: string, jour: string) => textes.get(cleCase(personneId, jour)) ?? ''
   const fonctionDe = new Map(fonctions.data.map((f) => [f.id, f]))
   const avecQuarts = new Set(liste.map((q) => q.personne_id))
+  // Journées lues dans le Calendrier : personne de cuisine → jour → journée.
+  const liees = new Map<string, Map<string, JourneeLiee>>()
+  for (const l of lies.data ?? []) {
+    const parJour = liees.get(l.personne_cuisine_id) ?? new Map<string, JourneeLiee>()
+    if (l.date) parJour.set(l.date, l)
+    liees.set(l.personne_cuisine_id, parJour)
+  }
+  const journee = (personneId: string, jour: string) => liees.get(personneId)?.get(jour)
+  /** Ancien quart d'une personne liée : seulement les jours sans journée du Calendrier. */
+  const texteAffiche = (personneId: string, jour: string) => (journee(personneId, jour) ? '' : texteDe(personneId, jour))
   const lignes = personnel.data.filter((p) => p.actif || avecQuarts.has(p.id)).sort(comparer(fonctionDe))
-  const totaux = new Map(lignes.map((p) => [p.id, totalHeures(jours.map((j) => texteDe(p.id, j)), statuts)]))
+  const totaux = new Map(
+    lignes.map((p) => {
+      const t = totalHeures(jours.map((j) => texteAffiche(p.id, j)), statuts)
+      // Journée du Calendrier travaillée : un jour sans heures précises.
+      const lus = jours.filter((j) => {
+        const x = journee(p.id, j)
+        return x && x.statut !== 'conge'
+      }).length
+      return [p.id, { heures: t.heures, nonChiffres: t.nonChiffres + lus }]
+    }),
+  )
   const equipe = [...totaux.values()].reduce((s, t) => ({ heures: s.heures + t.heures, nonChiffres: s.nonChiffres + t.nonChiffres }), {
     heures: 0,
     nonChiffres: 0,
   })
   const auTravail = jours.map((j) => {
-    const presents = lignes.flatMap((p) => (travaille(texteDe(p.id, j), statuts) ? [texteDe(p.id, j)] : []))
+    const presents = lignes.flatMap((p) => (travaille(texteAffiche(p.id, j), statuts) ? [texteAffiche(p.id, j)] : []))
+    // Sur place (Terrain ou sans précision) ; ni télétravail ni congé.
+    const lus = lignes.filter((p) => {
+      const x = journee(p.id, j)
+      return x && (x.statut === 'terrain' || x.statut === null)
+    }).length
     const debuts = presents.flatMap((t) => debutQuart(t) ?? [])
-    return { nombre: presents.length, des: debuts.length ? Math.min(...debuts) : null }
+    return { nombre: presents.length + lus, des: debuts.length ? Math.min(...debuts) : null }
   })
 
-  /** Même jour, ligne voisine ; au bout de la liste (vers le bas), on quitte la case. */
+  /** Même jour, ligne voisine (en sautant les lignes lues dans le Calendrier) ; au bout de la liste (vers le bas), on quitte la case. */
   function deplacer(personneId: string, jour: string, sens: 1 | -1) {
-    const i = lignes.findIndex((p) => p.id === personneId)
-    const voisine = lignes[i + sens]
+    let i = lignes.findIndex((p) => p.id === personneId) + sens
+    while (lignes[i] && !cases.current.has(cleCase(lignes[i].id, jour))) i += sens
+    const voisine = lignes[i]
     const cible = voisine && cases.current.get(cleCase(voisine.id, jour))?.champ
     if (cible) {
       cible.focus()
@@ -228,8 +259,9 @@ export function HoraireCuisine() {
         return setMessage({ lundi, texte: messageErreur(e), erreur: true })
       }
       if (semaine.current !== lundi) return
-      // Les personnes devenues inactives ne reviennent pas dans la nouvelle semaine.
-      const actifs = new Set(personnel.data?.filter((p) => p.actif).map((p) => p.id))
+      // Les personnes devenues inactives ne reviennent pas dans la nouvelle
+      // semaine, ni celles dont les journées viennent du Calendrier.
+      const actifs = new Set(personnel.data?.filter((p) => p.actif && !liees.has(p.id)).map((p) => p.id))
       const copie = precedente.filter((q) => actifs.has(q.personne_id)).map((q) => ({ ...q, jour: ajouterJours(q.jour, 7) }))
       if (!copie.length) return setMessage({ lundi, texte: `La semaine du ${dateCourte(lundiPrecedent)} est vide : rien à copier.` })
       if (
@@ -377,9 +409,11 @@ export function HoraireCuisine() {
             {lignes.map((p) => {
               const f = p.fonction_id ? fonctionDe.get(p.fonction_id) : undefined
               const total = totaux.get(p.id)!
+              const liee = liees.has(p.id)
+              const imprimee = avecQuarts.has(p.id) || (liees.get(p.id)?.size ?? 0) > 0
               return (
                 // Sur papier : seulement les personnes qui ont au moins une case remplie cette semaine.
-                <tr key={p.id} className={avecQuarts.has(p.id) ? undefined : 'print:hidden'}>
+                <tr key={p.id} className={imprimee ? undefined : 'print:hidden'}>
                   <td
                     className="truncate border-b border-pierre-100 px-3 py-1.5 font-medium print:whitespace-normal print:break-words print:border-pierre-400 print:px-1.5"
                     style={f ? { background: f.couleur, color: encre(f.couleur) } : undefined}
@@ -392,9 +426,25 @@ export function HoraireCuisine() {
                   >
                     {p.nom}
                     {!p.actif && <span className="ml-1 text-xs font-normal">(inactif)</span>}
+                    {liee && (
+                      <span className="ml-1 text-xs font-normal print:hidden" title="Journées lues dans le Calendrier (horaire de la direction)">
+                        🗓️
+                      </span>
+                    )}
                   </td>
                   {jours.map((j, i) => {
                     const k = cleCase(p.id, j)
+                    if (liee)
+                      return (
+                        <CaseLiee
+                          key={j}
+                          journee={journee(p.id, j)}
+                          ancien={texteDe(p.id, j)}
+                          statuts={statuts}
+                          aujourdhui={j === aujourdhui}
+                          bord={bord}
+                        />
+                      )
                     return (
                       <CaseQuart
                         key={j}
@@ -452,6 +502,19 @@ export function HoraireCuisine() {
           )}
         </table>
       </div>
+      {liees.size > 0 && (
+        <p className="mt-2 text-xs text-pierre-500 print:hidden">
+          🗓️ {lignes.filter((p) => liees.has(p.id)).map((p) => p.nom).join(', ')} : journées lues dans l'horaire de la direction du{' '}
+          {peutOuvrir('calendrier') ? (
+            <Link to={`/calendrier?date=${lundi}`} className="text-foret-700 underline">
+              Calendrier
+            </Link>
+          ) : (
+            'Calendrier'
+          )}{' '}
+          (elles s'y saisissent, pas ici).
+        </p>
+      )}
       {ecriture && (
         <p className="mt-2 text-xs text-pierre-500 print:hidden">
           Tapez comme dans l'ancienne feuille (« 6h30 à 14h30 », « 9ish », « OFF », « - »). Entrée ou ↑ ↓ : ligne suivante ou
@@ -460,6 +523,48 @@ export function HoraireCuisine() {
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * Case d'une personne dont les journées viennent du Calendrier (horaire de
+ * la direction) : lue, jamais saisie ici. Un jour sans journée montre
+ * l'ancien quart de Cuisine s'il y en a un (rien n'est effacé).
+ */
+function CaseLiee({
+  journee,
+  ancien,
+  statuts,
+  aujourdhui,
+  bord,
+}: {
+  journee: JourneeLiee | undefined
+  ancien: string
+  statuts: string[]
+  aujourdhui: boolean
+  bord: string
+}) {
+  const fond = aujourdhui ? 'bg-foret-50/60 print:bg-transparent' : ''
+  let texte = ancien
+  let style = `${styleCase(ancien, statuts, aujourdhui)} text-pierre-500`
+  let titre = ancien ? `${ancien} (quart saisi dans Cuisine avant le lien au Calendrier)` : 'Rien dans le Calendrier ce jour-là'
+  if (journee) {
+    const s = journee.statut ? STATUTS_PRESENCE[journee.statut] : null
+    texte = s ? `${s.emoji} ${s.libelle}` : 'Au travail'
+    style =
+      journee.statut === 'conge'
+        ? 'bg-amber-50 italic text-amber-800'
+        : journee.statut === 'teletravail'
+          ? 'bg-pierre-50 italic text-pierre-600'
+          : fond
+    titre = `${texte}${journee.description ? ` · ${journee.description}` : ''} (Calendrier, horaire de la direction)`
+  }
+  return (
+    <td className={`${bord} ${style} p-0`}>
+      <span className="block truncate px-2 py-2 print:whitespace-normal print:px-1.5 print:py-1" title={titre}>
+        {texte}
+      </span>
+    </td>
   )
 }
 

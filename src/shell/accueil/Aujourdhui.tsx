@@ -13,22 +13,37 @@ import { aujourdhui } from '../pokes'
 import { Carte } from './commun'
 import { heureLisible } from './outils'
 
-/** Une ligne de l'horaire du jour : heure (ou « Journée ») et texte. */
-function Moment({ quand, children, to }: { quand: string; children: React.ReactNode; to: string }) {
+/** Une ligne de l'horaire du jour : heure (ou « Journée ») et texte ; sans `to`, pas de lien. */
+function Moment({ quand, children, to }: { quand: string; children: React.ReactNode; to?: string }) {
+  const contenu = (
+    <>
+      <span className={`w-16 shrink-0 text-sm font-semibold ${quand === 'Journée' ? 'text-foret-600' : 'text-pierre-500'}`}>{quand}</span>
+      <span className="min-w-0 flex-1 text-sm">{children}</span>
+    </>
+  )
   return (
     <li>
-      <Link to={to} className="flex gap-4 px-5 py-2.5 hover:bg-pierre-50">
-        <span className={`w-16 shrink-0 text-sm font-semibold ${quand === 'Journée' ? 'text-foret-600' : 'text-pierre-500'}`}>{quand}</span>
-        <span className="min-w-0 flex-1 text-sm">{children}</span>
-      </Link>
+      {to ? (
+        <Link to={to} className="flex gap-4 px-5 py-2.5 hover:bg-pierre-50">
+          {contenu}
+        </Link>
+      ) : (
+        <div className="flex gap-4 px-5 py-2.5">{contenu}</div>
+      )}
     </li>
   )
 }
 
+/** Lien vers le Calendrier, sauf s'il est caché (`cacheSaufAdmins`) : ses données restent lues. */
+function useLienCalendrier() {
+  return useAuth().peutOuvrir('calendrier') ? '/calendrier' : undefined
+}
+
 export function Aujourdhui() {
   const { peutLire } = useAuth()
+  const lien = useLienCalendrier()
   return (
-    <Carte titre="Aujourd'hui" lien={peutLire('calendrier') ? { to: '/calendrier', texte: 'Calendrier' } : undefined} vide="Rien de prévu aujourd'hui.">
+    <Carte titre="Aujourd'hui" lien={lien ? { to: lien, texte: 'Calendrier' } : undefined} vide="Rien de prévu aujourd'hui.">
       {peutLire('calendrier') && <Sejours />}
       {peutLire('reunions') && <ReunionsDuJour />}
       {peutLire('calendrier') && <Evenements />}
@@ -38,12 +53,13 @@ export function Aujourdhui() {
 
 function Sejours() {
   const { data } = useSejours()
+  const lien = useLienCalendrier()
   const jour = jourCalendrier()
   const duJour = (data ?? []).filter((s) => sejourVisible(s) && sejourDuJour(s, jour))
   return (
     <>
       {duJour.map((s) => (
-        <Moment key={s.id} quand="Journée" to="/calendrier">
+        <Moment key={s.id} quand="Journée" to={lien}>
           <span className="font-medium">{s.nom_groupe}</span>
           {s.nb_participants != null && <span className="text-pierre-500"> · {s.nb_participants} pers.</span>}
           {s.date_arrivee === jour && <span className="text-pierre-500"> · arrive{s.heure_arrivee ? ` à ${heureLisible(s.heure_arrivee)}` : ''}</span>}
@@ -82,12 +98,13 @@ function ReunionsDuJour() {
 
 function Evenements() {
   const { data } = useEvenements()
+  const lien = useLienCalendrier()
   const jour = jourCalendrier()
   const plage = useEvenementsPlage(data, jour, jour)
   return (
     <>
       {(plage.get(jour) ?? []).map((ev) => (
-        <Moment key={ev.id} quand={heureLisible(ev.heure_debut) ?? 'Journée'} to="/calendrier">
+        <Moment key={ev.id} quand={heureLisible(ev.heure_debut) ?? 'Journée'} to={lien}>
           {ev.titre}
           {ev.lieu && <span className="text-pierre-500"> · {ev.lieu}</span>}
         </Moment>
@@ -105,6 +122,7 @@ const SECTEURS: { id: Secteur; nom: string }[] = [
 
 /** Qui travaille aujourd'hui, par secteur (vue commune du Calendrier). */
 export function AuTravail() {
+  const lien = useLienCalendrier()
   const jour = jourCalendrier()
   const { data } = usePresenceJour(jour, jour)
   const parSecteur = useMemo(
@@ -134,9 +152,11 @@ export function AuTravail() {
           <p className="mt-0.5 text-sm text-pierre-800">{s.noms.join(', ')}</p>
         </div>
       ))}
-      <Link to="/calendrier" className="inline-block text-sm font-medium text-foret-700 hover:text-foret-800">
-        Voir le calendrier
-      </Link>
+      {lien && (
+        <Link to={lien} className="inline-block text-sm font-medium text-foret-700 hover:text-foret-800">
+          Voir le calendrier
+        </Link>
+      )}
     </section>
   )
 }

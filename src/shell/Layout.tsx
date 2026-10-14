@@ -19,7 +19,7 @@ interface Entree {
 }
 
 export function Layout() {
-  const { profil, estAdmin, estDirection, peutLire, deconnexion } = useAuth()
+  const { profil, estAdmin, estDirection, peutOuvrir, deconnexion } = useAuth()
   const enAttente = useMutationState({ filters: { status: 'pending' } }).length
   const { pathname } = useLocation()
   const [ouvert, setOuvert] = useState(false)
@@ -89,7 +89,7 @@ export function Layout() {
   const modules: Entree[] = [
     // Nouvel accueil à l'essai : une entrée « Accueil » en tête du menu.
     ...(voitNouvelAccueil(profil?.courriel) ? [{ chemin: '/', nom: 'Accueil', icone: '🏠' }] : []),
-    ...MODULES.filter((m) => estEntree(m) && peutLire(m.id)),
+    ...MODULES.filter((m) => estEntree(m) && peutOuvrir(m.id)),
   ]
   const gestion: Entree[] = [
     ...(estDirection ? [{ chemin: '/referentiel', nom: 'Référentiel', icone: '🗂️' }] : []),
