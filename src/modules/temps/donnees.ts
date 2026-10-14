@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Role } from '@/lib/types'
-import type { AjustementBanque, Banque, ReglageMaladie } from './banques'
+import type { AjustementBanque, Banque, EtatBanqueHeures, ReglageMaladie } from './banques'
 import { finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
 
 // Module en ligne seulement : mutations networkMode « always », erreurs dans
@@ -333,6 +333,18 @@ export interface ReglageMaladieLigne extends ReglageMaladie {
   updated_at: string
 }
 
+/** Un changement de l'interrupteur « Heures en banque » (temps.banque_heures_etats). */
+export interface EtatBanqueHeuresLigne extends EtatBanqueHeures {
+  id: string
+  user_id: string | null
+  employe_id: string | null
+  auteur_nom: string
+  created_at: string
+}
+
+/** Défaut de l'interrupteur : activé pour un compte (direction, admin), désactivé pour un employé. */
+export const heuresActivesParDefaut = (t: Titulaire) => !!t.userId
+
 /** Heures d'une banque : avec la compagnie pour un employé (une feuille par compagnie). */
 export interface HeureBanqueLigne {
   jour: string
@@ -367,23 +379,93 @@ export function useDonneesBanques(t: Titulaire, au: string) {
               .order('id')
               .range(a, b),
           )
-      const [h, ajustements, maladie] = await Promise.all([
+      const [h, ajustements, maladie, etats] = await Promise.all([
         heures,
         db().from('ajustements_banques').select('id, banque, jour, heures, note, auteur_nom, created_at').eq(col, id).order('jour').order('created_at'),
         db().from('jours_maladie').select('id, annee, jours, auteur_nom, updated_at').eq(col, id).order('annee'),
+        db().from('banque_heures_etats').select('*').eq(col, id).order('depuis'),
       ])
       if (ajustements.error) throw ajustements.error
       if (maladie.error) throw maladie.error
+      if (etats.error) throw etats.error
       return {
         heures: h.map((x) => ({ ...x, heures: Number(x.heures), entreprise_id: x.entreprise_id ?? null })),
         ajustements: (ajustements.data as AjustementBanque[]).map((a) => ({ ...a, heures: Number(a.heures) })),
         reglagesMaladie: (maladie.data as ReglageMaladieLigne[]).map((r) => ({ ...r, jours: Number(r.jours) })),
+        etatsHeures: etats.data as EtatBanqueHeuresLigne[],
       }
     },
   })
 }
 
+/** Heures d'une personne pour une semaine (temps.semaines_banques). */
+export interface SemaineBanque {
+  user_id: string | null
+  employe_id: string | null
+  semaine: string
+  regulieres: number
+  maladie: number
+  banque: number
+}
+
+/**
+ * Onglet Banques : tout ce que la personne connectée peut voir, jusqu'au
+ * jour `au` — heures par personne et par semaine, ajustements, jours de
+ * maladie et interrupteurs. La base filtre (admin : tout ; direction : les
+ * employés et elle-même, jamais un autre membre de la direction).
+ */
+export function useBanquesTous(au: string) {
+  return useQuery({
+    queryKey: [S, 'banques', 'tous', au],
+    queryFn: async () => {
+      const [semaines, ajustements, maladie, etats] = await Promise.all([
+        toutLire<SemaineBanque>((a, b) => db().rpc('semaines_banques', { p_au: au }).order('semaine').order('user_id').order('employe_id').range(a, b)),
+        toutLire<AjustementBanque & { user_id: string | null; employe_id: string | null }>((a, b) =>
+          db().from('ajustements_banques').select('id, user_id, employe_id, banque, jour, heures, note, auteur_nom, created_at').order('jour').order('id').range(a, b),
+        ),
+        toutLire<ReglageMaladieLigne & { user_id: string | null; employe_id: string | null }>((a, b) =>
+          db().from('jours_maladie').select('id, user_id, employe_id, annee, jours, auteur_nom, updated_at').order('annee').order('id').range(a, b),
+        ),
+        toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
+      ])
+      return {
+        semaines: semaines.map((x) => ({ ...x, regulieres: Number(x.regulieres), maladie: Number(x.maladie), banque: Number(x.banque) })),
+        ajustements: ajustements.map((x) => ({ ...x, heures: Number(x.heures) })),
+        reglagesMaladie: maladie.map((x) => ({ ...x, jours: Number(x.jours) })),
+        etatsHeures: etats,
+      }
+    },
+  })
+}
+
+/** Interrupteurs « Heures en banque » des employés (grille Employés : ligne « Prises en banque »). */
+export function useEtatsBanqueHeures() {
+  return useQuery({
+    queryKey: [S, 'banques', 'etats'],
+    queryFn: () => toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
+  })
+}
+
 const titulaireRpc = (t: Titulaire) => ({ p_user: t.userId ?? null, p_employe: t.employeId ?? null })
+
+/**
+ * Active ou désactive la mise en banque des heures au-delà de 40 h, à partir
+ * de la période en cours (admins seulement : temps.regler_banque_heures).
+ * Rend le début de la période où le changement prend effet.
+ */
+export function useReglerBanqueHeures() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'banque-heures'],
+    networkMode: 'always',
+    mutationFn: async (p: { titulaire: Titulaire; active: boolean }) => {
+      const { data, error } = await db().rpc('regler_banque_heures', { ...titulaireRpc(p.titulaire), p_active: p.active })
+      if (error) throw error
+      return data as string
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
+  })
+}
 
 /** Ajustement manuel d'une banque (+ ou − des heures), avec une note. Jamais effacé. */
 export function useAjusterBanque() {

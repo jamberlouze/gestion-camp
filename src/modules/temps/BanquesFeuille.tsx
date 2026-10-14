@@ -4,6 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import {
   enJours,
+  etatBanqueHeures,
   HEURES_PAR_JOUR_MALADIE,
   joursMaladiePour,
   mouvementsBanques,
@@ -13,13 +14,16 @@ import {
   type Banque,
   type Mouvement,
 } from './banques'
-import { useAjusterBanque, useDonneesBanques, useReglerJoursMaladie, type ReglageMaladieLigne, type Titulaire } from './donnees'
+import {
+  heuresActivesParDefaut,
+  useAjusterBanque,
+  useDonneesBanques,
+  useReglerJoursMaladie,
+  type ReglageMaladieLigne,
+  type Titulaire,
+} from './donnees'
+import { libelleEtatHeures, NOMS_BANQUES as NOMS, signe } from './outils'
 import { aujourdhui, dateCourte, finPeriode, formatHeures } from './periodes'
-
-const NOMS: Record<Banque, string> = { maladie: 'Maladie', heures: 'Heures accumulées' }
-
-/** « +4 h », « −2,5 h » */
-const signe = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatHeures(Math.abs(n))} h`
 
 /**
  * Banques en bas d'une feuille individuelle (direction, admin, employé qui
@@ -56,12 +60,17 @@ export function BanquesFeuille({
   const dansFeuille = (h: { jour: string; entreprise_id: string | null }) =>
     h.jour >= debut && h.jour <= fin && (entrepriseId == null || h.entreprise_id === entrepriseId)
   const heures = [...donnees.data.heures.filter((h) => !dansFeuille(h)), ...heuresPeriode]
+  const parDefaut = heuresActivesParDefaut(titulaire)
   const mouvements = mouvementsBanques({
     heures,
     ajustements: donnees.data.ajustements,
     reglagesMaladie: donnees.data.reglagesMaladie,
     au: fin,
+    etatsHeures: donnees.data.etatsHeures,
+    heuresActivesParDefaut: parDefaut,
   })
+  // Interrupteur « Heures en banque » en vigueur pour cette période (réglé dans l'onglet Banques).
+  const etat = etatBanqueHeures(donnees.data.etatsHeures, parDefaut, debut)
   const annee = Number(fin.slice(0, 4))
   const joursAnnee = joursMaladiePour(annee, donnees.data.reglagesMaladie)
 
@@ -93,7 +102,11 @@ export function BanquesFeuille({
         />
         <CarteBanque
           banque="heures"
-          sousTitre={`Heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam.), heure pour heure`}
+          sousTitre={
+            etat.active
+              ? `Heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam.), heure pour heure · mise en banque ${libelleEtatHeures(etat)}`
+              : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute, le solde reste utilisable`
+          }
           mouvements={mouvements}
           debut={debut}
           fin={fin}
@@ -166,9 +179,17 @@ function CarteBanque({
       </button>
       {historique && (
         <div className="mt-2 max-h-72 overflow-y-auto print:hidden">
-          {!siens.length ? (
-            <p className="text-xs text-pierre-500">Aucun mouvement.</p>
-          ) : (
+          <TableHistorique mouvements={siens} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Mouvements d'une banque, du plus récent au plus ancien, avec le solde courant. */
+export function TableHistorique({ mouvements }: { mouvements: Mouvement[] }) {
+  if (!mouvements.length) return <p className="text-xs text-pierre-500">Aucun mouvement.</p>
+  return (
             <table className="w-full text-xs">
               <thead className="text-pierre-500">
                 <tr>
@@ -179,7 +200,7 @@ function CarteBanque({
                 </tr>
               </thead>
               <tbody className="divide-y divide-pierre-100">
-                {[...siens].reverse().map((m) => (
+                {[...mouvements].reverse().map((m) => (
                   <tr key={m.cle}>
                     <td className="py-1 pr-2 align-top whitespace-nowrap text-pierre-500">{dateCourte(m.jour)}</td>
                     <td className="py-1 pr-2 align-top">
@@ -194,10 +215,6 @@ function CarteBanque({
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -209,7 +226,19 @@ function lireNombre(texte: string): number | null {
   return n > 0 && Math.abs(n * 4 - Math.round(n * 4)) < 1e-9 ? n : null
 }
 
-function FenetreAjustement({ titulaire, fermer }: { titulaire: Titulaire; fermer: () => void }) {
+/** Ajustement manuel ; `banques` : celles qu'on peut ajuster (employé sans compte : heures seulement). */
+export function FenetreAjustement({
+  titulaire,
+  fermer,
+  banques = ['heures', 'maladie'],
+  nom,
+}: {
+  titulaire: Titulaire
+  fermer: () => void
+  banques?: Banque[]
+  /** Nom de la personne, dans le titre (onglet Banques). */
+  nom?: string
+}) {
   const ajuster = useAjusterBanque()
   const [banque, setBanque] = useState<Banque>('heures')
   const [sens, setSens] = useState<1 | -1>(1)
@@ -234,10 +263,10 @@ function FenetreAjustement({ titulaire, fermer }: { titulaire: Titulaire; fermer
   }
 
   return (
-    <Dialogue titre="Ajuster une banque" fermer={fermer}>
+    <Dialogue titre={nom ? `Ajuster une banque · ${nom}` : 'Ajuster une banque'} fermer={fermer}>
       <form className="space-y-3" onSubmit={envoyer}>
         <div className="flex flex-wrap gap-4 text-sm">
-          {(['heures', 'maladie'] as Banque[]).map((b) => (
+          {banques.map((b) => (
             <label key={b} className="flex items-center gap-2">
               <input type="radio" name="banque" checked={banque === b} onChange={() => setBanque(b)} />
               {NOMS[b]}
@@ -303,14 +332,16 @@ function FenetreAjustement({ titulaire, fermer }: { titulaire: Titulaire; fermer
   )
 }
 
-function FenetreJoursMaladie({
+export function FenetreJoursMaladie({
   titulaire,
   reglages,
   fermer,
+  nom,
 }: {
   titulaire: Titulaire
   reglages: ReglageMaladieLigne[]
   fermer: () => void
+  nom?: string
 }) {
   const regler = useReglerJoursMaladie()
   const anneeCourante = Number(aujourdhui().slice(0, 4))
@@ -335,7 +366,7 @@ function FenetreJoursMaladie({
   }
 
   return (
-    <Dialogue titre="Jours de maladie par année" fermer={fermer}>
+    <Dialogue titre={nom ? `Jours de maladie par année · ${nom}` : 'Jours de maladie par année'} fermer={fermer}>
       <form className="space-y-3" onSubmit={envoyer}>
         <p className="text-sm text-pierre-600">
           Accordés chaque 1er janvier (2 par défaut, le minimum de la loi). 1 jour = {HEURES_PAR_JOUR_MALADIE} h. Un

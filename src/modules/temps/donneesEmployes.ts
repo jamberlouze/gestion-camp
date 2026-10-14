@@ -174,7 +174,9 @@ export function useSaisirEmploye(debut: string) {
   return useMutation({
     mutationKey: [S, 'employes-heures'],
     networkMode: 'always',
-    mutationFn: async (c: { employeId: string; entrepriseId: string; jour: string; heures: number | null }) => {
+    // type : régulières (la grille) ou banque (ligne « Prises en banque » d'un employé sans compte dont la banque est activée).
+    mutationFn: async (c: { employeId: string; entrepriseId: string; jour: string; heures: number | null; type?: 'regulieres' | 'banque' }) => {
+      const type = c.type ?? 'regulieres'
       const { error } =
         c.heures == null
           ? await db()
@@ -183,21 +185,22 @@ export function useSaisirEmploye(debut: string) {
               .eq('employe_id', c.employeId)
               .eq('entreprise_id', c.entrepriseId)
               .eq('jour', c.jour)
-              .eq('type', 'regulieres')
+              .eq('type', type)
           : await db()
               .from('heures_employes')
               .upsert(
-                { employe_id: c.employeId, entreprise_id: c.entrepriseId, jour: c.jour, type: 'regulieres', heures: c.heures },
+                { employe_id: c.employeId, entreprise_id: c.entrepriseId, jour: c.jour, type, heures: c.heures },
                 { onConflict: 'employe_id,entreprise_id,jour,type' },
               )
       if (error) throw error
     },
     onMutate: async (c) => {
+      const type = c.type ?? 'regulieres'
       await client.cancelQueries({ queryKey: cle })
       const avant = client.getQueryData<HeureEmploye[]>(cle)
       client.setQueryData<HeureEmploye[]>(cle, (liste = []) => {
         const existante = liste.find(
-          (h) => h.employe_id === c.employeId && h.entreprise_id === c.entrepriseId && h.jour === c.jour && h.type === 'regulieres',
+          (h) => h.employe_id === c.employeId && h.entreprise_id === c.entrepriseId && h.jour === c.jour && h.type === type,
         )
         const reste = liste.filter((h) => h !== existante)
         if (c.heures == null) return reste
@@ -208,7 +211,7 @@ export function useSaisirEmploye(debut: string) {
             employe_id: c.employeId,
             entreprise_id: c.entrepriseId,
             jour: c.jour,
-            type: 'regulieres',
+            type,
             heures: c.heures,
           },
         ]

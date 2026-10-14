@@ -363,6 +363,25 @@ select '00000000-0000-0000-0000-000000000002', 'heures', '2026-10-03', 6, 'Solde
        '00000000-0000-0000-0000-000000000001', 'Admin Test'
  where not exists (select 1 from temps.ajustements_banques a where a.user_id = '00000000-0000-0000-0000-000000000002');
 
+-- Interrupteur « Heures en banque » (désactivé par défaut pour les employés) :
+-- activé depuis PP21 pour Léa (compte) et pour Manitou (sans compte, 45 h la
+-- semaine 1 → 5 h accumulées, 2 h prises en banque la semaine 2).
+insert into temps.heures_employes (employe_id, entreprise_id, jour, type, heures)
+select e.id, c.id, v.jour::date, v.type, v.heures
+  from (values
+    ('2026-10-05', 'regulieres', 9), ('2026-10-06', 'regulieres', 9), ('2026-10-07', 'regulieres', 9),
+    ('2026-10-08', 'regulieres', 9), ('2026-10-09', 'regulieres', 9),
+    ('2026-10-13', 'regulieres', 6), ('2026-10-13', 'banque', 2)
+  ) as v (jour, type, heures)
+  join core.employes e on e.surnom = 'Manitou'
+  join core.entreprises c on c.nom = 'GBPA+'
+on conflict do nothing;
+insert into temps.banque_heures_etats (employe_id, depuis, active, auteur, auteur_nom)
+select e.id, '2026-10-04', true, '00000000-0000-0000-0000-000000000001', 'Admin Test'
+  from core.employes e
+ where e.surnom in ('Pinson', 'Manitou')
+on conflict do nothing;
+
 -- ------------------------------------------------------------
 -- Petite caisse : l'historique vient de la migration (import du Sheets) ;
 -- la poche de Maxime est liée au compte admin de test pour essayer

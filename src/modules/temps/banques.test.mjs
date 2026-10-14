@@ -1,7 +1,7 @@
 // Banques des feuilles de temps (banques.ts). Lancer : npm run test:temps
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { enJours, joursMaladiePour, mouvementsBanques, resumePeriode } from './banques.ts'
+import { enJours, etatBanqueHeures, joursMaladiePour, mouvementsBanques, resumePeriode } from './banques.ts'
 
 const semaine = (dimanche, heuresParJour, type = 'regulieres') => {
   const [a, m, j] = dimanche.split('-').map(Number)
@@ -91,4 +91,66 @@ test('semaine en cours : datée de « au », pas du samedi à venir', () => {
   const heures = semaine('2026-10-11', [0, 11, 11, 11, 11, 0, 0])
   const m = mouvementsBanques({ heures, ajustements: [], reglagesMaladie: [], au: '2026-10-15' })
   assert.deepEqual(m.filter((x) => x.banque === 'heures').map((x) => [x.jour, x.heures]), [['2026-10-15', 4]])
+})
+
+test('interrupteur « Heures en banque » : défaut oui pour la direction, non pour un employé', () => {
+  const heures = semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]) // 45 h → 5 h de surplus
+  const banque = (m) => m.filter((x) => x.banque === 'heures')
+  const direction = mouvementsBanques({ heures, ajustements: [], reglagesMaladie: [], au: '2026-10-17' })
+  assert.equal(banque(direction).at(-1).solde, 5)
+  const employe = mouvementsBanques({ heures, ajustements: [], reglagesMaladie: [], au: '2026-10-17', heuresActivesParDefaut: false })
+  assert.equal(banque(employe).length, 0)
+  const active = mouvementsBanques({
+    heures, ajustements: [], reglagesMaladie: [], au: '2026-10-17',
+    heuresActivesParDefaut: false, etatsHeures: [{ depuis: '2026-10-04', active: true }],
+  })
+  assert.equal(banque(active).at(-1).solde, 5)
+})
+
+test('désactivée : plus d’accumulation, le solde reste et se prend ; réactivée : le passé désactivé ne compte pas', () => {
+  const heures = [
+    ...semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]), // PP21 : +5
+    ...semaine('2026-10-18', [0, 9, 9, 9, 9, 9, 0]), // PP22 : désactivée → rien
+    { jour: '2026-10-20', type: 'banque', heures: 2 }, // pris quand même : −2
+    ...semaine('2026-11-01', [0, 9, 9, 9, 9, 9, 0]), // PP23 : désactivée → rien
+    ...semaine('2026-11-15', [0, 9, 9, 9, 9, 10, 0]), // PP24 : réactivée → +6
+  ]
+  const etatsHeures = [
+    { depuis: '2026-10-18', active: false },
+    { depuis: '2026-11-15', active: true },
+  ]
+  const m = mouvementsBanques({ heures, ajustements: [], reglagesMaladie: [], au: '2026-11-28', etatsHeures })
+  assert.deepEqual(m.filter((x) => x.banque === 'heures').map((x) => [x.genre, x.heures, x.solde]), [
+    ['accumulees', 5, 5],
+    ['prises', -2, 3],
+    ['accumulees', 6, 9],
+  ])
+  // Ajustement permis pendant que c'est désactivé.
+  const ajustements = [{ id: 'p', banque: 'heures', jour: '2026-11-05', heures: -3, note: 'Heures payées', auteur_nom: 'Admin', created_at: '' }]
+  const m2 = mouvementsBanques({ heures, ajustements, reglagesMaladie: [], au: '2026-11-28', etatsHeures })
+  assert.equal(m2.filter((x) => x.banque === 'heures').at(-1).solde, 6)
+  assert.deepEqual(etatBanqueHeures(etatsHeures, true, '2026-10-10'), { active: true, depuis: null })
+  assert.deepEqual(etatBanqueHeures(etatsHeures, true, '2026-11-01'), { active: false, depuis: '2026-10-18' })
+  assert.deepEqual(etatBanqueHeures(etatsHeures, true, '2026-11-20'), { active: true, depuis: '2026-11-15' })
+})
+
+test('employé sans compte : pas de banque maladie, heures accumulées si activée', () => {
+  const heures = [...semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]), { jour: '2026-10-13', type: 'banque', heures: 1.5 }]
+  const m = mouvementsBanques({
+    heures, ajustements: [], reglagesMaladie: [], au: '2027-02-01',
+    heuresActivesParDefaut: false, etatsHeures: [{ depuis: '2026-10-04', active: true }], avecMaladie: false,
+  })
+  assert.equal(m.filter((x) => x.banque === 'maladie').length, 0)
+  assert.equal(m.filter((x) => x.banque === 'heures').at(-1).solde, 3.5)
+})
+
+test('sommes par semaine (onglet Banques) : même résultat que les heures par jour', () => {
+  const parJour = [...semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]), { jour: '2026-10-12', type: 'maladie', heures: 8 }]
+  const parSemaine = [
+    { jour: '2026-10-04', type: 'regulieres', heures: 45 },
+    { jour: '2026-10-11', type: 'maladie', heures: 8 },
+  ]
+  const a = mouvementsBanques({ heures: parJour, ajustements: [], reglagesMaladie: [], au: '2026-10-17' })
+  const b = mouvementsBanques({ heures: parSemaine, ajustements: [], reglagesMaladie: [], au: '2026-10-17' })
+  assert.deepEqual(b.map((x) => [x.cle, x.heures, x.solde]), a.map((x) => [x.cle, x.heures, x.solde]))
 })

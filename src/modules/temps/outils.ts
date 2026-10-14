@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router'
-import { aujourdhui, debutPeriode, estDebutPeriode, PREMIERE_PERIODE } from './periodes'
+import type { Banque } from './banques'
+import { aujourdhui, codePeriodePaie, debutPeriode, estDebutPeriode, formatHeures, PREMIERE_PERIODE } from './periodes'
 
 export const menu =
   'rounded-lg border border-pierre-300 bg-white px-3 py-1.5 text-sm text-pierre-900 focus:border-foret-600 focus:outline-none focus:ring-2 focus:ring-foret-600/20'
@@ -22,4 +23,18 @@ export function usePeriode(): [string, (debut: string) => void] {
       { replace: true },
     )
   return [debut, choisir]
+}
+
+// ------------------------------------------------------------------
+// Banques (affichage)
+// ------------------------------------------------------------------
+
+export const NOMS_BANQUES: Record<Banque, string> = { maladie: 'Maladie', heures: 'Heures accumulées' }
+
+/** « +4 h », « −2,5 h » */
+export const signe = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatHeures(Math.abs(n))} h`
+
+/** Interrupteur « Heures en banque » : « activée (par défaut) », « désactivée depuis PP22 ». */
+export function libelleEtatHeures(etat: { active: boolean; depuis: string | null }): string {
+  return `${etat.active ? 'activée' : 'désactivée'} ${etat.depuis ? `depuis ${codePeriodePaie(etat.depuis)}` : '(par défaut)'}`
 }

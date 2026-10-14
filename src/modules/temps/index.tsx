@@ -12,6 +12,7 @@ import { nomEmploye, useChangerFeuilleEmploye, useEmployesFeuille, useEntreprise
 import { FeuilleEmployes } from './Employes'
 import { Feuille } from './Feuille'
 import { FeuilleEmploye } from './FeuilleEmploye'
+import { OngletBanques } from './OngletBanques'
 import { formatHeures, libellePaie, libellePeriode } from './periodes'
 import { TableauDeBord } from './TableauDeBord'
 
@@ -29,6 +30,8 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
  * sa feuille » remplit la sienne (EspaceEmploye) et la soumet à la direction.
  * Onglet À approuver : feuilles soumises (employés pour la direction, plus
  * la direction pour les admins), approuvées ou renvoyées depuis la liste.
+ * Onglet Banques : les banques de chacun (admins : tout le monde ; direction :
+ * les employés seulement) et l'interrupteur « Heures en banque ».
  * Périodes numérotées comme Employeur D (PP21…, src/lib/periodesPaie.ts).
  */
 export default function ModuleTemps() {
@@ -59,6 +62,9 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
           À approuver
           {nb > 0 && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-xs font-semibold text-amber-800">{nb}</span>}
         </NavLink>
+        <NavLink to={`/temps/banques${suffixe}`} className={onglet}>
+          Banques
+        </NavLink>
         {estAdmin && (
           <NavLink to={`/temps/tableau${suffixe}`} className={onglet}>
             Tableau de bord
@@ -70,6 +76,7 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
         <Route index element={<MaFeuille />} />
         <Route path="employes" element={<FeuilleEmployes />} />
         <Route path="approuver" element={<AApprouver estAdmin={estAdmin} />} />
+        <Route path="banques" element={<OngletBanques estAdmin={estAdmin} />} />
         <Route path="employe/:employeId/:entrepriseId" element={<FeuilleDUnEmploye />} />
         <Route path="tableau" element={estAdmin ? <TableauDeBord /> : <Navigate to="/temps" replace />} />
         <Route path="personne/:id" element={estAdmin ? <FeuillePersonne /> : <Navigate to="/temps" replace />} />

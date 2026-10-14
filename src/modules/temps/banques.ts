@@ -15,7 +15,15 @@
 //     vacances, maladie et heures prises en banque ne comptent pas dans les
 //     40 h. Employé de plusieurs compagnies : toutes ses heures comptent ;
 //   - solde continu, reporté : jamais remis à zéro tout seul (le maladie
-//     non pris reste aussi) ; ajustements manuels avec une note.
+//     non pris reste aussi) ; ajustements manuels avec une note ;
+//   - interrupteur « Heures en banque » (temps.banque_heures_etats) : activé
+//     par défaut pour la direction et les admins, désactivé pour les
+//     employés ; chaque changement vaut à partir d'une période (`depuis`,
+//     un dimanche de début de période). Une semaine accumule seulement si
+//     l'état en vigueur à son dimanche est « activé » ; désactivé, le solde
+//     reste et peut encore être pris ou ajusté ;
+//   - employé sans compte (onglet Employés seulement) : pas de banque
+//     maladie (`avecMaladie: false`).
 
 export const HEURES_PAR_JOUR_MALADIE = 8
 export const JOURS_MALADIE_DEFAUT = 2
@@ -40,6 +48,12 @@ export interface AjustementBanque {
   note: string
   auteur_nom: string
   created_at: string
+}
+
+/** Interrupteur « Heures en banque » : `active` à partir de la période qui commence le dimanche `depuis`. */
+export interface EtatBanqueHeures {
+  depuis: string
+  active: boolean
 }
 
 /** « À partir de `annee`, `jours` par année. » */
@@ -95,6 +109,15 @@ export function joursMaladiePour(annee: number, reglages: ReglageMaladie[]): num
 const ORDRE: Record<Mouvement['genre'], number> = { octroi: 0, ajustement: 1, accumulees: 2, prises: 3 }
 
 /**
+ * État de la mise en banque au jour `jour` : le dernier changement dont
+ * `depuis` est au plus tard ce jour-là, sinon le défaut (`depuis` null).
+ */
+export function etatBanqueHeures(etats: EtatBanqueHeures[], parDefaut: boolean, jour: string): { active: boolean; depuis: string | null } {
+  const e = etats.filter((x) => x.depuis <= jour).sort((a, b) => b.depuis.localeCompare(a.depuis))[0]
+  return e ? { active: e.active, depuis: e.depuis } : { active: parDefaut, depuis: null }
+}
+
+/**
  * Tous les mouvements des deux banques jusqu'au jour `au` (inclus), du plus
  * ancien au plus récent, avec le solde courant de chaque banque. Les heures
  * d'une semaine comptent en un mouvement daté de son samedi (ou de `au`).
@@ -104,11 +127,20 @@ export function mouvementsBanques(p: {
   ajustements: AjustementBanque[]
   reglagesMaladie: ReglageMaladie[]
   au: string
+  /** Interrupteur « Heures en banque » (vide = le défaut partout). */
+  etatsHeures?: EtatBanqueHeures[]
+  /** Défaut de l'interrupteur : oui pour la direction et les admins (par défaut), non pour un employé. */
+  heuresActivesParDefaut?: boolean
+  /** Faux pour un employé sans compte : pas de banque maladie. */
+  avecMaladie?: boolean
 }): Mouvement[] {
   const liste: Omit<Mouvement, 'solde'>[] = []
+  const etats = p.etatsHeures ?? []
+  const parDefaut = p.heuresActivesParDefaut ?? true
+  const avecMaladie = p.avecMaladie ?? true
 
   // Jours de maladie accordés chaque 1er janvier.
-  const derniereAnnee = Number(p.au.slice(0, 4))
+  const derniereAnnee = avecMaladie ? Number(p.au.slice(0, 4)) : PREMIERE_ANNEE_BANQUES - 1
   for (let a = PREMIERE_ANNEE_BANQUES; a <= derniereAnnee; a++) {
     const jours = joursMaladiePour(a, p.reglagesMaladie)
     if (!jours) continue
@@ -138,7 +170,7 @@ export function mouvementsBanques(p: {
     const samedi = depuisJour(versJour(d) + 6)
     const jour = samedi > p.au ? p.au : samedi
     const semaine = `semaine du ${intervalle(d, samedi)}`
-    const surplus = arrondi(s.regulieres - SEUIL_SEMAINE)
+    const surplus = etatBanqueHeures(etats, parDefaut, d).active ? arrondi(s.regulieres - SEUIL_SEMAINE) : 0
     if (surplus > 0)
       liste.push({
         cle: `accumulees-${d}`,
@@ -159,7 +191,7 @@ export function mouvementsBanques(p: {
         libelle: `Prises en banque, ${semaine}`,
         detail: null,
       })
-    if (s.maladie > 0)
+    if (s.maladie > 0 && avecMaladie)
       liste.push({
         cle: `prises-maladie-${d}`,
         banque: 'maladie',
@@ -172,7 +204,7 @@ export function mouvementsBanques(p: {
   }
 
   for (const a of p.ajustements) {
-    if (a.jour > p.au) continue
+    if (a.jour > p.au || (a.banque === 'maladie' && !avecMaladie)) continue
     liste.push({
       cle: `ajustement-${a.id}`,
       banque: a.banque,
