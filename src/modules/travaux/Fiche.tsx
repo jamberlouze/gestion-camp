@@ -10,7 +10,7 @@ import { preparerFichier } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Annualiser } from './Annualiser'
-import { CaseTache, Puce } from './commun'
+import { BarreActions, CaseTache, Puce } from './commun'
 import {
   useAjouterCommentaire,
   useAdressePhoto,
@@ -22,7 +22,7 @@ import {
   type Donnees,
   type VariablesMaj,
 } from './donnees'
-import { dateCourte, enRetard, useDroits } from './outils'
+import { champ, dateCourte, enRetard, useDroits } from './outils'
 import { PRIORITES, type Photo, type Priorite, type Tache } from './types'
 
 /** Fiche d'une tâche : chaque changement est enregistré tout de suite (hors ligne aussi). */
@@ -138,7 +138,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
       {/* Quoi, où */}
       {base ? (
         <Champ libelle="Quoi ?">
-          <ChampTexte className={ui.champ} valeur={t.titre} obligatoire enregistrer={(titre) => modifier({ titre })} />
+          <ChampTexte className={champ} valeur={t.titre} obligatoire enregistrer={(titre) => modifier({ titre })} />
         </Champ>
       ) : (
         <h3 className="text-base font-semibold">{t.titre}</h3>
@@ -168,7 +168,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
             changer={(v) => modifier({ assigne_a: v })}
           />
           <Champ libelle="Priorité">
-            <select className={ui.champ} value={t.priorite} onChange={(e) => modifier({ priorite: Number(e.target.value) as Priorite })}>
+            <select className={champ} value={t.priorite} onChange={(e) => modifier({ priorite: Number(e.target.value) as Priorite })}>
               {Object.entries(PRIORITES).map(([n, libelle]) => (
                 <option key={n} value={n}>
                   {libelle}
@@ -177,14 +177,15 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
             </select>
           </Champ>
           <Champ libelle="Échéance">
-            <input type="date" className={ui.champ} value={t.echeance ?? ''} onChange={(e) => modifier({ echeance: e.target.value || null })} />
+            <input type="date" className={champ} value={t.echeance ?? ''} onChange={(e) => modifier({ echeance: e.target.value || null })} />
           </Champ>
           <Champ libelle="Heures prévues">
             <input
               type="number"
+              inputMode="decimal"
               min={0}
               step={0.5}
-              className={ui.champ}
+              className={champ}
               defaultValue={t.heures_prevues ?? ''}
               onBlur={(e) => {
                 const h = e.target.value === '' ? null : Number(e.target.value)
@@ -234,7 +235,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
         {t.statut !== 'a_trier' && `Signalée${signalePar ? ` par ${signalePar}` : ''} le ${dateCourte(t.created_at)}.`}
       </p>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-pierre-100 pt-3">
+      <BarreActions>
         <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
           Fermer
         </button>
@@ -251,7 +252,7 @@ function Contenu({ t, d, fermer, annualiser }: { t: Tache; d: Donnees; fermer: (
             Retirer mon signalement
           </button>
         )}
-      </div>
+      </BarreActions>
     </div>
   )
 }
@@ -341,7 +342,7 @@ function Commentaires({ tache: t, d }: { tache: Tache; d: Donnees }) {
       {droits.ecriture && (
         <div className="flex items-end gap-2">
           <textarea
-            className={ui.champ}
+            className={champ}
             rows={1}
             placeholder="Ajouter un commentaire…"
             value={texte}
@@ -396,7 +397,7 @@ function Choix({
   }
   return (
     <Champ libelle={libelle}>
-      <select className={ui.champ} value={valeur ?? ''} onChange={(e) => changer(e.target.value || null)}>
+      <select className={champ} value={valeur ?? ''} onChange={(e) => changer(e.target.value || null)}>
         <option value="">{vide}</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>
@@ -418,7 +419,7 @@ function ZoneTexte({ valeur, enregistrer }: { valeur: string; enregistrer: (v: s
   }
   return (
     <textarea
-      className={ui.champ}
+      className={champ}
       rows={3}
       value={texte}
       onChange={(e) => setTexte(e.target.value)}

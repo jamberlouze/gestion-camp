@@ -1,3 +1,4 @@
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, moisCourt } from './calendrier'
@@ -18,7 +19,7 @@ const entete = 'px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking
 /**
  * Passages en tableau à colonnes alignées (vue Mois sur ordinateur) :
  * case · tâche · (mois) · (entreprise) · (projet) · responsable · fournisseur.
- * Le responsable se change directement dans son menu ; le titre ouvre la fiche.
+ * Le responsable se change directement dans son menu ; le reste de la rangée ouvre la fiche.
  */
 export function TableauPassages({ passages, refs, colonnes }: { passages: Passage[]; refs: References; colonnes: Colonnes }) {
   return (
@@ -65,8 +66,9 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
   const annuelle = estAnnuelle(t)
   const secondaire = finie ? 'text-pierre-400' : 'text-pierre-600'
 
+  // Toute la rangée ouvre la fiche, sauf la case et le menu du responsable.
   return (
-    <tr className="align-top hover:bg-pierre-50/60">
+    <tr className={`align-top ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <td className="px-3 py-2">
         <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!ecriture} />
       </td>

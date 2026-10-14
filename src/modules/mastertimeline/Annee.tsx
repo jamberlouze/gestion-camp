@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconePlus } from '@/lib/icones'
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { ui } from '@/lib/ui'
 import {
   cleAujourdhui,
@@ -20,7 +21,7 @@ import {
   UNIQUE,
   type Etat,
 } from './calendrier'
-import { BarreFiltres, ChoixRegroupement, Pastille } from './commun'
+import { BarreFiltres, ChoixRegroupement, Pastille, PucesEtiquettes } from './commun'
 import { garder, regrouper, useBasculer, useEcriture, useFiltres, useOuvrirFiche, type Regroupement } from './outils'
 import { useCoches, useReferences, useTaches } from './donnees'
 import type { Coche, Tache } from './types'
@@ -169,13 +170,18 @@ export function Annee() {
                 </tr>
                 {g.elements.map(({ tache: t, cases }) => {
                   const entreprise = t.entreprise_id ? refs.entreprise.get(t.entreprise_id) : null
+                  const ouvrirFiche = () => ouvrir({ tache: t, periode: cases.find(Boolean)?.periode })
+                  // Toute la rangée ouvre la fiche, sauf les cases des mois.
                   return (
-                    <tr key={t.id} className="border-b border-pierre-100 hover:bg-pierre-50/60">
+                    <tr key={t.id} className={`border-b border-pierre-100 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
                       <td className="max-w-md px-3 py-1.5">
-                        <button className="text-left hover:text-foret-800" onClick={() => ouvrir({ tache: t, periode: cases.find(Boolean)?.periode })}>
-                          {t.titre}
-                        </button>
-                        {par !== 'entreprise' && entreprise && <span className="ml-2 whitespace-nowrap text-xs text-pierre-400">{entreprise.nom}</span>}
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <button className="text-left hover:text-foret-800" onClick={ouvrirFiche}>
+                            {t.titre}
+                          </button>
+                          {par !== 'entreprise' && entreprise && <span className="whitespace-nowrap text-xs text-pierre-400">{entreprise.nom}</span>}
+                          <PucesEtiquettes tache={t} refs={refs} />
+                        </span>
                       </td>
                       {cases.map((c, i) =>
                         c ? (
