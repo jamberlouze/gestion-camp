@@ -18,6 +18,11 @@ import { CATEGORIES, FORFAITS, UNITES, type Categorie, type Prix, type Produit, 
 
 type Statut = 'section' | 'valide' | 'a_valider' | 'a_definir'
 
+// Colonnes de la liste (carte large) : code, produit, année d'avant, prix, hausse, statut, mise à jour, action.
+// Liste préparée : la colonne « + % » passe entre les deux prix.
+const COLONNES = '@4xl:grid-cols-[6rem_minmax(0,1fr)_6rem_8rem_7.5rem_8.5rem_8rem_2rem]'
+const COLONNES_AVEC_HAUSSE = '@4xl:grid-cols-[6rem_minmax(0,1fr)_6rem_7.5rem_8rem_8.5rem_8rem_2rem]'
+
 const cleDe = (produit: string, ex: number) => `${produit}|${ex}`
 const memePrix = (a: number, b: number) => Math.abs(a - b) < 0.00005
 const nombre = (v: number | null | undefined) => (v === null || v === undefined ? null : Number(v))
@@ -225,12 +230,18 @@ export function Catalogue() {
           return (
             <section key={cat} className={`${ui.carte} @container`}>
               <h2 className="border-b border-pierre-200 px-3 py-2 font-semibold">{nomCat}</h2>
-              <div className="hidden gap-x-3 border-b border-pierre-100 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-pierre-500 @4xl:grid @4xl:grid-cols-[6rem_minmax(0,1fr)_6rem_8rem_7.5rem_8.5rem_8rem_2rem]">
+              <div
+                className={`hidden gap-x-3 border-b border-pierre-100 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-pierre-500 @4xl:grid ${
+                  avecHausse ? COLONNES_AVEC_HAUSSE : COLONNES
+                }`}
+              >
                 <span>Code</span>
                 <span>Produit</span>
                 <span className="text-right">{precedent ? libelleExercice(precedent) : ''}</span>
+                {/* Liste préparée : Prix de l'année d'avant | + % | Prix de l'année (demande de Maxime). */}
+                {avecHausse && <span className="text-right">+ % · hausse</span>}
                 <span className="text-right">{libelleExercice(exercice)}</span>
-                <span className="text-right">{precedent ? (avecHausse ? '+ % · hausse' : 'Hausse') : ''}</span>
+                {!avecHausse && <span className="text-right">{precedent ? 'Hausse' : ''}</span>}
                 <span>Statut</span>
                 <span>Mise à jour</span>
                 <span />
@@ -325,9 +336,33 @@ function LignePrix({
       }`
     : undefined
 
+  // Colonne « + % » et hausse ; dans une liste préparée, entre les deux prix (demande de Maxime).
+  const celluleHausse = (
+    <div className={`flex flex-col gap-0.5 text-xs text-pierre-500 ${avecHausse ? 'items-end' : 'items-start @4xl:items-end'}`}>
+      {peutHausse && ecriture ? (
+        <span className="inline-flex items-center gap-1 text-pierre-700">
+          +
+          <PrixSaisi
+            libelle={`Hausse en % sur ${libelleExercice(precedent!)} : ${p.nom}`}
+            valeur={pct}
+            placeholder="%"
+            petit
+            largeur="w-16"
+            min={-99}
+            enregistrer={(v) => ecrire(v === null ? { hausse_pct: null } : { hausse_pct: v, ...appliquerHausse(base, v, p) })}
+          />
+          %
+        </span>
+      ) : (
+        pct !== null && <span className="text-pierre-700">{pourcentage(pct)} appliqué</span>
+      )}
+      {precedent !== null && <span>{texteHausse(prixAvant, prixCourant)}</span>}
+    </div>
+  )
+
   return (
     <div
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 text-sm @4xl:grid-cols-[6rem_minmax(0,1fr)_6rem_8rem_7.5rem_8.5rem_8rem_2rem] ${
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 text-sm ${avecHausse ? COLONNES_AVEC_HAUSSE : COLONNES} ${
         rouge ? 'bg-red-50/70' : ''
       } ${p.actif ? '' : 'opacity-50'}`}
     >
@@ -363,7 +398,9 @@ function LignePrix({
         )}
       </span>
 
-      <div className="flex flex-col items-end gap-0.5">
+      {avecHausse && celluleHausse}
+
+      <div className={`flex flex-col gap-0.5 ${avecHausse ? 'items-start @4xl:items-end' : 'items-end'}`}>
         {section ? (
           <span className={`tabular-nums ${info.provisoire ? 'text-amber-800' : ''}`} title={`${section.lits} lits × ${argent(prixLit)}`}>
             {argent(prixCourant)}
@@ -396,26 +433,7 @@ function LignePrix({
         )}
       </div>
 
-      <div className="flex flex-col items-start gap-0.5 text-xs text-pierre-500 @4xl:items-end">
-        {peutHausse && ecriture ? (
-          <span className="inline-flex items-center gap-1 text-pierre-700">
-            +
-            <PrixSaisi
-              libelle={`Hausse en % sur ${libelleExercice(precedent!)} : ${p.nom}`}
-              valeur={pct}
-              placeholder="%"
-              petit
-              largeur="w-16"
-              min={-99}
-              enregistrer={(v) => ecrire(v === null ? { hausse_pct: null } : { hausse_pct: v, ...appliquerHausse(base, v, p) })}
-            />
-            %
-          </span>
-        ) : (
-          pct !== null && <span className="text-pierre-700">{pourcentage(pct)} appliqué</span>
-        )}
-        {precedent !== null && <span>{texteHausse(prixAvant, prixCourant)}</span>}
-      </div>
+      {!avecHausse && celluleHausse}
 
       <div className="flex flex-col items-end gap-0.5 @4xl:items-start">
         {statut === 'section' ? (

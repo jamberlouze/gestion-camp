@@ -76,7 +76,8 @@ En DEV seulement (base locale), module réservé aux admins pendant les essais. 
 - [x] « Hausse de 2027-28 sur 2026-27 : + [3] % — Appliquer aux 66 lignes affichées » (selon les filtres) : confirmation, puis un seul envoi : nuitée 33,48 $, repas 19,98 $, Mont-Blanc coût 23,69 $ → 28 $ (dollar supérieur), vélo coût 22,66 $ → 27,06 $ (+ 1 $), Sentier des cimes 22,21 $ ; le prix du lit déjà validé n'est pas touché ; les produits sans prix en 2026-27 (billets Tremblant, pêche) sont sautés. Tout reste « à valider ».
 - [x] « Annuler (+3 % sur 66 lignes) » remet chaque ligne comme avant (vérifié en SQL : vides de nouveau, le transport Mont-Blanc revient à son + 5 %).
 - [x] Téléphone : la barre du « + % » passe sur plusieurs lignes, pas de défilement horizontal.
-- [x] Essais remis : la liste 2027-28 de la DEV est de nouveau vide, à valider (78 lignes, aucun prix, aucun %).
+- [x] **Ordre des colonnes** (retouche de Maxime) : dans une liste préparée, « 2026-27 | + % · hausse | 2027-28 », la colonne « + % » juste à gauche du prix de l'année suivante ; sur téléphone, même ordre dans chaque carte (« 2026-27 : 149,50 $ » et le « + % » sur une ligne, puis le prix 2027-28 et le statut). Une liste non préparée (2026-27) garde son ordre (prix, puis hausse).
+- [x] Essais remis : la liste 2027-28 de la DEV est de nouveau vide, à valider (78 lignes, aucun prix, aucun %). Depuis, + 5 % a été appliqué à toute la liste 2027-28 de la DEV (16 h 08, compte Admin Test, pas par Claude) : laissé tel quel, tout est « à valider ».
 
 ## 10. À regarder par Maxime
 
