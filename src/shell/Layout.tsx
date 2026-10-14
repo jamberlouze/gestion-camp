@@ -6,6 +6,7 @@ import { IconeAttention, IconeDeconnexion, IconeFermer, IconeReduireMenu, IconeT
 import { useAuth } from './auth'
 import { FrontiereErreur } from './FrontiereErreur'
 import { estEntree, MODULES } from './modules'
+import { CoinMaquette } from './CoinMaquette'
 import { CoinPoke, FournisseurPoke } from './Poke'
 import { voitNouvelAccueil } from './accueil/outils'
 
@@ -127,6 +128,7 @@ export function Layout() {
               {profil?.nom ?? profil?.courriel}
             </span>
           )}
+          {!tiroir && <CoinMaquette />}
           {!tiroir && <CoinPoke place="menu" />}
           <button
             onClick={seDeconnecter}
@@ -187,7 +189,8 @@ export function Layout() {
           ) : (
             logo(false)
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center">
+            <CoinMaquette />
             <CoinPoke place="entete" />
           </div>
         </header>
