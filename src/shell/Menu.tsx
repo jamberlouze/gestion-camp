@@ -1,17 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FocusEvent, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useLocation } from 'react-router'
 import { estCourante, type Entree } from './entreesMenu'
 import { FAMILLES, type DefinitionFamille } from './modules'
 
 /**
- * Menu par familles (version B des maquettes, choix de Maxime) : une rangée
- * d'icônes par famille, le nom au survol ; sur téléphone (et sur un écran
- * tactile sans survol), des tuiles avec les noms ; menu réduit = un bouton
- * par famille qui ouvre sa sous-liste. Moins de 7 entrées en tout (ex. un
- * compte Terrain) : liste à plat avec les noms, sans familles.
+ * Menu par familles (version A des maquettes, en compact : choix de Maxime) :
+ * une liste avec le nom de chaque module, sous un titre de famille discret
+ * (avec la petite icône de la famille) qui se replie d'un clic ; Améliorations,
+ * Référentiel et Utilisateurs en rangée d'icônes en bas. Même liste dans le
+ * tiroir du téléphone. Menu réduit = un bouton par famille qui ouvre sa
+ * sous-liste. Moins de 7 entrées en tout (ex. un compte Terrain) : liste à
+ * plat avec les noms, sans familles.
  */
 const SEUIL_FAMILLES = 7
+
+// Familles repliées : gardées sur l'appareil.
+const CLE_REPLIEES = 'menu-familles-repliees'
 
 interface Groupe {
   /** null = la rangée du bas, sans titre. */
@@ -32,108 +37,163 @@ const libelle = (e: Entree) => (e.cache ? `${e.nom} · admins seulement` : e.nom
 const focusVisible = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-foret-600'
 
 export function Menu({ entrees, mode }: { entrees: Entree[]; mode: 'ouvert' | 'reduit' | 'tiroir' }) {
-  const sansSurvol = useSansSurvol()
   const bulle = useBulle()
   const groupes = grouper(entrees)
   const aPlat = entrees.length < SEUIL_FAMILLES
+  const tiroir = mode === 'tiroir'
+  const bas = groupes.find((g) => !g.famille)
 
   let contenu: ReactNode
   if (mode === 'reduit') contenu = aPlat ? <IconesAPlat groupes={groupes} bulle={bulle} /> : <FamillesReduites groupes={groupes} bulle={bulle} />
   else if (aPlat) contenu = <ListeAPlat groupes={groupes} />
-  else if (mode === 'tiroir' || sansSurvol) contenu = <Tuiles groupes={groupes} />
-  else contenu = <Rangees groupes={groupes} bulle={bulle} />
+  else contenu = <ListeFamilles groupes={groupes} tiroir={tiroir} />
 
   return (
-    <nav
-      aria-label="Modules"
-      onScroll={bulle.cacher}
-      className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${mode === 'reduit' ? 'items-center px-1 py-2' : 'px-2 py-2.5'}`}
-    >
-      {contenu}
+    <>
+      <nav
+        aria-label="Modules"
+        onScroll={bulle.cacher}
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${mode === 'reduit' ? 'items-center px-1 py-2' : tiroir ? 'p-2' : 'px-2 py-1.5'}`}
+      >
+        {contenu}
+      </nav>
+      {/* Menu ouvert et tiroir, avec familles : la rangée du bas, en icônes. */}
+      {mode !== 'reduit' && !aPlat && bas && <RangeeBas entrees={bas.entrees} tiroir={tiroir} bulle={bulle} />}
       {bulle.element}
-    </nav>
+    </>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Menu ouvert (ordinateur) : une rangée d'icônes par famille.
+// Menu ouvert (ordinateur) et tiroir (téléphone) : liste par familles repliables.
 
-function Rangees({ groupes, bulle }: { groupes: Groupe[]; bulle: Bulle }) {
+function useFamillesRepliees(): [string[], (id: string) => void] {
+  const [repliees, setRepliees] = useState<string[]>(() => {
+    try {
+      const brut = JSON.parse(localStorage.getItem(CLE_REPLIEES) ?? '[]')
+      return Array.isArray(brut) ? brut : []
+    } catch {
+      return []
+    }
+  })
+  const basculer = (id: string) =>
+    setRepliees((avant) => {
+      const apres = avant.includes(id) ? avant.filter((x) => x !== id) : [...avant, id]
+      try {
+        localStorage.setItem(CLE_REPLIEES, JSON.stringify(apres))
+      } catch {
+        // Stockage indisponible : le choix vaut pour la session.
+      }
+      return apres
+    })
+  return [repliees, basculer]
+}
+
+/**
+ * Lignes serrées sur ordinateur (28 px : tout le menu d'un admin tient dans
+ * un écran de portable), plus hautes dans le tiroir (doigt). Une famille
+ * repliée garde visible le module de la page ouverte.
+ */
+function ListeFamilles({ groupes, tiroir }: { groupes: Groupe[]; tiroir: boolean }) {
+  const { pathname } = useLocation()
+  const [repliees, basculer] = useFamillesRepliees()
+  const familles = groupes.filter((g) => g.famille)
+
   return (
-    <div className="flex flex-col gap-3">
-      {groupes.map((g) => (
-        <div key={g.famille?.id ?? 'bas'} className={g.famille ? '' : 'border-t border-pierre-200 pt-3'}>
-          {g.famille && <TitreFamille famille={g.famille} />}
-          <ul aria-labelledby={g.famille ? `famille-${g.famille.id}` : undefined} className="flex flex-wrap gap-[3px]">
-            {g.entrees.map((e) => (
-              <li key={e.chemin}>
-                <NavLink
-                  to={e.chemin}
-                  aria-label={libelle(e)}
-                  {...bulle.sur(libelle(e), 'bas')}
-                  className={({ isActive }) =>
-                    `flex size-[34px] items-center justify-center rounded-lg text-lg leading-none ${focusVisible} ${
-                      isActive ? 'bg-foret-100 ring-[1.5px] ring-foret-600 ring-inset' : 'hover:bg-pierre-100'
-                    }`
-                  }
-                >
-                  <span aria-hidden className={e.cache ? 'opacity-45' : ''}>
-                    {e.icone}
-                  </span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="flex flex-col">
+      {familles.map(({ famille, entrees }, i) => {
+        const f = famille!
+        const repliee = repliees.includes(f.id)
+        const visibles = repliee ? entrees.filter((e) => estCourante(e, pathname)) : entrees
+        return (
+          <div key={f.id} className={i ? (tiroir ? 'mt-1.5' : 'mt-1') : ''}>
+            <button
+              type="button"
+              id={`famille-${f.id}`}
+              aria-expanded={!repliee}
+              aria-controls={`liste-famille-${f.id}`}
+              onClick={() => basculer(f.id)}
+              className={`flex w-full items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold tracking-wide text-pierre-500 uppercase hover:text-pierre-800 ${focusVisible} ${
+                tiroir ? 'h-[26px]' : 'h-[22px]'
+              }`}
+            >
+              <IconeFamille id={f.id} className="size-3.5" />
+              <span className="min-w-0 flex-1 truncate text-left">{f.nom}</span>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+                className={`size-3.5 shrink-0 transition-transform ${repliee ? '-rotate-90' : ''}`}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <ul id={`liste-famille-${f.id}`} aria-labelledby={`famille-${f.id}`}>
+              {visibles.map((e) => (
+                <li key={e.chemin}>
+                  <LigneModule entree={e} hauteur={tiroir ? 'h-9' : 'h-7'} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Améliorations, Référentiel, Utilisateurs : icônes, nom au survol et au focus. */
+function RangeeBas({ entrees, tiroir, bulle }: { entrees: Entree[]; tiroir: boolean; bulle: Bulle }) {
+  return (
+    <div className="flex shrink-0 gap-0.5 border-t border-pierre-200 px-2 py-1.5">
+      {entrees.map((e) => (
+        <NavLink
+          key={e.chemin}
+          to={e.chemin}
+          aria-label={libelle(e)}
+          {...bulle.sur(libelle(e), 'haut')}
+          className={({ isActive }) =>
+            `flex items-center justify-center rounded-lg text-base leading-none ${tiroir ? 'h-9 w-11' : 'h-8 w-10'} ${focusVisible} ${
+              isActive ? 'bg-foret-100 ring-[1.5px] ring-foret-600 ring-inset' : 'hover:bg-pierre-100'
+            }`
+          }
+        >
+          <span aria-hidden>{e.icone}</span>
+        </NavLink>
       ))}
     </div>
   )
 }
 
-/** Titre d'une famille, avec sa petite icône (la même que dans le menu réduit ; demande de Maxime). */
-function TitreFamille({ famille }: { famille: DefinitionFamille }) {
+/** Une ligne : icône + nom (+ « admins » pour un module caché aux autres). */
+function LigneModule({ entree: e, hauteur, onClick }: { entree: Entree; hauteur: string; onClick?: () => void }) {
   return (
-    <div id={`famille-${famille.id}`} className="mb-0.5 flex h-[22px] items-center gap-1.5 px-1.5 text-xs font-semibold tracking-wide text-pierre-500 uppercase">
-      <IconeFamille id={famille.id} className="size-3.5" />
-      {famille.nom}
-    </div>
+    <NavLink to={e.chemin} onClick={onClick} aria-label={libelle(e)} className={({ isActive }) => classeLigne(isActive, hauteur, e.cache)}>
+      <span aria-hidden className={`w-5 shrink-0 text-center text-base leading-none ${e.cache ? 'opacity-45' : ''}`}>
+        {e.icone}
+      </span>
+      <span aria-hidden className="truncate">
+        {e.nom}
+      </span>
+      {e.cache && <MarqueAdmins />}
+    </NavLink>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Téléphone (tiroir) et écran sans survol : tuiles avec les noms.
+const classeLigne = (actif: boolean, hauteur: string, cache?: boolean) =>
+  `flex ${hauteur} items-center gap-3 rounded-lg px-2.5 text-sm font-medium ${focusVisible} ${
+    actif ? 'bg-foret-100 text-foret-800' : cache ? 'text-pierre-500 hover:bg-pierre-100' : 'text-pierre-700 hover:bg-pierre-100'
+  }`
 
-function Tuiles({ groupes }: { groupes: Groupe[] }) {
+function MarqueAdmins() {
   return (
-    <div className="flex flex-col gap-2.5">
-      {groupes.map((g) => (
-        <div key={g.famille?.id ?? 'bas'} className={g.famille ? '' : 'border-t border-pierre-200 pt-2.5'}>
-          {g.famille && <TitreFamille famille={g.famille} />}
-          <ul aria-labelledby={g.famille ? `famille-${g.famille.id}` : undefined} className="grid grid-cols-3 gap-1">
-            {g.entrees.map((e) => (
-              <li key={e.chemin}>
-                <NavLink
-                  to={e.chemin}
-                  aria-label={libelle(e)}
-                  className={({ isActive }) =>
-                    `flex h-[66px] flex-col items-center gap-1 rounded-[10px] px-1 pt-2 ${focusVisible} ${
-                      isActive ? 'bg-foret-100 text-foret-800' : e.cache ? 'text-pierre-500 hover:bg-pierre-100' : 'text-pierre-700 hover:bg-pierre-100'
-                    }`
-                  }
-                >
-                  <span aria-hidden className={`text-[22px] leading-none ${e.cache ? 'opacity-45' : ''}`}>
-                    {e.icone}
-                  </span>
-                  <span aria-hidden className="line-clamp-2 max-w-full text-center text-[11px] leading-[13px] font-medium break-words hyphens-auto">
-                    {e.nom}
-                  </span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
+    <span aria-hidden className="ml-auto shrink-0 rounded-full border border-pierre-200 px-1.5 text-[11px] leading-4 font-medium text-pierre-500">
+      admins
+    </span>
   )
 }
 
@@ -147,33 +207,12 @@ function ListeAPlat({ groupes }: { groupes: Groupe[] }) {
         <ul key={g.famille?.id ?? 'bas'} className={`flex flex-col gap-0.5 ${g.famille ? '' : 'mt-2 border-t border-pierre-200 pt-2'}`}>
           {g.entrees.map((e) => (
             <li key={e.chemin}>
-              <NavLink to={e.chemin} aria-label={libelle(e)} className={({ isActive }) => classeLigne(isActive, e.cache)}>
-                <span aria-hidden className={`w-5 shrink-0 text-center text-base leading-none ${e.cache ? 'opacity-45' : ''}`}>
-                  {e.icone}
-                </span>
-                <span aria-hidden className="truncate">
-                  {e.nom}
-                </span>
-                {e.cache && <MarqueAdmins />}
-              </NavLink>
+              <LigneModule entree={e} hauteur="h-9" />
             </li>
           ))}
         </ul>
       ))}
     </div>
-  )
-}
-
-const classeLigne = (actif: boolean, cache?: boolean) =>
-  `flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium ${focusVisible} ${
-    actif ? 'bg-foret-100 text-foret-800' : cache ? 'text-pierre-500 hover:bg-pierre-100' : 'text-pierre-700 hover:bg-pierre-100'
-  }`
-
-function MarqueAdmins() {
-  return (
-    <span aria-hidden className="ml-auto shrink-0 rounded-full border border-pierre-200 px-1.5 text-[11px] leading-4 font-medium text-pierre-500">
-      admins
-    </span>
   )
 }
 
@@ -333,15 +372,7 @@ function SousListe({
       <ul aria-labelledby={`titre-sous-liste-${famille.id}`}>
         {entrees.map((e) => (
           <li key={e.chemin}>
-            <NavLink to={e.chemin} onClick={fermer} aria-label={libelle(e)} className={({ isActive }) => classeLigne(isActive, e.cache)}>
-              <span aria-hidden className={`w-5 shrink-0 text-center text-base leading-none ${e.cache ? 'opacity-45' : ''}`}>
-                {e.icone}
-              </span>
-              <span aria-hidden className="truncate">
-                {e.nom}
-              </span>
-              {e.cache && <MarqueAdmins />}
-            </NavLink>
+            <LigneModule entree={e} hauteur="h-[34px]" onClick={fermer} />
           </li>
         ))}
       </ul>
@@ -355,7 +386,7 @@ function SousListe({
 // placée dedans serait coupée). Purement visuelle : le nom est déjà dans
 // l'aria-label du lien.
 
-type Cote = 'bas' | 'droite'
+type Cote = 'haut' | 'droite'
 interface Visee {
   texte: string
   cible: HTMLElement
@@ -404,8 +435,8 @@ function InfoBulle({ visee }: { visee: Visee }) {
     const r = visee.cible.getBoundingClientRect()
     const l = b.offsetWidth
     const h = b.offsetHeight
-    const gauche = visee.cote === 'bas' ? Math.min(Math.max(r.left + r.width / 2 - l / 2, 4), window.innerWidth - l - 4) : r.right + 8
-    const haut = visee.cote === 'bas' ? r.bottom + 6 : r.top + r.height / 2 - h / 2
+    const gauche = visee.cote === 'haut' ? Math.min(Math.max(r.left + r.width / 2 - l / 2, 4), window.innerWidth - l - 4) : r.right + 8
+    const haut = visee.cote === 'haut' ? r.top - h - 6 : r.top + r.height / 2 - h / 2
     b.style.left = `${gauche}px`
     b.style.top = `${haut}px`
     b.style.visibility = 'visible'
@@ -423,18 +454,6 @@ function InfoBulle({ visee }: { visee: Visee }) {
 }
 
 // ---------------------------------------------------------------------------
-
-/** Écran sans survol (téléphone, tablette tactile) : les tuiles avec les noms remplacent les icônes seules. */
-function useSansSurvol() {
-  return useSyncExternalStore(
-    (maj) => {
-      const mq = window.matchMedia('(hover: none)')
-      mq.addEventListener('change', maj)
-      return () => mq.removeEventListener('change', maj)
-    },
-    () => window.matchMedia('(hover: none)').matches,
-  )
-}
 
 const TRACES: Record<DefinitionFamille['id'], ReactNode> = {
   // Tente
@@ -473,7 +492,7 @@ const TRACES: Record<DefinitionFamille['id'], ReactNode> = {
   ),
 }
 
-/** Icône au trait d'une famille (menu ouvert : à côté du titre ; menu réduit : le bouton). */
+/** Icône au trait d'une famille (menu ouvert et tiroir : à côté du titre ; menu réduit : le bouton). */
 export function IconeFamille({ id, className = 'size-4' }: { id: DefinitionFamille['id']; className?: string }) {
   return (
     <svg

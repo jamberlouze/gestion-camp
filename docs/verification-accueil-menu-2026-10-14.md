@@ -1,6 +1,6 @@
 # Vérification de l'accueil et du menu par familles (2026-10-14)
 
-> **Passée par Claude en DEV le 2026-10-14.** Demandes de la réunion avec Charlotte : voir tout le menu d'un seul coup d'œil (familles, version B des maquettes + icône de la famille à côté de son nom), plus d'entrée « Accueil », « Ma journée » pour tout le monde en vrai tableau de bord, cartes plus petites. Corrigés en chemin : info-bulle de la première icône qui sortait de l'écran à gauche (bulle calée dans l'écran), avertissement du linter (« Fast refresh ») réglé en sortant le type `Entree` dans `entreesMenu.ts`. **Reste pour Maxime** : un coup d'œil sur un vrai téléphone et un iPad, les décisions du §7, puis la mise en ligne (§8).
+> **Passée par Claude en DEV le 2026-10-14** (repassée après le passage à la version A compacte). Demandes de la réunion avec Charlotte : voir tout le menu d'un seul coup d'œil (familles : d'abord la version B des maquettes, puis, au choix de Maxime, **la version A en compact**, avec l'icône de la famille à côté de son nom), plus d'entrée « Accueil », « Ma journée » pour tout le monde en vrai tableau de bord, cartes plus petites. Corrigés en chemin : info-bulle de la première icône qui sortait de l'écran à gauche (bulle calée dans l'écran), avertissement du linter (« Fast refresh ») réglé en sortant le type `Entree` dans `entreesMenu.ts`. **Reste pour Maxime** : un coup d'œil sur un vrai téléphone et un iPad, les décisions du §7, puis la mise en ligne (§8).
 
 En DEV seulement (base locale). Aucune migration, aucune donnée ajoutée au
 `seed.sql`. Pour voir la section Mastertimeline de l'accueil, Claude a ajouté le
@@ -14,32 +14,38 @@ avant décembre : rien n'est saisi avant le 4 octobre).
 commité) ou `accueil-essai` (http://localhost:5192). Comptes : `admin`
 (Admin Test), `direction` (Julie), `coordo` (Sarah), `terrain` (Léa).
 
-## 1. Menu ouvert (ordinateur)
+## 1. Menu ouvert (ordinateur) — version A compacte
 
-- [x] Familles dans l'ordre demandé : Opérations (Réservations, CRM, Calendrier, Cuisine, Animation, Rooming), Bâtiment et matériel (Travaux, Bâtiments, Inventaire, Embarcations, Véhicules), Gestion (Mastertimeline, Réunions, Achats, Petite caisse, Subventions, Vigie des camps), Équipe (RH, Feuilles de temps), puis la rangée du bas sans titre (Améliorations, Référentiel, Utilisateurs). — admin : 22 entrées, une pour chaque route de `App.tsx`
-- [x] Une rangée d'icônes par famille ; **la petite icône de la famille** (tente, maison, planchette, deux personnes) est à côté de son nom, la même que dans le menu réduit.
-- [x] Nom du module en info-bulle au survol, et au **focus clavier** (Tab) avec un contour vert visible ; chaque lien a son `aria-label`. La bulle de la première icône reste dans l'écran.
+Changement de Maxime le 2026-10-14 en fin de journée : la version B (rangées
+d'icônes, nom au survol) est remplacée par la **version A en compact**. Les
+rangées d'icônes et les tuiles de la version B sont retirées du code.
+
+- [x] Familles dans l'ordre demandé : Opérations (Réservations, CRM, Calendrier, Cuisine, Animation, Rooming), Bâtiment et matériel (Travaux, Bâtiments, Inventaire, Embarcations, Véhicules), Gestion (Mastertimeline, Réunions, Achats, Petite caisse, Subventions, Vigie des camps), Équipe (RH, Feuilles de temps), puis la rangée du bas (Améliorations, Référentiel, Utilisateurs). — admin : 22 entrées, une pour chaque route de `App.tsx`
+- [x] Liste avec l'**icône et le nom** de chaque module, **lignes de 28 px**, sous un titre de famille discret (petites capitales grises) avec **la petite icône de la famille** (tente, maison, planchette, deux personnes), la même que dans le menu réduit.
+- [x] **Chaque famille se replie** d'un clic sur son titre (chevron, `aria-expanded`) ; l'état est gardé sur l'appareil (`menu-familles-repliees`, vérifié après un rechargement). Une famille repliée garde visible le module de la page ouverte (Gestion repliée sur `/achats` : seul Achats reste).
+- [x] **Tout tient sans défiler** pour l'admin, familles ouvertes, à 1280 × 800 : 632 px de liste pour 650 px de place.
+- [x] Améliorations / Référentiel / Utilisateurs en **rangée d'icônes en bas** (au-dessus du nom) ; nom en info-bulle au survol et au focus clavier (au-dessus de l'icône) ; `aria-label` sur chaque lien.
+- [x] Focus clavier visible (contour vert) sur les titres de familles, les modules et les icônes du bas.
 - [x] Utilisateurs = 🔑, RH garde 👥 (aussi 🔑 dans la liste « Utilisateurs et accès » des Améliorations).
 - [x] Plus d'entrée « Accueil » : le logo « Gestion du camp » y ramène.
-- [x] Calendrier : visible pour l'admin seulement, grisé, bulle « Calendrier · admins seulement » ; pour Julie, absent du menu et `/calendrier` affiche « Calendrier : en pause » (comportement d'avant).
-- [x] Page ouverte marquée (fond vert + contour) ; `/cuisine/couts` marque Cuisine, `/achats?cible=30` marque Achats.
-- [x] Le menu de l'admin tient sans défiler (familles et rangée du bas : 327 px de haut pour les 22 entrées).
+- [x] Calendrier : visible pour l'admin seulement, grisé avec la pastille « admins » ; pour Julie, absent du menu et `/calendrier` affiche « Calendrier : en pause » (comportement d'avant).
+- [x] Page ouverte marquée (fond vert) ; `/cuisine/couts` marque Cuisine, `/achats?cible=30` marque Achats.
 - [x] 🌲 (maquette 3D) et 👉 (Poke) toujours au pied du menu ; la maquette s'ouvre et se ferme avec Échap.
 
-## 2. Menu réduit (ordinateur)
+## 2. Menu réduit (ordinateur) — inchangé
 
-- [x] Un bouton par famille (icône + nom court : Opérations, Bâtiment, Gestion, Équipe) ; la famille de la page ouverte est en vert (« Opérations (page ouverte : Cuisine) » pour les lecteurs d'écran).
+- [x] Un bouton par famille (icône + nom court : Opérations, Bâtiment, Gestion, Équipe) ; la famille de la page ouverte est en vert (« Gestion (page ouverte : Achats) » pour les lecteurs d'écran).
 - [x] Clic : la sous-liste s'ouvre à droite (titre de la famille, icônes et noms, page ouverte marquée, Calendrier « admins ») ; clic sur une autre famille = l'autre sous-liste ; clic ailleurs ou Échap = fermée (Échap remet le focus sur le bouton).
 - [x] Au clavier : Entrée ouvre, Tab entre dans la sous-liste, Entrée ouvre le module (CRM) et la sous-liste se ferme.
 - [x] Rangée du bas (💡 🗂️ 🔑) en icônes avec info-bulle à droite.
 - [x] Logo en haut du menu réduit (ramène à l'accueil), bouton « Déployer le menu » dessous ; choix gardé sur l'appareil comme avant.
 
-## 3. Téléphone (tiroir) et écran sans survol
+## 3. Téléphone (tiroir)
 
-- [x] Tiroir : tuiles 3 par rangée avec l'icône et le nom (coupures automatiques : « Réser-vations », « Embarca-tions »…), titres de familles avec leur icône ; tout le menu de l'admin tient dans 812 px.
-- [x] Choisir une tuile ferme le tiroir ; la barre du haut montre « ✅ Mastertimeline ».
-- [x] Aucun défilement horizontal (375 px : largeur de la page = 375 px) pour l'admin (accueil), Julie (Mastertimeline) et Léa (accueil).
-- [x] Écran tactile en mode ordinateur (iPad à l'horizontale, `(hover: none)`, simulé) : les tuiles avec les noms remplacent les icônes seules ; le menu défile si l'écran est bas.
+- [x] Tiroir = **la même liste A** (plus de tuiles) : titres de familles repliables avec leur icône, lignes de 36 px (doigt), rangée d'icônes du bas au-dessus du nom.
+- [x] Admin, familles toutes ouvertes : la liste défile dans le tiroir (822 px pour 658 px de place sur un écran de 812 px) ; replier une famille suffit pour tout voir.
+- [x] Choisir un module ferme le tiroir ; la barre du haut montre son icône et son nom.
+- [x] Aucun défilement horizontal (375 px : largeur de la page = 375 px) pour l'admin, Julie et Léa.
 - [ ] Sur un vrai iPhone et un vrai iPad. — à Maxime
 
 ## 4. Par rôle
@@ -47,7 +53,8 @@ commité) ou `accueil-essai` (http://localhost:5192). Comptes : `admin`
 - [x] **Admin** : 4 familles + rangée du bas (Améliorations, Référentiel, Utilisateurs).
 - [x] **Direction (Julie)** : Opérations (Cuisine, Animation, Rooming), Bâtiment et matériel (5), Gestion (Mastertimeline, Réunions, Achats), Équipe (RH, Feuilles de temps), en bas Référentiel ; pas de Calendrier.
 - [x] **Coordo (Sarah)** : 3 entrées → liste à plat avec les noms (Rooming, Travaux, Véhicules), sans familles.
-- [x] **Terrain (Léa)** : Travaux et Feuilles de temps (elle remplit sa feuille) → liste à plat ; menu réduit = 2 icônes avec info-bulle ; tiroir = 2 lignes.
+- [x] **Terrain (Léa)** : Travaux et Feuilles de temps (elle remplit sa feuille) → liste à plat (lignes de 36 px) ; menu réduit = 2 icônes avec info-bulle ; tiroir = 2 lignes.
+- [x] Julie : liste A sans défiler (4 familles + 🗂️ Référentiel en bas), comme la maquette A « rôles ».
 
 ## 5. Accueil (tableau de bord)
 
@@ -74,8 +81,8 @@ commité) ou `accueil-essai` (http://localhost:5192). Comptes : `admin`
 
 - [ ] Menu réduit : **le logo est ajouté en haut** (au-dessus du bouton « Déployer »), sinon on ne pouvait plus revenir à l'accueil en mode réduit (la maquette n'avait que le bouton).
 - [ ] Menu réduit : la sous-liste s'ouvre **au clic** (et au clavier), pas au simple survol.
-- [ ] Écran tactile en mode ordinateur (iPad à l'horizontale) : tuiles avec les noms au lieu des icônes seules (pas de survol pour lire les noms).
-- [ ] Tiroir du téléphone : l'icône de la famille est aussi à côté de son nom (comme le menu ouvert).
+- [ ] Tiroir du téléphone : lignes de 36 px (au lieu de 28) pour le doigt, comme la maquette A téléphone ; la liste de l'admin y défile si tout est ouvert.
+- [ ] Une famille repliée garde visible le module de la page ouverte.
 - [ ] À surveiller : la ligne « N achats à commander » (sans date) est **remplacée** par « X achats à commander dans les 30 prochains jours (dont N en retard) » ; un achat sans date cible n'y paraît plus.
 - [ ] Ordre de la grille d'accès (Utilisateurs) = ordre du menu par familles.
 - [ ] « Relevé produit » directement depuis l'accueil (avec confirmation), en plus de l'onglet Employés.
@@ -83,4 +90,4 @@ commité) ou `accueil-essai` (http://localhost:5192). Comptes : `admin`
 ## 8. Avant la mise en ligne
 
 - [ ] Mettre en ligne avec le cadre : `src/shell/modules.ts`, `Layout.tsx`, `Menu.tsx`, `entreesMenu.ts`, `accueil/` (`Accueil.tsx`, `AFaire.tsx`, `ASurveiller.tsx`, `Aujourdhui.tsx`, `commun.tsx`, `outils.ts`), `App.tsx` (une ligne), `modules/ameliorations/types.ts` (une icône). L'accueil lit `useAchatsACommanderBientot` (Achats, 509533b), `useDossiersAFermer` / `useFermerDossier` (Feuilles de temps, 04aae6a) et `libellePeriodePaie` (759ec21) : ces commits doivent partir avant ou avec celui-ci.
-- [ ] Prévenir l'équipe : plus d'entrée « Accueil » (cliquer le logo), menu en icônes (nom au survol).
+- [ ] Prévenir l'équipe : plus d'entrée « Accueil » (cliquer le logo), menu par familles repliables.
