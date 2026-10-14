@@ -246,15 +246,57 @@ export const useAjouterJournal = () => useAjouter<EntreeJournal>('journal', (l) 
 export const useModifierProduit = () => useModifier<Produit>('produits', ['reservations', 'produits'])
 export const useAjouterProduit = () => useAjouter<Produit>('produits', () => ['reservations', 'produits'])
 
-/** Prix d'un produit pour un exercice (ajouté ou remplacé). */
+/** Ce qu'on écrit d'un prix : seulement les champs donnés (auteur, dates et statut d'un prix changé : la base). */
+export type PrixAEcrire = Pick<Prix, 'produit_id' | 'exercice'> & Partial<Pick<Prix, 'prix' | 'cout' | 'marge' | 'valide' | 'repli'>>
+
+/** Prix d'un produit pour un exercice (ajouté ou modifié), validation comprise. Optimiste. */
 export function useEnregistrerPrix() {
   const client = useQueryClient()
+  const cle = ['reservations', 'prix']
   return useMutation({
     mutationKey: ['reservations', 'prix', 'enregistrer'],
     networkMode: 'always',
-    mutationFn: async (p: Prix) => {
-      const { error } = await db().from('prix').upsert(p, { onConflict: 'produit_id,exercice' })
+    // Mise à jour d'abord, ajout sinon : un upsert vérifierait la ligne à ajouter
+    // (prix vide + « validé » refusé) avant de voir qu'elle existe déjà.
+    mutationFn: async (p: PrixAEcrire) => {
+      const { produit_id, exercice, ...champs } = p
+      const { data, error } = await db().from('prix').update(champs).eq('produit_id', produit_id).eq('exercice', exercice).select('produit_id')
       if (error) throw error
+      if (data.length) return
+      const ajout = await db().from('prix').insert(p)
+      if (ajout.error) throw ajout.error
+    },
+    onMutate: async (p) => {
+      await client.cancelQueries({ queryKey: cle })
+      const avant = client.getQueryData<Prix[]>(cle)
+      const change = 'prix' in p || 'cout' in p || 'marge' in p
+      client.setQueryData<Prix[]>(cle, (l) => {
+        if (!l) return l
+        const x = l.find((y) => y.produit_id === p.produit_id && y.exercice === p.exercice)
+        if (!x)
+          return [
+            ...l,
+            { prix: null, cout: null, marge: null, valide: false, valide_le: null, valide_par_nom: null, modifie_le: new Date().toISOString(), modifie_par_nom: null, repli: null, ...p },
+          ]
+        return l.map((y) => (y === x ? { ...y, ...p, ...(change && !('valide' in p) ? { valide: false } : {}) } : y))
+      })
+      return { avant }
+    },
+    onError: (_e, _p, ctx) => ctx?.avant && client.setQueryData(cle, ctx.avant),
+    onSettled: () => client.invalidateQueries({ queryKey: cle }),
+  })
+}
+
+/** Prépare la liste d'un exercice : une ligne vide et à valider par produit, repli sur l'exercice d'avant. */
+export function usePreparerExercice() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations', 'prix', 'preparer'],
+    networkMode: 'always',
+    mutationFn: async (exercice: number) => {
+      const { data, error } = await db().rpc('preparer_exercice', { p_exercice: exercice })
+      if (error) throw error
+      return data as number
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'prix'] }),
   })
@@ -296,9 +338,15 @@ export function useEnregistrerEstime() {
     mutationFn: async (v: {
       estime: Pick<Estime, 'id' | 'reservation_id' | 'version' | 'exercice_prix' | 'sous_total' | 'tps' | 'tvq' | 'total' | 'notes'>
       lignes: LigneAEcrire[]
+      /** Prix provisoires utilisés (code → exercice du prix pris), gardés avec l'estimé. */
+      prix_provisoires?: Record<string, number>
     }) => {
       const { error } = await db().rpc('enregistrer_estime', { p_estime: v.estime, p_lignes: v.lignes })
       if (error) throw error
+      if (v.prix_provisoires) {
+        const r = await db().from('estimes').update({ prix_provisoires: v.prix_provisoires }).eq('id', v.estime.id)
+        if (r.error) throw r.error
+      }
     },
     onSettled: (_d, _e, v) => {
       client.invalidateQueries({ queryKey: ['reservations', 'estimes', v.estime.reservation_id] })

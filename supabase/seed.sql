@@ -587,3 +587,16 @@ select p.id, v.jour::date, 'direction', v.statut, v.note
   ) as v(nom, jour, statut, note)
   join calendrier.personnel p on p.nom = v.nom and p.deleted_at is null
 on conflict (personnel_id, date, secteur) do nothing;
+
+-- ------------------------------------------------------------
+-- Réservations › Liste de prix (révision du 2026-10-14) : une réservation
+-- d'essai en 2027-28, pour voir un estimé aux prix provisoires (liste
+-- 27-28 pas encore validée → prix de 26-27).
+-- ------------------------------------------------------------
+insert into reservations.reservations (numero, exercice, numero_seq, nom, compagnie_id, forfait, variante, date_arrivee, date_depart,
+  heure_arrivee, heure_depart, nb_participants, nb_accompagnateurs, ratio, service_repas, nb_dejeuners, nb_diners, nb_soupers, description)
+select '28-G-901', 2028, 901, 'ESSAI Liste de prix (classe nature 27-28)', e.id, 'classe_nature', 'verte', '2027-11-10', '2027-11-11',
+  '10:00', '14:00', 50, 4, '1:15', true, 1, 2, 1, 'Réservation d''essai : estimé aux prix provisoires de 2027-28.'
+from core.entreprises e
+where e.nom = 'GBPA+'
+on conflict (numero) do nothing;

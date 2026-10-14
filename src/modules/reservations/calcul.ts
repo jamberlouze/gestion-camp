@@ -81,6 +81,8 @@ export interface Etage {
 export interface Catalogue {
   /** Prix d'un produit pour l'exercice (avec repli sur le plus récent), null si à définir. */
   prix: (code: string, exercice: number) => number | null
+  /** Prix pas encore validé pour l'exercice (pris dans le repli) : voir `resoudrePrix`. */
+  provisoire?: (code: string, exercice: number) => boolean
   produits: Map<string, ProduitCalcul>
   etages: Map<string, Etage>
   gratuitePar: number
@@ -103,6 +105,8 @@ export interface Resultat {
   lignes: LigneCalculee[]
   /** Produits sans prix pour l'exercice (comptés à 0 $). */
   manquants: string[]
+  /** Produits utilisés dont le prix est provisoire (pas encore validé pour l'exercice). */
+  provisoires: string[]
   exercice: number
 }
 
@@ -270,9 +274,11 @@ export function prixScolaire(
 export function lignesAuto(e: EntreeCalcul, cat: Catalogue): Resultat {
   const exercice = exerciceDe(e.date_arrivee)
   const manquants = new Set<string>()
+  const provisoires = new Set<string>()
   const p = (code: string) => {
     const v = cat.prix(code, exercice)
     if (v === null) manquants.add(code)
+    else if (cat.provisoire?.(code, exercice)) provisoires.add(code)
     return v ?? 0
   }
   const nuits = nuitsEntre(e.date_arrivee, e.date_depart)
@@ -340,7 +346,7 @@ export function lignesAuto(e: EntreeCalcul, cat: Catalogue): Resultat {
     )
   }
 
-  return { lignes, manquants: [...manquants], exercice }
+  return { lignes, manquants: [...manquants], provisoires: [...provisoires], exercice }
 }
 
 // ------------------------------------------------------------------
@@ -387,11 +393,81 @@ export function totaux(lignes: Pick<LigneCalculee, 'montant'>[]): Totaux {
 }
 
 // ------------------------------------------------------------------
-// Catalogue
+// Catalogue : prix par exercice, provisoires, fournisseurs, hausses
 // ------------------------------------------------------------------
 
-/** Prix d'un produit de fournisseur : coût × majoration + ajout, arrondi. */
-export function prixMajore(p: { majoration: number | null; ajout: number | null; arrondi: 'aucun' | 'dollar_superieur' }, cout: number): number {
-  const brut = cout * Number(p.majoration ?? 1) + Number(p.ajout ?? 0)
+/** Prix d'un produit pour un exercice, tel que la base le garde (`reservations.prix`). */
+export interface PrixExercice {
+  exercice: number
+  prix: number | null
+  valide: boolean
+  /** Exercice dont le prix s'applique tant que celui-ci n'est pas validé. */
+  repli: number | null
+}
+
+export interface PrixResolu {
+  prix: number | null
+  /** Pas un prix validé de l'exercice : repli, prix à valider ou autre exercice. */
+  provisoire: boolean
+  /** Exercice du prix pris (null : aucun prix). */
+  exercice: number | null
+}
+
+/**
+ * Prix d'un produit pour un exercice (P2 et révision du 2026-10-14) :
+ * 1. prix validé de l'exercice → définitif ;
+ * 2. pas validé et un repli (liste préparée d'après l'exercice d'avant) →
+ *    le prix du repli, provisoire (« tant qu'un prix 27-28 n'est pas validé,
+ *    on prend celui de 26-27 ») ;
+ * 3. pas validé, sans repli → son propre prix, provisoire ;
+ * 4. aucun prix pour l'exercice → le plus récent d'avant (sinon le plus
+ *    proche d'après), provisoire.
+ */
+export function resoudrePrix(lignes: PrixExercice[], exercice: number): PrixResolu {
+  const par = new Map(lignes.map((l) => [l.exercice, l]))
+  const vus = new Set<number>()
+  const chercher = (ex: number): PrixResolu | null => {
+    const l = par.get(ex)
+    if (!l || vus.has(ex)) return null
+    vus.add(ex)
+    if (l.prix !== null && l.valide) return { prix: Number(l.prix), provisoire: ex !== exercice, exercice: ex }
+    if (l.repli !== null) {
+      const r = chercher(l.repli)
+      if (r) return { ...r, provisoire: true }
+    }
+    return l.prix !== null ? { prix: Number(l.prix), provisoire: true, exercice: ex } : null
+  }
+  const r = chercher(exercice)
+  if (r) return r
+  const autres = lignes.filter((l) => l.prix !== null && l.exercice !== exercice)
+  const avant = autres.filter((l) => l.exercice < exercice).sort((a, b) => b.exercice - a.exercice)[0]
+  const apres = autres.filter((l) => l.exercice > exercice).sort((a, b) => a.exercice - b.exercice)[0]
+  const l = avant ?? apres
+  return l ? { prix: Number(l.prix), provisoire: true, exercice: l.exercice } : { prix: null, provisoire: false, exercice: null }
+}
+
+/**
+ * Prix client d'un produit de fournisseur : coût × (1 + marge %) + ajout,
+ * arrondi selon le produit (Mont-Blanc : au dollar supérieur). Transport :
+ * marge de 15 % (ex-« × 1,15 », mêmes prix au cent près).
+ */
+export function prixFournisseur(
+  cout: number,
+  marge: number,
+  p: { ajout: number | null; arrondi: 'aucun' | 'dollar_superieur' },
+): number {
+  const brut = Number(cout) * (1 + Number(marge) / 100) + Number(p.ajout ?? 0)
   return p.arrondi === 'dollar_superieur' ? Math.ceil(brut - 1e-9) : arrondi4(brut)
+}
+
+/** Marge par défaut d'un produit de fournisseur, en % (majoration 1,15 → 15). */
+export const margeParDefaut = (majoration: number | null) =>
+  majoration === null ? null : Math.round((Number(majoration) - 1) * 10_000) / 100
+
+/** Hausse d'un prix d'une année à l'autre, en $ et en % (une décimale ; null si l'un manque). */
+export function hausse(avant: number | null, apres: number | null): { montant: number; pourcentage: number | null } | null {
+  if (avant === null || apres === null) return null
+  const a = Number(avant)
+  const b = Number(apres)
+  return { montant: arrondi4(b - a), pourcentage: a === 0 ? null : Math.round(((b - a) / a) * 1000) / 10 }
 }

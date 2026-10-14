@@ -8,11 +8,15 @@ import {
   appliquerPourcentages,
   exerciceDe,
   gratuites,
+  hausse,
   lignesAuto,
   litsDe,
+  margeParDefaut,
+  prixFournisseur,
   prixScolaire,
   regrouperSections,
   repasProposes,
+  resoudrePrix,
   totaux,
 } from './calcul.ts'
 
@@ -187,4 +191,63 @@ test('taxes ligne par ligne, comme QBO (vérifié en compagnie d’essai le 2026
   assert.deepEqual(totaux(l(6782.5, 0, 168.3)), { sous_total: 6950.8, tps: 347.55, tvq: 693.34, total: 7991.69 })
   // Ligne négative (rabais) : arrondie de façon symétrique, comme QBO.
   assert.deepEqual(totaux(l(6782.5, 168.3, -168.3)), { sous_total: 6782.5, tps: 339.13, tvq: 676.55, total: 7798.18 })
+})
+
+// ------------------------------------------------------------------
+// Liste de prix (révision du 2026-10-14)
+// ------------------------------------------------------------------
+
+test('fournisseurs : coût + marge de 15 % = les prix 2026-27 au cent près (ex-« × 1,15 »)', () => {
+  // [coût, prix de la liste 2026-27, ajout, arrondi] (migrations 20261008194431 et 20261008210842).
+  const cas = [
+    [130, 149.5], [125, 143.75], [175, 201.25], [720, 828], [132.25, 152.0875], [460, 529], [575, 661.25],
+    [475, 546.25], [189.75, 218.2125], [520, 598], [18, 20.7], [42, 48.3], [18.75, 21.5625],
+    [22, 26.3, 1], [23, 27, null, 'dollar_superieur'], [9, 11, null, 'dollar_superieur'], [31, 36, null, 'dollar_superieur'],
+    [30, 35, null, 'dollar_superieur'], [20, 23, null, 'dollar_superieur'], [27, 32, null, 'dollar_superieur'],
+  ]
+  for (const [cout, prix, ajout = null, arrondi = 'aucun'] of cas)
+    assert.equal(prixFournisseur(cout, 15, { ajout, arrondi }), prix, `coût ${cout}`)
+  assert.equal(margeParDefaut(1.15), 15)
+  assert.equal(margeParDefaut(1.3225), 32.25)
+  assert.equal(margeParDefaut(null), null)
+})
+
+test('prix provisoires : repli sur l’exercice d’avant tant que le prix n’est pas validé', () => {
+  const l = (exercice, prix, valide, repli = null) => ({ exercice, prix, valide, repli })
+  // 26-27 validé, 27-28 préparé (vide) : 27-28 prend 26-27, provisoire.
+  assert.deepEqual(resoudrePrix([l(2027, 25.2, true), l(2028, null, false, 2027)], 2028), { prix: 25.2, provisoire: true, exercice: 2027 })
+  // 27-28 entré mais pas validé : toujours 26-27.
+  assert.deepEqual(resoudrePrix([l(2027, 25.2, true), l(2028, 26, false, 2027)], 2028), { prix: 25.2, provisoire: true, exercice: 2027 })
+  // 27-28 validé : il s'applique.
+  assert.deepEqual(resoudrePrix([l(2027, 25.2, true), l(2028, 26, true, 2027)], 2028), { prix: 26, provisoire: false, exercice: 2028 })
+  // 26-27 à valider (sans repli) : son propre prix, provisoire — un prix d'avant (25-26) n'est jamais pris.
+  assert.deepEqual(resoudrePrix([l(2026, 130, true), l(2027, 149.5, false)], 2027), { prix: 149.5, provisoire: true, exercice: 2027 })
+  // Repli vide, prix 27-28 entré : on le prend plutôt que rien.
+  assert.deepEqual(resoudrePrix([l(2027, null, false), l(2028, 40, false, 2027)], 2028), { prix: 40, provisoire: true, exercice: 2028 })
+  // Pas de ligne pour l'exercice : le plus récent d'avant (comme avant la révision), provisoire.
+  assert.deepEqual(resoudrePrix([l(2026, 24, true), l(2027, 25.2, true)], 2028), { prix: 25.2, provisoire: true, exercice: 2027 })
+  assert.deepEqual(resoudrePrix([l(2027, 25.2, true)], 2026), { prix: 25.2, provisoire: true, exercice: 2027 })
+  assert.deepEqual(resoudrePrix([], 2027), { prix: null, provisoire: false, exercice: null })
+  // Repli en chaîne (28-29 préparé d'après 27-28, lui-même pas validé).
+  assert.deepEqual(resoudrePrix([l(2027, 25.2, true), l(2028, null, false, 2027), l(2029, null, false, 2028)], 2029), { prix: 25.2, provisoire: true, exercice: 2027 })
+})
+
+test('prix provisoires : signalés par le calcul, sans changer un montant', () => {
+  const avec = { ...catalogue, provisoire: (code) => code === 'REPAS' }
+  const e = {
+    forfait: 'classe_nature', variante: null, date_arrivee: '2027-10-13', date_depart: '2027-10-14', nb_participants: 50, nb_accompagnateurs: 4,
+    ratio: '1:15', service_repas: true, nb_dejeuners: 1, nb_diners: 2, nb_soupers: 1, heures_extra: 0, heures_supplementaires: 0, etages: [],
+  }
+  const sans = lignesAuto(e, catalogue)
+  const r = lignesAuto(e, avec)
+  assert.deepEqual(r.lignes, sans.lignes)
+  assert.deepEqual(r.provisoires, ['REPAS'])
+  assert.deepEqual(sans.provisoires, [])
+})
+
+test('hausse d’une année à l’autre', () => {
+  assert.deepEqual(hausse(31, 32.5), { montant: 1.5, pourcentage: 4.8 })
+  assert.deepEqual(hausse(18.5, 19.4), { montant: 0.9, pourcentage: 4.9 })
+  assert.deepEqual(hausse(0, 10), { montant: 10, pourcentage: null })
+  assert.equal(hausse(null, 10), null)
 })

@@ -430,7 +430,7 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
   - les liens vers les PDF déjà produits.
   - Pour une réservation déjà signée, l'estimé accepté est importé en une ligne au montant de l'estimé, avec le lien vers son PDF. Les factures qui restent à faire sont produites par l'app.
 - **2025-26** : historique (247 demandes) pour les rapports et le CRM. Il sert aussi de **données d'essai en DEV**.
-- **Listes de prix** : 2026-27 tirée du chiffrier ; 2025-26 tirée d'Airtable et des onglets 26-G.
+- **Listes de prix** : 2026-27 tirée du chiffrier ; 2025-26 tirée de la liste de prix du chiffrier 2025-26 (`scripts/migration/reservations-prix-historique.mjs`, export CSV gardé dans `scripts/migration/sauvegarde/`, hors Git ; à rejouer à la bascule), vérifiée sur les estimés 2025-26 importés (révision du 2026-10-14, `docs/verification-prix-2026-10-14.md`).
 - **Données personnelles** : les imports se font par script hors du dépôt Git, comme pour Copper.
 - **Bascule** (réponse de Maxime à Q7) : toute la saison 2026-27 se gère dans l'app. Import et bascule à un moment précis, choisi avec l'équipe.
   - Ce jour-là, Jotform est remplacé par le formulaire de l'app, et les Sheets et le chiffrier passent en lecture seule.

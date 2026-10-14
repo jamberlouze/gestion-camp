@@ -59,8 +59,18 @@ export function Estime({ r }: { r: Reservation }) {
   )
 }
 
+/** Prix provisoires d'un estimé (code → exercice du prix pris) : liste de prix pas encore validée. */
+function prixProvisoires(codes: Iterable<string>, exercice: number, infoPrix: ReturnType<typeof useDonnees>['infoPrix']) {
+  const m: Record<string, number> = {}
+  for (const c of codes) {
+    const i = infoPrix(c, exercice)
+    if (i.provisoire && i.exercice !== null) m[c] = i.exercice
+  }
+  return m
+}
+
 function PremierEstime({ r }: { r: Reservation }) {
-  const { catalogue, ecriture } = useDonnees()
+  const { catalogue, ecriture, infoPrix } = useDonnees()
   const enregistrer = useEnregistrerEstime()
   const creer = () => {
     const calc = lignesAuto(r, catalogue)
@@ -68,6 +78,7 @@ function PremierEstime({ r }: { r: Reservation }) {
     enregistrer.mutate({
       estime: { id: crypto.randomUUID(), reservation_id: r.id, version: 1, exercice_prix: calc.exercice, notes: null, ...totaux(lignes) },
       lignes,
+      prix_provisoires: prixProvisoires(calc.provisoires, calc.exercice, infoPrix),
     })
   }
   return (
@@ -83,7 +94,7 @@ function PremierEstime({ r }: { r: Reservation }) {
 }
 
 function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TEstime; choisir: (id: string) => void; reference: TEstime | null }) {
-  const { catalogue, produits, parCode, prixDe, ecriture, sources, auj } = useDonnees()
+  const { catalogue, produits, parCode, prixDe, infoPrix, ecriture, sources, auj } = useDonnees()
   const [pdf, setPdf] = useState<string | null>(null)
   const lignesDb = useLignes(estime.id)
   const enregistrer = useEnregistrerEstime()
@@ -127,6 +138,18 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
 
   if (!lignes) return <p className="text-sm text-pierre-500">Chargement…</p>
 
+  // Prix provisoires : brouillon = d'après la liste de prix d'aujourd'hui ; figé = ceux gardés avec l'estimé.
+  const provisoires = modifiable
+    ? prixProvisoires(new Set([...calcul.provisoires, ...lignes.flatMap((l) => (l.code && parCode.has(l.code) ? [l.code] : []))]), calcul.exercice, infoPrix)
+    : (estime.prix_provisoires ?? {})
+  const codesProvisoires = Object.keys(provisoires)
+  const exercicePrix = modifiable ? calcul.exercice : estime.exercice_prix
+  const ligneProvisoire = (l: Pick<LigneEdit, 'code' | 'auto' | 'prix_unitaire'>) =>
+    l.prix_unitaire !== 0 &&
+    (l.code
+      ? l.code in provisoires || (l.code.startsWith('AG-') && 'LIT' in provisoires)
+      : l.auto && codesProvisoires.some((c) => /^(CN-|JPA-|REPAS$)/.test(c)))
+
   const maj = (n: LigneEdit[]) => {
     setLignes(n.map((l, i) => ({ ...l, ordre: i })))
     setSale(true)
@@ -145,6 +168,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
       {
         estime: { id: estime.id, reservation_id: r.id, version: estime.version, exercice_prix: calcul.exercice, notes: estime.notes, ...t },
         lignes: avecMontants.map((l, i) => ({ ...l, ordre: i })),
+        prix_provisoires: provisoires,
       },
       {
         onSuccess: () => {
@@ -269,6 +293,16 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
       {modifiable && calcul.manquants.length > 0 && (
         <p className={ui.erreur}>Prix à définir dans le catalogue : {calcul.manquants.join(', ')} (comptés à 0 $).</p>
       )}
+      {codesProvisoires.length > 0 && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="font-medium">{modifiable ? 'Prix provisoires' : 'Fait avec des prix provisoires'}</span> :{' '}
+          {codesProvisoires
+            .map((c) => `${parCode.get(c)?.nom ?? c} (${provisoires[c] === exercicePrix ? 'à valider' : `prix ${libelleExercice(provisoires[c])}`})`)
+            .join(', ')}
+          . Les prix de {libelleExercice(exercicePrix)} ne sont pas encore validés dans la liste de prix
+          {modifiable ? ' : dès qu’ils le sont, « Recalculer » les reprend.' : '.'} Le PDF du client montre les prix tels quels.
+        </p>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] table-fixed text-sm">
@@ -302,6 +336,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
                     </>
                   )}
                   {modifiable && l.auto && <span className="text-[11px] text-foret-700">calculé</span>}
+                  {ligneProvisoire(l) && <span className="ml-1.5 text-[11px] text-amber-700">prix provisoire</span>}
                 </td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">
                   {modifiable && l.pourcentage === null ? (

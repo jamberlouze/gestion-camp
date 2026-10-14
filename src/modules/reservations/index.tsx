@@ -8,7 +8,7 @@ import { useAuth } from '@/shell/auth'
 import { aujourdhui } from '@/shell/pokes'
 import { Catalogue } from './Catalogue'
 import { OngletCourriels } from './CourrielsClients'
-import { ContexteReservations, fabriquerPrixDe, type Donnees } from './contexte'
+import { ContexteReservations, fabriquerInfoPrix, type Donnees } from './contexte'
 import { lireReglages } from './parametres'
 import {
   useCompagnies,
@@ -66,7 +66,8 @@ export default function ModuleReservations() {
     )
       return null
     const r = lireReglages(reglages.data)
-    const prixDe = fabriquerPrixDe(produits.data, prix.data)
+    const infoPrix = fabriquerInfoPrix(produits.data, prix.data)
+    const prixDe = (code: string, exercice: number) => infoPrix(code, exercice).prix
     const parCode = new Map(produits.data.map((p) => [p.code, p]))
     const noms = new Map(responsables.data.map((x) => [x.id, x.nom]))
     const orgParId = new Map(organisations.data.map((o) => [o.id, o]))
@@ -80,8 +81,10 @@ export default function ModuleReservations() {
       parCode,
       prix: prix.data,
       prixDe,
+      infoPrix,
       catalogue: {
         prix: prixDe,
+        provisoire: (code, exercice) => infoPrix(code, exercice).provisoire,
         produits: parCode,
         etages: new Map(etages.data.map((e) => [e.code, e])),
         gratuitePar: r.gratuitePar,

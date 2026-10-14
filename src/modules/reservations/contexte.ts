@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Profil } from '@/lib/types'
 import type { Contact, Organisation } from '@/modules/crm/types'
-import type { Catalogue } from './calcul'
+import { resoudrePrix, type Catalogue, type PrixExercice, type PrixResolu } from './calcul'
 import type { Entreprise } from './donnees'
 import type { Sources } from './productionPdf'
 import type { Reglages } from './parametres'
@@ -14,8 +14,10 @@ export interface Donnees {
   produits: Produit[]
   parCode: Map<string, Produit>
   prix: Prix[]
-  /** Prix d'un produit pour un exercice ; sans prix pour cet exercice : le plus récent. */
+  /** Prix d'un produit pour un exercice ; sans prix validé pour cet exercice : le repli (`resoudrePrix`). */
   prixDe: (code: string, exercice: number) => number | null
+  /** Le même prix, avec son statut (provisoire) et l'exercice d'où il vient. */
+  infoPrix: (code: string, exercice: number) => PrixResolu
   catalogue: Catalogue
   reglages: Reglages
   organisations: Organisation[]
@@ -45,20 +47,26 @@ export function useDonnees() {
   return d
 }
 
-/** Fonction de prix avec repli sur l'exercice le plus récent qui a un prix (P2). */
-export function fabriquerPrixDe(produits: Produit[], prix: Prix[]) {
+/**
+ * Prix d'un produit par code et exercice, avec repli (P2) : un prix pas
+ * encore validé prend celui de son repli, marqué provisoire (`resoudrePrix`).
+ */
+export function fabriquerInfoPrix(produits: Produit[], prix: Prix[]) {
   const idDe = new Map(produits.map((p) => [p.code, p.id]))
-  const parProduit = new Map<string, Prix[]>()
+  const parProduit = new Map<string, PrixExercice[]>()
   for (const p of prix) {
-    if (p.prix === null) continue
     const l = parProduit.get(p.produit_id) ?? []
-    l.push(p)
+    l.push({ exercice: p.exercice, prix: p.prix === null ? null : Number(p.prix), valide: p.valide, repli: p.repli })
     parProduit.set(p.produit_id, l)
   }
-  for (const l of parProduit.values()) l.sort((a, b) => b.exercice - a.exercice)
-  return (code: string, exercice: number): number | null => {
-    const l = parProduit.get(idDe.get(code) ?? '')
-    if (!l?.length) return null
-    return Number((l.find((p) => p.exercice === exercice) ?? l[0]).prix)
+  const memo = new Map<string, PrixResolu>()
+  return (code: string, exercice: number): PrixResolu => {
+    const cle = `${code}|${exercice}`
+    let r = memo.get(cle)
+    if (!r) {
+      r = resoudrePrix(parProduit.get(idDe.get(code) ?? '') ?? [], exercice)
+      memo.set(cle, r)
+    }
+    return r
   }
 }

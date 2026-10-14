@@ -115,6 +115,8 @@ export interface Estime {
   /** Accepté par le client sur sa page : son nom et son adresse IP. */
   accepte_par: string | null
   accepte_ip: string | null
+  /** Prix provisoires utilisés (code → exercice du prix pris), figés avec l'estimé. */
+  prix_provisoires: Record<string, number>
   created_at: string
   updated_at: string
 }
@@ -177,9 +179,12 @@ export interface Produit {
   unite: Unite
   forfaits: Forfait[]
   etages: string[] | null
+  /** Produit de fournisseur (non nul) : marge par défaut, en multiplicateur (1,15 = 15 %). */
   majoration: number | null
   ajout: number | null
   arrondi: 'aucun' | 'dollar_superieur'
+  /** Fournisseur nommé (transport, sorties), facultatif. */
+  fournisseur: string | null
   note_minimum: string | null
   systeme: boolean
   extra: boolean
@@ -192,8 +197,21 @@ export interface Produit {
 export interface Prix {
   produit_id: string
   exercice: number
+  /** Prix client (null = à définir). */
   prix: number | null
+  /** Coût du fournisseur (produits de fournisseurs). */
   cout: number | null
+  /** Marge du fournisseur en % (15 = coût × 1,15). */
+  marge: number | null
+  /** « Validé » (sinon « à valider ») ; auteur et dates tenus par la base. */
+  valide: boolean
+  valide_le: string | null
+  valide_par_nom: string | null
+  /** Dernière modification du prix, du coût ou de la marge. */
+  modifie_le: string
+  modifie_par_nom: string | null
+  /** Exercice dont le prix s'applique tant que celui-ci n'est pas validé. */
+  repli: number | null
 }
 
 export interface Reglage {
