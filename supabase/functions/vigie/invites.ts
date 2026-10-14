@@ -7,6 +7,8 @@
 export const SAISONS = ['hiver', 'printemps', 'ete', 'automne']
 export const TYPES_CAMP = ['camp_vacances', 'camp_familial', 'camp_jour', 'besoins_particuliers', 'classe_nature', 'accueil_groupe']
 export const HEBERGEMENTS = ['tente', 'dortoir', 'chalet', 'chambre', 'autre']
+/** Type de séjour d'un programme (pas du camp : un camp peut en offrir plusieurs). */
+export const TYPES_SEJOUR = ['camp_vacances', 'camp_familial', 'classe_nature', 'groupe']
 
 const BPA = `La Base de Plein Air Mont-Tremblant (BPA) est un camp de vacances et une base de plein air
 à Mont-Tremblant (Laurentides, Québec) : 190 lits en chambres de 4 à 6, une plage et un lac, accès
@@ -50,9 +52,14 @@ export const OUTIL_RESULTATS = {
             duree_nuits: nul('integer'),
             prix: { ...nul('number'), description: 'Prix régulier total pour un enfant, en dollars canadiens ; null si introuvable.' },
             annee: { ...nul('string'), description: 'Saison ou année du prix, ex. « été 2027 ».' },
+            type_sejour: {
+              type: ['string', 'null'],
+              enum: [...TYPES_SEJOUR, null],
+              description: 'Type de séjour du programme (voir les consignes) ; null si aucun ne convient.',
+            },
             source_url: nul('string'),
           },
-          required: ['programme_id', 'nom', 'description', 'duree_jours', 'duree_nuits', 'prix', 'annee', 'source_url'],
+          required: ['programme_id', 'nom', 'description', 'duree_jours', 'duree_nuits', 'prix', 'annee', 'type_sejour', 'source_url'],
         },
       },
       activites: { type: 'array', items: ACTIVITE },
@@ -190,6 +197,17 @@ export interface ActiviteListe { id: string; nom: string }
 export const blocListe = (activites: ActiviteListe[]) =>
   `Liste commune des activités candidates (identifiant | nom) :\n${activites.map((a) => `${a.id} | ${a.nom}`).join('\n')}`
 
+/** Les quatre types de séjour, pour classer chaque programme (décision du 2026-10-14). */
+const TYPES_SEJOUR_TEXTE = `Type de séjour (type_sejour) de CHAQUE programme, connu ou nouveau ; un camp peut offrir
+plusieurs types, classe chaque programme à part, d'après son nom, sa description et la page lue :
+- camp_vacances : enfants ou ados inscrits seuls par leurs parents (séjour régulier, spécialisé,
+  aspirant-moniteur, expédition…) ;
+- camp_familial : parents et enfants ensemble (séjour ou fin de semaine en famille) ;
+- classe_nature : écoles (classes nature, vertes, neige ou blanches, sorties scolaires avec nuitées) ;
+- groupe : groupes organisés qui réservent le site (organismes, équipes sportives, entreprises,
+  retraites, location du site) ;
+- null si aucun ne convient (camp de jour sans nuit, séjour pour adultes seuls…).`
+
 const consignesManuelles = (consignes: string) =>
   consignes.trim() ? `\n\nConsignes de la direction (prioritaires) :\n${consignes.trim()}` : ''
 
@@ -202,14 +220,16 @@ enregistrer_resultats, appelé une seule fois à la toute fin.
 
 1. Prix des programmes — PRIORITÉ NUMÉRO UN. Trouve la page des tarifs de la saison la plus récente
    affichée. Pour chaque programme connu (liste fournie avec identifiants), donne le prix régulier
-   actuel, la durée en jours et en nuits et la saison ou l'année du prix, avec programme_id. Prix =
-   montant total pour un enfant, en dollars canadiens, sans rabais (lève-tôt, fratrie, membre). Si le
+   actuel, la durée en jours et en nuits, la saison ou l'année du prix et le type de séjour, avec
+   programme_id. Prix = montant total pour un enfant (par participant pour une classe nature, une
+   famille ou un groupe), en dollars canadiens, sans rabais (lève-tôt, fratrie, membre). Si le
    camp affiche plusieurs durées ou prix pour un même programme, une entrée par variante (ex.
    « Ado-X (12 jours) ») en réutilisant programme_id pour la variante qui correspond au programme
    connu. N'invente jamais un prix : null si introuvable. Un programme connu introuvable : ne le liste
    pas.
 2. Nouveaux programmes (programme_id null) : séjours distincts (régulier, aspirant-moniteur,
-   expédition, spécialisé…), sans sous-catégories de prix.
+   expédition, spécialisé, classe nature, famille, groupes…), sans sous-catégories de prix.
+   ${TYPES_SEJOUR_TEXTE.replace(/\n/g, '\n   ')}
 3. Activités (priorité secondaire, rarement listées de façon structurée) : cherche plus loin qu'un
    simple passage sur le site — pages d'activités, d'installations, de programmes, de classes nature
    et d'hiver, galerie de photos — et surveille les réseaux sociaux (recherche web sur le nom du camp
@@ -234,9 +254,12 @@ ${BPA}
 
 Passe 2 (recherche approfondie) : la direction vient de retenir ce camp. Documente TOUS les
 paramètres suivis et enregistre-les avec l'outil enregistrer_resultats, appelé une seule fois à la fin :
-- programmes : tous les séjours offerts (programme_id null), avec nom, description courte, durée en
-  jours et en nuits, prix régulier total pour un enfant (dollars canadiens, sans rabais) et saison
-  du prix ; une entrée par variante de durée ou de prix ; null plutôt qu'un prix inventé ;
+- programmes : tous les séjours offerts (programme_id null) — camp de vacances, mais aussi classes
+  nature, séjours en famille et accueil de groupes s'il y en a —, avec nom, description courte,
+  durée en jours et en nuits, prix régulier total par participant (dollars canadiens, sans rabais),
+  saison du prix et type de séjour ; une entrée par variante de durée ou de prix ; null plutôt
+  qu'un prix inventé ;
+  ${TYPES_SEJOUR_TEXTE.replace(/\n/g, '\n  ')}
 - activités : recherche approfondie (site, galerie, programmes, hiver, classes nature, réseaux
   sociaux) ; associe chaque activité à la liste commune (activite_id) dès que c'est la même ;
 - photos_a_analyser : jusqu'à 6 adresses directes d'images montrant des activités ;
@@ -261,13 +284,17 @@ export interface ProgrammeInvite {
   duree_nuits: number | null
   prix: number | null
   annee: string | null
+  type_sejour?: string | null
 }
 
 export function inviteCamp(camp: CampInvite, programmes: ProgrammeInvite[], activitesConnues: string[], aujourdhui: string) {
   const liens = [camp.site_web, camp.facebook, camp.instagram, camp.tiktok].filter(Boolean).join(' · ')
   const progs = programmes.length
     ? programmes
-        .map((p) => `- ${p.id} | ${p.nom} | ${p.duree_jours ?? '?'} jours / ${p.duree_nuits ?? '?'} nuits | ${p.prix ?? '?'} $ | ${p.annee ?? '?'}`)
+        .map(
+          (p) =>
+            `- ${p.id} | ${p.nom} | ${p.duree_jours ?? '?'} jours / ${p.duree_nuits ?? '?'} nuits | ${p.prix ?? '?'} $ | ${p.annee ?? '?'} | ${p.type_sejour ?? '?'}`,
+        )
         .join('\n')
     : '(aucun)'
   return `Nous sommes le ${aujourdhui}.
@@ -275,7 +302,7 @@ export function inviteCamp(camp: CampInvite, programmes: ProgrammeInvite[], acti
 Camp : ${camp.nom} (${[camp.ville, camp.region].filter(Boolean).join(', ') || 'lieu inconnu'})
 Liens connus : ${liens || 'aucun'}
 
-Programmes connus (identifiant | nom | durée | prix | saison) :
+Programmes connus (identifiant | nom | durée | prix | saison | type de séjour) :
 ${progs}
 
 Activités déjà notées pour ce camp : ${activitesConnues.length ? activitesConnues.join(', ') : '(aucune)'}`

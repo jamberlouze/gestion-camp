@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { ui } from '@/lib/ui'
+import { useModifier } from './donnees'
 import { menu } from './outils'
-import { CATEGORIES, SAISONS, type Categorie, type Saison } from './types'
+import { CATEGORIES, nomTypeSejour, SAISONS, TYPES_SEJOUR, type Categorie, type Programme, type Saison, type TypeSejour } from './types'
 
 export function Chargement() {
   return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
@@ -124,5 +125,96 @@ export function TexteLibre({
       onChange={(e) => setTexte(e.target.value)}
       onBlur={() => texte.trim() !== (valeur ?? '') && enregistrer(texte.trim() || null)}
     />
+  )
+}
+
+/** Puces de choix (une seule allumée, ou « tout »), comme dans le CRM et les Réservations. */
+export function Puces<T extends string>({
+  options,
+  valeur,
+  changer,
+  tout = 'Tous',
+  compte,
+  libelle,
+}: {
+  options: { id: T; nom: string }[]
+  valeur: T | ''
+  changer: (v: T | '') => void
+  tout?: string
+  compte?: (id: T | '') => number
+  libelle?: string
+}) {
+  return (
+    <div className="inline-flex flex-wrap rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" role="group" aria-label={libelle}>
+      {[{ id: '' as T | '', nom: tout }, ...options].map((o) => (
+        <button
+          key={o.id || 'tout'}
+          aria-pressed={valeur === o.id}
+          className={`rounded-md px-2.5 py-1 ${valeur === o.id ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`}
+          onClick={() => changer(o.id)}
+        >
+          {o.nom}
+          {compte && <span className="ml-1 tabular-nums text-pierre-400">{compte(o.id)}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const COULEURS_TYPE: Record<TypeSejour, string> = {
+  camp_vacances: 'bg-emerald-50 text-emerald-800',
+  camp_familial: 'bg-violet-50 text-violet-800',
+  classe_nature: 'bg-sky-50 text-sky-800',
+  groupe: 'bg-orange-50 text-orange-800',
+}
+
+export function PastilleTypeSejour({ type, aVerifier }: { type: TypeSejour | null; aVerifier?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      <span className={`rounded-full px-2 py-0.5 text-xs ${type ? COULEURS_TYPE[type] : 'bg-pierre-100 text-pierre-500'}`}>{nomTypeSejour(type)}</span>
+      {aVerifier && <span className="text-xs text-amber-700">à vérifier</span>}
+    </span>
+  )
+}
+
+/**
+ * Type de séjour d'un programme : menu pour le changer et, s'il vient de Claude
+ * (à vérifier), ✓ pour le confirmer tel quel. Changer ou confirmer = vérifié.
+ */
+export function ChoixTypeSejour({ programme: p, ecriture }: { programme: Programme; ecriture: boolean }) {
+  const modifier = useModifier<Programme>('programmes')
+  if (!ecriture) return <PastilleTypeSejour type={p.type_sejour} aVerifier={p.type_a_verifier} />
+  return (
+    <span className="inline-flex items-center gap-1">
+      <select
+        aria-label={`Type de séjour de ${p.nom}`}
+        title={p.type_a_verifier ? 'Proposé par Claude, à vérifier' : undefined}
+        // Pas `menu` : ses couleurs l'emporteraient sur celles d'« à vérifier ».
+        className={`fleche-serree rounded-lg border px-2.5 py-1 text-xs ${
+          p.type_a_verifier
+            ? 'border-amber-400 bg-amber-50 text-amber-900'
+            : `border-pierre-300 bg-white ${p.type_sejour ? 'text-pierre-800' : 'text-pierre-500'}`
+        }`}
+        value={p.type_sejour ?? ''}
+        onChange={(e) => modifier.mutate({ id: p.id, type_sejour: (e.target.value || null) as TypeSejour | null, type_a_verifier: false })}
+      >
+        <option value="">Pas classé</option>
+        {TYPES_SEJOUR.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.libelle}
+          </option>
+        ))}
+      </select>
+      {p.type_a_verifier && (
+        <button
+          className="rounded-md px-1.5 py-0.5 text-sm font-medium text-foret-700 ring-1 ring-foret-200 hover:bg-foret-50"
+          title={p.type_sejour ? `Confirmer « ${nomTypeSejour(p.type_sejour)} »` : 'Confirmer : aucun de ces types'}
+          aria-label={`Confirmer le type de ${p.nom}`}
+          onClick={() => modifier.mutate({ id: p.id, type_a_verifier: false })}
+        >
+          ✓
+        </button>
+      )}
+    </span>
   )
 }

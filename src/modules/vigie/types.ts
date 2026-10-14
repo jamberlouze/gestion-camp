@@ -26,6 +26,18 @@ export const TYPES_CAMP: Record<string, string> = {
   accueil_groupe: 'Accueil de groupes',
 }
 
+/** Type de séjour d'un PROGRAMME (décision du 2026-10-14 : pas du camp, un camp peut en offrir plusieurs). */
+export type TypeSejour = 'camp_vacances' | 'camp_familial' | 'classe_nature' | 'groupe'
+
+export const TYPES_SEJOUR: { id: TypeSejour; libelle: string }[] = [
+  { id: 'camp_vacances', libelle: 'Camp de vacances' },
+  { id: 'camp_familial', libelle: 'Camp familial' },
+  { id: 'classe_nature', libelle: 'Classe nature' },
+  { id: 'groupe', libelle: 'Groupe' },
+]
+
+export const nomTypeSejour = (t: TypeSejour | null | undefined) => TYPES_SEJOUR.find((x) => x.id === t)?.libelle ?? 'Pas classé'
+
 export const HEBERGEMENTS: Record<string, string> = {
   tente: 'Tente',
   dortoir: 'Dortoir',
@@ -80,6 +92,10 @@ export interface Programme {
   source_url: string | null
   actif: boolean
   verifie_le: string | null
+  /** null = pas classé (ou aucun des quatre types). */
+  type_sejour: TypeSejour | null
+  /** Type posé par Claude (pré-classement ou recherche), pas encore confirmé dans l'app. */
+  type_a_verifier: boolean
 }
 
 export interface Activite {

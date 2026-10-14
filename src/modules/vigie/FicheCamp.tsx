@@ -5,10 +5,21 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { Carte, ChoixCategorie, Chargement, LienExterne, PastilleCategorie, Saisons, TexteLibre } from './commun'
-import { argent, dateCourte, menu } from './outils'
+import { Carte, ChoixCategorie, ChoixTypeSejour, Chargement, LienExterne, PastilleCategorie, Puces, Saisons, TexteLibre } from './commun'
+import { argent, dateCourte, duType, ecartMediane, medianesParType, menu, resumeStats, useTypeChoisi, type FiltreType } from './outils'
 import { useActivites, useCamps, useChangementsCamp, useEcriture, useLier, useLiens, useModifier, useProgrammes } from './donnees'
-import { HEBERGEMENTS, TYPES_CAMP, type Activite, type Camp, type LienActivite, type Programme, type StatutInclusion } from './types'
+import {
+  HEBERGEMENTS,
+  nomTypeSejour,
+  TYPES_CAMP,
+  TYPES_SEJOUR,
+  type Activite,
+  type Camp,
+  type LienActivite,
+  type Programme,
+  type StatutInclusion,
+  type TypeSejour,
+} from './types'
 
 const champ = `${ui.champ} py-1.5`
 const nombreOuNull = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
@@ -26,6 +37,8 @@ export function FicheCamp() {
   const liens = useLiens()
   const historique = useChangementsCamp(id)
   const modifier = useModifier<Camp>('camps')
+  const [type, setType] = useTypeChoisi(true)
+  const medianes = useMemo(() => medianesParType(camps.data ?? [], programmes.data ?? []), [camps.data, programmes.data])
 
   const camp = camps.data?.find((c) => c.id === id)
   const progs = useMemo(() => (programmes.data ?? []).filter((p) => p.camp_id === id), [programmes.data, id])
@@ -153,7 +166,7 @@ export function FicheCamp() {
         </Carte>
       </div>
 
-      <Programmes camp={camp} programmes={progs} ecriture={ecriture} />
+      <Programmes camp={camp} programmes={progs} ecriture={ecriture} type={type} setType={setType} medianes={medianes} />
 
       <Carte titre={`Activités offertes (${lies.length})`}>
         <ActivitesCamp camp={camp} lies={lies} ecriture={ecriture} />
@@ -195,7 +208,21 @@ export function FicheCamp() {
   )
 }
 
-function Programmes({ camp, programmes, ecriture }: { camp: Camp; programmes: Programme[]; ecriture: boolean }) {
+function Programmes({
+  camp,
+  programmes,
+  ecriture,
+  type,
+  setType,
+  medianes,
+}: {
+  camp: Camp
+  programmes: Programme[]
+  ecriture: boolean
+  type: FiltreType
+  setType: (t: FiltreType) => void
+  medianes: ReturnType<typeof medianesParType>
+}) {
   const modifier = useModifier<Programme>('programmes')
   const maj = (p: Programme, valeurs: Partial<Programme>) => modifier.mutate({ id: p.id, ...valeurs })
   const cellule = 'px-2 py-1.5'
@@ -215,25 +242,47 @@ function Programmes({ camp, programmes, ecriture }: { camp: Camp; programmes: Pr
     if (await confirmer({ titre: `Supprimer le programme « ${p.nom} » ?`, libelleOk: 'Supprimer' })) modifier.mutate({ id: p.id, supprimer: true })
   }
   const actifs = programmes.filter((p) => p.actif)
+  // Puces des types de ce camp (et « Pas classé ») : seulement s'il y a de quoi choisir.
+  const presents: { id: TypeSejour | 'aucun'; nom: string }[] = TYPES_SEJOUR.filter((t) => programmes.some((p) => p.type_sejour === t.id)).map((t) => ({
+    id: t.id,
+    nom: t.libelle,
+  }))
+  if (programmes.some((p) => p.type_sejour == null)) presents.push({ id: 'aucun', nom: 'Pas classé' })
+  // Le type choisi ailleurs (lien du tableau de bord) reste allumé même si ce camp n'en a pas.
+  if (type && !presents.some((o) => o.id === type)) presents.push({ id: type, nom: type === 'aucun' ? 'Pas classé' : nomTypeSejour(type) })
+  const affiches = duType(programmes, type)
+  const typesAffiches = TYPES_SEJOUR.filter((t) => affiches.some((p) => p.actif && p.type_sejour === t.id))
   return (
     <Carte
-      titre={`Programmes (${actifs.length})`}
+      titre={type ? `Programmes (${affiches.filter((p) => p.actif).length} sur ${actifs.length})` : `Programmes (${actifs.length})`}
       action={
-        ecriture && (
-          <button className={`${ui.boutonSecondaire} py-1.5`} onClick={() => modifier.mutate({ camp_id: camp.id, nom: 'Nouveau programme' })}>
-            <IconePlus /> Programme
-          </button>
-        )
+        <div className="flex flex-wrap items-center gap-2">
+          {(presents.length > 1 || type) && (
+            <Puces libelle="Type de séjour" options={presents} valeur={type} changer={setType} tout="Tous les types" />
+          )}
+          {ecriture && (
+            <button
+              className={`${ui.boutonSecondaire} py-1.5`}
+              onClick={() =>
+                // Avec un type choisi, le nouveau programme le prend (sinon il serait caché).
+                modifier.mutate({ camp_id: camp.id, nom: 'Nouveau programme', type_sejour: type && type !== 'aucun' ? (type as TypeSejour) : null })
+              }
+            >
+              <IconePlus /> Programme
+            </button>
+          )}
+        </div>
       }
     >
-      {!programmes.length ? (
-        <p className="text-sm text-pierre-500">Aucun programme connu.</p>
+      {!affiches.length ? (
+        <p className="text-sm text-pierre-500">{programmes.length ? `Aucun programme « ${type === 'aucun' ? 'Pas classé' : nomTypeSejour(type as TypeSejour)} ».` : 'Aucun programme connu.'}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-pierre-500">
               <tr>
                 <th className={`${cellule} font-medium`}>Programme</th>
+                <th className={`${cellule} font-medium`}>Type de séjour</th>
                 <th className={`${cellule} text-right font-medium`}>Jours</th>
                 <th className={`${cellule} text-right font-medium`}>Nuits</th>
                 <th className={`${cellule} text-right font-medium`}>Prix</th>
@@ -244,7 +293,9 @@ function Programmes({ camp, programmes, ecriture }: { camp: Camp; programmes: Pr
               </tr>
             </thead>
             <tbody className="divide-y divide-pierre-100 align-top">
-              {programmes.map((p) => (
+              {affiches.map((p) => {
+                const ecart = ecartMediane(p, medianes)
+                return (
                 <tr key={p.id} className={p.actif ? '' : 'opacity-50'}>
                   <td className={`${cellule} min-w-64`}>
                     <ChampTexte className={champ} valeur={p.nom} obligatoire disabled={!ecriture} enregistrer={(nom) => maj(p, { nom })} />
@@ -256,10 +307,20 @@ function Programmes({ camp, programmes, ecriture }: { camp: Camp; programmes: Pr
                       </div>
                     )}
                   </td>
+                  <td className={`${cellule} pt-2`}>
+                    <ChoixTypeSejour programme={p} ecriture={ecriture} />
+                  </td>
                   <td className={cellule}>{nb(p, 'duree_jours', 'w-20')}</td>
                   <td className={cellule}>{nb(p, 'duree_nuits', 'w-20')}</td>
                   <td className={cellule}>{nb(p, 'prix', 'w-28')}</td>
-                  <td className={`${cellule} whitespace-nowrap pt-3 text-right font-medium tabular-nums`}>{argent(p.prix_par_nuit)}</td>
+                  <td className={`${cellule} whitespace-nowrap pt-3 text-right font-medium tabular-nums`}>
+                    {argent(p.prix_par_nuit)}
+                    {ecart && (
+                      <div className="text-xs font-normal text-pierre-500" title={ecart.titre}>
+                        {ecart.court}
+                      </div>
+                    )}
+                  </td>
                   <td className={cellule}>
                     <ChampTexte className={`${champ} min-w-28`} valeur={p.annee ?? ''} disabled={!ecriture} enregistrer={(annee) => maj(p, { annee: annee || null })} />
                   </td>
@@ -278,9 +339,19 @@ function Programmes({ camp, programmes, ecriture }: { camp: Camp; programmes: Pr
                     )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
+          {typesAffiches.length > 0 && (
+            <ul className="mt-2 space-y-0.5 text-xs text-pierre-500">
+              {typesAffiches.map((t) => (
+                <li key={t.id}>
+                  {t.libelle}, camps comparables : {resumeStats(medianes.get(t.id) ?? null)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </Carte>

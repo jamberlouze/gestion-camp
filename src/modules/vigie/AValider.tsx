@@ -4,10 +4,10 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeAttention } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { ChoixCategorie, Chargement, LienExterne, PastilleCategorie } from './commun'
+import { ChoixCategorie, Chargement, LienExterne, PastilleCategorie, PastilleTypeSejour } from './commun'
 import { dateCourte, rangCategorie } from './outils'
 import { adresseStockage, reveiller, useAValider, useCamps, useEcriture, useModifier, useProgrammes, useValider } from './donnees'
-import { TYPES_CAMP, type Camp, type Categorie, type Changement } from './types'
+import { TYPES_CAMP, TYPES_SEJOUR, type Camp, type Categorie, type Changement, type TypeSejour } from './types'
 
 /** Valider ou rejeter les changements détectés et les camps proposés. */
 export function AValider() {
@@ -90,7 +90,8 @@ export function AValider() {
           <button className="text-sm text-foret-700 underline" onClick={() => toutValider(nouveauxProgrammes, 'nouveaux programmes')}>Tout valider</button>
         )}>
           {nouveauxProgrammes.map((c) => {
-            const d = c.details as { description?: string | null }
+            const d = c.details as { description?: string | null; type_sejour?: string | null }
+            const type = TYPES_SEJOUR.some((t) => t.id === d.type_sejour) ? (d.type_sejour as TypeSejour) : null
             return (
               <li key={c.id} className="flex flex-wrap items-center gap-3 py-2.5">
                 <div className="min-w-64 flex-1">
@@ -98,6 +99,10 @@ export function AValider() {
                     {nomCamp(c.camp_id)}
                   </Link>
                   <span className="text-pierre-700"> — {c.nouvelle_valeur}</span>
+                  {/* Type proposé par Claude : gardé à la validation, à vérifier ensuite dans Programmes. */}
+                  <span className="ml-2" title="Type de séjour proposé par Claude">
+                    <PastilleTypeSejour type={type} />
+                  </span>
                   {d.description && <div className="text-sm text-pierre-600">{d.description}</div>}
                   <div className="text-xs text-pierre-500">
                     Détecté le {dateCourte(c.detecte_le)} {c.source_url && <>· <LienExterne href={c.source_url}>source</LienExterne></>}

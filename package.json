@@ -21,7 +21,8 @@
     "worker:dev": "wrangler dev --port 8787",
     "test:worker": "node --test \"worker/**/*.test.js\"",
     "test:calcul": "node --test src/modules/reservations/calcul.test.mjs",
-    "test:rapports": "node --test src/modules/reservations/rapports.test.mjs"
+    "test:rapports": "node --test src/modules/reservations/rapports.test.mjs",
+    "test:vigie": "node --test supabase/functions/vigie/vigie.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

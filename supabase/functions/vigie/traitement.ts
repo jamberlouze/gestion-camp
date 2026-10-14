@@ -55,6 +55,9 @@ const saisons = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((s) => 
 const parmi = (v: unknown, permis: string[]) => (Array.isArray(v) ? [...new Set(v.filter((s) => permis.includes(s)))] : [])
 const TYPES = ['camp_vacances', 'camp_familial', 'camp_jour', 'besoins_particuliers', 'classe_nature', 'accueil_groupe']
 const HEBERGEMENTS = ['tente', 'dortoir', 'chalet', 'chambre', 'autre']
+const TYPES_SEJOUR = ['camp_vacances', 'camp_familial', 'classe_nature', 'groupe']
+/** Type de séjour proposé par Claude pour un programme ; null s'il n'est pas l'un des quatre. */
+export const typeSejour = (v: unknown) => (typeof v === 'string' && TYPES_SEJOUR.includes(v) ? v : null)
 
 /** Données d'une requête réussie (lève l'erreur sinon). */
 async function verifier<T>(promesse: PromiseLike<{ data: T; error: any }>): Promise<NonNullable<T>> {
@@ -216,6 +219,9 @@ export async function traiterCamp(ctx: Contexte, r: Requete, entree: any) {
       prix: nombre(p.prix),
       annee: chaine(p.annee),
       source_url: chaine(p.source_url),
+      // Classé par Claude : à vérifier dans l'app (décision du 2026-10-14). Pour un
+      // programme connu, le type n'est jamais changé ici (celui de l'app fait foi).
+      type_sejour: typeSejour(p.type_sejour),
     }
     const connu =
       (typeof p.programme_id === 'string' && connus.find((c) => c.id === p.programme_id)) ||
@@ -262,7 +268,7 @@ export async function traiterCamp(ctx: Contexte, r: Requete, entree: any) {
         )
       }
     } else if (documentation) {
-      await verifier(ctx.db.from('programmes').insert({ camp_id: campId, ...nouveau, verifie_le: maintenant }))
+      await verifier(ctx.db.from('programmes').insert({ camp_id: campId, ...nouveau, type_a_verifier: true, verifie_le: maintenant }))
       connus.push({ ...nouveau, id: 'nouveau', nom })
     } else {
       const cle = normaliser(nom)
