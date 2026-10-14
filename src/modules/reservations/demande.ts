@@ -192,6 +192,9 @@ const FR = {
   merci: 'Nous avons bien reçu votre demande de réservation. Un membre de notre équipe vous contactera sous peu.',
   numero: 'Numéro de votre demande : {n}',
   erreur_envoi: "L'envoi n'a pas fonctionné. Réessayez dans un instant ; si le problème persiste, écrivez-nous à inscriptions@camptremblant.com.",
+  pre_rempli:
+    'Bon retour, {o} ! Le formulaire reprend les informations de votre dernière demande : vérifiez-les, corrigez au besoin, puis choisissez le type de séjour et vos dates.',
+  lien_perime: "Ce lien n'est plus valide : remplissez le formulaire au complet, nous ferons le lien avec votre dossier.",
 }
 
 type Textes = typeof FR
@@ -285,6 +288,9 @@ const EN: Textes = {
   merci: 'We have received your reservation request. A member of our team will contact you shortly.',
   numero: 'Your request number: {n}',
   erreur_envoi: 'Sending failed. Please try again in a moment; if the problem persists, write to us at inscriptions@camptremblant.com.',
+  pre_rempli:
+    'Welcome back, {o}! This form uses the information from your last request: please check it, correct it if needed, then choose the type of stay and your dates.',
+  lien_perime: 'This link is no longer valid: please fill out the whole form, and we will match it with your file.',
 }
 
 export const TEXTES: Record<Langue, Textes> = { fr: FR, en: EN }
@@ -555,4 +561,156 @@ export function resume(r: Reponses): { question: string; reponse: string }[] {
     [t.commentaires, r.commentaires],
   ]
   return lignes.filter(([, rep, vis]) => vis !== false && rep).map(([question, reponse]) => ({ question, reponse }))
+}
+
+// ------------------------------------------------------------------
+// Lien du formulaire d'une organisation (/demande?lien=<jeton>)
+// ------------------------------------------------------------------
+
+interface PersonneLien {
+  nom: string
+  courriel: string | null
+  telephone: string | null
+}
+
+/** Ce que reservations.formulaire_organisation donne au formulaire. */
+export interface SourceLien {
+  organisation: { nom: string; genre: string | null; adresse: string | null; ville: string | null; province: string | null; code_postal: string | null }
+  derniere: {
+    forfait: Forfait
+    nb_participants: number | null
+    nb_accompagnateurs: number | null
+    ages: string | null
+    langue: string | null
+    description: string | null
+    service_repas: boolean
+    courriel_direction: string | null
+  } | null
+  demande: {
+    type_groupe: string | null
+    type_autre: string | null
+    langue: string | null
+    pays: string | null
+    resp_prenom: string | null
+    resp_nom: string | null
+    resp_courriel: string | null
+  } | null
+  responsable: PersonneLien | null
+  facturation: PersonneLien | null
+}
+
+/** Type de groupe du formulaire d'après le type d'organisation du CRM. */
+function typeDeGenre(genre: string | null): { type: TypeGroupe | ''; autre: string } {
+  switch (genre) {
+    case 'ecole_primaire':
+    case 'ecole_secondaire':
+    case 'cegep':
+    case 'universite':
+      return { type: 'ecole', autre: '' }
+    case 'entreprise':
+    case 'particulier':
+    case 'club_sportif':
+    case 'municipalite':
+      return { type: genre, autre: '' }
+    case 'organisme':
+      return { type: 'osbl', autre: '' }
+    case 'association_etudiante':
+      return { type: 'autre', autre: 'Association étudiante' }
+    case 'autre':
+      return { type: 'autre', autre: '' }
+    default:
+      return { type: '', autre: '' }
+  }
+}
+
+const TYPES_GROUPE: TypeGroupe[] = ['ecole', 'entreprise', 'particulier', 'club_sportif', 'municipalite', 'osbl', 'autre']
+const LANGUES_GROUPE: LangueGroupe[] = ['fr', 'en', 'fr_en', 'autre']
+
+/** « Français » (texte de la réservation) → fr. */
+function langueDe(texte: string | null): LangueGroupe | '' {
+  const t = (texte ?? '').trim().toLowerCase()
+  if (!t) return ''
+  if (/fran[cç]ais et anglais|english and french|bilingue/.test(t)) return 'fr_en'
+  if (/^(fran[cç]ais|french)$/.test(t)) return 'fr'
+  if (/^(anglais|english)$/.test(t)) return 'en'
+  return 'autre'
+}
+
+/** « Julie Tremblay » → prénom « Julie », nom « Tremblay ». */
+function separerNom(nom: string): [string, string] {
+  const mots = nom.trim().split(/\s+/).filter(Boolean)
+  return [mots[0] ?? '', mots.slice(1).join(' ')]
+}
+
+const texte = (v: unknown) => (v === null || v === undefined ? '' : String(v))
+
+/**
+ * Réponses de départ du formulaire ouvert par le lien d'une organisation :
+ * coordonnées et groupe de sa dernière réservation ; type de séjour, dates
+ * et heures à choisir, commentaires vides.
+ */
+export function preRemplissage(s: SourceLien): Reponses {
+  const r: Reponses = { ...REPONSES_VIDES }
+  const o = s.organisation
+  r.organisation = o.nom
+  r.adresse = texte(o.adresse)
+  r.ville = texte(o.ville)
+  r.province = texte(o.province)
+  r.code_postal = texte(o.code_postal)
+  r.pays = s.demande?.pays || 'Canada'
+
+  const typeDemande = s.demande?.type_groupe as TypeGroupe | undefined
+  if (typeDemande && TYPES_GROUPE.includes(typeDemande)) {
+    r.type_groupe = typeDemande
+    r.type_autre = typeDemande === 'autre' ? texte(s.demande?.type_autre) : ''
+  } else {
+    const t = typeDeGenre(o.genre)
+    r.type_groupe = t.type
+    r.type_autre = t.autre
+  }
+
+  const langueDemande = s.demande?.langue as LangueGroupe | undefined
+  r.langue = langueDemande && LANGUES_GROUPE.includes(langueDemande) ? langueDemande : langueDe(s.derniere?.langue ?? null)
+
+  const d = s.derniere
+  if (d) {
+    const scolaire = estScolaire(d.forfait)
+    const p = d.nb_participants
+    const a = d.nb_accompagnateurs
+    if (scolaire) {
+      r.nb_eleves = texte(p)
+      r.nb_accompagnateurs = texte(a)
+      r.ages = texte(d.ages)
+    }
+    r.nb_personnes = p === null ? '' : String(p + (scolaire ? (a ?? 0) : 0))
+    r.repas = d.service_repas ? 'oui' : 'non'
+    r.description = texte(d.description)
+    r.courriel_direction = texte(d.courriel_direction)
+  }
+
+  const resp = s.responsable
+  if (resp) {
+    // Même personne que la dernière demande : son prénom et son nom tels qu'elle les a donnés.
+    const memeCourriel = !!resp.courriel && resp.courriel.trim().toLowerCase() === (s.demande?.resp_courriel ?? '').trim().toLowerCase()
+    const [prenom, nom] = memeCourriel && s.demande?.resp_prenom ? [s.demande.resp_prenom, texte(s.demande.resp_nom)] : separerNom(resp.nom)
+    r.resp_prenom = prenom
+    r.resp_nom = nom
+    r.resp_courriel = texte(resp.courriel)
+    r.resp_telephone = texte(resp.telephone)
+    r.facturation_meme = s.facturation ? 'non' : 'oui'
+  }
+  if (s.facturation) {
+    const [prenom, nom] = separerNom(s.facturation.nom)
+    r.fact_prenom = prenom
+    r.fact_nom = nom
+    r.fact_courriel = texte(s.facturation.courriel)
+    r.fact_telephone = texte(s.facturation.telephone)
+  }
+  return r
+}
+
+/** Jeton du lien d'une organisation dans l'adresse (?lien=…), sinon null. */
+export const jetonLien = (recherche: string) => {
+  const j = new URLSearchParams(recherche).get('lien') ?? ''
+  return /^[0-9a-f]{48}$/.test(j) ? j : null
 }

@@ -123,6 +123,39 @@ const FR = {
   a_corriger: 'Quelques champs sont à compléter.',
   confidentialite:
     'Vos renseignements sont protégés (Loi 25) : seules les personnes responsables de la sécurité et des repas y ont accès, et ils sont effacés 3 mois après le séjour. Seul le courriel est gardé, si vous acceptez de recevoir nos nouvelles.',
+
+  // Confirmation des informations du séjour (pré-arrivée)
+  confirmation: {
+    titre: 'Vos informations pour le séjour',
+    a_confirmer: 'Merci de confirmer ces informations : elles servent à préparer les repas, les chambres et l’horaire d’animation.',
+    aide: 'Vérifiez ces informations. Si tout est exact, confirmez-les ; sinon, proposez un changement : l’équipe vous répondra ici.',
+    confirmee: '✓ Confirmé par {n} le {d}.',
+    confirmee_changee: 'Vous aviez confirmé le {d}, mais des informations ont changé depuis : merci de confirmer de nouveau.',
+    je_confirme: 'Je confirme ces informations',
+    je_propose: 'Je propose un changement',
+    confirmation_envoyee: 'Merci ! Vos informations sont confirmées.',
+    votre_nom: 'Votre nom',
+    en_attente: 'Votre demande de changement du {d} attend la réponse de l’équipe :',
+    proposer_autre: 'Proposer un autre changement',
+    acceptee: 'Votre changement du {d} a été accepté.',
+    refusee: 'Votre changement du {d} n’a pas été accepté.',
+    reponse_equipe: 'Réponse de l’équipe : {r}',
+    changement_titre: 'Proposer un changement',
+    changement_aide:
+      'Modifiez ce qui change. Le contrat prévoit un changement d’au plus 10 % du nombre de participants, au plus tard 21 jours avant l’arrivée ; vous pouvez nous signaler un changement plus tard (nous ajusterons les repas et l’animation), mais l’équipe peut le refuser.',
+    message: 'Précisions (facultatif)',
+    message_aide: 'Responsable sur place, numéro de cellulaire pendant le séjour, besoins particuliers…',
+    envoyer: 'Envoyer la demande',
+    envoi: 'Envoi…',
+    annuler: 'Annuler',
+    demande_envoyee: 'Merci ! Votre demande est envoyée : l’équipe vous répondra sur cette page.',
+    dans_regles: 'Ce changement respecte ce que prévoit le contrat ; l’équipe le confirmera.',
+    hors_regle: 'L’équipe évaluera ce changement, sans garantie :',
+    rien_change: 'Vous n’avez rien changé.',
+    service_oui: 'Oui',
+    service_non: 'Non',
+    ratios_aide: 'Ratios offerts : 1:10, 1:15 ou 1:20 (sans garantie d’acceptation).',
+  },
 }
 
 type Textes = typeof FR
@@ -243,6 +276,38 @@ const EN: Textes = {
   a_corriger: 'Some fields need to be completed.',
   confidentialite:
     'Your information is protected (Quebec Law 25): only the people responsible for safety and meals can see it, and it is deleted 3 months after the stay. Only your email is kept, if you agree to receive our news.',
+
+  confirmation: {
+    titre: 'Your stay information',
+    a_confirmer: 'Please confirm this information: we use it to prepare meals, rooms and the activity schedule.',
+    aide: 'Please check this information. If everything is correct, confirm it; otherwise, suggest a change: our team will answer you here.',
+    confirmee: '✓ Confirmed by {n} on {d}.',
+    confirmee_changee: 'You confirmed on {d}, but some information has changed since: please confirm again.',
+    je_confirme: 'I confirm this information',
+    je_propose: 'I want to suggest a change',
+    confirmation_envoyee: 'Thank you! Your information is confirmed.',
+    votre_nom: 'Your name',
+    en_attente: 'Your change request of {d} is waiting for our team’s answer:',
+    proposer_autre: 'Suggest another change',
+    acceptee: 'Your change of {d} was accepted.',
+    refusee: 'Your change of {d} was not accepted.',
+    reponse_equipe: 'Our team’s answer: {r}',
+    changement_titre: 'Suggest a change',
+    changement_aide:
+      'Edit what changes. The contract allows a change of up to 10% of the number of participants, no later than 21 days before arrival; you can still tell us about a later change (we will adjust meals and activities), but our team may decline it.',
+    message: 'Details (optional)',
+    message_aide: 'Person in charge on site, cell phone number during the stay, special needs…',
+    envoyer: 'Send the request',
+    envoi: 'Sending…',
+    annuler: 'Cancel',
+    demande_envoyee: 'Thank you! Your request has been sent: our team will answer you on this page.',
+    dans_regles: 'This change is within what the contract allows; our team will confirm it.',
+    hors_regle: 'Our team will review this change, with no guarantee:',
+    rien_change: 'You have not changed anything.',
+    service_oui: 'Yes',
+    service_non: 'No',
+    ratios_aide: 'Available ratios: 1:10, 1:15 or 1:20 (no guarantee of acceptance).',
+  },
 }
 
 export const TEXTES_PUBLICS: Record<Langue, Textes> = { fr: FR, en: EN }

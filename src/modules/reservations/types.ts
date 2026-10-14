@@ -1,5 +1,6 @@
 // Types du module Réservations (tables du schéma `reservations`).
 
+import type { InfosSejour } from './confirmation'
 import type { GenreCourriel, ModeleCourriel } from './courriels'
 import type { Reponses } from './demande'
 
@@ -401,6 +402,8 @@ export interface DocumentPdf {
   chemin: string
   empreinte: string
   meta: { signature?: CaseSignature }
+  /** Contrat signé : sa signature (un seul par signature, relié par la base). */
+  signature_id: string | null
   cree_le: string
   cree_par_nom: string | null
 }
@@ -578,4 +581,33 @@ export const GENRES_FACTURE: Record<GenreFacture, string> = {
   progressive: 'Facture',
   separee: 'Facture séparée',
   note_credit: 'Note de crédit',
+}
+
+// ------------------------------------------------------------------
+// Confirmation des informations par le client (pré-arrivée, page client)
+// et lien du formulaire d'une organisation
+// ------------------------------------------------------------------
+
+/** « Je confirme » ou « Je propose un changement » (reservations.confirmations ; règles : confirmation.ts). */
+export interface ConfirmationClient {
+  id: string
+  reservation_id: string
+  genre: 'confirmation' | 'changement'
+  statut: 'recue' | 'a_traiter' | 'acceptee' | 'refusee' | 'remplacee'
+  recue_le: string
+  nom: string
+  actuel: InfosSejour
+  propose: InfosSejour | null
+  message: string | null
+  reponse: string | null
+  traitee_le: string | null
+  traitee_par_nom: string | null
+}
+
+/** Lien du formulaire propre à une organisation (/demande?lien=<jeton>). */
+export interface LienFormulaire {
+  organisation_id: string
+  jeton: string
+  cree_le: string
+  cree_par_nom: string | null
 }

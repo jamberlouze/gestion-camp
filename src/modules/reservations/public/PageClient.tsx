@@ -5,11 +5,13 @@ import { bilanFactures } from '../facturation'
 import type { Forfait } from '../types'
 import { db, messageDe } from './client'
 import { Entete, Page, Pied } from './commun'
+import { ConfirmationInfos } from './ConfirmationClient'
 import { dateLisible, dollars, langueDuGroupe, useLangue } from './outils'
 import { TEXTES_PUBLICS } from './textes'
 
 // Page client sans compte (/client/<jeton>) : le séjour, l'estimé à
-// accepter, le contrat à signer, les documents, le lien des fiches
+// accepter, le contrat à signer, les informations du séjour à confirmer
+// (pré-arrivée, ConfirmationClient.tsx), les documents, le lien des fiches
 // participants et un message à l'équipe. Lit reservations.page_client.
 
 interface Ligne {
@@ -140,6 +142,7 @@ export default function PageClient() {
         </dl>
       </section>
 
+      <ConfirmationInfos jeton={jeton} forfait={infos.forfait} langue={langue} ferme={!!infos.fermeture} />
       <Estime infos={infos} jeton={jeton} langue={langue} relire={relire} />
       <Contrat infos={infos} langue={langue} />
 

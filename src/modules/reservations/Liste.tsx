@@ -9,7 +9,7 @@ import { PuceEtape, Puces } from './commun'
 import { useDonnees } from './contexte'
 import { heuresNormales } from './parametres'
 import { argent, champPetit, nomForfait, normaliser, periode } from './format'
-import { useAjouterReservation, useAlertesPaiement } from './donnees'
+import { useAjouterReservation, useAlertesPaiement, useChangementsATraiter } from './donnees'
 import { ETAPES, FORFAITS, type Forfait, type Reservation } from './types'
 
 type Vue = 'nouvelles' | 'actives' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
@@ -59,6 +59,7 @@ export function Liste() {
   const { reservations, orgParId, responsables, nomResponsable, ecriture, auj } = useDonnees()
   const naviguer = useNavigate()
   const sansPaiement = useAlertesPaiement(auj)
+  const changements = useChangementsATraiter()
   const [params, setParams] = useSearchParams()
   const vue = (VUES.some((v) => v.id === params.get('vue')) ? params.get('vue') : 'nouvelles') as Vue
   const exercice = params.get('exercice') ?? String(exerciceDe(auj))
@@ -196,6 +197,7 @@ export function Liste() {
                         !r.organisation_id && <div className="text-xs text-amber-700">Organisation à valider</div>
                       )}
                       {sansPaiement.has(r.id) && <div className="text-xs text-rose-700">Aucun paiement reçu</div>}
+                      {changements.has(r.id) && <div className="text-xs text-amber-700">Changement du client à traiter</div>}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{nomForfait(r)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{periode(r)}</td>

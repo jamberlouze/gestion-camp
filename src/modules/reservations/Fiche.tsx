@@ -11,6 +11,7 @@ import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
 import { AvisReservation } from './AvisDisponibilite'
 import { ChoixOrganisation } from './ChoixOrganisation'
+import { ChangementAuSejour, ConfirmationsSejour } from './ConfirmationSejour'
 import { CourrielsReservation } from './CourrielsClients'
 import { DemandeRecue } from './DemandeRecue'
 import { EspaceClient } from './EspaceClient'
@@ -22,6 +23,7 @@ import { useDemandes, useJournal, useModifierReservation, useSupprimerReservatio
 import { Documents } from './Documents'
 import { Estime } from './Estime'
 import { Facturation } from './FacturationQbo'
+import { LienOrganisation } from './LienOrganisation'
 import {
   ETAGES,
   ETAPES,
@@ -105,6 +107,9 @@ function Contenu({ r }: { r: Reservation }) {
 
       <Parcours r={r} changer={changer} />
 
+      {/* Changement proposé par le client sur sa page : à accepter ou refuser. */}
+      <ChangementAuSejour r={r} />
+
       {/* Le séjour d'abord, sur toute la largeur : c'est lui qui fait l'estimé. */}
       <Sejour r={r} changer={changer} />
 
@@ -115,6 +120,7 @@ function Contenu({ r }: { r: Reservation }) {
           <Documents r={r} />
           <CourrielsReservation r={r} />
           <EspaceClient r={r} />
+          <ConfirmationsSejour r={r} />
           <Suivi r={r} />
         </div>
         <div className="space-y-5">
@@ -287,6 +293,7 @@ function ClientLecture({ r, demandeAValider, relier }: { r: Reservation; demande
           <Personne libelle="Responsable de la facturation" contact={fact} vide={resp ? 'Le même' : '—'} />
         </div>
       )}
+      {org && <LienOrganisation organisationId={org.id} />}
 
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5">
         {r.courriel_direction && (

@@ -1,7 +1,9 @@
 // Contrat signé produit par le Worker dès la signature du client, pour que la
 // page de signature le montre et le fasse télécharger tout de suite (avant :
 // produit dans le navigateur de l'équipe, à l'ouverture de la fiche, qui
-// reste le filet de sûreté). Même fabrication que l'app : pdfContratSigne
+// reste le filet de sûreté). Un seul par signature : index unique sur
+// documents.signature_id, lien posé par la base (migration
+// 20261014185253). Même fabrication que l'app : pdfContratSigne
 // (src/modules/reservations/pdf/documents.ts), chargé à la demande pour que
 // les tests du Worker sous Node n'aient pas à lire les modules PDF.
 
@@ -47,19 +49,31 @@ export async function produireContratSigne(env, jeton) {
     empreinteOriginal: contrat.empreinte,
     compagnie: compagnie?.raison_sociale ?? '',
   })
-  const doc = await garderDocument(env, {
-    reservationId: r.id,
-    genre: 'contrat_signe',
-    titre: `Contrat ${r.numero} signé`,
-    octets,
-    estimeId: contrat.estime_id,
-    // Au journal, au nom du client (comme sa signature).
-    auteurNom: `${sig.nom_signataire ?? 'Client'} (client)`,
-  })
-  // Seulement si personne (l'équipe, à l'ouverture de la fiche) ne l'a fait entre-temps.
-  await db.modifier('signatures', `id=eq.${sig.id}&document_signe_id=is.null`, { document_signe_id: doc.id })
+  let doc
+  try {
+    doc = await garderDocument(env, {
+      reservationId: r.id,
+      genre: 'contrat_signe',
+      titre: `Contrat ${r.numero} signé`,
+      octets,
+      estimeId: contrat.estime_id,
+      signatureId: sig.id,
+      // Au journal, au nom du client (comme sa signature).
+      auteurNom: `${sig.nom_signataire ?? 'Client'} (client)`,
+    })
+  } catch (e) {
+    // Un seul contrat signé par signature (index unique) : quelqu'un d'autre
+    // (la fiche, filet de sûreté) l'a produit entre-temps ; garderDocument a
+    // déjà retiré notre fichier. On rend celui qui existe.
+    if (!/23505|documents_un_contrat_signe/.test(String(e?.message))) throw e
+    const existant = un(await db.lire(`documents?signature_id=eq.${sig.id}&genre=eq.contrat_signe&select=*`))
+    if (!existant) throw e
+    return existant
+  }
+  // Relié à la signature par la base (reservations.relier_contrat_signe).
   const apres = await lire(env, jeton)
-  if (apres.sig.document_signe_id !== doc.id) {
+  if (apres.signe && apres.signe.id !== doc.id) {
+    // Ancien contrat signé sans signature_id, relié avant nous : on garde celui-là.
     await retirerDocument(env, doc)
     return apres.signe
   }

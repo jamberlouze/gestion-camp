@@ -5,6 +5,7 @@ import { useRelances } from '@/modules/crm/donnees'
 import type { CleCalendrier } from './agenda'
 import type {
   Compagnie,
+  ConfirmationClient,
   Courriel,
   DemandeRecue,
   DocumentPdf,
@@ -13,6 +14,7 @@ import type {
   EtageRooming,
   Facture,
   FicheParticipant,
+  LienFormulaire,
   Ligne,
   Modele,
   ModeleCourriel,
@@ -750,5 +752,88 @@ export function useTotauxAcceptes() {
         if (data.length < 1000) return totaux
       }
     },
+  })
+}
+
+// ------------------------------------------------------------------
+// Confirmation des informations par le client (pré-arrivée)
+// ------------------------------------------------------------------
+
+/** Confirmations et demandes de changement d'une réservation (les plus récentes d'abord). */
+export function useConfirmations(reservationId: string) {
+  const cle = ['reservations', 'confirmations', reservationId]
+  useTempsReel('confirmations', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('confirmations').select('*').eq('reservation_id', reservationId).order('recue_le', { ascending: false })
+      if (error) throw error
+      return data as ConfirmationClient[]
+    },
+  })
+}
+
+/** Réservations qui ont une demande de changement du client à accepter ou refuser (liste). */
+export function useChangementsATraiter() {
+  const cle = ['reservations', 'confirmations', 'a_traiter']
+  useTempsReel('confirmations', cle)
+  const q = useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('confirmations').select('reservation_id').eq('statut', 'a_traiter')
+      if (error) throw error
+      return (data as { reservation_id: string }[]).map((x) => x.reservation_id)
+    },
+  })
+  return new Set(q.data ?? [])
+}
+
+/** Accepter (le séjour est mis à jour) ou refuser une demande de changement ; erreurs affichées sur place. */
+export function useTraiterChangement() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'confirmations', 'traiter'],
+    networkMode: 'always',
+    mutationFn: async (v: { id: string; accepter: boolean; reponse: string }) => {
+      const { error } = await db().rpc('traiter_changement', { p_confirmation: v.id, p_accepter: v.accepter, p_reponse: v.reponse })
+      if (error) throw error
+    },
+    onSettled: () =>
+      Promise.all(
+        [['reservations', 'confirmations'], ['reservations', 'reservations'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey })),
+      ),
+  })
+}
+
+// ------------------------------------------------------------------
+// Lien du formulaire d'une organisation (/demande?lien=<jeton>)
+// ------------------------------------------------------------------
+
+export function useLienFormulaire(organisationId: string | null) {
+  const cle = ['reservations', 'liens_formulaire', organisationId]
+  useTempsReel('liens_formulaire', cle, organisationId ? `organisation_id=eq.${organisationId}` : undefined)
+  return useQuery({
+    queryKey: cle,
+    enabled: !!organisationId,
+    queryFn: async () => {
+      const { data, error } = await db().from('liens_formulaire').select('*').eq('organisation_id', organisationId!).maybeSingle()
+      if (error) throw error
+      return data as LienFormulaire | null
+    },
+  })
+}
+
+/** Créer (ou reprendre), refaire (l'ancien ne marche plus) ou retirer le lien ; rend le jeton. */
+export function useChangerLienFormulaire() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'liens_formulaire', 'changer'],
+    networkMode: 'always',
+    mutationFn: async (v: { organisation: string; action: 'creer' | 'refaire' | 'retirer' }) => {
+      const { data, error } = await db().rpc('lien_organisation', { p_organisation: v.organisation, p_action: v.action })
+      if (error) throw error
+      return data as string | null
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'liens_formulaire'] }),
   })
 }

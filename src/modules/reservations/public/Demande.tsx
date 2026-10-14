@@ -7,12 +7,15 @@ import {
   aujourdhui,
   erreurs,
   heureLisible,
+  jetonLien,
   nettoyer,
+  preRemplissage,
   remplacer,
   REPONSES_VIDES,
   TEXTES,
   visibles,
   type Reponses,
+  type SourceLien,
   type TypeGroupe,
 } from '../demande'
 import type { Forfait } from '../types'
@@ -23,6 +26,9 @@ import { dollars, useLangue } from './outils'
 // Formulaire public de demande de réservation (/demande), qui remplace le
 // Jotform. Les questions et leurs conditions sont dans demande.ts ; le
 // Worker refait les mêmes vérifications avant d'enregistrer.
+// /demande?lien=<jeton> : lien du formulaire d'une organisation récurrente,
+// pré-rempli d'après sa dernière réservation (preRemplissage) ; la demande
+// arrive reliée à l'organisation.
 
 interface Infos {
   heures_normales: Record<string, [string, string]> | null
@@ -47,6 +53,9 @@ export default function Demande() {
   const [envoi, setEnvoi] = useState(false)
   const [numero, setNumero] = useState<string | null>(null)
   const auj = aujourdhui()
+  const [lien] = useState(() => jetonLien(window.location.search))
+  // Organisation du lien (null : lien inconnu ou retiré ; undefined : pas de lien ou en lecture).
+  const [organisation, setOrganisation] = useState<string | null | undefined>(undefined)
 
   useEffect(() => {
     document.title = t.titre
@@ -57,6 +66,18 @@ export default function Demande() {
       .rpc('formulaire_public')
       .then(({ data }) => setInfos((data as Infos | null) ?? null))
   }, [])
+
+  useEffect(() => {
+    if (!lien) return
+    db()
+      .rpc('formulaire_organisation', { p_jeton: lien })
+      .then(({ data }) => {
+        const source = data as SourceLien | null
+        setOrganisation(source?.organisation.nom ?? null)
+        // Seulement si rien n'a encore été saisi.
+        if (source) setRep((r) => (JSON.stringify(r) === JSON.stringify(REPONSES_VIDES) ? preRemplissage(source) : r))
+      })
+  }, [lien])
 
   const v = visibles(rep)
   // Une erreur du serveur effacée (champ corrigé) ne masque pas celle de la page.
@@ -109,7 +130,7 @@ export default function Demande() {
       const res = await fetch('/api/reservations/demande', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cle, langue, turnstile: jeton, reponses: nettoyer(rep), piege }),
+        body: JSON.stringify({ cle, langue, turnstile: jeton, reponses: nettoyer(rep), piege, ...(lien ? { lien } : {}) }),
       })
       const corps = (await res.json().catch(() => ({}))) as { numero?: string | null; erreur?: string; champs?: Partial<Record<keyof Reponses, string>> }
       if (res.ok) {
@@ -156,6 +177,10 @@ export default function Demande() {
     <Page>
       <Entete titre={t.titre} langue={langue} changerLangue={changerLangue} />
       <p className="text-sm text-pierre-600">{t.intro}</p>
+      {lien && organisation && (
+        <p className="rounded-lg border border-foret-200 bg-foret-50 px-3 py-2 text-sm text-foret-900">{remplacer(t.pre_rempli, { o: organisation })}</p>
+      )}
+      {lien && organisation === null && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{t.lien_perime}</p>}
 
       <form
         noValidate

@@ -19,7 +19,7 @@ async function empreinte(octets) {
 }
 
 /** Garde un PDF dans le seau privé et l'inscrit dans reservations.documents. */
-export async function garderDocument(env, { reservationId, genre, titre, octets, estimeId = null, meta = {}, auteurNom = null }) {
+export async function garderDocument(env, { reservationId, genre, titre, octets, estimeId = null, meta = {}, auteurNom = null, signatureId = null }) {
   const id = crypto.randomUUID()
   const chemin = `${reservationId}/${genre}-${new Date().toISOString().replace(/[:.]/g, '-')}-${id.slice(0, 8)}.pdf`
   const envoi = await fetch(adresseObjet(env, chemin), { method: 'POST', headers: entetes(env, { 'Content-Type': 'application/pdf' }), body: octets })
@@ -35,6 +35,8 @@ export async function garderDocument(env, { reservationId, genre, titre, octets,
       empreinte: await empreinte(octets),
       meta,
       cree_par_nom: auteurNom,
+      // Contrat signé : sa signature (un seul par signature, relié par la base).
+      ...(signatureId ? { signature_id: signatureId } : {}),
     })
   } catch (e) {
     await retirerFichier(env, chemin)

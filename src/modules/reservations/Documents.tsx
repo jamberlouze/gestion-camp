@@ -13,6 +13,9 @@ import type { Reservation } from './types'
 const quand = (iso: string) =>
   new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 
+/** Délai avant que la fiche produise elle-même le contrat signé (le Worker le fait dès la signature). */
+const DELAI_FILET = 60_000
+
 /** Documents de la réservation : estimé, contrat et sa signature, pré-arrivée. */
 export function Documents({ r }: { r: Reservation }) {
   const { sources, modeles, ecriture, auj, reservations } = useDonnees()
@@ -50,15 +53,21 @@ export function Documents({ r }: { r: Reservation }) {
     }
   }
 
-  // Contrat signé par le client : sa copie signée est produite à l'ouverture
-  // de la fiche (la page de signature promet qu'elle sera déposée sur la page
-  // client). Une seule tentative ; le bouton reste si elle échoue.
+  // Contrat signé par le client : le Worker produit sa copie signée dès la
+  // signature. Filet de sûreté : si elle manque encore une minute après la
+  // signature, la fiche la produit (une seule tentative ; le bouton reste si
+  // elle échoue). Attendre évite la course avec le Worker (27-G-056 : deux
+  // contrats signés) ; la base refuse de toute façon un deuxième contrat signé.
   const signeTente = useRef(false)
   const signeAProduire = ecriture && sig?.statut === 'signe' && !sig.document_signe_id && sig.document_id ? contratDe(sig.document_id) : undefined
   useEffect(() => {
     if (!signeAProduire || !sig || signeTente.current) return
-    signeTente.current = true
-    void agir('signe', () => produireContratSigne(sources(r), sig, signeAProduire))
+    const attente = Math.max(0, DELAI_FILET - (Date.now() - Date.parse(sig.signe_le ?? '')))
+    const minuterie = setTimeout(() => {
+      signeTente.current = true
+      void agir('signe', () => produireContratSigne(sources(r), sig, signeAProduire))
+    }, Number.isNaN(attente) ? 0 : attente)
+    return () => clearTimeout(minuterie)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signeAProduire?.id])
 

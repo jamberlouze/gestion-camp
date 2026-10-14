@@ -67,6 +67,8 @@ export async function garderDocument(o: {
   octets: Uint8Array
   estimeId?: string | null
   meta?: DocumentPdf['meta']
+  /** Contrat signé : sa signature. */
+  signatureId?: string
 }): Promise<DocumentPdf> {
   const id = crypto.randomUUID()
   const chemin = `${o.r.id}/${o.genre}-${new Date().toISOString().replace(/[:.]/g, '-')}-${id.slice(0, 8)}.pdf`
@@ -83,6 +85,7 @@ export async function garderDocument(o: {
     chemin,
     empreinte: await empreinte(o.octets),
     meta: o.meta ?? {},
+    ...(o.signatureId ? { signature_id: o.signatureId } : {}),
   }
   const { data, error } = await db().from('documents').insert(ligne).select().single()
   if (error) {
@@ -145,10 +148,17 @@ export async function produireContratSigne(s: Sources, sig: Signature, contratEn
     empreinteOriginal: contratEnvoye.empreinte,
     compagnie: compagnie?.raison_sociale ?? '',
   })
-  const doc = await garderDocument({ r: s.r, genre: 'contrat_signe', titre: `Contrat ${s.r.numero} signé`, octets, estimeId: contratEnvoye.estime_id })
-  const { error: e2 } = await db().from('signatures').update({ document_signe_id: doc.id }).eq('id', sig.id)
-  if (e2) throw e2
-  return doc
+  try {
+    // Relié à la signature par la base (un seul contrat signé par signature).
+    return await garderDocument({ r: s.r, genre: 'contrat_signe', titre: `Contrat ${s.r.numero} signé`, octets, estimeId: contratEnvoye.estime_id, signatureId: sig.id })
+  } catch (e) {
+    // Déjà produit (par le Worker, à la signature) : garderDocument a retiré
+    // notre fichier ; on rend celui qui existe.
+    if ((e as { code?: string }).code !== '23505') throw e
+    const { data, error } = await db().from('documents').select('*').eq('signature_id', sig.id).eq('genre', 'contrat_signe').single()
+    if (error) throw error
+    return data as DocumentPdf
+  }
 }
 
 export async function pdfDeLaPreArrivee(s: Sources, estime: Contexte['estime'], modele: Pick<Modele, 'titre' | 'contenu'>) {

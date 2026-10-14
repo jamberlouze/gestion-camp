@@ -3,7 +3,8 @@
 //        Jotform). Vérifie Turnstile (anti-robot), vérifie les réponses
 //        avec les mêmes règles que la page (demande.ts), prépare la
 //        réservation, puis appelle reservations.recevoir_demande avec la
-//        clé secrète.
+//        clé secrète. `lien` (facultatif) : jeton du lien du formulaire
+//        d'une organisation ; la demande arrive alors reliée au CRM.
 //   GET  /api/reservations/document?jeton=…&id=… : PDF d'un document de la
 //        page client ; renvoie vers une adresse signée de 5 minutes du seau
 //        privé (le client n'a jamais la clé ni un lien permanent).
@@ -70,12 +71,15 @@ async function recevoirDemande(request, env) {
   const champs = erreurs(reponses, langue, aujourdhui())
   if (Object.keys(champs).length) return json({ erreur: 'champs', champs }, 422)
 
+  // Lien du formulaire d'une organisation : la base relie la demande (jeton inconnu = ignoré).
+  const lien = /^[0-9a-f]{48}$/.test(String(corps.lien ?? '')) ? String(corps.lien) : null
+
   try {
     const db = base(env, 'reservations')
     const reglages = lireReglages(await db.lire('reglages?select=cle,valeur'))
     const res = await db.rpc('recevoir_demande', {
       p_reservation: versReservation(reponses, reglages),
-      p_demande: { cle, langue, reponses, adresse_ip: ip, navigateur: request.headers.get('User-Agent') ?? '' },
+      p_demande: { cle, langue, reponses, adresse_ip: ip, navigateur: request.headers.get('User-Agent') ?? '', ...(lien ? { lien } : {}) },
     })
     // Accusé de réception préparé tout de suite (envoyé seul s'il est en mode automatique).
     if (res.id && !res.deja) await preparerCourriels(env, res.id).catch((e) => console.error('Accusé non préparé :', e))
