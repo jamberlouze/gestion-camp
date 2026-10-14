@@ -5,10 +5,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
+  appliquerHausse,
   appliquerPourcentages,
   exerciceDe,
   gratuites,
   hausse,
+  ligneProvisoire,
   lignesAuto,
   litsDe,
   margeParDefaut,
@@ -250,4 +252,31 @@ test('hausse d’une année à l’autre', () => {
   assert.deepEqual(hausse(18.5, 19.4), { montant: 0.9, pourcentage: 4.9 })
   assert.deepEqual(hausse(0, 10), { montant: 10, pourcentage: null })
   assert.equal(hausse(null, 10), null)
+})
+
+test('lignes à prix provisoire (estimé du client)', () => {
+  const prov = { 'CN-N': 2027, REPAS: 2027, 'TRANS-SEM-MB': 2027, LIT: 2027 }
+  assert.equal(ligneProvisoire({ code: 'TRANS-SEM-MB', auto: false, prix_unitaire: 149.5 }, prov), true)
+  assert.equal(ligneProvisoire({ code: 'AG-CH', auto: true, prix_unitaire: 907.2 }, prov), true)
+  assert.equal(ligneProvisoire({ code: null, auto: true, prix_unitaire: 162.1 }, prov), true)
+  // Gratuité à 0 $, ligne libre, estimé sans prix provisoire : rien.
+  assert.equal(ligneProvisoire({ code: null, auto: true, prix_unitaire: 0 }, prov), false)
+  assert.equal(ligneProvisoire({ code: null, auto: false, prix_unitaire: 50 }, prov), false)
+  assert.equal(ligneProvisoire({ code: 'TRANS-SEM-MB', auto: false, prix_unitaire: 149.5 }, {}), false)
+  assert.equal(ligneProvisoire({ code: 'MATELAS', auto: false, prix_unitaire: 249 }, null), false)
+  assert.equal(ligneProvisoire({ code: 'AG-CH', auto: true, prix_unitaire: 907.2 }, { 'TRANS-SEM-MB': 2027 }), false)
+})
+
+test('« + % » de l’exercice suivant : prix d’avant × (1 + %), au cent ; fournisseur : sur le coût, marge gardée', () => {
+  const interne = { majoration: null, ajout: null, arrondi: 'aucun' }
+  assert.deepEqual(appliquerHausse({ prix: 25.2, cout: null, marge: null }, 5, interne), { prix: 26.46, cout: null, marge: null })
+  assert.deepEqual(appliquerHausse({ prix: 19.4, cout: null, marge: null }, 3.5, interne), { prix: 20.08, cout: null, marge: null })
+  assert.deepEqual(appliquerHausse({ prix: 300, cout: null, marge: null }, -10, interne), { prix: 270, cout: null, marge: null })
+  // Transport : coût 130 + 5 % = 136,50 ; marge 15 % gardée → 156,975.
+  const transport = { majoration: 1.15, ajout: null, arrondi: 'aucun' }
+  assert.deepEqual(appliquerHausse({ prix: 149.5, cout: 130, marge: 15 }, 5, transport), { prix: 156.975, cout: 136.5, marge: 15 })
+  // Mont-Blanc : coût 23 + 4 % = 23,92 ; × 1,15 = 27,508 → 28 (dollar supérieur).
+  assert.deepEqual(appliquerHausse({ prix: 27, cout: 23, marge: 15 }, 4, { majoration: 1.15, ajout: null, arrondi: 'dollar_superieur' }), { prix: 28, cout: 23.92, marge: 15 })
+  // Fournisseur sans coût connu : le % sur le prix.
+  assert.deepEqual(appliquerHausse({ prix: 21, cout: null, marge: null }, 10, transport), { prix: 23.1, cout: null, marge: 15 })
 })

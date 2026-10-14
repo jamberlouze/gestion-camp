@@ -3,6 +3,7 @@
 // ici : images et annexes viennent de `Ressources` (app ou Worker).
 
 import { PDFDocument, type PDFImage } from 'pdf-lib'
+import { exerciceDe, libelleExercice, ligneProvisoire } from '../calcul'
 import { argent, dateLongue, heure } from '../format'
 import { FORFAITS, type CaseSignature, type Forfait, type Signature } from '../types'
 import { champs, type Contexte } from './champs'
@@ -15,6 +16,9 @@ export interface Ressources {
 }
 
 export interface LigneDoc {
+  /** Code du produit et ligne calculée : pour repérer un prix provisoire (`ligneProvisoire`). */
+  code?: string | null
+  auto?: boolean | null
   description: string
   note: string | null
   quantite: number
@@ -137,10 +141,19 @@ export async function pdfEstime(ctx: Contexte, lignes: LigneDoc[], res: Ressourc
     { t: `Forfait : ${FORFAITS[ctx.r.forfait]}${nuits > 0 ? ` | ${nuits} nuit${nuits > 1 ? 's' : ''}` : ''}`, gras: true },
     { t: `\n${dates}` },
   ]
+  // Prix provisoires (liste de prix de l'exercice pas encore validée) : mention sur la ligne + note sous le tableau.
+  const provisoire = lignes.map((l) => ligneProvisoire(l, ctx.estime?.prix_provisoires))
+  const exercicePrix = ctx.estime?.exercice_prix ?? exerciceDe(ctx.r.date_arrivee)
   const rangees: (string | Morceau[])[][] = [
     [info, '', '', ''],
-    ...lignes.map((l) => [
-      l.note ? [{ t: l.description }, { t: `\n${l.note}`, italique: true }] : l.description,
+    ...lignes.map((l, i) => [
+      l.note || provisoire[i]
+        ? [
+            { t: l.description },
+            ...(l.note ? [{ t: `\n${l.note}`, italique: true }] : []),
+            ...(provisoire[i] ? [{ t: '\nPrix provisoire *', italique: true }] : []),
+          ]
+        : l.description,
       l.pourcentage !== null ? `${String(l.pourcentage).replace('.', ',')} %` : formatQuantite(l.quantite),
       l.pourcentage !== null ? '' : argent(l.prix_unitaire),
       argent(l.montant),
@@ -158,6 +171,15 @@ export async function pdfEstime(ctx: Contexte, lignes: LigneDoc[], res: Ressourc
   c.besoin(80)
   const y0 = c.y
   colonne(c, c.gauche, c.largeur * 0.58, [
+    ...(provisoire.some(Boolean)
+      ? [
+          {
+            t: `* Prix provisoire : le prix ${libelleExercice(exercicePrix)} n'est pas encore confirmé ; il sera ajusté à la confirmation.`,
+            taille: 8,
+            couleur: couleurs.texte,
+          },
+        ]
+      : []),
     {
       t: `Les prix des activités de fournisseurs de ${ctx.compagnie.raison_sociale} sont sujets à changement. Les prix finaux seront ceux qui apparaissent sur la facture qui vous sera envoyée une fois l'estimé accepté.`,
       taille: 8,

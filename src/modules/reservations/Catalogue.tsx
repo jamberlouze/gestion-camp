@@ -4,10 +4,10 @@ import { BoutonModifier } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
-import { exerciceDe, hausse, libelleExercice, litsDe, margeParDefaut, prixFournisseur } from './calcul'
+import { appliquerHausse, exerciceDe, hausse, libelleExercice, litsDe, margeParDefaut, prixFournisseur } from './calcul'
 import { useDonnees } from './contexte'
 import { argent, champPetit, dateCourte, dateLongue } from './format'
-import { useAjouterProduit, useEnregistrerPrix, useModifierProduit, usePreparerExercice, type PrixAEcrire } from './donnees'
+import { useAjouterProduit, useEnregistrerPrix, useEnregistrerPrixLot, useModifierProduit, usePreparerExercice, type PrixAEcrire } from './donnees'
 import { CATEGORIES, FORFAITS, UNITES, type Categorie, type Prix, type Produit, type Unite } from './types'
 
 // Liste de prix (remplace l'onglet « Liste de prix » du chiffrier ; révision
@@ -20,6 +20,11 @@ type Statut = 'section' | 'valide' | 'a_valider' | 'a_definir'
 
 const cleDe = (produit: string, ex: number) => `${produit}|${ex}`
 const memePrix = (a: number, b: number) => Math.abs(a - b) < 0.00005
+const nombre = (v: number | null | undefined) => (v === null || v === undefined ? null : Number(v))
+const pourcentage = (n: number) => `${n > 0 ? '+' : ''}${String(n).replace('.', ',')} %`
+
+/** Ligne écrite d'un coup par « Appliquer ce % » (et son annulation). */
+type LignePrixLot = Pick<Prix, 'produit_id' | 'exercice' | 'prix' | 'cout' | 'marge' | 'hausse_pct' | 'repli'>
 /** Jour local (AAAA-MM-JJ) d'un horodatage. */
 const jourDe = (horodatage: string) => new Date(horodatage).toLocaleDateString('fr-CA')
 
@@ -36,6 +41,9 @@ export function Catalogue() {
   const { produits, prix, catalogue, ecriture, auj } = useDonnees()
   const [params, setParams] = useSearchParams()
   const preparer = usePreparerExercice()
+  const lot = useEnregistrerPrixLot()
+  const [pctLot, setPctLot] = useState('')
+  const [annulation, setAnnulation] = useState<{ lignes: LignePrixLot[]; pct: number; exercice: number } | null>(null)
   const [nouveau, setNouveau] = useState(false)
   const [aModifier, setAModifier] = useState<Produit | null>(null)
 
@@ -75,6 +83,38 @@ export function Catalogue() {
     return l.valide ? 'valide' : 'a_valider'
   }
   const nbAValider = visibles.filter((p) => !['section', 'valide'].includes(statutDe(p))).length
+  const affiches = visibles.filter((p) => !aValiderSeul || !['section', 'valide'].includes(statutDe(p)))
+
+  // « + % » (liste préparée) : lignes affichées, hors sections et prix validés, qui ont un prix ou un coût d'avant.
+  const avecHausse = preparee && precedent !== null
+  const cibles = avecHausse
+    ? affiches.filter((p) => {
+        if (p.etages?.length || statutDe(p) === 'valide') return false
+        const a = ligneDe(p.id, precedent)
+        return !!a && (a.prix !== null || a.cout !== null)
+      })
+    : []
+  const appliquerLot = async () => {
+    const pct = Number(pctLot.replace(',', '.'))
+    if (precedent === null || pctLot.trim() === '' || !Number.isFinite(pct) || pct <= -100 || !cibles.length) return
+    const ok = await confirmer({
+      titre: `Appliquer ${pourcentage(pct)} à ${cibles.length} ligne${cibles.length > 1 ? 's' : ''} de ${libelleExercice(exercice)} ?`,
+      message: `Prix ${libelleExercice(exercice)} = prix ${libelleExercice(precedent)} × ${String(1 + pct / 100).replace('.', ',')}, arrondi au cent ; produits de fournisseurs : le % s'applique au coût, la marge est gardée. Les prix déjà validés ne sont pas touchés ; les autres restent « à valider ». « Annuler » remet ces lignes comme avant.`,
+      libelleOk: 'Appliquer',
+      danger: false,
+    })
+    if (!ok) return
+    const avant: LignePrixLot[] = []
+    const apres: LignePrixLot[] = []
+    for (const p of cibles) {
+      const l = ligneDe(p.id, exercice)
+      const a = ligneDe(p.id, precedent)!
+      const repli = l ? l.repli : exercice - 1
+      avant.push({ produit_id: p.id, exercice, prix: l?.prix ?? null, cout: l?.cout ?? null, marge: l?.marge ?? null, hausse_pct: l?.hausse_pct ?? null, repli })
+      apres.push({ produit_id: p.id, exercice, ...appliquerHausse({ prix: nombre(a.prix), cout: nombre(a.cout), marge: nombre(a.marge) }, pct, p), hausse_pct: pct, repli })
+    }
+    lot.mutate(apres, { onSuccess: () => setAnnulation({ lignes: avant, pct, exercice }) })
+  }
 
   const lancerPreparation = async (ex: number, completer = false) => {
     const ok = await confirmer({
@@ -137,6 +177,39 @@ export function Catalogue() {
           </div>
         )}
       </div>
+      {vue === 'liste' && avecHausse && ecriture && precedent !== null && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-pierre-200 bg-pierre-50 px-3 py-2 text-sm text-pierre-700">
+          <span>
+            Hausse de {libelleExercice(exercice)} sur {libelleExercice(precedent)} :
+          </span>
+          <span className="inline-flex items-center gap-1">
+            +
+            <input
+              type="number"
+              step="any"
+              aria-label="Pourcentage à appliquer aux lignes affichées"
+              className={`${champPetit} w-20 text-right tabular-nums`}
+              placeholder="%"
+              value={pctLot}
+              onChange={(e) => setPctLot(e.target.value)}
+            />
+            %
+          </span>
+          <button className={ui.boutonSecondaire} disabled={!cibles.length || pctLot.trim() === '' || lot.isPending} onClick={appliquerLot}>
+            Appliquer aux {cibles.length} ligne{cibles.length > 1 ? 's' : ''} affichée{cibles.length > 1 ? 's' : ''}
+          </button>
+          {annulation && annulation.exercice === exercice && (
+            <button
+              className="text-sm text-pierre-600 underline hover:text-pierre-900"
+              disabled={lot.isPending}
+              onClick={() => lot.mutate(annulation.lignes, { onSuccess: () => setAnnulation(null) })}
+            >
+              Annuler ({pourcentage(annulation.pct)} sur {annulation.lignes.length} ligne{annulation.lignes.length > 1 ? 's' : ''})
+            </button>
+          )}
+          <span className="text-xs text-pierre-500">Les prix validés ne sont pas touchés. Chaque ligne a aussi son « + % ».</span>
+        </div>
+      )}
       <p className="text-sm text-pierre-500">
         Les prix sont copiés dans chaque estimé au moment où il est fait : les changer ici ne touche jamais un estimé existant. Un prix changé redevient « à
         valider ». {preparee ? `Tant qu’un prix ${libelleExercice(exercice)} n’est pas validé, les estimés de ${libelleExercice(exercice)} prennent celui de ${libelleExercice(exercice - 1)} (marqué « provisoire »). ` : ''}
@@ -147,7 +220,7 @@ export function Catalogue() {
         <Historique produits={visibles} />
       ) : (
         Object.entries(CATEGORIES).map(([cat, nomCat]) => {
-          const siens = visibles.filter((p) => p.categorie === cat && (!aValiderSeul || !['section', 'valide'].includes(statutDe(p))))
+          const siens = affiches.filter((p) => p.categorie === cat)
           if (!siens.length) return null
           return (
             <section key={cat} className={`${ui.carte} @container`}>
@@ -157,7 +230,7 @@ export function Catalogue() {
                 <span>Produit</span>
                 <span className="text-right">{precedent ? libelleExercice(precedent) : ''}</span>
                 <span className="text-right">{libelleExercice(exercice)}</span>
-                <span className="text-right">{precedent ? 'Hausse' : ''}</span>
+                <span className="text-right">{precedent ? (avecHausse ? '+ % · hausse' : 'Hausse') : ''}</span>
                 <span>Statut</span>
                 <span>Mise à jour</span>
                 <span />
@@ -170,6 +243,7 @@ export function Catalogue() {
                     exercice={exercice}
                     precedent={precedent}
                     preparee={preparee}
+                    avecHausse={avecHausse}
                     ligne={ligneDe(p.id, exercice)}
                     avant={precedent ? ligneDe(p.id, precedent) : undefined}
                     statut={statutDe(p)}
@@ -195,6 +269,7 @@ function LignePrix({
   exercice,
   precedent,
   preparee,
+  avecHausse,
   ligne,
   avant,
   statut,
@@ -206,6 +281,7 @@ function LignePrix({
   exercice: number
   precedent: number | null
   preparee: boolean
+  avecHausse: boolean
   ligne: Prix | undefined
   avant: Prix | undefined
   statut: Statut
@@ -227,6 +303,12 @@ function LignePrix({
   const prixCourant = section ? (prixLit === null ? null : section.lits * prixLit) : prixClient
   const info = section ? infoPrix('LIT', exercice) : infoPrix(p.code, exercice)
   const rouge = statut === 'a_valider' || statut === 'a_definir'
+  // « + % » sur l'exercice d'avant (liste préparée) ; un prix différent du calcul = ajusté à la main.
+  const base = { prix: nombre(avant?.prix), cout: nombre(avant?.cout), marge: nombre(avant?.marge) }
+  const peutHausse = avecHausse && !section && (base.prix !== null || base.cout !== null)
+  const pct = nombre(ligne?.hausse_pct)
+  const attendu = peutHausse && pct !== null ? appliquerHausse(base, pct, p) : null
+  const ajusteMain = attendu?.prix != null && prixClient !== null && !memePrix(prixClient, attendu.prix)
 
   // Une ligne créée ici suit la liste : repli si la liste a été préparée, marge par défaut.
   const ecrire = (champs: Omit<PrixAEcrire, 'produit_id' | 'exercice'>) =>
@@ -306,9 +388,34 @@ function LignePrix({
             = {libelleExercice(precedent)}
           </button>
         )}
+        {ajusteMain && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900" title={`Calculé avec ${pourcentage(pct!)} : ${argent(attendu!.prix)}`}>
+            ajusté à la main ({prixClient! > attendu!.prix! ? '+' : ''}
+            {argent(prixClient! - attendu!.prix!)})
+          </span>
+        )}
       </div>
 
-      <span className="text-xs text-pierre-500 @4xl:text-right">{precedent !== null && texteHausse(prixAvant, prixCourant)}</span>
+      <div className="flex flex-col items-start gap-0.5 text-xs text-pierre-500 @4xl:items-end">
+        {peutHausse && ecriture ? (
+          <span className="inline-flex items-center gap-1 text-pierre-700">
+            +
+            <PrixSaisi
+              libelle={`Hausse en % sur ${libelleExercice(precedent!)} : ${p.nom}`}
+              valeur={pct}
+              placeholder="%"
+              petit
+              largeur="w-16"
+              min={-99}
+              enregistrer={(v) => ecrire(v === null ? { hausse_pct: null } : { hausse_pct: v, ...appliquerHausse(base, v, p) })}
+            />
+            %
+          </span>
+        ) : (
+          pct !== null && <span className="text-pierre-700">{pourcentage(pct)} appliqué</span>
+        )}
+        {precedent !== null && <span>{texteHausse(prixAvant, prixCourant)}</span>}
+      </div>
 
       <div className="flex flex-col items-end gap-0.5 @4xl:items-start">
         {statut === 'section' ? (
@@ -483,6 +590,8 @@ function PrixSaisi({
   placeholder = 'à définir',
   petit,
   rouge,
+  largeur,
+  min = 0,
 }: {
   valeur: number | null
   enregistrer: (v: number | null) => void
@@ -491,6 +600,9 @@ function PrixSaisi({
   placeholder?: string
   petit?: boolean
   rouge?: boolean
+  /** Largeur Tailwind du champ (sinon celle d'un prix). */
+  largeur?: string
+  min?: number
 }) {
   const texte = valeur === null ? '' : String(Number(valeur))
   const [v, setV] = useState(texte)
@@ -503,9 +615,9 @@ function PrixSaisi({
     <input
       type="number"
       step="any"
-      min={0}
+      min={min}
       aria-label={libelle}
-      className={`${champPetit} ${petit ? 'w-24 py-1 text-xs' : 'w-28'} text-right tabular-nums ${rouge ? 'border-red-300 text-red-800' : ''}`}
+      className={`${champPetit} ${largeur ?? (petit ? 'w-24' : 'w-28')} ${petit ? 'py-1 text-xs' : ''} text-right tabular-nums ${rouge ? 'border-red-300 text-red-800' : ''}`}
       placeholder={placeholder}
       disabled={disabled}
       value={v}

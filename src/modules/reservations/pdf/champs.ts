@@ -26,7 +26,8 @@ export interface Contexte {
   compagnie: Compagnie
   client: Client | null
   contact: Personne | null
-  estime: Pick<Estime, 'version' | 'sous_total' | 'tps' | 'tvq' | 'total' | 'date_estime' | 'statut'> | null
+  /** `prix_provisoires` (et son `exercice_prix`) : lignes marquées « Prix provisoire » sur l'estimé. */
+  estime: (Pick<Estime, 'version' | 'sous_total' | 'tps' | 'tvq' | 'total' | 'date_estime' | 'statut'> & Partial<Pick<Estime, 'exercice_prix' | 'prix_provisoires'>>) | null
   etages: EtageRooming[]
   /** Moment de production (date et heure de la pré-signature de la direction). */
   maintenant: Date

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ChampPiege, fusionnerErreurs } from '@/lib/public/habillage'
 import { Turnstile } from '@/lib/public/Turnstile'
 import { ui } from '@/lib/ui'
-import { exerciceDe } from '../calcul'
 import {
   aujourdhui,
   erreurs,
@@ -21,7 +20,7 @@ import {
 import type { Forfait } from '../types'
 import { db } from './client'
 import { Choix, Entete, Page, Pied, Question } from './commun'
-import { dollars, useLangue } from './outils'
+import { useLangue } from './outils'
 
 // Formulaire public de demande de réservation (/demande), qui remplace le
 // Jotform. Les questions et leurs conditions sont dans demande.ts ; le
@@ -32,7 +31,6 @@ import { dollars, useLangue } from './outils'
 
 interface Infos {
   heures_normales: Record<string, [string, string]> | null
-  prix_repas: Record<string, number>
 }
 
 const ORDRE_TYPES: TypeGroupe[] = ['ecole', 'entreprise', 'particulier', 'club_sportif', 'municipalite', 'osbl', 'autre']
@@ -96,21 +94,12 @@ export default function Demande() {
     />
   )
 
-  // Heures normales et prix du repas : réglages et catalogue de l'app.
+  // Heures normales : réglages de l'app. Aucun prix dans le formulaire public (décision de Maxime, 2026-10-14).
   const normales = (forfait: string): [string, string] | null => infos?.heures_normales?.[forfait] ?? null
   const heures = (forfait: string) => {
     const h = normales(forfait)
     return h ? { a: heureLisible(h[0], langue), d: heureLisible(h[1], langue) } : { a: '…', d: '…' }
   }
-  const prixRepas = (() => {
-    const p = infos?.prix_repas ?? {}
-    const jour = rep.date || rep.arrivee || auj
-    const ex = String(exerciceDe(jour))
-    const cles = Object.keys(p).sort()
-    const prix = p[ex] ?? (cles.length ? p[cles[cles.length - 1]] : null)
-    return prix === null || prix === undefined ? null : dollars(prix, langue)
-  })()
-
   const envoyer = async () => {
     setTente(true)
     setMessage(null)
@@ -270,7 +259,7 @@ export default function Demande() {
               </Question>
             )}
             {v.repas && (
-              <Question libelle={t.repas} aide={prixRepas ? remplacer(t.repas_aide, { prix: prixRepas }) : undefined} {...q('repas')}>
+              <Question libelle={t.repas} {...q('repas')}>
                 <Choix
                   nom="repas"
                   valeur={rep.repas}

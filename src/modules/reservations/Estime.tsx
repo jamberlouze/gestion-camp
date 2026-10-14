@@ -3,7 +3,16 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { appliquerPourcentages, arrondi4, exerciceDe, libelleExercice, lignesAuto, totaux, type LigneCalculee } from './calcul'
+import {
+  appliquerPourcentages,
+  arrondi4,
+  exerciceDe,
+  libelleExercice,
+  ligneProvisoire as estLigneProvisoire,
+  lignesAuto,
+  totaux,
+  type LigneCalculee,
+} from './calcul'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { garderEstime, ouvrirPdf, pdfDeLEstime } from './productionPdf'
@@ -144,11 +153,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
     : (estime.prix_provisoires ?? {})
   const codesProvisoires = Object.keys(provisoires)
   const exercicePrix = modifiable ? calcul.exercice : estime.exercice_prix
-  const ligneProvisoire = (l: Pick<LigneEdit, 'code' | 'auto' | 'prix_unitaire'>) =>
-    l.prix_unitaire !== 0 &&
-    (l.code
-      ? l.code in provisoires || (l.code.startsWith('AG-') && 'LIT' in provisoires)
-      : l.auto && codesProvisoires.some((c) => /^(CN-|JPA-|REPAS$)/.test(c)))
+  const ligneProvisoire = (l: Pick<LigneEdit, 'code' | 'auto' | 'prix_unitaire'>) => estLigneProvisoire(l, provisoires)
 
   const maj = (n: LigneEdit[]) => {
     setLignes(n.map((l, i) => ({ ...l, ordre: i })))
@@ -196,7 +201,8 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
             if (a === 'nouvelle_version') choisir(id)
             // L'estimé envoyé est gardé en PDF (preuve de ce que le client a reçu).
             if (a === 'envoyer')
-              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye' })
+              // Prix provisoires du PDF : ceux qu'on vient d'enregistrer, sinon ceux gardés avec l'estimé.
+              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye', prix_provisoires: sale ? provisoires : (estime.prix_provisoires ?? {}) })
                 // Le courriel de l'estimé, tout de suite (sans attendre le passage aux 15 minutes).
                 .then(() => preparerCourriels(r.id).catch(() => {}))
                 .catch((e) =>
@@ -300,7 +306,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
             .map((c) => `${parCode.get(c)?.nom ?? c} (${provisoires[c] === exercicePrix ? 'à valider' : `prix ${libelleExercice(provisoires[c])}`})`)
             .join(', ')}
           . Les prix de {libelleExercice(exercicePrix)} ne sont pas encore validés dans la liste de prix
-          {modifiable ? ' : dès qu’ils le sont, « Recalculer » les reprend.' : '.'} Le PDF du client montre les prix tels quels.
+          {modifiable ? ' : dès qu’ils le sont, « Recalculer » les reprend.' : '.'} Sur le PDF et la page du client, ces lignes portent la mention « Prix provisoire ».
         </p>
       )}
 
@@ -446,7 +452,11 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
             className={ui.boutonSecondaire}
             disabled={avecMontants.length === 0}
             onClick={() =>
-              pdfDeLEstime(sources(r), modifiable ? { ...estime, ...t } : estime, modifiable ? avecMontants : undefined)
+              pdfDeLEstime(
+                sources(r),
+                modifiable ? { ...estime, ...t, exercice_prix: calcul.exercice, prix_provisoires: provisoires } : estime,
+                modifiable ? avecMontants : undefined,
+              )
                 .then(ouvrirPdf)
                 .catch((e) => setPdf(messageErreur(e)))
             }

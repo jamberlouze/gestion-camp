@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { aujourdhui, erreurs, genreSuggere, nettoyer, REPONSES_VIDES, versReservation } from '../../src/modules/reservations/demande.ts'
+import { aujourdhui, erreurs, genreSuggere, nettoyer, REPONSES_VIDES, TEXTES, versReservation } from '../../src/modules/reservations/demande.ts'
 import { routeReservations } from './api.js'
 
 const reglages = {
@@ -196,4 +196,12 @@ test('demande : le champ piège fait semblant de réussir', async () => {
   const res = await routeReservations(requete({ cle: crypto.randomUUID(), piege: 'http://spam', reponses: classeNature }), env, 'demande')
   assert.equal(res.status, 200)
   assert.equal(appels.length, 0)
+})
+
+test('formulaire public : aucun prix dans les textes (décision de Maxime du 2026-10-14)', () => {
+  for (const langue of ['fr', 'en']) {
+    const textes = JSON.stringify(TEXTES[langue])
+    assert.doesNotMatch(textes, /\{prix\}/, `${langue} : champ {prix}`)
+    assert.doesNotMatch(textes, /\d\s?\$|\$\s?\d/, `${langue} : montant en dollars`)
+  }
 })

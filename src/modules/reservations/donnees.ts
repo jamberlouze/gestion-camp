@@ -247,7 +247,7 @@ export const useModifierProduit = () => useModifier<Produit>('produits', ['reser
 export const useAjouterProduit = () => useAjouter<Produit>('produits', () => ['reservations', 'produits'])
 
 /** Ce qu'on écrit d'un prix : seulement les champs donnés (auteur, dates et statut d'un prix changé : la base). */
-export type PrixAEcrire = Pick<Prix, 'produit_id' | 'exercice'> & Partial<Pick<Prix, 'prix' | 'cout' | 'marge' | 'valide' | 'repli'>>
+export type PrixAEcrire = Pick<Prix, 'produit_id' | 'exercice'> & Partial<Pick<Prix, 'prix' | 'cout' | 'marge' | 'valide' | 'repli' | 'hausse_pct'>>
 
 /** Prix d'un produit pour un exercice (ajouté ou modifié), validation comprise. Optimiste. */
 export function useEnregistrerPrix() {
@@ -276,7 +276,7 @@ export function useEnregistrerPrix() {
         if (!x)
           return [
             ...l,
-            { prix: null, cout: null, marge: null, valide: false, valide_le: null, valide_par_nom: null, modifie_le: new Date().toISOString(), modifie_par_nom: null, repli: null, ...p },
+            { prix: null, cout: null, marge: null, valide: false, valide_le: null, valide_par_nom: null, modifie_le: new Date().toISOString(), modifie_par_nom: null, repli: null, hausse_pct: null, ...p },
           ]
         return l.map((y) => (y === x ? { ...y, ...p, ...(change && !('valide' in p) ? { valide: false } : {}) } : y))
       })
@@ -299,6 +299,25 @@ export function usePreparerExercice() {
       return data as number
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['reservations', 'prix'] }),
+  })
+}
+
+/**
+ * Plusieurs prix d'un coup (« Appliquer ce % aux lignes affichées », et son
+ * annulation) : un seul envoi ; chaque ligne porte les mêmes champs.
+ */
+export function useEnregistrerPrixLot() {
+  const client = useQueryClient()
+  const cle = ['reservations', 'prix']
+  return useMutation({
+    mutationKey: ['reservations', 'prix', 'lot'],
+    networkMode: 'always',
+    mutationFn: async (lignes: Required<Pick<Prix, 'produit_id' | 'exercice' | 'prix' | 'cout' | 'marge' | 'hausse_pct' | 'repli'>>[]) => {
+      if (!lignes.length) return
+      const { error } = await db().from('prix').upsert(lignes, { onConflict: 'produit_id,exercice', defaultToNull: false })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: cle }),
   })
 }
 

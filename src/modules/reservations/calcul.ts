@@ -460,9 +460,51 @@ export function prixFournisseur(
   return p.arrondi === 'dollar_superieur' ? Math.ceil(brut - 1e-9) : arrondi4(brut)
 }
 
+/**
+ * « + % » de la liste de l'exercice suivant (demande de Maxime) : prix de
+ * l'exercice d'avant × (1 + %), arrondi au cent. Produit de fournisseur avec
+ * un coût : le % s'applique au coût d'avant (au cent), la marge est gardée
+ * et le prix client recalculé (`prixFournisseur`).
+ */
+export function appliquerHausse(
+  avant: { prix: number | null; cout: number | null; marge: number | null },
+  pct: number,
+  p: { majoration: number | null; ajout: number | null; arrondi: 'aucun' | 'dollar_superieur' },
+): { prix: number | null; cout: number | null; marge: number | null } {
+  const f = 1 + Number(pct) / 100
+  if (p.majoration !== null && avant.cout !== null) {
+    const cout = arrondi2(Number(avant.cout) * f)
+    const marge = avant.marge === null ? (margeParDefaut(p.majoration) ?? 15) : Number(avant.marge)
+    return { cout, marge, prix: prixFournisseur(cout, marge, p) }
+  }
+  return {
+    prix: avant.prix === null ? null : arrondi2(Number(avant.prix) * f),
+    cout: null,
+    marge: p.majoration === null ? null : avant.marge === null ? margeParDefaut(p.majoration) : Number(avant.marge),
+  }
+}
+
 /** Marge par défaut d'un produit de fournisseur, en % (majoration 1,15 → 15). */
 export const margeParDefaut = (majoration: number | null) =>
   majoration === null ? null : Math.round((Number(majoration) - 1) * 10_000) / 100
+
+/**
+ * Ligne d'estimé à prix provisoire, d'après les codes gardés avec l'estimé
+ * (`estimes.prix_provisoires`) : ligne d'un produit provisoire ; section
+ * d'hébergement si le prix du lit l'est ; forfait scolaire calculé si une de
+ * ses parts (nuitée, repas, animation) l'est. Jamais une ligne à 0 $.
+ * L'app, le PDF et la page client s'en servent.
+ */
+export function ligneProvisoire(
+  l: { code?: string | null; auto?: boolean | null; prix_unitaire: number },
+  provisoires: Record<string, number> | null | undefined,
+): boolean {
+  if (!provisoires || Number(l.prix_unitaire) === 0) return false
+  const codes = Object.keys(provisoires)
+  if (!codes.length) return false
+  if (l.code) return l.code in provisoires || (l.code.startsWith('AG-') && 'LIT' in provisoires)
+  return !!l.auto && codes.some((c) => /^(CN-|JPA-|REPAS$)/.test(c))
+}
 
 /** Hausse d'un prix d'une année à l'autre, en $ et en % (une décimale ; null si l'un manque). */
 export function hausse(avant: number | null, apres: number | null): { montant: number; pourcentage: number | null } | null {

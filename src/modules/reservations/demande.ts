@@ -1,8 +1,9 @@
 // Formulaire public de demande de réservation : remplace le Jotform
 // « Demande de réservation de groupe » (242487021708254). Mêmes questions,
 // même logique conditionnelle, en français et en anglais (traduction du
-// Jotform) ; seules les coquilles sont corrigées, et les heures et le prix
-// du repas viennent des réglages et du catalogue au lieu d'être écrits en dur.
+// Jotform) ; seules les coquilles sont corrigées, et les heures viennent des
+// réglages au lieu d'être écrites en dur. Aucun prix n'est montré (décision de
+// Maxime du 2026-10-14 : ni repas ni autre, validé ou non).
 //
 // Fichier pur : la page publique s'en sert pour afficher et vérifier, le
 // Worker pour vérifier de nouveau et préparer la réservation.
@@ -150,7 +151,6 @@ const FR = {
   nb_personnes: 'Nombre de personnes',
   nombre_aide: 'Entrez le nombre approximatif si vous ne connaissez pas le nombre exact.',
   repas: 'Souhaitez-vous ajouter le service de repas ?',
-  repas_aide: '{prix} par personne, par repas.',
   nb_eleves: "Nombre d'élèves",
   ages: 'Âges et niveaux scolaires des élèves',
   nb_accompagnateurs: "Nombre d'adultes accompagnateurs",
@@ -246,7 +246,6 @@ const EN: Textes = {
   nb_personnes: 'Number of people',
   nombre_aide: "Enter the approximate number if you don't know the exact number.",
   repas: 'Would you like to add a meal service?',
-  repas_aide: '{prix} per person, per meal.',
   nb_eleves: 'Number of students',
   ages: "Students' ages and school levels",
   nb_accompagnateurs: 'Number of accompanying adults',

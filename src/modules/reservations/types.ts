@@ -212,6 +212,8 @@ export interface Prix {
   modifie_par_nom: string | null
   /** Exercice dont le prix s'applique tant que celui-ci n'est pas validé. */
   repli: number | null
+  /** « + % » appliqué au prix (ou au coût d'un fournisseur) de l'exercice d'avant. */
+  hausse_pct: number | null
 }
 
 export interface Reglage {

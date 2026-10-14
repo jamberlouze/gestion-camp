@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ui } from '@/lib/ui'
+import { exerciceDe, libelleExercice, ligneProvisoire } from '../calcul'
 import { heureLisible, remplacer } from '../demande'
 import { bilanFactures } from '../facturation'
 import type { Forfait } from '../types'
@@ -15,6 +16,8 @@ import { TEXTES_PUBLICS } from './textes'
 // participants et un message à l'équipe. Lit reservations.page_client.
 
 interface Ligne {
+  code?: string | null
+  auto?: boolean | null
   description: string
   note: string | null
   quantite: number
@@ -50,6 +53,9 @@ interface Infos {
     accepte_le: string | null
     accepte_par: string | null
     document_id: string | null
+    /** Prix provisoires de l'estimé (code → exercice du prix pris) : lignes marquées. */
+    exercice_prix?: number
+    prix_provisoires?: Record<string, number>
     lignes: Ligne[]
   } | null
   signature: { statut: 'en_attente' | 'signe'; jeton: string | null; echeance: string; signe_le: string | null; nom_signataire: string | null } | null
@@ -221,6 +227,7 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
                 <td className="py-1.5 pr-2">
                   {l.description}
                   {l.note && <div className="text-xs italic text-pierre-500">{l.note}</div>}
+                  {ligneProvisoire(l, e.prix_provisoires) && <div className="text-xs italic text-amber-800">{t.prix_provisoire}</div>}
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{Number(l.quantite).toLocaleString(langue === 'en' ? 'en-CA' : 'fr-CA')}</td>
                 <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{dollars(l.prix_unitaire, langue)}</td>
@@ -252,6 +259,11 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
           </tfoot>
         </table>
       </div>
+      {e.lignes.some((l) => ligneProvisoire(l, e.prix_provisoires)) && (
+        <p className="mt-2 text-xs text-amber-800">
+          {remplacer(t.prix_provisoire_note, { ex: libelleExercice(e.exercice_prix ?? exerciceDe(infos.date_arrivee)) })}
+        </p>
+      )}
       {e.document_id && (
         <a className="mt-3 inline-block text-sm text-foret-700 underline" href={lienDocument(jeton, e.document_id)} target="_blank" rel="noreferrer">
           {t.pdf}
