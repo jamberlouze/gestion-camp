@@ -6,6 +6,7 @@ import { useRooming } from './donnees'
 import { AllerAuPlan, VuePlan } from './Plan'
 import { Plans } from './Plans'
 import { Reglages } from './Reglages'
+import { Resume } from './Resume'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
   `whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium ${
@@ -14,7 +15,7 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 export default function ModuleRooming() {
   const { pathname } = useLocation()
-  const surPlan = pathname === '/rooming' || pathname.startsWith('/rooming/plan/')
+  const surPlan = pathname === '/rooming/plan' || pathname.startsWith('/rooming/plan/')
   const ecriture = useAuth().peutEcrire('rooming')
   const d = useRooming()
   return (
@@ -22,7 +23,11 @@ export default function ModuleRooming() {
       <h1 className="text-2xl font-semibold">Rooming</h1>
       {/* Adresses absolues : voir Embarcations. */}
       <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
-        <NavLink to="/rooming" end className={() => onglet({ isActive: surPlan })}>
+        <NavLink to="/rooming" end className={onglet}>
+          Résumé
+        </NavLink>
+        {/* Le plan en vigueur (anciennement /rooming). */}
+        <NavLink to="/rooming/plan" className={() => onglet({ isActive: surPlan })}>
           Plan
         </NavLink>
         <NavLink to="/rooming/plans" className={onglet}>
@@ -42,7 +47,8 @@ export default function ModuleRooming() {
         )
       ) : (
         <Routes>
-          <Route index element={<AllerAuPlan d={d} />} />
+          <Route index element={<Resume d={d} />} />
+          <Route path="plan" element={<AllerAuPlan d={d} />} />
           <Route path="plan/:id" element={<VuePlan d={d} />} />
           <Route path="plans" element={<Plans d={d} />} />
           <Route path="reglages" element={<Reglages d={d} />} />

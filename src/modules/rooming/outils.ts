@@ -128,6 +128,50 @@ export function arbrePlan(
   return { racines, totaux: additionner(racines.map((r) => r.totaux)) }
 }
 
+/** Un lieu de la référence d'aujourd'hui, avec le total de ses lits (lui et tout ce qu'il contient). */
+export interface NoeudReference {
+  lieu: Lieu
+  /** Lits et chambres rattachés directement à ce lieu. */
+  litsPropres: number
+  chambresPropres: number
+  lits: number
+  chambres: number
+  enfants: NoeudReference[]
+}
+
+const somme = (liste: NoeudReference[], f: (n: NoeudReference) => number) => liste.reduce((t, n) => t + f(n), 0)
+
+/**
+ * Le résumé hors saison : la référence d'aujourd'hui (`dansReference`) en
+ * arbre, avec le total de lits à chaque lieu (étage, section, bâtiment,
+ * site). Suit la référence toute seule ; un lieu sans chambre n'y est pas.
+ */
+export function arbreReference(s: Structure): { racines: NoeudReference[]; lits: number; chambres: number } {
+  const reference = dansReference(s)
+  const noeud = (lieu: Lieu): NoeudReference | null => {
+    const propres = s.chambres.filter((c) => c.lieu_id === lieu.id && reference.chambres.has(c.id))
+    const enfants = enfantsDe(s.lieux, lieu.id)
+      .filter((l) => reference.lieux.has(l.id))
+      .map(noeud)
+      .filter((n): n is NoeudReference => n !== null)
+    if (propres.length === 0 && enfants.length === 0) return null
+    const litsPropres = propres.reduce((t, c) => t + c.lits, 0)
+    return {
+      lieu,
+      litsPropres,
+      chambresPropres: propres.length,
+      lits: litsPropres + somme(enfants, (e) => e.lits),
+      chambres: propres.length + somme(enfants, (e) => e.chambres),
+      enfants,
+    }
+  }
+  const racines = enfantsDe(s.lieux, null)
+    .filter((l) => reference.lieux.has(l.id))
+    .map(noeud)
+    .filter((n): n is NoeudReference => n !== null)
+  return { racines, lits: somme(racines, (r) => r.lits), chambres: somme(racines, (r) => r.chambres) }
+}
+
 /** « CH 2 », « Motel 16 », « Appart » : abréviation (sinon nom) du lieu, puis le numéro, sauf si c'est le même mot. */
 export function nomChambre(lieu: Lieu | undefined, chambre: Chambre): string {
   if (!lieu || chambre.numero === lieu.nom || chambre.numero === lieu.code) return chambre.numero

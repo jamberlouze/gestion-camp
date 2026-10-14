@@ -7,7 +7,7 @@ import type { Donnees } from './donnees'
 import { arbrePlan, libelleOccupation, nomPersonne, pluriel, type NoeudChambre, type NoeudLieu, type Totaux } from './outils'
 import type { Plan as TypePlan } from './types'
 
-/** /rooming : le plan en vigueur, sinon le premier plan actif. */
+/** /rooming/plan (onglet Plan) : le plan en vigueur, sinon le premier plan actif. */
 export function AllerAuPlan({ d }: { d: Donnees }) {
   const plan = d.plans.find((p) => p.en_vigueur) ?? d.plans.find((p) => !p.archive) ?? d.plans[0]
   if (plan) return <Navigate to={`/rooming/plan/${plan.id}`} replace />
@@ -219,8 +219,6 @@ const COULEURS = {
   fermee: 'border-pierre-200 bg-[repeating-linear-gradient(135deg,var(--color-pierre-100)_0_6px,var(--color-pierre-50)_6px_12px)]',
 }
 
-const BARRES = { enfants: 'bg-sky-500', employes: 'bg-amber-500', vide: 'bg-pierre-300' }
-
 function Tuile({ n, d, ouvrir }: { n: NoeudChambre; d: Donnees; ouvrir?: () => void }) {
   const { chambre, etat, personnes } = n
   const fermee = etat.lits === 0
@@ -259,14 +257,8 @@ function Tuile({ n, d, ouvrir }: { n: NoeudChambre; d: Donnees; ouvrir?: () => v
           ))}
         </div>
       )}
-      {!fermee && (
-        <div className="mt-auto pt-2">
-          <div className="flex h-1.5 overflow-hidden rounded-full bg-pierre-200/70">
-            <div className={BARRES[etat.type]} style={{ width: `${(etat.nombre / etat.lits) * 100}%` }} />
-          </div>
-          {etat.type !== 'vide' && etat.libres > 0 && <div className="mt-0.5 text-xs text-pierre-500">{pluriel(etat.libres, 'libre', 'libres')}</div>}
-        </div>
-      )}
+      {/* Pas de barre de taux d'occupation (retirée à la réunion du 2026-10-14) : les chiffres suffisent. */}
+      {!fermee && etat.type !== 'vide' && etat.libres > 0 && <div className="mt-auto pt-2 text-xs text-pierre-500">{pluriel(etat.libres, 'libre', 'libres')}</div>}
     </button>
   )
 }
