@@ -39,8 +39,12 @@ export interface Entreprise {
   actif: boolean
 }
 
-/** Régulières : payées, dans la grille ; woofing : non payées, seulement sur la feuille de l'employé. */
-export type TypeHeuresEmploye = 'regulieres' | 'woofing'
+/**
+ * Régulières : payées, dans la grille ; woofing : non payées, seulement sur
+ * la feuille de l'employé ; maladie et banque (prises en banque) : payées,
+ * sur la feuille de l'employé qui remplit la sienne (banques.ts).
+ */
+export type TypeHeuresEmploye = 'regulieres' | 'woofing' | 'maladie' | 'banque'
 
 export interface HeureEmploye {
   id: string
@@ -109,6 +113,11 @@ const cleHeures = (debut: string) => [S, 'employes-heures', debut]
 const cleNotes = (debut: string) => [S, 'employes-notes', debut]
 const cleFeuilles = (debut: string) => [S, 'employes-feuilles', debut]
 
+/**
+ * Heures payées des employés pour la période : régulières (la grille) et,
+ * pour ceux qui remplissent leur feuille, maladie et prises en banque
+ * (affichées à part et exportées). Le woofing (non payé) n'y est pas.
+ */
 export function useHeuresEmployes(debut: string) {
   return useQuery({
     queryKey: cleHeures(debut),
@@ -119,7 +128,7 @@ export function useHeuresEmployes(debut: string) {
           db()
             .from('heures_employes')
             .select('id, employe_id, entreprise_id, jour, type, heures')
-            .eq('type', 'regulieres')
+            .in('type', ['regulieres', 'maladie', 'banque'])
             .gte('jour', debut)
             .lte('jour', finPeriode(debut))
             .order('jour')
@@ -187,7 +196,9 @@ export function useSaisirEmploye(debut: string) {
       await client.cancelQueries({ queryKey: cle })
       const avant = client.getQueryData<HeureEmploye[]>(cle)
       client.setQueryData<HeureEmploye[]>(cle, (liste = []) => {
-        const existante = liste.find((h) => h.employe_id === c.employeId && h.entreprise_id === c.entrepriseId && h.jour === c.jour)
+        const existante = liste.find(
+          (h) => h.employe_id === c.employeId && h.entreprise_id === c.entrepriseId && h.jour === c.jour && h.type === 'regulieres',
+        )
         const reste = liste.filter((h) => h !== existante)
         if (c.heures == null) return reste
         return [
@@ -207,7 +218,11 @@ export function useSaisirEmploye(debut: string) {
     onError: (_e, _c, ctx) => {
       if (ctx) client.setQueryData(cle, ctx.avant)
     },
-    onSettled: () => client.invalidateQueries({ queryKey: cle }),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: cle })
+      client.invalidateQueries({ queryKey: [S, 'banques'] })
+      client.invalidateQueries({ queryKey: [S, 'dossiers-a-fermer'] })
+    },
   })
 }
 
@@ -343,6 +358,8 @@ export function useSaisirFeuilleEmploye(employeId: string, entrepriseId: string,
     onSettled: () => {
       client.invalidateQueries({ queryKey: cle })
       client.invalidateQueries({ queryKey: cleHeures(debut) })
+      client.invalidateQueries({ queryKey: [S, 'banques'] })
+      client.invalidateQueries({ queryKey: [S, 'dossiers-a-fermer'] })
     },
   })
 }

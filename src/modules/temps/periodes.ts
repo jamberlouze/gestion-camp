@@ -1,10 +1,25 @@
 // Périodes de paie et saisie des heures (fonctions pures).
 // Dates AAAA-MM-JJ en heure locale. Une période = 14 jours, du dimanche au
-// samedi ; la première commence le dimanche 4 octobre 2026 (même règle que
-// temps.debut_periode en SQL).
+// samedi ; la première du module commence le dimanche 4 octobre 2026 (même
+// règle que temps.debut_periode en SQL). Le calcul des périodes, des dates
+// de paie et des numéros (PP) est dans le fichier commun src/lib/periodesPaie.ts
+// (aussi utilisé par le Calendrier) ; ce fichier-ci y ajoute les règles du
+// module (rien avant la première période) et la saisie des heures.
 
-export const PREMIERE_PERIODE = '2026-10-04'
-export const DUREE_PERIODE = 14
+import {
+  DUREE_PERIODE_PAIE,
+  datePaie,
+  debutPeriodePaie,
+  finPeriodePaie,
+  libellePeriodePaie,
+  numeroPeriodePaie,
+  PREMIERE_PERIODE_PAIE,
+} from '@/lib/periodesPaie'
+
+export { codePeriodePaie, datePaie, numeroPeriodePaie } from '@/lib/periodesPaie'
+
+export const PREMIERE_PERIODE = PREMIERE_PERIODE_PAIE
+export const DUREE_PERIODE = DUREE_PERIODE_PAIE
 
 const deux = (n: number) => String(n).padStart(2, '0')
 const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
@@ -34,12 +49,12 @@ export const ecartJours = (a: string, b: string) => Math.round((depuisIso(b).get
 /** Premier jour (dimanche) de la période qui contient `iso` ; la première période pour une date antérieure. */
 export function debutPeriode(iso: string): string {
   if (iso < PREMIERE_PERIODE) return PREMIERE_PERIODE
-  return ajouterJours(PREMIERE_PERIODE, Math.floor(ecartJours(PREMIERE_PERIODE, iso) / DUREE_PERIODE) * DUREE_PERIODE)
+  return debutPeriodePaie(iso)
 }
 
 export const estDebutPeriode = (iso: string) => estIso(iso) && debutPeriode(iso) === iso
 
-export const finPeriode = (debut: string) => ajouterJours(debut, DUREE_PERIODE - 1)
+export const finPeriode = (debut: string) => finPeriodePaie(debut)
 
 export const periodeSuivante = (debut: string) => ajouterJours(debut, DUREE_PERIODE)
 export const periodePrecedente = (debut: string) => ajouterJours(debut, -DUREE_PERIODE)
@@ -57,18 +72,24 @@ export function periodesEntre(de: string, a: string): string[] {
 /** « 4 oct. » ou « 4 oct. 2026 ». */
 export function dateCourte(iso: string, avecAnnee = true): string {
   const d = depuisIso(iso)
-  return `${d.getDate()} ${MOIS_COURTS[d.getMonth()]}${avecAnnee ? ` ${d.getFullYear()}` : ''}`
+  return `${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS_COURTS[d.getMonth()]}${avecAnnee ? ` ${d.getFullYear()}` : ''}`
 }
 
-/** « 4 au 17 oct. 2026 », « 25 oct. au 7 nov. 2026 », « 27 déc. 2026 au 9 janv. 2027 ». */
-export function libellePeriode(debut: string): string {
-  const fin = finPeriode(debut)
-  const a = depuisIso(debut)
-  const b = depuisIso(fin)
-  if (a.getFullYear() !== b.getFullYear()) return `${dateCourte(debut, true)} au ${dateCourte(fin, true)}`
-  if (a.getMonth() !== b.getMonth()) return `${dateCourte(debut, false)} au ${dateCourte(fin, true)}`
-  return `${a.getDate()} au ${dateCourte(fin, true)}`
+/**
+ * Numéro et dates, partout où une période paraît (comme Employeur D) :
+ * « PP21 · 4 au 17 oct. 2026 », « PP23 · 1er au 14 nov. 2026 »,
+ * « PP1 · 27 déc. 2026 au 9 janv. 2027 ».
+ */
+export const libellePeriode = (debut: string) => libellePeriodePaie(debut, { annee: true })
+
+/** « PP21 · 2026 » : numéro et année de paie (export CSV, comme Employeur D). */
+export function codeAnneePeriode(debut: string): string {
+  const { numero, annee } = numeroPeriodePaie(debut)
+  return `PP${numero} · ${annee}`
 }
+
+/** « paie du jeu. 22 oct. » */
+export const libellePaie = (debut: string) => `paie du ${JOURS_COURTS[depuisIso(datePaie(debut)).getDay()]} ${dateCourte(datePaie(debut), false)}`
 
 /** « lun. 5 » */
 export function jourCourt(iso: string): string {
@@ -80,12 +101,14 @@ export function jourCourt(iso: string): string {
 // Heures
 // ------------------------------------------------------------------
 
-export type TypeHeures = 'regulieres' | 'vacances' | 'maladie'
+/** banque : heures prises dans la banque d'heures accumulées (voir banques.ts). */
+export type TypeHeures = 'regulieres' | 'vacances' | 'maladie' | 'banque'
 
 export const TYPES: { id: TypeHeures; libelle: string }[] = [
   { id: 'regulieres', libelle: 'Régulières' },
   { id: 'vacances', libelle: 'Vacances' },
   { id: 'maladie', libelle: 'Maladie' },
+  { id: 'banque', libelle: 'Prises en banque' },
 ]
 
 /**

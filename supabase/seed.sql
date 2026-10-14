@@ -284,6 +284,72 @@ update core.profils
    set employe_id = (select id from core.employes where surnom = 'Pinson'), woofing = true
  where courriel = 'lea@camp.test';
 
+-- Feuilles de temps, période PP21 (4 au 17 oct. 2026), pour essayer les
+-- banques, l'onglet À approuver et les dossiers à fermer :
+--   Léa (Pinson) : GBPA+ 45 h la semaine 1 (+ 3 h Aquabounga → 8 h
+--     accumulées), woofing, maladie et heures prises en banque ; sa feuille
+--     GBPA+ est soumise, celle d'Aquabounga reste ouverte ;
+--   Julie (direction) : 42,5 h la semaine 1 (2,5 h accumulées), vacances,
+--     maladie, solde de départ de 6 h ; feuille soumise (pour les admins) ;
+--   Olivier (direction) : quelques heures, feuille ouverte (Julie ne la voit pas) ;
+--   Marteau : des heures en PP21 seulement (dossier à fermer à partir de PP24).
+insert into temps.heures_employes (employe_id, entreprise_id, jour, type, heures)
+select e.id, c.id, v.jour::date, v.type, v.heures
+  from (values
+    ('Pinson', 'GBPA+', '2026-10-05', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-06', 'regulieres', 9),
+    ('Pinson', 'GBPA+', '2026-10-07', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-08', 'regulieres', 9),
+    ('Pinson', 'GBPA+', '2026-10-09', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-10', 'woofing', 4),
+    ('Pinson', 'GBPA+', '2026-10-12', 'maladie', 8), ('Pinson', 'GBPA+', '2026-10-13', 'regulieres', 8),
+    ('Pinson', 'GBPA+', '2026-10-14', 'regulieres', 6), ('Pinson', 'GBPA+', '2026-10-14', 'banque', 2),
+    ('Pinson', 'Aquabounga', '2026-10-10', 'regulieres', 3),
+    ('Marteau', 'GBPA+', '2026-10-05', 'regulieres', 7.5), ('Marteau', 'GBPA+', '2026-10-06', 'regulieres', 7.5)
+  ) as v (surnom, compagnie, jour, type, heures)
+  join core.employes e on e.surnom = v.surnom
+  join core.entreprises c on c.nom = v.compagnie
+on conflict do nothing;
+
+insert into temps.feuilles_employes (employe_id, entreprise_id, debut, statut)
+select e.id, c.id, '2026-10-04', 'soumise'
+  from core.employes e, core.entreprises c
+ where e.surnom = 'Pinson' and c.nom = 'GBPA+'
+on conflict do nothing;
+insert into temps.journal (feuille_employe_id, genre, auteur, auteur_nom, created_at)
+select f.id, 'soumission', '00000000-0000-0000-0000-000000000009', 'Léa Morin', '2026-10-14 16:05-04'
+  from temps.feuilles_employes f join core.employes e on e.id = f.employe_id
+ where e.surnom = 'Pinson' and f.debut = '2026-10-04' and f.statut = 'soumise'
+   and not exists (select 1 from temps.journal j where j.feuille_employe_id = f.id);
+
+insert into temps.heures (user_id, jour, type, heures)
+select v.user_id::uuid, v.jour::date, v.type, v.heures
+  from (values
+    ('00000000-0000-0000-0000-000000000002', '2026-10-05', 'regulieres', 8.5),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-06', 'regulieres', 8.5),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-07', 'regulieres', 8.5),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-08', 'regulieres', 8.5),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-09', 'regulieres', 8.5),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-12', 'vacances', 8),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-13', 'regulieres', 8),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-14', 'regulieres', 4),
+    ('00000000-0000-0000-0000-000000000002', '2026-10-14', 'maladie', 4),
+    ('00000000-0000-0000-0000-000000000003', '2026-10-05', 'regulieres', 7),
+    ('00000000-0000-0000-0000-000000000003', '2026-10-06', 'regulieres', 7)
+  ) as v (user_id, jour, type, heures)
+on conflict do nothing;
+
+insert into temps.feuilles (user_id, debut, statut)
+values ('00000000-0000-0000-0000-000000000002', '2026-10-04', 'soumise')
+on conflict do nothing;
+insert into temps.journal (feuille_id, genre, auteur, auteur_nom, created_at)
+select f.id, 'soumission', f.user_id, 'Julie Tremblay', '2026-10-14 15:30-04'
+  from temps.feuilles f
+ where f.user_id = '00000000-0000-0000-0000-000000000002' and f.debut = '2026-10-04' and f.statut = 'soumise'
+   and not exists (select 1 from temps.journal j where j.feuille_id = f.id);
+
+insert into temps.ajustements_banques (user_id, banque, jour, heures, note, auteur, auteur_nom)
+select '00000000-0000-0000-0000-000000000002', 'heures', '2026-10-03', 6, 'Solde de départ (Google Sheets)',
+       '00000000-0000-0000-0000-000000000001', 'Admin Test'
+ where not exists (select 1 from temps.ajustements_banques a where a.user_id = '00000000-0000-0000-0000-000000000002');
+
 -- ------------------------------------------------------------
 -- Petite caisse : l'historique vient de la migration (import du Sheets) ;
 -- la poche de Maxime est liée au compte admin de test pour essayer

@@ -15,19 +15,24 @@ import {
   type Entreprise,
   type TypeHeuresEmploye,
 } from './donneesEmployes'
+import { BanquesFeuille } from './BanquesFeuille'
 import { Note, Semaine } from './Feuille'
-import { formatHeures, joursPeriode, libellePeriode } from './periodes'
+import { formatHeures, joursPeriode, libellePaie, libellePeriode } from './periodes'
 import { BarreStatut, Journal } from './Statut'
 
 const REGULIERES = { id: 'regulieres', libelle: 'Heures' }
 const WOOFING = { id: 'woofing', libelle: 'Woofing' }
+const MALADIE = { id: 'maladie', libelle: 'Maladie' }
+const BANQUE = { id: 'banque', libelle: 'Prises en banque' }
 
 /**
  * Feuille d'un employé qui remplit la sienne, pour une compagnie et une
  * période. Il saisit puis soumet à la direction ; la direction corrige,
  * approuve ou renvoie ; un admin peut annuler une approbation. Ses heures
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
- * base) ; le woofing (non payé) reste ici.
+ * base) ; le woofing (non payé) reste ici ; maladie et prises en banque
+ * paraissent à part dans l'onglet Employés. En bas : ses banques (toutes
+ * compagnies confondues), réglées par la direction.
  */
 export function FeuilleEmploye({
   employe,
@@ -59,7 +64,7 @@ export function FeuilleEmploye({
   const soi = employeTemps === employe.id
   // Mêmes règles que temps.peut_modifier_employe.
   const modifiable = statut === 'ouverte' ? estDirection || soi : statut === 'soumise' && estDirection
-  const types = woofing || heures.some((h) => h.type === 'woofing') ? [REGULIERES, WOOFING] : [REGULIERES]
+  const types = [REGULIERES, ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : []), MALADIE, BANQUE]
   const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
   const jours = joursPeriode(debut)
@@ -72,7 +77,9 @@ export function FeuilleEmploye({
         <h2 className="text-lg font-semibold">
           {nomEmploye(employe)} · {entreprise.nom}
         </h2>
-        <p className="text-sm">Période du {libellePeriode(debut)}</p>
+        <p className="text-sm">
+          {libellePeriode(debut)} · {libellePaie(debut)}
+        </p>
       </div>
 
       <BarreStatut
@@ -114,6 +121,12 @@ export function FeuilleEmploye({
             Woofing (non payé) : <b className="tabular-nums">{formatHeures(total('woofing'))} h</b>
           </span>
         )}
+        <span>
+          Maladie : <b className="tabular-nums">{formatHeures(total('maladie'))} h</b>
+        </span>
+        <span>
+          Prises en banque : <b className="tabular-nums">{formatHeures(total('banque'))} h</b>
+        </span>
       </div>
 
       <Note
@@ -129,6 +142,14 @@ export function FeuilleEmploye({
       />
 
       <Journal journal={journal.data ?? []} peutNoter={statut !== 'ouverte'} onNoter={(texte) => agir('noter', texte)} />
+
+      <BanquesFeuille
+        titulaire={{ employeId: employe.id }}
+        debut={debut}
+        heuresPeriode={heures}
+        entrepriseId={entreprise.id}
+        peutRegler={estDirection}
+      />
     </div>
   )
 }

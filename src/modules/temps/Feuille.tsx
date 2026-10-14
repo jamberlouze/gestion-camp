@@ -14,6 +14,7 @@ import {
   useSaisir,
   type Heure,
 } from './donnees'
+import { BanquesFeuille } from './BanquesFeuille'
 import { BarreStatut, Journal } from './Statut'
 import {
   aujourdhui,
@@ -21,6 +22,7 @@ import {
   formatHeures,
   jourCourt,
   joursPeriode,
+  libellePaie,
   libellePeriode,
   lireHeures,
   TYPES,
@@ -32,7 +34,8 @@ import {
  * semaines de dimanche à samedi, une rangée par type d'heures. La personne
  * saisit puis soumet sa feuille aux admins (gelée pour elle, sauf les notes
  * ajoutées) ; un admin corrige, approuve ou renvoie. La feuille d'un admin
- * ne passe pas par l'approbation.
+ * ne passe pas par l'approbation. En bas : ses banques (maladie, heures
+ * accumulées), réglées par les admins.
  */
 export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const { profil, estAdmin } = useAuth()
@@ -71,7 +74,9 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
     <div className="space-y-4">
       <div className="hidden print:block">
         <h2 className="text-lg font-semibold">{nomDe(personne)}</h2>
-        <p className="text-sm">Période du {libellePeriode(debut)}</p>
+        <p className="text-sm">
+          {libellePeriode(debut)} · {libellePaie(debut)}
+        </p>
       </div>
       {avecApprobation && (
         <BarreStatut
@@ -124,6 +129,8 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
       {avecApprobation && (
         <Journal journal={journal.data ?? []} peutNoter={statut !== 'ouverte'} onNoter={(texte) => agir('noter', texte)} />
       )}
+
+      <BanquesFeuille titulaire={{ userId }} debut={debut} heuresPeriode={heures.data} peutRegler={estAdmin} />
     </div>
   )
 }
