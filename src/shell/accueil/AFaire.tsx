@@ -1,63 +1,119 @@
 import { useMemo, useState } from 'react'
+import { confirmer } from '@/lib/Confirmation'
+import { codePeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { cleAujourdhui, cleCoche, exerciceDeCle, libelleMois } from '@/modules/mastertimeline/calendrier'
 import { CaseCoche } from '@/modules/mastertimeline/commun'
 import { useCoches, useResponsables, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
 import { FILTRES_VIDES, passagesDuMois, retards, trierPassages, useBasculer, type Passage } from '@/modules/mastertimeline/outils'
-import { useAApprouver, useFeuille } from '@/modules/temps/donnees'
-import { dateCourte as dateCourteTemps, finPeriode, periodePrecedente, PREMIERE_PERIODE } from '@/modules/temps/periodes'
+import { useAApprouver, useDossiersAFermer, useFeuille, useFermerDossier, type DossierAFermer } from '@/modules/temps/donnees'
+import { periodePrecedente, PREMIERE_PERIODE } from '@/modules/temps/periodes'
 import { periodeCourante } from '@/modules/temps/outils'
 import { comparer, dateCourte, enRetard, estOuverte, jourAujourdhui } from '@/modules/travaux/outils'
 import { CaseTache } from '@/modules/travaux/commun'
 import { useTaches } from '@/modules/travaux/donnees'
 import { PRIORITES } from '@/modules/travaux/types'
 import { useAuth } from '../auth'
-import { Autres, Carte, Ligne } from './commun'
+import { Autres, Carte, Groupe, Ligne } from './commun'
 
 const MAX_PAR_SOURCE = 5
 
-/** Ce qui attend la personne connectée, tous modules confondus. */
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
+
+/** Ce qui attend la personne connectée, groupé par module (seulement ses modules). */
 export function AFaire() {
   const { profil, estAdmin, estDirection, peutLire } = useAuth()
+  // Feuilles de temps : la direction et les admins (l'employé qui remplit sa
+  // feuille n'a pas ces tâches-là).
   const temps = peutLire('temps') && estDirection
-  const precedente = periodePrecedente(periodeCourante())
+  const travaux = peutLire('travaux')
+  const mastertimeline = peutLire('mastertimeline')
+  if (!profil || !(temps || travaux || mastertimeline)) return null
   return (
     <Carte titre="À faire pour moi" vide="Rien ne t'attend pour l'instant.">
-      {temps && <AApprouver estAdmin={estAdmin} />}
-      {/* La feuille d'un admin ne passe pas par la soumission. */}
-      {temps && !estAdmin && profil && precedente >= PREMIERE_PERIODE && <MaFeuille userId={profil.id} debut={precedente} />}
-      {peutLire('travaux') && profil && <MesTravaux moi={profil.id} />}
-      {peutLire('mastertimeline') && profil && <MesTachesAnnuelles courriel={profil.courriel} nom={profil.nom} />}
+      {temps && <FeuillesDeTemps userId={profil.id} estAdmin={estAdmin} />}
+      {mastertimeline && <MesTachesAnnuelles courriel={profil.courriel} nom={profil.nom} />}
+      {travaux && <MesTravaux moi={profil.id} />}
     </Carte>
   )
 }
 
-function AApprouver({ estAdmin }: { estAdmin: boolean }) {
-  const { data } = useAApprouver(estAdmin)
-  const n = (data?.employes.length ?? 0) + (data?.direction.length ?? 0)
-  if (!n) return null
+// ---------------------------------------------------------------------------
+// Feuilles de temps : à approuver, à soumettre, relevés d'emploi à produire.
+
+/** « PP21 · 4 au 17 oct. » pour une seule période, sinon « PP20, PP21 ». */
+function periodes(debuts: string[]) {
+  const uniques = [...new Set(debuts)].sort()
+  return uniques.length === 1 ? libellePeriodePaie(uniques[0]) : uniques.map((d) => codePeriodePaie(d)).join(', ')
+}
+
+function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boolean }) {
+  const aApprouver = useAApprouver(estAdmin)
+  // La feuille d'un admin ne passe pas par la soumission ; rien avant la première période.
+  const precedente = periodePrecedente(periodeCourante())
+  const soumettre = !estAdmin && precedente >= PREMIERE_PERIODE
+  const maFeuille = useFeuille(userId, precedente)
+  const dossiers = useDossiersAFermer()
+  const fermer = useFermerDossier()
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  const soumises = [...(aApprouver.data?.employes ?? []), ...(aApprouver.data?.direction ?? [])]
+  const aSoumettre = soumettre && !maFeuille.isPending && (!maFeuille.data || maFeuille.data.statut === 'ouverte')
+  const releves = dossiers.data ?? []
+  if (!soumises.length && !aSoumettre && !releves.length) return null
+
+  // Même geste que l'onglet Employés : confirmer, puis la fiche est désactivée.
+  const releveProduit = async (d: DossierAFermer) => {
+    const nom = d.nom_complet || d.surnom
+    if (
+      !(await confirmer({
+        titre: `Relevé d’emploi produit pour ${nom} ?`,
+        message: 'Sa fiche sera désactivée dans le référentiel (on peut la réactiver dans Référentiel › Employés). Ses heures restent.',
+        libelleOk: 'Désactiver la fiche',
+        danger: false,
+      }))
+    )
+      return
+    setErreur(null)
+    fermer.mutate(d.employe_id, { onError: (e) => setErreur(e instanceof Error ? e.message : String(e)) })
+  }
+
   return (
-    <Ligne
-      to="/temps/approuver"
-      titre={`Approuver ${n} feuille${n > 1 ? 's' : ''} de temps`}
-      module="⏱️ Feuilles de temps"
-      detail="Soumises, en attente"
-    />
+    <Groupe icone="⏱️" titre="Feuilles de temps">
+      {soumises.length > 0 && (
+        <Ligne
+          to="/temps/approuver"
+          titre={`Approuver ${pluriel(soumises.length, 'feuille')} de temps`}
+          detail={periodes(soumises.map((f) => f.debut))}
+        />
+      )}
+      {aSoumettre && <Ligne to={`/temps?periode=${precedente}`} titre="Soumettre ma feuille de temps" detail={libellePeriodePaie(precedente)} alerte />}
+      {releves.slice(0, MAX_PAR_SOURCE).map((d) => (
+        <Ligne
+          key={d.employe_id}
+          to="/temps/employes"
+          titre={`Produire le relevé d’emploi : ${d.nom_complet || d.surnom}`}
+          detail={`Aucune heure depuis 2 périodes · dernières heures : ${codePeriodePaie(d.derniere_periode)}`}
+          action={
+            <button
+              type="button"
+              disabled={fermer.isPending}
+              onClick={() => releveProduit(d)}
+              title="Relevé produit : désactiver la fiche"
+              className="rounded-md border border-pierre-300 bg-white px-2 py-1 text-xs font-medium whitespace-nowrap text-pierre-700 hover:bg-pierre-50 disabled:opacity-50"
+            >
+              Relevé produit
+            </button>
+          }
+        />
+      ))}
+      <Autres n={releves.length - MAX_PAR_SOURCE} to="/temps/employes" />
+      {erreur && <li className="px-4 py-1.5 text-xs text-red-700">{erreur}</li>}
+    </Groupe>
   )
 }
 
-function MaFeuille({ userId, debut }: { userId: string; debut: string }) {
-  const { data, isPending } = useFeuille(userId, debut)
-  if (isPending || (data && data.statut !== 'ouverte')) return null
-  return (
-    <Ligne
-      to={`/temps?periode=${debut}`}
-      titre="Soumettre ma feuille de temps"
-      module="⏱️ Feuilles de temps"
-      detail={`Période du ${dateCourteTemps(debut, false)} au ${dateCourteTemps(finPeriode(debut), false)}`}
-      alerte
-    />
-  )
-}
+// ---------------------------------------------------------------------------
+// Travaux assignés à moi.
 
 function MesTravaux({ moi }: { moi: string }) {
   const { data } = useTaches()
@@ -72,9 +128,17 @@ function MesTravaux({ moi }: { moi: string }) {
     }
   }, [data, moi, cochees])
   const jour = jourAujourdhui()
+  const liste = [...ouvertes.slice(0, MAX_PAR_SOURCE), ...faites]
+  if (!liste.length) return null
+  const retards = ouvertes.filter((t) => enRetard(t, jour)).length
+
   return (
-    <>
-      {[...ouvertes.slice(0, MAX_PAR_SOURCE), ...faites].map((t) => {
+    <Groupe
+      icone="🛠️"
+      titre="Travaux · assignés à moi"
+      resume={[retards ? `${retards} en retard` : null, pluriel(ouvertes.length, 'ouverte')].filter(Boolean).join(' · ')}
+    >
+      {liste.map((t) => {
         const faite = !estOuverte(t)
         const retard = enRetard(t, jour)
         const morceaux = [
@@ -92,21 +156,26 @@ function MesTravaux({ moi }: { moi: string }) {
             }
             faite={faite}
             titre={t.titre}
-            module="🛠️ Travaux"
-            detail={faite ? 'Terminée' : morceaux.join(' · ') || 'Assignée à toi'}
+            detail={faite ? 'Terminée' : morceaux.join(' · ') || undefined}
             alerte={!faite && (retard || t.priorite === 1)}
           />
         )
       })}
       <Autres n={ouvertes.length - MAX_PAR_SOURCE} to="/travaux" />
-    </>
+    </Groupe>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Mastertimeline : mes tâches du mois en cours, plus celles en retard.
+
+const nomDuMois = (cle: string) => libelleMois(cle).split(' ')[0].toLowerCase()
 
 /**
  * Passages de Mastertimeline (ce mois-ci et en retard) dont la personne est
  * responsable. Les responsables sont une liste propre au module : on les
- * relie au compte par le courriel.
+ * relie au compte par le courriel (Mastertimeline › Réglages › Responsables),
+ * sinon par le nom s'il est unique.
  */
 function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string | null }) {
   const { peutEcrire } = useAuth()
@@ -129,32 +198,38 @@ function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string |
   // Passages cochés pendant cette visite : restent affichés (barrés), pour pouvoir décocher.
   const [cochees, setCochees] = useState<Passage[]>([])
 
-  const { aFaire, faits } = useMemo(() => {
-    if (!moi || !taches.data || !index.pret) return { aFaire: [], faits: [] }
+  const { enRetard, duMois, faits } = useMemo(() => {
+    if (!moi || !taches.data || !index.pret) return { enRetard: [], duMois: [], faits: [] }
     const filtres = { ...FILTRES_VIDES, responsable: moi.id }
     const enRetard = trierPassages(retards(taches.data, index.index, filtres))
     const duMois = trierPassages(passagesDuMois(taches.data, cle, index.index, filtres)).filter(
       (p) => p.etat !== 'faite' && p.etat !== 'sautee',
     )
-    const aFaire = [...enRetard, ...duMois]
-    const cles = new Set(aFaire.map((p) => cleCoche(p.tache.id, p.periode)))
+    const cles = new Set([...enRetard, ...duMois].map((p) => cleCoche(p.tache.id, p.periode)))
     const faits = cochees
       .filter((p) => !cles.has(cleCoche(p.tache.id, p.periode)))
       .map((p) => {
         const coche = index.index.get(cleCoche(p.tache.id, p.periode))
         return { ...p, coche, etat: coche?.statut ?? p.etat }
       })
-    return { aFaire, faits }
+    return { enRetard, duMois, faits }
   }, [moi, taches.data, index.pret, index.index, cle, cochees])
+
+  const aFaire = [...enRetard, ...duMois]
+  const liste = [...aFaire.slice(0, MAX_PAR_SOURCE), ...faits]
+  if (!liste.length) return null
 
   const cocher = (p: Passage) => {
     setCochees((c) => (c.some((x) => x.tache.id === p.tache.id && x.periode === p.periode) ? c : [...c, p]))
     basculer(p.tache, p.periode, p.coche, 'faite')
   }
-  const liste = [...aFaire.slice(0, MAX_PAR_SOURCE), ...faits]
 
   return (
-    <>
+    <Groupe
+      icone="✅"
+      titre={`Mastertimeline · mes tâches ${/^[aeiouéèêh]/i.test(nomDuMois(cle)) ? 'd’' : 'de '}${nomDuMois(cle)}`}
+      resume={[enRetard.length ? `${enRetard.length} en retard` : null, `${duMois.length} ce mois-ci`].filter(Boolean).join(' · ')}
+    >
       {liste.map((p) => {
         const faite = p.etat === 'faite'
         return (
@@ -164,19 +239,18 @@ function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string |
             caseACocher={<CaseCoche etat={p.etat} basculer={() => cocher(p)} desactivee={!ecriture} />}
             faite={faite}
             titre={p.tache.titre}
-            module="✅ Mastertimeline"
             detail={
               faite
                 ? 'Faite'
                 : p.etat === 'retard'
-                  ? `En retard (${p.periode === 'unique' ? 'échéance passée' : libelleMois(p.periode)})`
-                  : 'Ce mois-ci'
+                  ? `En retard · ${p.periode === 'unique' ? 'échéance passée' : libelleMois(p.periode).toLowerCase()}`
+                  : undefined
             }
             alerte={p.etat === 'retard'}
           />
         )
       })}
       <Autres n={aFaire.length - MAX_PAR_SOURCE} to="/mastertimeline" />
-    </>
+    </Groupe>
   )
 }

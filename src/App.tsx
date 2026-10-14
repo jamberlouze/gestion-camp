@@ -4,7 +4,7 @@ import { Compagnies, Employes, Groupes, Referentiel, Semaines } from '@/core/Ref
 import { Utilisateurs } from '@/core/Utilisateurs'
 import { estPagePublique } from '@/lib/pagesPubliques'
 import { configManquante } from '@/lib/supabase'
-import { Accueil } from '@/shell/Accueil'
+import { Accueil } from '@/shell/accueil/Accueil'
 import { useAuth } from '@/shell/auth'
 import { Chargement, GardeAdmin, GardeDirection, GardeModule } from '@/shell/Gardes'
 import { Layout } from '@/shell/Layout'

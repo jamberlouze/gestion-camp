@@ -17,18 +17,18 @@ import { heureLisible } from './outils'
 function Moment({ quand, children, to }: { quand: string; children: React.ReactNode; to?: string }) {
   const contenu = (
     <>
-      <span className={`w-16 shrink-0 text-sm font-semibold ${quand === 'Journée' ? 'text-foret-600' : 'text-pierre-500'}`}>{quand}</span>
+      <span className={`w-16 shrink-0 text-xs leading-5 font-semibold ${quand === 'Journée' ? 'text-foret-600' : 'text-pierre-500'}`}>{quand}</span>
       <span className="min-w-0 flex-1 text-sm">{children}</span>
     </>
   )
   return (
     <li>
       {to ? (
-        <Link to={to} className="flex gap-4 px-5 py-2.5 hover:bg-pierre-50">
+        <Link to={to} className="flex gap-3 px-4 py-1.5 hover:bg-pierre-50">
           {contenu}
         </Link>
       ) : (
-        <div className="flex gap-4 px-5 py-2.5">{contenu}</div>
+        <div className="flex gap-3 px-4 py-1.5">{contenu}</div>
       )}
     </li>
   )
@@ -39,9 +39,11 @@ function useLienCalendrier() {
   return useAuth().peutOuvrir('calendrier') ? '/calendrier' : undefined
 }
 
+/** Le jour : séjours et événements (Calendrier), réunions ; seulement avec l'un de ces modules. */
 export function Aujourdhui() {
   const { peutLire } = useAuth()
   const lien = useLienCalendrier()
+  if (!peutLire('calendrier') && !peutLire('reunions')) return null
   return (
     <Carte titre="Aujourd'hui" lien={lien ? { to: lien, texte: 'Calendrier' } : undefined} vide="Rien de prévu aujourd'hui.">
       {peutLire('calendrier') && <Sejours />}
@@ -136,11 +138,11 @@ export function AuTravail() {
   const total = parSecteur.reduce((n, s) => n + s.noms.length, 0)
   if (!data) return null
   return (
-    <section className={`${ui.carte} space-y-3 px-5 py-4`}>
+    <section className={`${ui.carte} space-y-2 px-4 py-2.5`}>
       <div className="flex items-center gap-3">
-        <h2 className="flex-1 font-semibold">Au travail aujourd'hui</h2>
+        <h2 className="flex-1 text-sm font-semibold">Au travail aujourd'hui</h2>
         {total > 0 && (
-          <span className="text-sm text-pierre-500">
+          <span className="text-xs text-pierre-500">
             {total} personne{total > 1 ? 's' : ''}
           </span>
         )}
@@ -148,12 +150,12 @@ export function AuTravail() {
       {parSecteur.length === 0 && <p className="text-sm text-pierre-500">Personne à l'horaire aujourd'hui.</p>}
       {parSecteur.map((s) => (
         <div key={s.id}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-foret-600">{s.nom}</p>
-          <p className="mt-0.5 text-sm text-pierre-800">{s.noms.join(', ')}</p>
+          <p className="text-xs font-semibold tracking-wide text-foret-600 uppercase">{s.nom}</p>
+          <p className="text-sm text-pierre-800">{s.noms.join(', ')}</p>
         </div>
       ))}
       {lien && (
-        <Link to={lien} className="inline-block text-sm font-medium text-foret-700 hover:text-foret-800">
+        <Link to={lien} className="inline-block text-xs font-medium text-foret-700 hover:text-foret-800">
           Voir le calendrier
         </Link>
       )}
