@@ -229,6 +229,19 @@ from (values
 ) as v(item, statut, quantite, prix, entreprise, note)
 left join core.entreprises e on e.nom = v.entreprise;
 
+-- Dates cibles de commande (comptées du jour du chargement) : en retard,
+-- dans 5 jours, dans 20 jours, dans 60 jours ; un commandé à date passée
+-- (plus de signal) ; les autres sans date.
+update achats.achats a set date_cible = current_date + v.jours
+from (values
+  ('Arcs de tag-à-l''arc', -3),
+  ('Masque tag à l''arc', 5),
+  ('Tables à picnique +10', 20),
+  ('Modules Aquabounga', 60),
+  ('Quai Rabaska', -10)
+) as v(item, jours)
+where a.item = v.item;
+
 -- ------------------------------------------------------------
 -- Embarcations : quelques modèles et embarcations de test, et une
 -- note à trier (numéros attribués par le déclencheur).

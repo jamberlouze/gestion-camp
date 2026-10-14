@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
+import { aCommanderBientot, HORIZON_JOURS, jourAujourdhui } from './outils'
 import type { Achat, Entreprise, Fournisseur } from './types'
 
 // Module en ligne seulement : sans réseau, une modification échoue tout de
@@ -16,14 +18,32 @@ export const useAchats = () => useListe<Achat>('achats', 'achats', 'created_at')
 export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
 export const useFournisseurs = () => useListe<Fournisseur>('mastertimeline', 'fournisseurs', 'nom')
 
+/** Adresse du module filtrée sur les achats à commander bientôt (compteur du haut). */
+export const LIEN_A_COMMANDER_BIENTOT = '/achats?cible=30'
+
+/**
+ * Achats « À commander » à commander bientôt, pour l'en-tête du module et
+ * l'accueil : `enRetard` (date cible passée, la plus ancienne d'abord) et
+ * `aVenir` (d'aujourd'hui à 30 jours, la plus proche d'abord) ; `nombre` =
+ * les deux ensemble. Les achats sans date cible n'y sont jamais. `pret` =
+ * faux tant que la liste n'est pas lue. À monter seulement pour qui lit le
+ * module (`peutLire('achats')`) ; lien vers la liste filtrée : `lien`.
+ */
+export function useAchatsACommanderBientot() {
+  const { data, error } = useAchats()
+  const jour = jourAujourdhui()
+  const bientot = useMemo(() => aCommanderBientot(data ?? [], jour, HORIZON_JOURS), [data, jour])
+  return { ...bientot, pret: !!data, erreur: error, lien: LIEN_A_COMMANDER_BIENTOT }
+}
+
 export function useAjouterAchat() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['achats', 'ajouter'],
     networkMode: 'always',
     mutationFn: async (achat: Achat) => {
-      const { id, item, statut, quantite, prix_unitaire, entreprise_id, fournisseur_id, note } = achat
-      const { error } = await table().insert({ id, item, statut, quantite, prix_unitaire, entreprise_id, fournisseur_id, note })
+      const { id, item, statut, quantite, prix_unitaire, entreprise_id, fournisseur_id, note, date_cible } = achat
+      const { error } = await table().insert({ id, item, statut, quantite, prix_unitaire, entreprise_id, fournisseur_id, note, date_cible })
       if (error) throw error
     },
     onMutate: async (achat) => {
