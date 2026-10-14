@@ -1,5 +1,5 @@
 // Cloudflare Worker unique : sert l'application (fichiers de dist/), garde
-// Supabase éveillé (cron), fait la recherche du lundi de la Vigie de
+// Supabase éveillé (cron), fait la recherche trimestrielle de la Vigie de
 // subventions (cron + routes /api/subventions/*) et reçoit le formulaire
 // public des Réservations (/api/reservations/*). Déployé automatiquement
 // par Cloudflare (Workers Builds) à chaque push sur main : build
@@ -21,9 +21,10 @@
   "triggers": {
     // Une seule expression (le forfait gratuit limite le nombre de crons par
     // compte), aux 15 minutes : synchro des séjours Airtable du Calendrier.
-    // Chaque passage garde aussi Supabase éveillé ; le lundi, les passages
-    // de l'heure pile de 8 h à 11 h UTC font la recherche de subventions,
-    // une entreprise par passage.
+    // Chaque passage garde aussi Supabase éveillé et met à jour l'agenda des
+    // subventions ; du 1er au 7 octobre, janvier, avril et juillet, les
+    // passages de l'heure pile de 8 h à 11 h UTC font la recherche de
+    // subventions, un travail par passage.
     "crons": ["*/15 * * * *"]
   },
   // Valeurs publiques (les mêmes que dans .env.production). Les secrets

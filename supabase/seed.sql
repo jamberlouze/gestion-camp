@@ -403,3 +403,65 @@ on conflict (personne_id) do nothing;
 insert into rh.notes (personne_id, genre, jour, texte, auteur_nom) values
   ('d0000000-0000-0000-0000-000000000004', 'avis_ecrit', '2026-07-10', 'Retard de 45 minutes à la plage, groupe sans surveillance.', 'Julie Tremblay')
 on conflict do nothing;
+
+-- ------------------------------------------------------------
+-- Subventions : agenda Google simulé (« essai-… », jamais Google depuis
+-- une base locale), deux subventions de l'année fiscale 2026-27 (une
+-- retenue avec une proposition de Claude, une obtenue avec sa reddition),
+-- et leur attribution salariale (employés fictifs ci-dessus + un poste à
+-- pourvoir).
+-- ------------------------------------------------------------
+update subventions.grant_settings
+   set value = jsonb_build_object('actif', true, 'calendrier', 'essai-subventions', 'depuis', '2026-10-01')
+ where key = 'agenda';
+
+insert into subventions.grants (id, program_name, organisme, description, source_url, grant_type, status,
+  potential_amount_max, open_date, deadline_date, funded_start, funded_end, eligibility_criteria,
+  target_company_id, applicant_company_id, program_key, origin, discovered_fy,
+  amount_requested, requested_at, amount_granted, granted_at)
+select v.id::uuid, v.nom, v.organisme, v.description, v.url, 'salarial', v.statut::subventions.grant_status,
+       v.max, v.ouverture::date, v.limite::date, v.debut::date, v.fin::date, v.criteres,
+       c.id, c.id, v.cle, 'manuel', 2027,
+       v.demande, v.demande_le::date, v.accorde, v.accorde_le::date
+  from (values
+    ('5b000000-0000-0000-0000-000000000001', 'Jeunesse Canada au travail (essai)', 'Patrimoine canadien',
+     'Emplois d''été pour les jeunes dans les organismes du patrimoine et des langues officielles.',
+     'https://www.canada.ca/fr/patrimoine-canadien/services/financement/jeunesse-canada-travail.html', 'en_cours',
+     15000, null, '2027-02-01', '2027-05-03', '2027-08-27', 'Jeunes de 16 à 30 ans, citoyens canadiens ou résidents permanents.',
+     'jeunesse-canada-au-travail', null, null, null, null),
+    ('5b000000-0000-0000-0000-000000000002', 'Emplois d''été Canada 2027 (essai)', 'Emploi et Développement social Canada',
+     'Subvention salariale pour des emplois d''été de 6 à 16 semaines.',
+     'https://www.canada.ca/fr/emploi-developpement-social/services/financement/emplois-ete-canada.html', 'obtenu',
+     50000, '2026-11-15', '2027-01-12', '2027-06-21', '2027-08-27', null,
+     'emplois-ete-canada', 30000, '2027-01-10', 24600, '2027-04-20')
+  ) as v(id, nom, organisme, description, url, statut, max, ouverture, limite, debut, fin, criteres, cle, demande, demande_le, accorde, accorde_le)
+  join subventions.grant_companies c on c.name = 'GBPA+'
+on conflict (id) do nothing;
+
+insert into subventions.grant_reporting_steps (id, grant_id, description, due_date, sort_order) values
+  ('5b000000-0000-0000-0000-000000000011', '5b000000-0000-0000-0000-000000000002', 'Rapport de fin d''emploi de chaque étudiant', '2027-09-30', 0),
+  ('5b000000-0000-0000-0000-000000000012', '5b000000-0000-0000-0000-000000000002', 'Demande de paiement finale', '2027-10-15', 1)
+on conflict (id) do nothing;
+
+-- Mise à jour ciblée de Claude : une date d'ouverture remplie (champ vide),
+-- une date limite qui changerait (à valider sur la fiche).
+insert into subventions.grant_proposals (id, grant_id, field, current_value, proposed_value, status, source_url, comment) values
+  ('5b000000-0000-0000-0000-000000000021', '5b000000-0000-0000-0000-000000000001', 'deadline_date', '2027-02-01', '2027-02-15', 'a_valider',
+   'https://www.canada.ca/fr/patrimoine-canadien/services/financement/jeunesse-canada-travail.html', 'La date limite a été repoussée de deux semaines.'),
+  ('5b000000-0000-0000-0000-000000000022', '5b000000-0000-0000-0000-000000000001', 'open_date', null, '2026-11-02', 'appliquee',
+   'https://www.canada.ca/fr/patrimoine-canadien/services/financement/jeunesse-canada-travail.html', null)
+on conflict (id) do nothing;
+update subventions.grants set open_date = '2026-11-02'
+ where id = '5b000000-0000-0000-0000-000000000001' and open_date is null;
+
+insert into subventions.grant_salary_lines (id, grant_id, employee_id, free_name, hourly_rate, hours, salary_amount,
+  start_date, end_date, grant_contribution, employer_contribution, note)
+select v.id::uuid, v.grant_id::uuid, e.id, v.libre, v.taux, v.heures, v.montant, v.debut::date, v.fin::date, v.subv, v.empl, v.note
+  from (values
+    ('5b000000-0000-0000-0000-000000000031', '5b000000-0000-0000-0000-000000000002', 'Koda', null, 17.50, 280, null, '2027-06-21', '2027-08-27', 4900, null, null),
+    ('5b000000-0000-0000-0000-000000000032', '5b000000-0000-0000-0000-000000000002', 'Moutic', null, null, null, 5600, '2027-06-21', '2027-08-20', 4200, 1400, 'Avec les vacances et les charges.'),
+    ('5b000000-0000-0000-0000-000000000033', '5b000000-0000-0000-0000-000000000002', null, 'Sauveteur no 2 (à pourvoir)', 18.00, 300, null, '2027-06-28', '2027-08-27', 2700, null, null),
+    ('5b000000-0000-0000-0000-000000000034', '5b000000-0000-0000-0000-000000000001', 'Cliff', null, null, null, 12000, '2027-05-03', '2027-08-27', 7000, null, null)
+  ) as v(id, grant_id, surnom, libre, taux, heures, montant, debut, fin, subv, empl, note)
+  left join core.employes e on e.surnom = v.surnom
+on conflict (id) do nothing;

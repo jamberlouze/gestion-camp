@@ -1,5 +1,6 @@
-// Courriel de rappel du lundi : contenu (fonctions pures) et envoi par
-// l'API Gmail. Simple rappel, aucune validation depuis le courriel.
+// Courriel de rappel (après la recherche du trimestre) : contenu (fonctions
+// pures) et envoi par l'API Gmail. Simple rappel, aucune validation depuis
+// le courriel. ÉTEINT jusqu'à nouvel ordre (COURRIELS dans pipeline.js).
 //
 // Secrets Cloudflare : GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET,
 // GMAIL_REFRESH_TOKEN (client OAuth « interne » du Google Workspace, portée
@@ -59,7 +60,7 @@ export function construireRappel({ entreprises, nouvelles, erreurs, lien, essai 
   const sujet =
     (essai ? '[Essai] ' : '') +
     (total === 0
-      ? 'Vigie de subventions : rien de nouveau cette semaine'
+      ? 'Vigie de subventions : rien de nouveau ce trimestre'
       : `Vigie de subventions : ${total} nouvelle${total > 1 ? 's' : ''} subvention${total > 1 ? 's' : ''} à valider`)
   const nom = new Map(entreprises.map((e) => [e.id, e.name]))
   const parEntreprise = entreprises.map((e) => ({
@@ -80,8 +81,8 @@ export function construireRappel({ entreprises, nouvelles, erreurs, lien, essai 
 
   const texte = [
     total === 0
-      ? 'La recherche de cette semaine n’a trouvé aucune nouvelle subvention.'
-      : `La recherche de cette semaine a trouvé ${total} nouvelle${total > 1 ? 's' : ''} subvention${total > 1 ? 's' : ''}.`,
+      ? 'La recherche de ce trimestre n’a trouvé aucune nouvelle subvention.'
+      : `La recherche de ce trimestre a trouvé ${total} nouvelle${total > 1 ? 's' : ''} subvention${total > 1 ? 's' : ''}.`,
     '',
     ...parEntreprise.map(
       (e) => `• ${e.nom} : ${e.n}${e.erreur ? ` (la recherche a échoué : ${e.erreur.slice(0, 200)})` : ''}`,
@@ -90,14 +91,14 @@ export function construireRappel({ entreprises, nouvelles, erreurs, lien, essai 
     '',
     `Valider ou rejeter dans l'app : ${lien}`,
     '',
-    `Année fiscale ${libelleAnneeFiscale(anneeFiscaleCourante())}. Courriel envoyé automatiquement chaque lundi.`,
+    `Année fiscale ${libelleAnneeFiscale(anneeFiscaleCourante())}. Courriel envoyé automatiquement après chaque recherche trimestrielle.`,
   ].join('\n')
 
   const html = `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.5;color:#1f1e1a;max-width:640px">
 <p>${
     total === 0
-      ? 'La recherche de cette semaine n’a trouvé <b>aucune nouvelle subvention</b>.'
-      : `La recherche de cette semaine a trouvé <b>${total} nouvelle${total > 1 ? 's' : ''} subvention${total > 1 ? 's' : ''}</b>.`
+      ? 'La recherche de ce trimestre n’a trouvé <b>aucune nouvelle subvention</b>.'
+      : `La recherche de ce trimestre a trouvé <b>${total} nouvelle${total > 1 ? 's' : ''} subvention${total > 1 ? 's' : ''}</b>.`
   }</p>
 <ul style="padding-left:20px">${parEntreprise
     .map(
@@ -115,7 +116,7 @@ ${
     : ''
 }
 <p><a href="${echapper(lien)}" style="display:inline-block;background:#0f5132;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">Ouvrir la vue de validation</a></p>
-<p style="color:#7a766b;font-size:13px">Année fiscale ${libelleAnneeFiscale(anneeFiscaleCourante())}. Courriel envoyé automatiquement chaque lundi par la Vigie de subventions.</p>
+<p style="color:#7a766b;font-size:13px">Année fiscale ${libelleAnneeFiscale(anneeFiscaleCourante())}. Courriel envoyé automatiquement après chaque recherche trimestrielle par la Vigie de subventions.</p>
 </div>`
 
   return { sujet, texte, html }

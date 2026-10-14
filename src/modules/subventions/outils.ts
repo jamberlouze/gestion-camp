@@ -1,6 +1,7 @@
 import type { Profil } from '@/lib/types'
 import { ui } from '@/lib/ui'
-import type { CategorieRejet, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
+import type { Employe } from '@/lib/types'
+import type { CategorieRejet, ChampPropose, LigneSalaire, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
 
 export const STATUTS: Record<Statut, { libelle: string; classe: string }> = {
   nouveau: { libelle: 'Nouvelle', classe: 'bg-sky-100 text-sky-800' },
@@ -53,16 +54,38 @@ export const anneeFiscaleCourante = () => anneeFiscale(aujourdhui())
 export const libelleAnneeFiscale = (fy: number) => `${fy - 1}-${String(fy).slice(2)}`
 
 /**
- * Date qui rattache une subvention à une année fiscale : octroi, sinon
- * réception, sinon date limite, sinon découverte.
+ * Année fiscale proposée (même règle que subventions.poser_annee_fiscale) :
+ * période financée, sinon date limite, sinon octroi, sinon année de la
+ * découverte ; avec ce qui l'a décidée.
  */
-export const dateRattachement = (g: Subvention) =>
-  g.granted_at ?? g.received_at ?? g.deadline_date ?? g.discovered_at.slice(0, 10)
+export function anneeFiscaleProposee(g: Pick<Subvention, 'funded_start' | 'deadline_date' | 'granted_at' | 'discovered_fy'>) {
+  if (g.funded_start) return { annee: anneeFiscale(g.funded_start), selon: 'la période financée' }
+  if (g.deadline_date) return { annee: anneeFiscale(g.deadline_date), selon: 'la date limite' }
+  if (g.granted_at) return { annee: anneeFiscale(g.granted_at), selon: "la date d'octroi" }
+  return { annee: g.discovered_fy, selon: "l'année de la découverte" }
+}
+
+/** Retenue (en cours) ou obtenue : dans l'agenda, à mettre à jour, à l'attribution salariale. */
+export const estRetenue = (g: Pick<Subvention, 'status'>) => g.status === 'en_cours' || g.status === 'obtenu'
 
 /** Date du jour (heure locale) au format AAAA-MM-JJ. */
 export function aujourdhui() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const jourIso = (a: number, m: number, j: number) => `${a}-${String(m + 1).padStart(2, '0')}-${String(j).padStart(2, '0')}`
+
+/**
+ * Recherche automatique : 4 fois par année, le 1er octobre, janvier, avril et
+ * juillet (passages jusqu'au 7 si le cron a manqué ; voir estTourTrimestriel
+ * du Worker). `enCours` : on est dans cette semaine-là.
+ */
+export function prochainTrimestre(d = new Date()) {
+  const m = d.getMonth()
+  if (m % 3 === 0 && d.getDate() <= 7) return { date: jourIso(d.getFullYear(), m, 1), enCours: true }
+  const suivant = Math.floor(m / 3) * 3 + 3
+  return { date: jourIso(d.getFullYear() + (suivant >= 12 ? 1 : 0), suivant % 12, 1), enCours: false }
 }
 
 export function joursAvant(iso: string) {
@@ -91,6 +114,40 @@ const formatMoment = new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: '
 export const moment = (iso: string) => formatMoment.format(new Date(iso))
 
 export const heures = (n: number) => `${n.toLocaleString('fr-CA', { maximumFractionDigits: 2 })} h`
+
+const formatCents = new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+/** « 1 234,50 $ » (salaires, contributions). */
+export const argentCents = (n: number) => formatCents.format(n)
+
+/** « 62 % » ; null : « — ». */
+export const pourcentage = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100).toLocaleString('fr-CA')} %`)
+
+export const LIBELLES_CHAMPS: Record<ChampPropose, string> = {
+  source_url: 'Page officielle',
+  open_date: 'Ouverture de la demande',
+  deadline_date: 'Date limite',
+  funded_start: 'Début de la période financée',
+  funded_end: 'Fin de la période financée',
+  potential_amount_min: 'Montant potentiel minimum',
+  potential_amount_max: 'Montant potentiel maximum',
+  eligibility_criteria: "Critères d'admissibilité",
+}
+
+/** Valeur d'une proposition (texte de la base) telle qu'affichée. */
+export function valeurChamp(champ: ChampPropose, v: string | null) {
+  if (v == null || v === '') return '—'
+  if (champ === 'open_date' || champ === 'deadline_date' || champ === 'funded_start' || champ === 'funded_end') return dateCourte(v)
+  if (champ === 'potential_amount_min' || champ === 'potential_amount_max') return argent(Number(v))
+  return v
+}
+
+/** « du 22 juin au 28 août 2027 » ; une seule borne connue : « à partir du … » / « jusqu'au … ». */
+export function periode(debut: string | null, fin: string | null) {
+  if (debut && fin) return `${dateCourte(debut)} au ${dateCourte(fin)}`
+  if (debut) return `à partir du ${dateCourte(debut)}`
+  if (fin) return `jusqu'au ${dateCourte(fin)}`
+  return null
+}
 
 /** « Emplois d'été Canada » → « emplois-dete-canada » (même règle que le Worker). */
 export function cleProgramme(texte: string) {
@@ -137,3 +194,59 @@ export const entrepriseDe = (g: Subvention) => g.applicant_company_id ?? g.targe
 
 /** Champ du module sans largeur imposée (ui.champ est en w-full, qui l'emporterait sur w-auto / w-24). */
 export const champ = ui.champ.replace('w-full ', '')
+
+// ---------------------------------------------------------------------
+// Attribution salariale (fonctions pures)
+// ---------------------------------------------------------------------
+const cents = (n: number) => Math.round(n * 100) / 100
+
+export interface CalculSalaire {
+  /** Montant, sinon taux horaire × heures. */
+  salaire: number | null
+  subvention: number | null
+  /** Saisie, sinon salaire − subvention (`employeurCalcule`). */
+  employeur: number | null
+  employeurCalcule: boolean
+  /** Part payée par la subvention : subvention ÷ (subvention + employeur). */
+  couvert: number | null
+}
+
+export function calculLigne(
+  l: Pick<LigneSalaire, 'salary_amount' | 'hourly_rate' | 'hours' | 'grant_contribution' | 'employer_contribution'>,
+): CalculSalaire {
+  const n = (v: number | null) => (v == null ? null : Number(v))
+  const salaire = n(l.salary_amount) ?? (l.hourly_rate != null && l.hours != null ? cents(Number(l.hourly_rate) * Number(l.hours)) : null)
+  const subvention = n(l.grant_contribution)
+  const saisi = n(l.employer_contribution)
+  const employeur = saisi ?? (salaire != null && subvention != null ? cents(Math.max(0, salaire - subvention)) : null)
+  const total = subvention != null && employeur != null ? subvention + employeur : null
+  return { salaire, subvention, employeur, employeurCalcule: saisi == null && employeur != null, couvert: total ? subvention! / total : null }
+}
+
+/** Totaux d'un groupe de lignes (valeurs connues seulement). */
+export function totauxSalaires(lignes: CalculSalaire[]) {
+  const somme = (f: (c: CalculSalaire) => number | null) => cents(lignes.reduce((s, c) => s + (f(c) ?? 0), 0))
+  const subvention = somme((c) => (c.employeur != null ? c.subvention : null))
+  const employeur = somme((c) => (c.subvention != null ? c.employeur : null))
+  return {
+    salaire: somme((c) => c.salaire),
+    subvention: somme((c) => c.subvention),
+    employeur: somme((c) => c.employeur),
+    couvert: subvention + employeur > 0 ? subvention / (subvention + employeur) : null,
+  }
+}
+
+/** « Marie Fortin (Koda) » ; sans prénom ni nom : le nom de camp. */
+export function nomEmploye(e: Pick<Employe, 'surnom' | 'prenom' | 'nom_famille'>) {
+  const nom = [e.prenom, e.nom_famille].filter(Boolean).join(' ')
+  if (!nom) return e.surnom
+  return sansAccents(nom) === sansAccents(e.surnom) ? nom : `${nom} (${e.surnom})`
+}
+
+/** « 18,5 » ou « 18.5 » → 18.5 ; vide → null ; invalide → NaN. */
+export function lireNombre(v: string) {
+  const t = v.replace(/[\s $]/g, '').replace(',', '.')
+  if (!t) return null
+  const x = Number(t)
+  return Number.isFinite(x) && x >= 0 ? x : Number.NaN
+}

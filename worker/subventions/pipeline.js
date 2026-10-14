@@ -1,18 +1,28 @@
-// Pipeline hebdomadaire (section 4 de la feuille de route).
+// Pipeline de la Vigie de subventions (section 4 de la feuille de route,
+// révisée le 2026-10-14).
 //
-// Le cron du lundi (8 h, 9 h, 10 h et 11 h UTC, soit tôt le matin à
-// l'heure de l'Est) appelle tourHebdomadaire : chaque appel traite UNE
-// entreprise (une recherche dure plusieurs minutes ; un appel du cron est
-// limité à 15 minutes). Quand toutes les entreprises actives ont leur
-// recherche de la semaine, le courriel de rappel part (une fois).
-// Une panne sur une entreprise est écrite dans son journal et n'empêche
-// pas les autres.
+// Quatre fois par année (début d'octobre, janvier, avril et juillet : les
+// trimestres de l'année fiscale), le cron fait la recherche en deux temps,
+// UN travail par passage (une recherche dure plusieurs minutes ; un appel du
+// cron est limité à 15 minutes) :
+//   a) recherche large, une entreprise active à la fois (rechercherEntreprise) ;
+//   b) mise à jour ciblée des subventions retenues ou obtenues de chaque
+//      entreprise (mettreAJourRetenues) : champ vide rempli, champ rempli qui
+//      changerait = proposition à valider sur la fiche.
+// Une panne est écrite dans le journal et n'empêche pas le reste.
+//
+// Aucun courriel jusqu'à nouvel ordre (décision de Maxime, 2026-10-14) : le
+// rappel (courriel.js) reste dans le code, éteint par COURRIELS.
 
+import { synchroniserAgenda } from './agenda.js'
 import { base } from './base.js'
 import { clientClaude, modele, rechercher, reparer, synthetiser } from './claude.js'
 import { construireRappel, envoyerGmail, gmailConfigure } from './courriel.js'
-import { invitationMemoire, invitationRecherche } from './invites.js'
-import { extraireTableau, validerProgrammes } from './resultats.js'
+import { invitationMemoire, invitationMiseAJour, invitationRecherche } from './invites.js'
+import { extraireTableau, validerMisesAJour, validerProgrammes } from './resultats.js'
+
+/** Courriels du module : aucun jusqu'à nouvel ordre. Le remettre = true (et revoir le texte du rappel). */
+export const COURRIELS = false
 
 export const rechercheConfiguree = (env) => !!(env.ANTHROPIC_API_KEY && env.SUPABASE_SECRET_KEY)
 
@@ -28,11 +38,23 @@ function aujourdhui() {
   }).format(new Date())
 }
 
-/** Lundi 0 h UTC de la semaine (même borne que date_trunc('week', now())). */
-export function debutSemaine(maintenant = new Date()) {
-  const jour = (maintenant.getUTCDay() + 6) % 7
-  return new Date(Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate() - jour))
+/** 1er jour (0 h UTC) du trimestre de l'année fiscale : octobre, janvier, avril ou juillet. */
+export function debutTrimestre(maintenant = new Date()) {
+  return new Date(Date.UTC(maintenant.getUTCFullYear(), Math.floor(maintenant.getUTCMonth() / 3) * 3, 1))
 }
+
+/**
+ * Passage du cron (aux 15 min) qui fait la recherche du trimestre : du 1er au
+ * 7 octobre, janvier, avril et juillet, à l'heure pile de 8 h à 11 h UTC
+ * (tôt le matin à Montréal). Tout est d'ordinaire fait le premier jour ;
+ * les jours suivants rattrapent une panne du cron.
+ */
+export const estTourTrimestriel = (moment) =>
+  moment.getUTCMonth() % 3 === 0 &&
+  moment.getUTCDate() <= 7 &&
+  moment.getUTCHours() >= 8 &&
+  moment.getUTCHours() <= 11 &&
+  moment.getUTCMinutes() < 15
 
 /**
  * Étape 1 : mémoire. Résume tout le feedback du groupe en règles apprises
@@ -78,6 +100,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
 
   const run = await db.inserer('grant_search_runs', {
     company_id: entreprise.id,
+    kind: 'large',
     trigger_source: declencheur,
     memory_version_id: regles?.id ?? null,
     model: nom,
@@ -155,19 +178,86 @@ async function preparerRappel(env, db, depuis, { essai = false } = {}) {
 }
 
 /**
- * Étape 6 : le courriel de la semaine, une seule fois (la ligne de
- * grant_digests est créée avant l'envoi : deux appels ne peuvent pas
- * l'envoyer deux fois). Les subventions échues sont d'abord expirées.
+ * Mise à jour ciblée des subventions retenues (en cours) ou obtenues d'une
+ * entreprise : 10 au plus par appel, les moins récemment vérifiées d'abord
+ * (`trimestre` : seulement celles pas encore vérifiées ce trimestre). Rien à
+ * vérifier : aucun appel à Claude. Renvoie le bilan ; en cas de panne,
+ * l'erreur est écrite dans le journal puis relancée.
  */
-export async function envoyerRappelHebdo(env) {
+export async function mettreAJourRetenues(env, { entrepriseId, declencheur = 'cron', trimestre = false }) {
   const db = base(env)
-  const semaine = debutSemaine()
-  const cle = semaine.toISOString().slice(0, 10)
+  const [entreprise] = await db.lire(`grant_companies?id=eq.${entrepriseId}&select=*`)
+  if (!entreprise) throw new Error('Entreprise introuvable.')
+  const aVerifier = await db.rpc('retenues_a_verifier', {
+    p_company: entreprise.id,
+    p_depuis: trimestre ? debutTrimestre().toISOString() : null,
+    p_max: 10,
+  })
+  if (!aVerifier.length) return { run: null, entreprise: entreprise.name, checked: 0, filled: 0, proposed: 0, new: 0, duplicate: 0, invalid: 0 }
+
+  const nom = modele(env)
+  const run = await db.inserer('grant_search_runs', {
+    company_id: entreprise.id,
+    kind: 'ciblee',
+    trigger_source: declencheur,
+    model: nom,
+  })
+
+  let texte = null
+  try {
+    const subventions = aVerifier.map((g, i) => ({ ...g, ref: `S${i + 1}` }))
+    const parRef = new Map(subventions.map((g) => [g.ref, g]))
+    const reponse = await rechercher(clientClaude(env), nom, invitationMiseAJour({ entreprise, subventions, aujourdhui: aujourdhui() }))
+    texte = reponse.texte
+
+    let elements
+    try {
+      elements = extraireTableau(texte)
+    } catch (e) {
+      console.warn(`Réponse illisible (${entreprise.name}, mise à jour) : ${messageDe(e)} — rattrapage`)
+      elements = await reparer(clientClaude(env, { delai: 5 * 60 * 1000, essais: 2 }), nom, texte, 'mises_a_jour')
+    }
+    const { valides, invalides } = validerMisesAJour(elements, parRef)
+    const bilan = await db.rpc('appliquer_mise_a_jour', {
+      p_run: run.id,
+      p_items: valides,
+      p_grants: aVerifier.map((g) => g.id),
+    })
+
+    await db.modifier('grant_search_runs', `id=eq.${run.id}`, {
+      finished_at: new Date().toISOString(),
+      invalid_count: invalides.length,
+      input_tokens: reponse.usage.input_tokens,
+      output_tokens: reponse.usage.output_tokens,
+      web_search_count: reponse.usage.web_search_requests,
+      error: reponse.fin === 'max_tokens' ? 'Réponse coupée (limite de longueur) : mise à jour peut-être incomplète.' : null,
+      raw_output: invalides.length ? `Éléments écartés : ${invalides.join(' ; ')}\n\n${texte}`.slice(0, 20000) : null,
+    })
+    return { run: run.id, entreprise: entreprise.name, ...bilan, invalid: invalides.length }
+  } catch (e) {
+    await db
+      .modifier('grant_search_runs', `id=eq.${run.id}`, {
+        finished_at: new Date().toISOString(),
+        error: messageDe(e).slice(0, 2000),
+        raw_output: texte ? texte.slice(0, 20000) : null,
+      })
+      .catch((e2) => console.error(`Journal (${entreprise.name}) : ${messageDe(e2)}`))
+    throw e
+  }
+}
+
+/**
+ * Rappel du trimestre, une seule fois (la ligne de grant_digests, clé = 1er
+ * jour du trimestre, est créée avant l'envoi). ÉTEINT : COURRIELS = false.
+ */
+export async function envoyerRappel(env) {
+  if (!COURRIELS) return 'courriels désactivés'
+  const db = base(env)
+  const debut = debutTrimestre()
+  const cle = debut.toISOString().slice(0, 10)
   const [deja] = await db.lire(`grant_digests?week_start=eq.${cle}&select=week_start`)
   if (deja) return 'déjà envoyé'
-
-  await db.rpc('expirer_echues')
-  const [rappel, destinataires] = await Promise.all([preparerRappel(env, db, semaine), db.rpc('destinataires')])
+  const [rappel, destinataires] = await Promise.all([preparerRappel(env, db, debut), db.rpc('destinataires')])
   try {
     await db.inserer('grant_digests', { week_start: cle, recipients: destinataires, new_count: rappel.nouvelles })
   } catch (e) {
@@ -183,15 +273,16 @@ export async function envoyerRappelHebdo(env) {
   }
 }
 
-/** Courriel d'essai (bouton de l'onglet Recherches) : 7 derniers jours, à une seule personne. */
+/** Courriel d'essai (route /api/subventions/courriel) : 7 derniers jours, à une seule personne. ÉTEINT avec COURRIELS. */
 export async function envoyerRappelEssai(env, courriel) {
+  if (!COURRIELS) throw new Error('Ce module n’envoie aucun courriel (jusqu’à nouvel ordre).')
   const db = base(env)
   const rappel = await preparerRappel(env, db, new Date(Date.now() - 7 * 24 * 3600 * 1000), { essai: true })
   await envoyerGmail(env, { a: [courriel], ...rappel })
 }
 
-/** Un appel du cron du lundi : la prochaine entreprise, puis le courriel si la semaine est finie. */
-export async function tourHebdomadaire(env) {
+/** Un passage du cron du trimestre : le travail suivant (recherche large, puis mises à jour ciblées). */
+export async function tourTrimestriel(env) {
   if (!rechercheConfiguree(env)) {
     console.log('Vigie de subventions : secrets ANTHROPIC_API_KEY ou SUPABASE_SECRET_KEY manquants, rien à faire.')
     return
@@ -199,26 +290,46 @@ export async function tourHebdomadaire(env) {
   const db = base(env)
   const [actif] = await db.lire('grant_settings?key=eq.recherche_active&select=value')
   if (actif?.value === false) {
-    console.log('Vigie de subventions : recherche hebdomadaire en pause (Réglages).')
+    console.log('Vigie de subventions : recherche automatique en pause (Réglages).')
     return
   }
 
-  const id = await db.rpc('prochaine_entreprise_hebdo')
-  if (id) {
+  const tache = await db.rpc('prochaine_tache_trimestre')
+  if (tache?.company_id) {
     try {
-      const bilan = await rechercherEntreprise(env, { entrepriseId: id, declencheur: 'cron' })
-      console.log(`Vigie de subventions : ${JSON.stringify(bilan)}`)
+      const bilan =
+        tache.kind === 'ciblee'
+          ? await mettreAJourRetenues(env, { entrepriseId: tache.company_id, declencheur: 'cron', trimestre: true })
+          : await rechercherEntreprise(env, { entrepriseId: tache.company_id, declencheur: 'cron' })
+      console.log(`Vigie de subventions (${tache.kind}) : ${JSON.stringify(bilan)}`)
     } catch (e) {
-      console.error(`Vigie de subventions : ${messageDe(e)}`)
+      console.error(`Vigie de subventions (${tache.kind}) : ${messageDe(e)}`)
     }
+    return
   }
-
-  if (await db.rpc('semaine_terminee')) {
+  if (COURRIELS) {
     if (!gmailConfigure(env)) console.log('Vigie de subventions : Gmail non configuré, le rappel sera noté en erreur.')
     try {
-      console.log(`Vigie de subventions, rappel : ${await envoyerRappelHebdo(env)}`)
+      console.log(`Vigie de subventions, rappel : ${await envoyerRappel(env)}`)
     } catch (e) {
       console.error(`Vigie de subventions, rappel : ${messageDe(e)}`)
     }
   }
+}
+
+/**
+ * Chaque passage du cron (aux 15 min, worker/index.js) : l'agenda Google
+ * (rien si le réglage est inactif), les subventions échues expirées une
+ * fois par jour (8 h UTC), et la recherche du trimestre à ses passages.
+ */
+export async function passageSubventions(env, moment = new Date()) {
+  if (!env.SUPABASE_SECRET_KEY) return
+  const travaux = [
+    synchroniserAgenda(env).then((r) => {
+      if (r.faites || r.erreurs) console.log(`Vigie de subventions, agenda : ${JSON.stringify(r)}`)
+    }),
+  ]
+  if (moment.getUTCHours() === 8 && moment.getUTCMinutes() < 15) travaux.push(base(env).rpc('expirer_echues'))
+  if (estTourTrimestriel(moment)) travaux.push(tourTrimestriel(env))
+  await Promise.all(travaux.map((t) => t.catch((e) => console.error(`Vigie de subventions : ${messageDe(e)}`))))
 }

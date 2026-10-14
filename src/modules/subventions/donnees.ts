@@ -1,8 +1,22 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { Profil } from '@/lib/types'
-import type { CategorieRejet, Entreprise, Etape, Feedback, Heures, Note, Rappel, Recherche, Reglage, Regles, Subvention } from './types'
+import type { Employe, Profil } from '@/lib/types'
+import type { LigneAgenda } from './agenda'
+import type {
+  CategorieRejet,
+  Entreprise,
+  Etape,
+  Feedback,
+  Heures,
+  LigneSalaire,
+  Note,
+  Proposition,
+  Recherche,
+  Reglage,
+  Regles,
+  Subvention,
+} from './types'
 
 // Module en ligne seulement (comme Mastertimeline) : sans réseau, une
 // modification échoue tout de suite (networkMode « always ») et s'affiche
@@ -23,7 +37,11 @@ export const useEtapes = () => useListe<Etape>(S, 'grant_reporting_steps', 'sort
 export const useRecherches = () => useListe<Recherche>(S, 'grant_search_runs', 'started_at')
 export const useRegles = () => useListe<Regles>(S, 'grant_learned_rules', 'generated_at')
 export const useReglages = () => useListe<Reglage>(S, 'grant_settings', 'key')
-export const useRappels = () => useListe<Rappel>(S, 'grant_digests', 'week_start')
+export const usePropositions = () => useListe<Proposition>(S, 'grant_proposals', 'created_at')
+/** Ce que le Worker a écrit dans l'agenda Google « Subventions ». */
+export const useEvenementsAgenda = () => useListe<LigneAgenda>(S, 'grant_calendar_events', 'event_key')
+/** Référentiel Employés (attribution salariale). */
+export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom')
 /** Noms des personnes (notes, heures, décisions) : la direction voit tous les profils. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 
@@ -82,10 +100,99 @@ export function useDecider() {
       })
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: (_r, p) => {
       client.invalidateQueries({ queryKey: [S, 'grants'] })
       client.invalidateQueries({ queryKey: [S, 'grant_feedback'] })
+      // Retenue : ses dates partent tout de suite dans l'agenda (sinon au prochain passage du cron).
+      if (p.decision === 'valide') ecrireAgendaPlusTard(client, p.grant)
     },
+  })
+}
+
+/** Accepter (le champ prend la valeur proposée) ou refuser une proposition de Claude. */
+export function useDeciderProposition() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [LOCAL, 'proposition'],
+    networkMode: 'always',
+    mutationFn: async ({ id, accepter }: { id: string; accepter: boolean }) => {
+      const { error } = await db().rpc('decider_proposition', { p_id: id, p_accepter: accepter })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: [S, 'grants'] })
+      client.invalidateQueries({ queryKey: [S, 'grant_proposals'] })
+    },
+  })
+}
+
+export interface ResultatAgenda {
+  actif: boolean
+  mode: 'simule' | 'google' | 'non_configure'
+  faites: number
+  erreurs?: number
+  restantes: number
+  erreur?: string
+}
+
+/** Demande au Worker d'écrire tout de suite dans l'agenda : une subvention, ou toutes. */
+export async function synchroniserAgenda(grantId?: string) {
+  const res = await appelerWorker('agenda', { method: 'POST', body: JSON.stringify(grantId ? { grant_id: grantId } : {}) })
+  if (!res.ok) throw new Error(await erreurWorker(res))
+  return (await res.json()) as ResultatAgenda
+}
+
+/** Synchro de l'agenda en arrière-plan (une panne attend le prochain passage du cron). */
+export function ecrireAgendaPlusTard(client: ReturnType<typeof useQueryClient>, grantId: string) {
+  synchroniserAgenda(grantId)
+    .then(() => client.invalidateQueries({ queryKey: [S, 'grant_calendar_events'] }))
+    .catch(() => {})
+}
+
+// ---------------------------------------------------------------------
+// Attribution salariale : des salaires, donc ni temps réel ni cache sur
+// l'appareil (clé « subventions-salaires » exclue de la persistance dans
+// src/lib/requetes.ts), comme les Feuilles de temps.
+// ---------------------------------------------------------------------
+const SALAIRES = 'subventions-salaires'
+
+export function useLignesSalaire() {
+  return useQuery({
+    queryKey: [SALAIRES, 'lignes'],
+    queryFn: async () => {
+      const { data, error } = await db().from('grant_salary_lines').select('*').order('created_at')
+      if (error) throw error
+      return data as LigneSalaire[]
+    },
+  })
+}
+
+/** Ajoute (sans id) ou modifie (avec id) une ligne ; erreur affichée par la fenêtre. */
+export function useEnregistrerLigneSalaire() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [LOCAL, 'grant_salary_lines'],
+    networkMode: 'always',
+    mutationFn: async (ligne: Partial<LigneSalaire>) => {
+      const { id, ...reste } = ligne
+      const requete = id ? db().from('grant_salary_lines').update(reste).eq('id', id) : db().from('grant_salary_lines').insert(reste)
+      const { error } = await requete
+      if (error) throw error
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: [SALAIRES] }),
+  })
+}
+
+export function useSupprimerLigneSalaire() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [LOCAL, 'grant_salary_lines', 'supprimer'],
+    networkMode: 'always',
+    mutationFn: async (id: string) => {
+      const { error } = await db().from('grant_salary_lines').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: [SALAIRES] }),
   })
 }
 

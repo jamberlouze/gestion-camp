@@ -29,6 +29,7 @@ export function base(env, schema = 'subventions') {
     lire: (chemin) => requete(chemin),
     inserer: async (table, ligne) => (await requete(table, { methode: 'POST', corps: ligne, prefer: 'return=representation' }))[0],
     modifier: (table, filtre, champs) => requete(`${table}?${filtre}`, { methode: 'PATCH', corps: champs, prefer: 'return=minimal' }),
+    supprimer: (table, filtre) => requete(`${table}?${filtre}`, { methode: 'DELETE', prefer: 'return=minimal' }),
     rpc: (nom, args = {}) => requete(`rpc/${nom}`, { methode: 'POST', corps: args }),
   }
 }

@@ -189,11 +189,15 @@ Les anciennes apps restent en service jusqu'au portage de leur module. On
 
 ### 8. Vigie de subventions : secrets Cloudflare
 
-Chaque lundi, le Worker demande à Claude (recherche web) les subventions
-pertinentes pour chaque entreprise active, une par passage du cron (8 h, 9 h,
-10 h UTC, soit 4 h à 6 h l'été à Montréal), puis envoie le courriel de rappel.
-Il lui faut six secrets. Ils s'ajoutent dans Cloudflare, **jamais** dans le
-dépôt : [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
+Quatre fois par année (du 1er au 7 octobre, janvier, avril et juillet, aux
+passages de 8 h à 11 h UTC du cron, soit tôt le matin à Montréal), le Worker
+demande à Claude (recherche web), un travail par passage : d'abord une
+recherche large de nouvelles subventions pour chaque entreprise active, puis
+la mise à jour des subventions retenues et obtenues (dates, montants,
+critères, lien ; nouvelle édition d'une obtenue). **Aucun courriel** n'est
+envoyé par ce module jusqu'à nouvel ordre (les secrets `GMAIL_REFRESH_TOKEN`
+et `GMAIL_EXPEDITEUR` ne lui servent plus). Les secrets s'ajoutent dans
+Cloudflare, **jamais** dans le dépôt : [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
 `gestion-camp` → Settings → Variables and Secrets → **Add** → Type **Secret**.
 Ils restent en place aux déploiements suivants.
 
@@ -201,9 +205,31 @@ Ils restent en place aux déploiements suivants.
 |---|---|
 | `ANTHROPIC_API_KEY` | [platform.claude.com](https://platform.claude.com) → Settings → Workspaces → **Create workspace** « Vigie de subventions », avec une **limite de dépense mensuelle** (Limits) ; puis API Keys → **Create Key** dans ce workspace. Une clé à part, pas une clé générale. |
 | `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys → Secret keys → **New secret key** (nom : `worker-gestion-camp`). Elle contourne la RLS : seulement dans Cloudflare. |
-| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` | Voir « Gmail » ci-dessous. |
-| `GMAIL_REFRESH_TOKEN` | Voir « Gmail » ci-dessous. |
-| `GMAIL_EXPEDITEUR` | L'adresse qui envoie (celle autorisée à l'étape 5 ci-dessous), ex. `maxime@camptremblant.com`. |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` | Client OAuth « interne » : voir « Gmail » ci-dessous (sert aussi à l'agenda). |
+| `SUBVENTIONS_AGENDA_REFRESH_TOKEN` | Agenda Google « Subventions » : voir ci-dessous. |
+
+**Agenda Google « Subventions »** (dédié : l'agenda d'inscription n'est pas
+touché) — une seule fois :
+
+1. Google Agenda, avec le compte de Maxime : « Autres agendas » → **+** →
+   Créer un agenda « Subventions ». Le partager au besoin (Charlotte, Marco)
+   en lecture.
+2. console.cloud.google.com, projet « Vigie » de l'étape 1 ci-dessous : APIs &
+   Services → Library → **Google Calendar API** → Enable.
+3. [OAuth Playground](https://developers.google.com/oauthplayground), comme à
+   l'étape 5 ci-dessous (mêmes identifiants du client), portée
+   `https://www.googleapis.com/auth/calendar.events`, connecté avec le compte
+   qui possède l'agenda → **Refresh token** → secret Cloudflare
+   `SUBVENTIONS_AGENDA_REFRESH_TOKEN`. (Sans lui, le Worker essaie
+   `GOOGLE_AGENDA_REFRESH_TOKEN` des Réservations, qui marche seulement si son
+   compte peut modifier l'agenda « Subventions ».)
+4. Paramètres de l'agenda « Subventions » → Intégrer l'agenda → **Identifiant
+   de l'agenda** (`…@group.calendar.google.com`) → app → Subventions →
+   Réglages → Agenda Google : le coller, cocher « Écrire dans l'agenda »,
+   puis « Écrire maintenant ».
+
+En DEV (base locale), jamais Google : l'agenda est simulé (`essai-subventions`,
+`subventions.grant_calendar_events` montre ce qui serait écrit).
 
 **Gmail (API Gmail, compte Google Workspace du camp)** — une seule fois :
 
@@ -224,13 +250,14 @@ Les mêmes quatre valeurs `GMAIL_*` servent au module Vigie des camps
 compétiteurs (secrets Supabase, mêmes noms).
 
 **Vérifier** : app → Subventions → Recherches. La carte Configuration doit
-afficher trois ✓. Lancez une recherche pour une entreprise (3 à 10 minutes),
-puis « M'envoyer un courriel d'essai ».
+afficher deux ✓. « Lancer maintenant » une recherche large pour une
+entreprise (3 à 10 minutes), puis une « Mise à jour des retenues ».
 
 **Coût** : avec `claude-opus-5-5` (variable `SUBVENTIONS_MODELE` dans
 `wrangler.jsonc`), compter de l'ordre de 1 à 2 $ US par entreprise et par
-recherche (jetons + recherches web à 10 $ les 1000) : environ 10 à 25 $ par mois
-pour trois entreprises. Le journal des recherches affiche les jetons et le
+recherche (jetons + recherches web à 10 $ les 1000), autant pour une mise à
+jour des retenues : environ 10 à 25 $ par trimestre pour trois entreprises
+(plus de 4 fois moins qu'à la recherche du lundi). Le journal des recherches affiche les jetons et le
 nombre de recherches web de chaque passage. `claude-sonnet-5-5` coûte deux fois
 moins cher.
 

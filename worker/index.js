@@ -1,6 +1,6 @@
 // Worker de la gestion du camp : sert l'application (fichiers statiques de
 // dist/, voir wrangler.jsonc), garde Supabase éveillé, fait la recherche
-// hebdomadaire de la Vigie de subventions (voir subventions/pipeline.js),
+// trimestrielle de la Vigie de subventions (voir subventions/pipeline.js),
 // la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js),
 // les routes publiques des Réservations (formulaire de demande, documents et
 // factures de la page client : reservations/api.js), celles du module RH
@@ -28,17 +28,7 @@ import { routeQbo } from "./qbo/api.js";
 import { qboConfigure } from "./qbo/oauth.js";
 import { synchroniserTout as synchroQbo } from "./qbo/operations.js";
 import { routeSubventions } from "./subventions/api.js";
-import { tourHebdomadaire } from "./subventions/pipeline.js";
-
-// Vigie de subventions : le lundi, aux appels de 8 h, 9 h, 10 h et 11 h UTC
-// du cron (4 h à 7 h, heure avancée de l'Est ; 3 h à 6 h, heure normale).
-// Le cron passe aux 15 minutes (synchro du Calendrier) : seulement le
-// passage de l'heure pile, pour garder une entreprise par heure.
-const estTourSubventions = (moment) =>
-  moment.getUTCDay() === 1 &&
-  moment.getUTCHours() >= 8 &&
-  moment.getUTCHours() <= 11 &&
-  moment.getUTCMinutes() < 15;
+import { passageSubventions } from "./subventions/pipeline.js";
 
 async function pingSupabase(env) {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ping`, {
@@ -59,7 +49,9 @@ const texte = (body, status = 200) =>
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(pingSupabase(env));
-    if (estTourSubventions(new Date(event.scheduledTime))) ctx.waitUntil(tourHebdomadaire(env));
+    // Vigie de subventions : agenda Google, échues expirées (une fois par jour) et
+    // recherche du trimestre (début d'octobre, janvier, avril, juillet) : subventions/pipeline.js.
+    ctx.waitUntil(passageSubventions(env, new Date(event.scheduledTime)).catch((e) => console.error("Subventions :", e)));
     // Séjours Airtable → calendrier.sejours (rien tant que les secrets manquent).
     if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
     // Factures et soldes de QuickBooks Online (rien tant que l'app Intuit n'est pas configurée).

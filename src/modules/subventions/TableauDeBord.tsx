@@ -5,11 +5,9 @@ import { ui } from '@/lib/ui'
 import { menu, PastilleStatut, PastilleType } from './commun'
 import { useEntreprises, useHeures, useSubventions } from './donnees'
 import {
-  anneeFiscale,
   anneeFiscaleCourante,
   argent,
   dateCourte,
-  dateRattachement,
   entrepriseDe,
   heures as formatHeures,
   libelleAnneeFiscale,
@@ -26,9 +24,10 @@ const FILTRES: { id: string; libelle: string; statuts: Statut[] }[] = [
 
 /**
  * Suivi par année fiscale (1er octobre au 30 septembre) et par entreprise.
- * Une subvention appartient à l'année de son octroi (sinon réception, date
- * limite, découverte) et à l'entreprise qui dépose (sinon celle pour qui
- * elle a été trouvée).
+ * Une subvention appartient à son année fiscale (fiscal_year : proposée
+ * d'après la période financée, sinon la date limite ; modifiable sur la
+ * fiche) et à l'entreprise qui dépose (sinon celle pour qui elle a été
+ * trouvée).
  */
 export function TableauDeBord() {
   const navigate = useNavigate()
@@ -40,13 +39,13 @@ export function TableauDeBord() {
   const [filtre, setFiltre] = useState('demandes')
 
   const annees = useMemo(() => {
-    const s = new Set([anneeFiscaleCourante(), ...(subventions.data ?? []).map((g) => anneeFiscale(dateRattachement(g)))])
+    const s = new Set([anneeFiscaleCourante(), ...(subventions.data ?? []).map((g) => g.fiscal_year)])
     return [...s].sort((a, b) => b - a)
   }, [subventions.data])
 
   const donnees = useMemo(() => {
     const deLAnnee = (subventions.data ?? []).filter(
-      (g) => anneeFiscale(dateRattachement(g)) === annee && (!entreprise || entrepriseDe(g) === entreprise),
+      (g) => g.fiscal_year === annee && (!entreprise || entrepriseDe(g) === entreprise),
     )
     const obtenues = deLAnnee.filter((g) => g.status === 'obtenu')
     const somme = (l: typeof deLAnnee, f: (g: (typeof deLAnnee)[number]) => number | null) => l.reduce((s, g) => s + Number(f(g) ?? 0), 0)
@@ -61,7 +60,7 @@ export function TableauDeBord() {
       totalHeures,
       liste: deLAnnee
         .filter((g) => statuts.includes(g.status))
-        .sort((a, b) => ORDRE_STATUTS.indexOf(a.status) - ORDRE_STATUTS.indexOf(b.status) || dateRattachement(b).localeCompare(dateRattachement(a))),
+        .sort((a, b) => ORDRE_STATUTS.indexOf(a.status) - ORDRE_STATUTS.indexOf(b.status) || (b.deadline_date ?? '').localeCompare(a.deadline_date ?? '')),
     }
   }, [subventions.data, heures.data, annee, entreprise, filtre])
 
