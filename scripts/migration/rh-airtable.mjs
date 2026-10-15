@@ -20,7 +20,14 @@
 // (jamais dans Git).
 //
 // Relançable : chaque ligne garde son identifiant Airtable (airtable_id,
-// airtable_ids) ; une personne fusionnée dans l'app n'est pas recréée.
+// airtable_ids) ; une personne fusionnée dans l'app n'est pas recréée ; une
+// ligne n'est réécrite que si une valeur d'Airtable a changé (une 2e passe
+// identique ne touche à rien). Attention : une valeur changée dans Airtable
+// ÉCRASE celle de l'app (statut, décision, dossier) — ne pas relancer après
+// la bascule. À la fin du SQL, contrôle « comptes Airtable = comptes de la
+// base » (colonne etat : ok / ÉCART). Marche à suivre : docs/bascule-rh.md.
+// Extraits du connecteur : demander seulement les champs lus ici (fieldIds),
+// sans NAS, compte, transit, institution ni spécimen hors import final.
 // Champs lus par identifiant (fld…) : un champ renommé dans Airtable ne
 // casse pas l'import.
 
@@ -129,7 +136,6 @@ const courriel = (v) => {
 }
 const date = (v) => (txt(v) && /^\d{4}-\d{2}-\d{2}/.test(txt(v)) ? txt(v).slice(0, 10) : null)
 const chiffres = (v) => (v === null || v === undefined ? null : String(v).replace(/\D/g, '') || null)
-const arr = (ids) => (ids.length ? `array[${ids.join(',')}]::uuid[]` : `'{}'::uuid[]`)
 const json = (o) => q(JSON.stringify(Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))))
 
 /** Identifiant stable tiré d'une clé (relancer l'import donne les mêmes). */
@@ -350,7 +356,7 @@ for (const r of candidatures) {
     postes_texte: inconnus.length ? inconnus.join(', ') : null,
   }
   sql.push(
-    `insert into rh.candidatures (id, personne_id, source, recue_le, saison_ids, poste_ids, reponses, statut, pre_decision, commentaires, entrevue_le, notes_entrevue, entreprise_id, saison_id, poste_id, echelon, airtable_id) values (` +
+    `insert into rh.candidatures as t (id, personne_id, source, recue_le, saison_ids, poste_ids, reponses, statut, pre_decision, commentaires, entrevue_le, notes_entrevue, entreprise_id, saison_id, poste_id, echelon, airtable_id) values (` +
       [
         q(id),
         personneExpr(p),
@@ -370,7 +376,9 @@ for (const r of candidatures) {
         echelon ?? 'null',
         q(r.id),
       ].join(', ') +
-      `) on conflict (airtable_id) do update set statut = excluded.statut, pre_decision = excluded.pre_decision, commentaires = excluded.commentaires, entrevue_le = excluded.entrevue_le, notes_entrevue = excluded.notes_entrevue, entreprise_id = excluded.entreprise_id, saison_id = excluded.saison_id, poste_id = excluded.poste_id, echelon = excluded.echelon;`,
+      `) on conflict (airtable_id) do update set statut = excluded.statut, pre_decision = excluded.pre_decision, commentaires = excluded.commentaires, entrevue_le = excluded.entrevue_le, notes_entrevue = excluded.notes_entrevue, entreprise_id = excluded.entreprise_id, saison_id = excluded.saison_id, poste_id = excluded.poste_id, echelon = excluded.echelon` +
+      // Seulement si une valeur change : une relance ne touche pas aux lignes à jour.
+      ` where (t.statut, t.pre_decision, t.commentaires, t.entrevue_le, t.notes_entrevue, t.entreprise_id, t.saison_id, t.poste_id, t.echelon) is distinct from (excluded.statut, excluded.pre_decision, excluded.commentaires, excluded.entrevue_le, excluded.notes_entrevue, excluded.entreprise_id, excluded.saison_id, excluded.poste_id, excluded.echelon);`,
   )
   const dernier = txt(f[C.dernierCourriel])
   if (dernier) {
@@ -401,7 +409,7 @@ for (const r of embauches) {
 const saisonsEmbauchees = new Map() // personne → Set('ete-2026')
 const embaucheSql = (cle, p, champs) => {
   saisonsEmbauchees.set(p, (saisonsEmbauchees.get(p) ?? new Set()).add(`${champs.saison.genre}-${champs.saison.annee}`))
-  return `insert into rh.embauches (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, remuneration, vacances, type_employe, action_paie, date_embauche, disponibilites, disponibilites_note, code_ethique_le, commentaires, presentation, dossier_recu_le, airtable_id) values (` +
+  return `insert into rh.embauches as t (id, personne_id, saison_id, entreprise_id, poste_id, echelon, candidature_id, statut, remuneration, vacances, type_employe, action_paie, date_embauche, disponibilites, disponibilites_note, code_ethique_le, commentaires, presentation, dossier_recu_le, airtable_id) values (` +
   [
     q(uuid(`embauche:${cle}`)),
     personneExpr(p),
@@ -424,7 +432,8 @@ const embaucheSql = (cle, p, champs) => {
     q(champs.recu ?? null),
     q(champs.airtable ?? null),
   ].join(', ') +
-  `) on conflict (id) do update set statut = excluded.statut, remuneration = excluded.remuneration, vacances = excluded.vacances, type_employe = excluded.type_employe, action_paie = excluded.action_paie, date_embauche = excluded.date_embauche, disponibilites = excluded.disponibilites, disponibilites_note = excluded.disponibilites_note;`
+  `) on conflict (id) do update set statut = excluded.statut, remuneration = excluded.remuneration, vacances = excluded.vacances, type_employe = excluded.type_employe, action_paie = excluded.action_paie, date_embauche = excluded.date_embauche, disponibilites = excluded.disponibilites, disponibilites_note = excluded.disponibilites_note` +
+  ` where (t.statut, t.remuneration, t.vacances, t.type_employe, t.action_paie, t.date_embauche, t.disponibilites, t.disponibilites_note) is distinct from (excluded.statut, excluded.remuneration, excluded.vacances, excluded.type_employe, excluded.action_paie, excluded.date_embauche, excluded.disponibilites, excluded.disponibilites_note);`
 }
 
 // « Ancien = Oui » d'un dossier : a travaillé avec nous avant (saisons pas toujours connues).
@@ -460,7 +469,7 @@ for (const p of personnesTouchees) {
     if (tel) p.telephone = tel
     const allergies = txt(f[E.allergiesOui]) === 'Oui' ? txt(f[E.allergies]) || 'Oui (non précisé)' : null
     apres.push(
-      `insert into rh.dossiers (personne_id, adresse, ville, province, code_postal, pays, assurance_maladie, etudiant_temps_plein, etudes, allergies, diete, taille_tshirt, taille_hoodie, urgence1_nom, urgence1_lien, urgence1_telephone, urgence2_nom, urgence2_lien, urgence2_telephone) values (` +
+      `insert into rh.dossiers as t (personne_id, adresse, ville, province, code_postal, pays, assurance_maladie, etudiant_temps_plein, etudes, allergies, diete, taille_tshirt, taille_hoodie, urgence1_nom, urgence1_lien, urgence1_telephone, urgence2_nom, urgence2_lien, urgence2_telephone) values (` +
         [
           personneExpr(p),
           q(txt(f[E.adresse])),
@@ -482,7 +491,8 @@ for (const p of personnesTouchees) {
           q(txt(f[E.u2lien])),
           q(txt(f[E.u2tel])),
         ].join(', ') +
-        `) on conflict (personne_id) do update set adresse = excluded.adresse, ville = excluded.ville, province = excluded.province, code_postal = excluded.code_postal, pays = excluded.pays, assurance_maladie = excluded.assurance_maladie, etudiant_temps_plein = excluded.etudiant_temps_plein, etudes = excluded.etudes, allergies = excluded.allergies, diete = excluded.diete, taille_tshirt = excluded.taille_tshirt, taille_hoodie = excluded.taille_hoodie, urgence1_nom = excluded.urgence1_nom, urgence1_lien = excluded.urgence1_lien, urgence1_telephone = excluded.urgence1_telephone, urgence2_nom = excluded.urgence2_nom, urgence2_lien = excluded.urgence2_lien, urgence2_telephone = excluded.urgence2_telephone;`,
+        `) on conflict (personne_id) do update set adresse = excluded.adresse, ville = excluded.ville, province = excluded.province, code_postal = excluded.code_postal, pays = excluded.pays, assurance_maladie = excluded.assurance_maladie, etudiant_temps_plein = excluded.etudiant_temps_plein, etudes = excluded.etudes, allergies = excluded.allergies, diete = excluded.diete, taille_tshirt = excluded.taille_tshirt, taille_hoodie = excluded.taille_hoodie, urgence1_nom = excluded.urgence1_nom, urgence1_lien = excluded.urgence1_lien, urgence1_telephone = excluded.urgence1_telephone, urgence2_nom = excluded.urgence2_nom, urgence2_lien = excluded.urgence2_lien, urgence2_telephone = excluded.urgence2_telephone` +
+        ` where (t.adresse, t.ville, t.province, t.code_postal, t.pays, t.assurance_maladie, t.etudiant_temps_plein, t.etudes, t.allergies, t.diete, t.taille_tshirt, t.taille_hoodie, t.urgence1_nom, t.urgence1_lien, t.urgence1_telephone, t.urgence2_nom, t.urgence2_lien, t.urgence2_telephone) is distinct from (excluded.adresse, excluded.ville, excluded.province, excluded.code_postal, excluded.pays, excluded.assurance_maladie, excluded.etudiant_temps_plein, excluded.etudes, excluded.allergies, excluded.diete, excluded.taille_tshirt, excluded.taille_hoodie, excluded.urgence1_nom, excluded.urgence1_lien, excluded.urgence1_telephone, excluded.urgence2_nom, excluded.urgence2_lien, excluded.urgence2_telephone);`,
     )
     if (avecPaie) {
       const nas = chiffres(f[E.nas])?.padStart(9, '0') ?? null
@@ -592,10 +602,30 @@ const sqlPersonnes = [...personnes.values()].map((p) => {
     `insert into rh.personnes (id, prenom, nom_famille, surnom, courriel, telephone, date_naissance, sexe, notes, ne_pas_reembaucher, raison_ne_pas, deja_travaille, vaj_le, vaj_note, airtable_ids) ` +
     `select ${q(uuid(`personne:${p.cle}`))}, ${q(p.prenom)}, ${q(p.nom)}, ${q(p.surnom ?? null)}, ${q(p.courriel)}, ${q(p.telephone ?? null)}, ${q(p.naissance ?? null)}, ${q(p.sexe ?? null)}, ${q(notes)}, ${p.nePas ? 'true' : 'false'}, ${q(p.nePas ? 'Ne reprendrait pas (banque d’employés 2025)' : null)}, ${p.deja ? 'true' : 'false'}, ${q(p.vaj_le ?? null)}, ${q(p.vaj_note ?? null)}, array[${ids.map(q).join(',')}] ` +
     `where not exists (select 1 from rh.personnes where airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)}));\n` +
-    // Une fiche déjà là (même courriel, ou fusionnée) reçoit les identifiants Airtable.
-    `update rh.personnes set airtable_ids = array(select distinct unnest(airtable_ids || array[${ids.map(q).join(',')}])), deja_travaille = deja_travaille or ${p.deja ? 'true' : 'false'} where airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)});`
+    // Une fiche déjà là (même courriel, ou fusionnée) reçoit les identifiants Airtable
+    // (triés : une relance donne le même tableau), seulement s'il en manque.
+    `update rh.personnes set airtable_ids = array(select distinct x from unnest(airtable_ids || array[${ids.map(q).join(',')}]) x order by x), deja_travaille = deja_travaille or ${p.deja ? 'true' : 'false'} where (airtable_ids && array[${ids.map(q).join(',')}] or (courriel is not null and courriel = ${q(p.courriel)})) and (not airtable_ids @> array[${ids.map(q).join(',')}]${p.deja ? ' or not deja_travaille' : ''});`
   )
 })
+
+// Contrôle : chaque fiche d'Airtable lue se retrouve dans la base (« ok »),
+// sinon « ÉCART » (et la transaction est quand même validée : à examiner).
+// Lignes « info » : personnes reliées à Airtable (moins que les personnes du
+// script si des fiches ont été fusionnées dans l'app) ; « à revoir » : embauches
+// créées par un import dont la candidature n'est plus acceptée dans Airtable
+// (l'import ne les retire pas ; 0 attendu).
+const tableau = (l) => `array[${l.map((r) => q(r.id)).join(',')}]::text[]`
+const clesPersonnes = [...personnes.values()].flatMap((p) => [...p.ids])
+const controle = [
+  `select quoi, airtable, base, case when airtable is null then 'info' when airtable = base then 'ok' else 'ÉCART' end as etat from (values`,
+  `  ('candidatures', ${candidatures.length}, (select count(*)::int from rh.candidatures where airtable_id = any(${tableau(candidatures)}))),`,
+  `  ('dossiers d''embauche', ${embauches.length}, (select count(*)::int from rh.embauches where airtable_id = any(${tableau(embauches)}))),`,
+  `  ('humains', ${humains.length}, (select count(distinct x)::int from rh.personnes, unnest(airtable_ids) x where x = any(${tableau(humains)}))),`,
+  `  ('banque 2025', ${banque.length}, (select count(distinct x)::int from rh.personnes, unnest(airtable_ids) x where x = any(${tableau(banque)}))),`,
+  `  ('personnes reliées à Airtable (${personnes.size} dans le script)', null, (select count(*)::int from rh.personnes where airtable_ids && array[${clesPersonnes.map(q).join(',')}]::text[])),`,
+  `  ('embauches importées à revoir', 0, (select count(*)::int from rh.embauches e join rh.candidatures c on c.id = e.candidature_id where c.airtable_id is not null and c.statut <> 'acceptee' and e.statut in ('a_envoyer','envoyee','dossier_recu')))`,
+  `) as v(quoi, airtable, base);`,
+]
 
 const texteSql = [
   ...entete,
@@ -603,6 +633,7 @@ const texteSql = [
   ...sql,
   ...apres,
   `select 'personnes' as quoi, count(*) from rh.personnes union all select 'candidatures', count(*) from rh.candidatures union all select 'embauches', count(*) from rh.embauches union all select 'dossiers', count(*) from rh.dossiers;`,
+  ...controle,
   'commit;',
 ]
   .join('\n')

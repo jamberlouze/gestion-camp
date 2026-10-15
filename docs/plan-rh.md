@@ -1,6 +1,6 @@
 # Plan — module RH (recrutement, embauche et dossiers d'employés)
 
-Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12 ; phase 2 (pages publiques) bâtie en DEV le 2026-10-12 ; phase 3 (courriels, contrat) et phase 4 (§14) bâties en DEV le 2026-10-15.
+Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12 ; phase 2 (pages publiques) bâtie en DEV le 2026-10-12 ; phase 3 (courriels, contrat) et phase 4 (§14) bâties en DEV le 2026-10-15 ; bascule préparée en DEV le 2026-10-15 (phase 5, §15, marche à suivre `docs/bascule-rh.md`).
 Inventaire détaillé de l'existant (champs, formulaires, textes des courriels, Sheets) : `docs/rh-existant.md`.
 
 ## 0. Ce que le module remplace
@@ -146,7 +146,7 @@ Bâti en DEV le 2026-10-15 (phase 3) : migration `rh_contrats`, `src/modules/rh/
 - Script `scripts/migration/rh-airtable.mjs` ; le SQL produit reste hors dépôt (données personnelles), appliqué par l'API Management comme pour le CRM.
 - Source : l'API Airtable (jeton en lecture) **ou** des extraits du connecteur Airtable de Claude (`--depuis`, réponses enregistrées telles quelles, jamais recopiées). Import DEV fait le 2026-10-12 par le connecteur, sans les champs de paie : 684 personnes, 320 candidatures (mêmes statuts qu'Airtable), 252 embauches (dont les saisons 2022 à 2025 de la banque 2025), 70 dossiers, 647 disponibilités ; relancé une 2e fois sans doublon.
 - Personnes (Humains + Banque 2025 + Volontariat), candidatures, embauches, dossiers, paie (chiffrée), fichiers (téléchargés d'Airtable vers les seaux privés).
-- Relançable sans doublons (`airtable_id`), pour importer une première fois à l'essai puis une dernière fois à la bascule.
+- Relançable sans doublons (`airtable_id`), pour importer une première fois à l'essai puis une dernière fois à la bascule. Répétition du 2026-10-15 (phase 5, connecteur, sans la paie) : 3 candidatures, 2 embauches, 1 dossier et 3 personnes ajoutés depuis le 12 ramenés ; comptes Airtable = comptes DEV (contrôle à la fin du SQL) ; une relance ne modifie plus aucune ligne (`docs/verification-rh-phase5.md`).
 - Libellés corrigés au passage (postes, compagnies, saisons, tailles).
 
 ## 11. Phases
@@ -157,7 +157,7 @@ Bâti en DEV le 2026-10-15 (phase 3) : migration `rh_contrats`, `src/modules/rh/
 | 2 | Pages publiques : candidature, intention de retour, dossier d'embauche ; dépôt de fichiers ; alertes | bâtie en DEV le 2026-10-12 |
 | 3 | Courriels (modèles, envoi Gmail, journal) ; contrat produit et signé en ligne | bâtie en DEV le 2026-10-15 ; en ligne avant le pic de janvier (122 candidatures en janvier 2026) |
 | 4 | Planification, diètes par semaine, conformité, exports, lien avec le référentiel | bâtie en DEV le 2026-10-15 (§14, migration `rh_phase4`) ; en ligne avant les formations de mai |
-| Bascule | Import final, formulaires Airtable fermés et redirigés, automatisations coupées | après la phase 3 |
+| Bascule | Import final, formulaires Airtable fermés et redirigés, automatisations coupées | **préparée en DEV le 2026-10-15** (phase 5, §15) : marche à suivre `docs/bascule-rh.md`, répétition de l'import `docs/verification-rh-phase5.md` ; attend le sous-domaine, le choix de l'option de publication (RH dépend d'une migration des Feuilles de temps) et le « oui » de Maxime |
 
 Airtable continue de tourner jusqu'à la bascule.
 
@@ -228,6 +228,14 @@ Phase 4 (2026-10-15) :
 - Employeur D : une modification (M, un ancien) met la date dans « Date de réembauche » (K) et laisse « Date d'embauche » (I) vide ; titre d'emploi exigé seulement pour un ajout (A) ; type de dépôt 1 = 1 (salaire) ; sans compte bancaire = chèque (mode 1) ; province hors liste (« Laurentides ») ou pays autre que Canada / États-Unis = à corriger au dossier ; États-Unis = province ZZ, code postal américain en T ; assurance maladie « aucun » ou illisible = vide ; téléphone et courriel illisibles ou trop longs = vides (avertissement) ; dates en texte AAAA-MM-JJ, NAS, transit, institution et compte en texte (zéros de tête gardés), matricule, heures et taux en nombres ; le 4 % n'est pas exporté (banque de vacances à régler dans Employeur D).
 - Référentiel : un bénévole validé reçoit aussi une fiche (Animation, Rooming) ; une personne au même courriel qu'un compte de la direction n'en reçoit pas d'office (règle des Feuilles de temps) ; la correspondance par le nom se fait sans tenir compte de la casse (et des accents dans la fenêtre « Relier ») ; une fiche créée par « Relier au référentiel » est active seulement si la dernière embauche complète n'est pas terminée ; « Relier » ne change ni l'état actif ni les compagnies d'une fiche existante.
 
+Phase 5 (2026-10-15) :
+
+- Résumé quotidien : une ligne importée d'Airtable (`airtable_id`) n'est **jamais** une nouveauté (migration `20261015134435_rh_nouveautes_sans_import`) ; constaté à la répétition : le premier résumé listait ce qui était entré dans Airtable dans les 24 h d'avant.
+- Import : une ligne n'est réécrite que si une valeur d'Airtable a changé (une relance ne touche à rien) ; identifiants Airtable triés ; contrôle « comptes Airtable = comptes de la base » à la fin du SQL, sans annuler la transaction en cas d'écart (à examiner) ; ne plus relancer l'import après la bascule (il écraserait les changements faits dans l'app).
+- Import final de la paie **par un jeton Airtable en lecture** (recommandé) : les NAS et comptes ne passent pas par la conversation.
+- RH dépend de la migration `20261015120202_temps_employeur_d` (Feuilles de temps) : options de publication décrites dans `docs/bascule-rh.md` §1.4, à choisir par Maxime.
+- Embauches importées encore en cours à la bascule : nouveau lien de dossier de l'app ; la validation garde sa règle (contrat signé dans l'app) ; à changer seulement si Maxime le demande.
+
 ## 14. Conception de la phase 4 (2026-10-15)
 
 Bâtie en DEV le 2026-10-15 (migration `20261015125223_rh_phase4`, vérification `docs/verification-rh-phase4.md`) ; écarts et précisions : §13 (phase 4). Le canevas exige aussi le **numéro du titre d'emploi** (colonne G du profil emploi, obligatoire pour un ajout) : réglage `titre_emploi` d'Employeur D, vide au départ.
@@ -273,6 +281,8 @@ Pastilles par ligne et filtre « À régler » : **dossier** (lien pas envoyé /
 `docs/verification-rh-phase4.md` (même forme que les phases 2 et 3), passée en DEV : tests SQL des droits (codes, cases, pilotage : RLS `rh` ; export Employeur D refusé sans `rh_paie` et noté dans les consultations ; relier : direction), tests Node des fichiers purs (planification, diètes, conformité, Employeur D), navigateur sur ordinateur et téléphone avec des fiches fictives (`@camp.test`) retirées à la fin.
 
 ## 15. Phase 5 : préparer la bascule (DEV seulement, 2026-10-15)
+
+Faite en DEV le 2026-10-15 : `docs/bascule-rh.md` (marche à suivre du jour J), `docs/verification-rh-phase5.md` (répétition passée), migration `20261015134435_rh_nouveautes_sans_import`, `rh-airtable.mjs` relançable sans réécriture et avec contrôle des comptes ; choix en §13 (phase 5).
 
 La bascule elle-même (plan §11 : import final, formulaires Airtable fermés et redirigés, automatisations coupées) touche la PROD et attend deux choses de Maxime : le sous-domaine (« on attend ») et son « oui » à `/mise-en-ligne`. La phase 5 prépare tout ce qui peut l'être sans toucher la PROD ni Airtable :
 
