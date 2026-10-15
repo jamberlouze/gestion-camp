@@ -6,7 +6,7 @@ import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { enregistrerStructure, ordonner, remettreLieu, retirerLieu, supprimerStructure, useRelire, type Donnees, type TableStructure } from './donnees'
+import { enregistrerStructure, ordonner, retirerLieu, supprimerStructure, useRelire, type Donnees, type TableStructure } from './donnees'
 import { dansReference, enfantsDe, pluriel } from './outils'
 import { NIVEAUX, type Chambre, type Lieu, type Niveau } from './types'
 
@@ -14,13 +14,16 @@ type Faire = (f: () => Promise<unknown>) => Promise<string | null>
 
 const parOrdre = <T extends { ordre: number }>(a: T, b: T) => a.ordre - b.ordre
 const maxOrdre = (l: { ordre: number }[]) => l.reduce((m, x) => Math.max(m, x.ordre), 0)
+/** Lieux de la référence sous un parent : jamais ceux qui en sont retirés. */
+const lieuxSous = (d: Donnees, parent: string | null) => enfantsDe(d.structure.lieux, parent).filter((l) => l.actif)
 
 /**
  * Référence : la réalité d'aujourd'hui, un arbre de lieux (site > bâtiment >
  * section > étage ; site, section et étage facultatifs) et leurs chambres
  * avec leurs lits, sans personne. Un nouveau plan en prend une photo ;
- * changer la référence ne touche jamais un plan déjà créé. Retirer un lieu
- * ou une chambre qu'un plan utilise le retire seulement de la référence.
+ * changer la référence ne touche jamais un plan déjà créé. Un lieu ou une
+ * chambre retiré disparaît d'ici ; si un plan l'utilise, il ne reste que
+ * dans ce plan (effacé par la base quand plus aucun plan ne l'utilise).
  */
 export function Reglages({ d }: { d: Donnees }) {
   const ecriture = useAuth().peutEcrire('rooming')
@@ -46,7 +49,7 @@ export function Reglages({ d }: { d: Donnees }) {
 
   if (!ecriture) return <p className="py-8 text-center text-sm text-pierre-500">La référence se règle par les personnes qui peuvent modifier ce module.</p>
 
-  const racines = enfantsDe(d.structure.lieux, null)
+  const racines = lieuxSous(d, null)
   const reference = dansReference(d.structure)
   const actives = d.structure.chambres.filter((c) => reference.chambres.has(c.id))
   const totalLits = actives.reduce((t, c) => t + c.lits, 0)
@@ -97,56 +100,25 @@ function chambresDe(lieu: Lieu, d: Donnees): Chambre[] {
 
 type Proprietes = { lieu: Lieu; freres: Lieu[]; i: number; d: Donnees; faire: Faire; reference: Set<string> }
 
-function BlocLieu(props: Proprietes) {
-  return props.lieu.actif ? <BlocLieuActif {...props} /> : <BlocLieuRetire {...props} />
-}
-
-/** Lieu retiré de la référence : replié, avec « Remettre ». */
-function BlocLieuRetire({ lieu, d, faire }: Proprietes) {
-  const chambres = chambresDe(lieu, d)
-  const ids = new Set(chambres.map((c) => c.id))
-  const plans = new Set(d.occupations.filter((o) => ids.has(o.chambre_id)).map((o) => o.plan_id)).size
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed border-pierre-300 px-3 py-2 text-sm text-pierre-500">
-      <span className="font-medium text-pierre-600">
-        {lieu.nom}
-        {lieu.code && <span className="ml-1.5 font-normal">({lieu.code})</span>}
-      </span>
-      <span className="rounded bg-pierre-100 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide">Retiré de la référence</span>
-      <span className="text-xs">
-        {pluriel(chambres.length, 'chambre', 'chambres')}
-        {plans > 0 && `, gardé dans ${pluriel(plans, 'plan', 'plans')}`}
-      </span>
-      <button
-        type="button"
-        className="ml-auto rounded px-2 py-1 text-xs font-medium text-foret-700 hover:bg-foret-50"
-        onClick={() => faire(() => remettreLieu(lieu.id))}
-      >
-        Remettre
-      </button>
-    </div>
-  )
-}
-
-function BlocLieuActif({ lieu, freres, i, d, faire, reference }: Proprietes) {
-  const enfants = enfantsDe(d.structure.lieux, lieu.id)
-  const chambres = d.structure.chambres.filter((c) => c.lieu_id === lieu.id).sort(parOrdre)
+function BlocLieu({ lieu, freres, i, d, faire, reference }: Proprietes) {
+  const enfants = lieuxSous(d, lieu.id)
+  const chambres = d.structure.chambres.filter((c) => c.lieu_id === lieu.id && c.actif).sort(parOrdre)
   const enfant = NIVEAUX[lieu.niveau].enfant
-  const sites = d.structure.lieux.filter((l) => l.niveau === 'site').sort(parOrdre)
+  const sites = d.structure.lieux.filter((l) => l.niveau === 'site' && l.actif).sort(parOrdre)
   const lits = chambresDe(lieu, d)
     .filter((c) => reference.has(c.id))
     .reduce((t, c) => t + c.lits, 0)
 
-  // S'il sert dans un plan, il est seulement retiré de la référence ; sinon effacé.
+  // Il disparaît de la référence ; s'il sert dans un plan, ce plan le garde.
   async function retirer() {
     const ids = new Set(chambresDe(lieu, d).map((c) => c.id))
     const plans = new Set(d.occupations.filter((o) => ids.has(o.chambre_id)).map((o) => o.plan_id)).size
     const ok = await confirmer({
-      titre: `Retirer « ${lieu.nom} » de la référence ?`,
-      message: plans
-        ? `Les nouveaux plans ne l'auront plus, ni ce qu'il contient. Les ${pluriel(plans, 'plan', 'plans')} qui l'utilisent le gardent. Vous pourrez le remettre.`
-        : `Aucun plan ne l'utilise : il sera effacé${ids.size ? `, avec ses ${pluriel(ids.size, 'chambre', 'chambres')}` : ''}.`,
-      libelleOk: 'Retirer',
+      titre: `Supprimer « ${lieu.nom} » de la référence ?`,
+      message: `Il sera supprimé${ids.size ? `, avec ses ${pluriel(ids.size, 'chambre', 'chambres')}` : ''}.${
+        plans ? ` ${plans === 1 ? "Le plan qui l'utilise le garde" : `Les ${plans} plans qui l'utilisent le gardent`}.` : ''
+      }`,
+      libelleOk: 'Supprimer',
     })
     if (ok) faire(() => retirerLieu(lieu.id))
   }
@@ -231,16 +203,14 @@ function ListeChambres({ chambres, d, faire }: { chambres: Chambre[]; d: Donnees
     faire(() => ordonner('chambres', ids))
   }
 
-  // Une chambre qu'un plan utilise est seulement retirée de la référence
-  // (les anciens plans la gardent) ; sinon elle est effacée.
+  // La chambre disparaît de la référence. Si un plan l'utilise, elle reste
+  // en base pour ce plan (actif = false) ; sinon elle est effacée.
   async function retirer(c: Chambre) {
     const plans = new Set(d.occupations.filter((o) => o.chambre_id === c.id).map((o) => o.plan_id)).size
     const ok = await confirmer({
-      titre: `Retirer la chambre ${c.numero} de la référence ?`,
-      message: plans
-        ? `Les nouveaux plans ne l'auront plus. Les ${pluriel(plans, 'plan', 'plans')} qui l'ont déjà la gardent. Vous pourrez la remettre.`
-        : "Aucun plan ne l'utilise : elle sera effacée.",
-      libelleOk: 'Retirer',
+      titre: `Supprimer la chambre ${c.numero} de la référence ?`,
+      message: plans ? `${plans === 1 ? "Le plan qui l'a déjà la garde" : `Les ${plans} plans qui l'ont déjà la gardent`}.` : undefined,
+      libelleOk: 'Supprimer',
     })
     if (!ok) return
     faire(() => (plans ? enregistrerStructure<Chambre>('chambres', { id: c.id, actif: false }) : supprimerStructure('chambres', c.id)))
@@ -249,11 +219,7 @@ function ListeChambres({ chambres, d, faire }: { chambres: Chambre[]; d: Donnees
   return (
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-1.5">
       {chambres.map((c, j) => (
-        <li
-          key={c.id}
-          className={`flex items-center gap-1 rounded-md border px-1.5 py-1 ${c.actif ? 'border-pierre-200 bg-pierre-50' : 'border-dashed border-pierre-300 bg-white text-pierre-400'}`}
-          title={c.actif ? undefined : "Retirée de la référence : les nouveaux plans ne l'ont pas"}
-        >
+        <li key={c.id} className="flex items-center gap-1 rounded-md border border-pierre-200 bg-pierre-50 px-1.5 py-1">
           <ChampTexte
             aria-label={`Numéro de la chambre ${c.numero}`}
             className="w-20 min-w-0 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-medium hover:border-pierre-300 focus:border-foret-600 focus:bg-white focus:outline-none"
@@ -286,19 +252,9 @@ function ListeChambres({ chambres, d, faire }: { chambres: Chambre[]; d: Donnees
             <BoutonIcone libelle="Reculer" desactive={j === chambres.length - 1} onClick={() => deplacer(j, 1)}>
               <IconeChevron className="size-3.5" />
             </BoutonIcone>
-            {c.actif ? (
-              <BoutonIcone libelle={`Retirer la chambre ${c.numero}`} danger onClick={() => retirer(c)}>
-                <IconeCorbeille className="size-3.5" />
-              </BoutonIcone>
-            ) : (
-              <button
-                type="button"
-                className="rounded px-1.5 text-xs font-medium text-foret-700 hover:bg-foret-50"
-                onClick={() => faire(() => enregistrerStructure<Chambre>('chambres', { id: c.id, actif: true }))}
-              >
-                Remettre
-              </button>
-            )}
+            <BoutonIcone libelle={`Supprimer la chambre ${c.numero}`} danger onClick={() => retirer(c)}>
+              <IconeCorbeille className="size-3.5" />
+            </BoutonIcone>
           </span>
         </li>
       ))}
@@ -306,7 +262,7 @@ function ListeChambres({ chambres, d, faire }: { chambres: Chambre[]; d: Donnees
   )
 }
 
-/** Nom modifiable + monter/descendre + retirer. */
+/** Nom modifiable + monter/descendre + supprimer. */
 function Entete<T extends { id: string; nom: string; ordre: number }>({
   table,
   ligne,
@@ -349,7 +305,7 @@ function Entete<T extends { id: string; nom: string; ordre: number }>({
       <BoutonIcone libelle="Descendre" desactive={i === freres.length - 1} onClick={() => deplacer(1)}>
         <IconeChevron className="size-4 rotate-90" />
       </BoutonIcone>
-      <BoutonIcone libelle={`Retirer ${ligne.nom}`} danger onClick={retirer}>
+      <BoutonIcone libelle={`Supprimer ${ligne.nom}`} danger onClick={retirer}>
         <IconeCorbeille className="size-4" />
       </BoutonIcone>
     </div>

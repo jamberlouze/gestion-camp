@@ -154,19 +154,15 @@ export async function supprimerStructure(table: TableStructure, id: string) {
 }
 
 /**
- * Retire un lieu de la référence : s'il sert dans un plan, il est seulement
- * retiré (les anciens plans le gardent) → 'retire' ; sinon il est effacé
- * avec ce qu'il contient → 'efface'.
+ * Supprime un lieu de la référence avec ce qu'il contient : s'il sert dans
+ * un plan, il reste en base pour ce plan seulement (actif = false, plus
+ * jamais montré dans la référence) → 'retire' ; sinon il est effacé →
+ * 'efface'.
  */
 export async function retirerLieu(id: string): Promise<'retire' | 'efface'> {
   const { data, error } = await db().rpc('retirer_lieu', { p_lieu: id })
   if (error) throw error
   return data as 'retire' | 'efface'
-}
-
-/** Remet un lieu dans la référence, avec ce qu'il contient et ses parents. */
-export async function remettreLieu(id: string) {
-  await executer(db().rpc('remettre_lieu', { p_lieu: id }))
 }
 
 /** Renumérote l'ordre selon la liste d'id. */
