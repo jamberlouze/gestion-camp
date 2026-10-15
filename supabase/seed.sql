@@ -382,6 +382,16 @@ select e.id, '2026-10-04', true, '00000000-0000-0000-0000-000000000001', 'Admin 
  where e.surnom in ('Pinson', 'Manitou')
 on conflict do nothing;
 
+-- Export Employeur D : numéros fictifs (essai) pour GBPA+ et Opikawa,
+-- matricules fictifs pour Pinson, Manitou et Marteau ; Aquabounga et les
+-- autres employés restent sans numéro, pour voir ce que l'export bloque.
+update core.entreprises c set numero_employeur_d = v.numero
+  from (values ('GBPA+', '9000001'), ('Opikawa', '9000002')) as v (nom, numero)
+ where c.nom = v.nom and c.numero_employeur_d is null;
+update core.employes e set matricule_employeur_d = v.matricule
+  from (values ('Pinson', '101'), ('Manitou', '102'), ('Marteau', '103')) as v (surnom, matricule)
+ where e.surnom = v.surnom and e.matricule_employeur_d is null;
+
 -- ------------------------------------------------------------
 -- Petite caisse : l'historique vient de la migration (import du Sheets) ;
 -- la poche de Maxime est liée au compte admin de test pour essayer

@@ -22,6 +22,7 @@ import {
   type EmployeFeuille,
   type Entreprise,
 } from './donneesEmployes'
+import { ExportEmployeurD } from './ExportEmployeurD'
 import { Case } from './Feuille'
 import { PastilleStatut } from './Statut'
 import { menu, usePeriode } from './outils'
@@ -117,6 +118,7 @@ export function FeuilleEmployes() {
   const masques = useDossiersAFermer(debut)
   const [afficherMasques, setAfficherMasques] = useState(false)
   const etatsBanque = useEtatsBanqueHeures()
+  const [employeurD, setEmployeurD] = useState(false)
 
   const nomCompagnie =
     compagnie === SANS ? 'Sans compagnie' : (entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null)
@@ -284,11 +286,18 @@ export function FeuilleEmployes() {
             <IconeTableur className="size-4" />
             Exporter
           </button>
+          <button className={ui.boutonSecondaire} onClick={() => setEmployeurD(true)} title="Fichier de saisie de la paie pour Employeur D (Desjardins)">
+            <IconeTableur className="size-4" />
+            Employeur D
+          </button>
           <button className={ui.boutonSecondaire} onClick={() => window.print()}>
             Imprimer
           </button>
         </div>
       </div>
+      {employeurD && (
+        <ExportEmployeurD debut={debut} compagnieDepart={compagnie === SANS ? '' : compagnie} fermer={() => setEmployeurD(false)} />
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
         <select aria-label="Secteur" className={menu} value={secteur} onChange={(e) => choisir('secteur', e.target.value)}>

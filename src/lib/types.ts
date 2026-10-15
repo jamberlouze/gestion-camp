@@ -54,6 +54,8 @@ export interface Employe {
   entreprise_ids: string[]
   actif: boolean
   airtable_id: string | null
+  /** Matricule Employeur D (paie), le même pour toutes ses compagnies ; nettoyé par la base. */
+  matricule_employeur_d: string | null
 }
 
 /** Compagnie du groupe (core.entreprises : Mastertimeline, Achats, Feuilles de temps…). */
@@ -65,6 +67,8 @@ export interface Entreprise {
   couleur: string | null
   ordre: number
   actif: boolean
+  /** Numéro de compagnie Employeur D (paie) ; nettoyé par la base. */
+  numero_employeur_d: string | null
 }
 
 export interface Semaine {

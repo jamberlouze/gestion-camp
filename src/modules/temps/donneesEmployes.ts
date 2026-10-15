@@ -27,6 +27,8 @@ export interface EmployeFeuille {
   secteur: string | null
   entreprise_ids: string[]
   actif: boolean
+  /** Matricule Employeur D (export de la paie), le même pour toutes ses compagnies. */
+  matricule_employeur_d: string | null
 }
 
 /** Compagnie (référentiel commun, core.entreprises). */
@@ -37,6 +39,8 @@ export interface Entreprise {
   couleur: string | null
   ordre: number
   actif: boolean
+  /** Numéro de compagnie Employeur D (export de la paie). */
+  numero_employeur_d: string | null
 }
 
 /**
@@ -84,7 +88,7 @@ export function useEmployesFeuille() {
       const { data, error } = await supabase
         .schema('core')
         .from('employes')
-        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif')
+        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif, matricule_employeur_d')
         .order('surnom')
       if (error) throw error
       return data as EmployeFeuille[]
