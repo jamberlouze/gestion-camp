@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
@@ -6,12 +7,13 @@ import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { usePeriode } from './outils'
-import { nomDe, useAApprouver, useMembres } from './donnees'
-import { nomEmploye, useEmployesFeuille, useEntreprises, useFeuillesPropres } from './donneesEmployes'
+import { nomDe, useChangerFeuille, useFeuillesAApprouver, useMembres, type Action, type FeuilleAApprouver } from './donnees'
+import { nomEmploye, useChangerFeuilleEmploye, useEmployesFeuille, useEntreprises, useFeuillesPropres, type Entreprise } from './donneesEmployes'
 import { FeuilleEmployes } from './Employes'
 import { Feuille } from './Feuille'
 import { FeuilleEmploye } from './FeuilleEmploye'
-import { libellePeriode } from './periodes'
+import { OngletBanques } from './OngletBanques'
+import { formatHeures, libellePaie, libellePeriode } from './periodes'
 import { TableauDeBord } from './TableauDeBord'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -27,7 +29,10 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
  * direction), que toute la direction remplit ; un employé coché « Remplit
  * sa feuille » remplit la sienne (EspaceEmploye) et la soumet à la direction.
  * Onglet À approuver : feuilles soumises (employés pour la direction, plus
- * la direction pour les admins).
+ * la direction pour les admins), approuvées ou renvoyées depuis la liste.
+ * Onglet Banques : les banques de chacun (admins : tout le monde ; direction :
+ * les employés seulement) et l'interrupteur « Heures en banque ».
+ * Périodes numérotées comme Employeur D (PP21…, src/lib/periodesPaie.ts).
  */
 export default function ModuleTemps() {
   const { estAdmin, estDirection, employeTemps } = useAuth()
@@ -36,8 +41,8 @@ export default function ModuleTemps() {
 }
 
 function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
-  const aApprouver = useAApprouver(estAdmin)
-  const nb = (aApprouver.data?.employes.length ?? 0) + (aApprouver.data?.direction.length ?? 0)
+  const aApprouver = useFeuillesAApprouver()
+  const nb = aApprouver.data?.length ?? 0
   // La période choisie suit d'un onglet à l'autre.
   const [params] = useSearchParams()
   const periode = params.get('periode')
@@ -57,6 +62,9 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
           À approuver
           {nb > 0 && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-xs font-semibold text-amber-800">{nb}</span>}
         </NavLink>
+        <NavLink to={`/temps/banques${suffixe}`} className={onglet}>
+          Banques
+        </NavLink>
         {estAdmin && (
           <NavLink to={`/temps/tableau${suffixe}`} className={onglet}>
             Tableau de bord
@@ -68,6 +76,7 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
         <Route index element={<MaFeuille />} />
         <Route path="employes" element={<FeuilleEmployes />} />
         <Route path="approuver" element={<AApprouver estAdmin={estAdmin} />} />
+        <Route path="banques" element={<OngletBanques estAdmin={estAdmin} />} />
         <Route path="employe/:employeId/:entrepriseId" element={<FeuilleDUnEmploye />} />
         <Route path="tableau" element={estAdmin ? <TableauDeBord /> : <Navigate to="/temps" replace />} />
         <Route path="personne/:id" element={estAdmin ? <FeuillePersonne /> : <Navigate to="/temps" replace />} />
@@ -99,12 +108,11 @@ function FeuillePersonne() {
   const [debut, setDebut] = usePeriode()
   const membres = useMembres()
   const personne = membres.data?.find((m) => m.id === id)
+  const [params] = useSearchParams()
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
-        <Link to={`/temps/tableau?periode=${debut}`} className="text-sm text-foret-700 underline">
-          ← Tableau de bord
-        </Link>
+        <Retour depuisApprouver={params.get('retour') === 'approuver'} debut={debut} vers="/temps/tableau" libelle="Tableau de bord" />
         <h2 className="text-lg font-semibold">{membres.data ? nomDe(personne) : '…'}</h2>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -201,15 +209,14 @@ function FeuilleDUnEmploye() {
   const employes = useEmployesFeuille()
   const entreprises = useEntreprises()
   const propres = useFeuillesPropres()
+  const [params] = useSearchParams()
   const employe = employes.data?.find((e) => e.id === employeId)
   const entreprise = entreprises.data?.find((x) => x.id === entrepriseId)
   const erreur = employes.error ?? entreprises.error ?? propres.error
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
-        <Link to={`/temps/employes?periode=${debut}`} className="text-sm text-foret-700 underline">
-          ← Employés
-        </Link>
+        <Retour depuisApprouver={params.get('retour') === 'approuver'} debut={debut} vers="/temps/employes" libelle="Employés" />
         <h2 className="text-lg font-semibold">{employe ? nomEmploye(employe) : '…'}</h2>
         {entreprise && <PuceCompagnie compagnie={entreprise} />}
       </div>
@@ -238,9 +245,42 @@ function FeuilleDUnEmploye() {
   )
 }
 
-/** Feuilles soumises, toutes périodes : employés (toute la direction) et direction (admins). */
+/** Lien de retour : vers À approuver si on vient de là, sinon vers l'onglet d'origine (même période). */
+function Retour({ depuisApprouver, debut, vers, libelle }: { depuisApprouver: boolean; debut: string; vers: string; libelle: string }) {
+  return depuisApprouver ? (
+    <Link to="/temps/approuver" className="text-sm text-foret-700 underline">
+      ← À approuver
+    </Link>
+  ) : (
+    <Link to={`${vers}?periode=${debut}`} className="text-sm text-foret-700 underline">
+      ← {libelle}
+    </Link>
+  )
+}
+
+const quand = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString('fr-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
+
+/** Une ligne de la liste, prête à afficher. */
+interface LigneAApprouver {
+  feuille: FeuilleAApprouver
+  nom: string
+  compagnie: Entreprise | null
+  qui: 'Employé' | 'Direction'
+  lien: string
+}
+
+// Colonnes de largeur fixe (alignées d'une ligne à l'autre) ; sur un écran étroit, la ligne se replie.
+const COL = { periode: 'xl:w-56', heures: 'xl:w-24 xl:text-right', soumise: 'xl:w-32' }
+
+/**
+ * Feuilles soumises, toutes périodes : employés qui remplissent la leur
+ * (toute la direction) et direction (admins seulement, jamais la sienne :
+ * temps.feuilles_a_approuver). Une ligne par feuille : personne, période,
+ * total d'heures, soumission ; on l'ouvre, l'approuve ou la renvoie d'ici.
+ */
 function AApprouver({ estAdmin }: { estAdmin: boolean }) {
-  const aApprouver = useAApprouver(estAdmin)
+  const aApprouver = useFeuillesAApprouver()
   const employes = useEmployesFeuille()
   const entreprises = useEntreprises()
   const membres = useMembres()
@@ -249,68 +289,149 @@ function AApprouver({ estAdmin }: { estAdmin: boolean }) {
   if (!aApprouver.data || !employes.data || !entreprises.data || !membres.data)
     return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const lignes = [
-    ...aApprouver.data.employes.map((f) => {
+  const lignes: LigneAApprouver[] = aApprouver.data.map((f) => {
+    if (f.genre === 'employe') {
       const e = employes.data.find((x) => x.id === f.employe_id)
       return {
-        cle: f.id,
-        debut: f.debut,
+        feuille: f,
         nom: e ? nomEmploye(e) : 'Employé inconnu',
         compagnie: entreprises.data.find((x) => x.id === f.entreprise_id) ?? null,
         qui: 'Employé',
-        lien: `/temps/employe/${f.employe_id}/${f.entreprise_id}?periode=${f.debut}`,
+        lien: `/temps/employe/${f.employe_id}/${f.entreprise_id}?periode=${f.debut}&retour=approuver`,
       }
-    }),
-    ...aApprouver.data.direction.map((f) => ({
-      cle: f.id,
-      debut: f.debut,
+    }
+    return {
+      feuille: f,
       nom: nomDe(membres.data.find((m) => m.id === f.user_id)),
       compagnie: null,
       qui: 'Direction',
-      lien: `/temps/personne/${f.user_id}?periode=${f.debut}`,
-    })),
-  ].sort((a, b) => a.debut.localeCompare(b.debut) || a.nom.localeCompare(b.nom, 'fr'))
+      lien: `/temps/personne/${f.user_id}?periode=${f.debut}&retour=approuver`,
+    }
+  })
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-pierre-600">
         {estAdmin
-          ? 'Feuilles soumises par les employés et par la direction.'
+          ? 'Feuilles soumises par les employés qui remplissent la leur et par la direction.'
           : 'Feuilles soumises par les employés qui remplissent la leur.'}{' '}
-        Ouvrez une feuille pour la corriger, l'approuver ou la renvoyer.
+        Approuvez ou renvoyez d’ici, ou ouvrez la feuille pour la corriger d’abord.
       </p>
       {!lignes.length ? (
         <p className={`${ui.carte} px-4 py-8 text-center text-sm text-pierre-500`}>Aucune feuille à approuver.</p>
       ) : (
-        <div className={`${ui.carte} overflow-x-auto`}>
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-pierre-500">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">Période</th>
-                <th className="px-3 py-2 text-left font-medium">Personne</th>
-                <th className="px-3 py-2 text-left font-medium">Compagnie</th>
-                <th className="px-3 py-2 text-left font-medium">Feuille</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-pierre-100">
-              {lignes.map((l) => (
-                <tr key={l.cle} className="hover:bg-pierre-50">
-                  <td className="px-3 py-2 whitespace-nowrap">{libellePeriode(l.debut)}</td>
-                  <td className="px-3 py-2 font-medium">{l.nom}</td>
-                  <td className="px-3 py-2">{l.compagnie && <PuceCompagnie compagnie={l.compagnie} />}</td>
-                  <td className="px-3 py-2 text-pierre-600">{l.qui}</td>
-                  <td className="px-3 py-2 text-right">
-                    <Link to={l.lien} className="font-medium text-foret-700 underline">
-                      Ouvrir
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={ui.carte}>
+          <div className="hidden gap-x-5 border-b border-pierre-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-pierre-500 xl:flex">
+            <span className="flex-1">Personne</span>
+            <span className={COL.periode}>Période</span>
+            <span className={COL.heures}>Heures</span>
+            <span className={COL.soumise}>Soumise le</span>
+            <span className="w-[18.5rem]" />
+          </div>
+          <ul className="divide-y divide-pierre-100">
+            {lignes.map((l) => (
+              <LigneFeuille key={l.feuille.feuille_id} ligne={l} />
+            ))}
+          </ul>
         </div>
       )}
     </div>
+  )
+}
+
+function LigneFeuille({ ligne }: { ligne: LigneAApprouver }) {
+  const changer = useChangerFeuille()
+  const changerEmploye = useChangerFeuilleEmploye()
+  const [renvoi, setRenvoi] = useState<string | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [enCours, setEnCours] = useState(false)
+  const f = ligne.feuille
+
+  const agir = async (action: Action, texte?: string) => {
+    setErreur(null)
+    setEnCours(true)
+    try {
+      if (f.genre === 'employe')
+        await changerEmploye.mutateAsync({ employeId: f.employe_id!, entrepriseId: f.entreprise_id!, debut: f.debut, action, texte })
+      else await changer.mutateAsync({ userId: f.user_id!, debut: f.debut, action, texte })
+      setRenvoi(null)
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <li className="space-y-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 xl:flex-nowrap">
+        <div className="min-w-40 flex-1">
+          <Link to={ligne.lien} className="font-medium text-pierre-900 underline decoration-pierre-300 hover:text-foret-700">
+            {ligne.nom}
+          </Link>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-pierre-500">
+            {ligne.compagnie && <PuceCompagnie compagnie={ligne.compagnie} court className="px-1.5! py-px!" />}
+            {ligne.qui}
+          </span>
+        </div>
+        <div className={`text-sm whitespace-nowrap ${COL.periode}`}>
+          <span className="font-medium">{libellePeriode(f.debut)}</span>
+          <span className="block text-xs text-pierre-500">{libellePaie(f.debut)}</span>
+        </div>
+        <div className={`text-sm whitespace-nowrap tabular-nums ${COL.heures}`}>
+          <b>{formatHeures(f.heures)} h</b>
+          {f.woofing > 0 && <span className="block text-xs text-pierre-500">+ {formatHeures(f.woofing)} h woofing</span>}
+        </div>
+        <div className={`text-sm whitespace-nowrap text-pierre-600 ${COL.soumise}`}>
+          <span className="xl:hidden">Soumise le </span>
+          {quand(f.soumise_le)}
+        </div>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto xl:w-[18.5rem] xl:flex-nowrap xl:justify-end">
+          <Link to={ligne.lien} className={ui.boutonSecondaire}>
+            Ouvrir
+          </Link>
+          {renvoi == null && (
+            <>
+              <button className={ui.bouton} disabled={enCours} onClick={() => agir('approuver')}>
+                Approuver
+              </button>
+              <button className={ui.boutonSecondaire} disabled={enCours} onClick={() => setRenvoi('')}>
+                Renvoyer…
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {renvoi != null && (
+        <form
+          className="space-y-2 xl:ml-auto xl:max-w-xl"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (renvoi.trim()) agir('renvoyer', renvoi)
+          }}
+        >
+          <label className={ui.etiquette} htmlFor={`renvoi-${f.feuille_id}`}>
+            Pourquoi la renvoyer ?
+          </label>
+          <textarea
+            id={`renvoi-${f.feuille_id}`}
+            autoFocus
+            className={`${ui.champ} min-h-16`}
+            placeholder="Ex. il manque les heures de mardi."
+            value={renvoi}
+            onChange={(e) => setRenvoi(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button type="submit" className={ui.bouton} disabled={enCours || !renvoi.trim()}>
+              Renvoyer
+            </button>
+            <button type="button" className="text-sm text-pierre-500" onClick={() => setRenvoi(null)}>
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
+      {erreur && <p className={ui.erreur}>{erreur}</p>}
+    </li>
   )
 }

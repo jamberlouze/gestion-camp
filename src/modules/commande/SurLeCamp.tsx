@@ -4,6 +4,7 @@
 import { Link } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
 import { dateCourte, ecartJours, heure } from '../calendrier/dates'
 import { useEvenements, useSejours } from '../calendrier/donnees'
 import { nonConfirme, teinteSejour, useEvenementsPlage, useSejoursPlage } from '../calendrier/outils'
@@ -26,6 +27,8 @@ function enLignes(sejours: Sejour[]): Sejour[][] {
  * jours tombent les uns sous les autres.
  */
 export function SurLeCamp({ jours }: { jours: string[] }) {
+  // Calendrier caché (cacheSaufAdmins) : ses données restent lues, sans lien.
+  const lien = useAuth().peutOuvrir('calendrier')
   const debut = jours[0]
   const fin = jours[jours.length - 1]
   const sejours = useSejours()
@@ -42,9 +45,11 @@ export function SurLeCamp({ jours }: { jours: string[] }) {
         <div className="grid bg-pierre-50 text-sm" style={gabarit}>
           <div className="flex items-baseline justify-between gap-2 border-b border-pierre-200 px-3 py-2">
             <h3 className="font-semibold">Sur le camp cette semaine</h3>
-            <Link to={`/calendrier?date=${debut}`} className="text-xs text-foret-700 underline">
-              Calendrier
-            </Link>
+            {lien && (
+              <Link to={`/calendrier?date=${debut}`} className="text-xs text-foret-700 underline">
+                Calendrier
+              </Link>
+            )}
           </div>
           {jours.map((j) => (
             <div key={j} className="border-b border-l border-pierre-200 px-2 py-2 text-xs text-pierre-500">

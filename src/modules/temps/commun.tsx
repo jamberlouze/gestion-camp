@@ -1,6 +1,7 @@
 import { IconeChevron } from '@/lib/icones'
 import { menu, periodeCourante } from './outils'
 import {
+  libellePaie,
   libellePeriode,
   periodePrecedente,
   periodesEntre,
@@ -8,7 +9,10 @@ import {
   PREMIERE_PERIODE,
 } from './periodes'
 
-/** ‹ [période] › — de la première période à un an devant (vacances planifiées). */
+/**
+ * ‹ [PP21 · 4 au 17 oct. 2026] › paie du jeu. 22 oct. — de la première
+ * période à un an devant (vacances planifiées). Numéros comme Employeur D.
+ */
 export function ChoixPeriode({ debut, onChange }: { debut: string; onChange: (d: string) => void }) {
   const courante = periodeCourante()
   let derniere = courante
@@ -37,6 +41,7 @@ export function ChoixPeriode({ debut, onChange }: { debut: string; onChange: (d:
       <button className={bouton} aria-label="Période suivante" onClick={() => onChange(periodeSuivante(debut))}>
         <IconeChevron className="size-4" />
       </button>
+      <span className="text-sm text-pierre-500">{libellePaie(debut)}</span>
       {debut !== courante && (
         <button className="text-sm text-foret-700 underline" onClick={() => onChange(courante)}>
           Période en cours

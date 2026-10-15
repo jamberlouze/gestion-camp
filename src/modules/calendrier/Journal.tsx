@@ -5,7 +5,7 @@ import { ui } from '@/lib/ui'
 import { Chargement } from './commun'
 import { dateCourte, heure } from './dates'
 import { lireJournal, usePersonnel, useSejours } from './donnees'
-import { META_SECTEUR, type EntreeJournal, type Secteur } from './types'
+import { META_SECTEUR, STATUTS_PRESENCE, type EntreeJournal, type Secteur, type StatutPresence } from './types'
 
 const TABLES: Record<string, string> = {
   sejours: 'Séjours',
@@ -59,6 +59,9 @@ const CHAMPS: Record<string, string> = {
   nb_animateurs: 'animateurs requis',
   avec_animation: 'animation',
   avec_repas: 'repas',
+  statut: 'choix',
+  courriel: 'courriel',
+  personne_cuisine_id: 'horaire de cuisine',
 }
 const IGNORES = new Set(['id', 'created_at', 'updated_at', 'updated_by', 'deleted_at', 'synced_at', 'raw', 'airtable_record_id'])
 
@@ -106,7 +109,19 @@ export function Journal() {
       .filter((k) => !IGNORES.has(k) && JSON.stringify(avant[k]) !== JSON.stringify(apres[k]))
       .map((k) => {
         const lisible = (v: unknown) =>
-          k === 'personnel_id' ? (noms.get(String(v)) ?? '?') : k === 'sejour_id' ? (v ? (groupes.get(String(v)) ?? '?') : '∅') : valeurLisible(v)
+          k === 'personnel_id'
+            ? (noms.get(String(v)) ?? '?')
+            : k === 'sejour_id'
+              ? v
+                ? (groupes.get(String(v)) ?? '?')
+                : '∅'
+              : k === 'statut' && typeof v === 'string' && v in STATUTS_PRESENCE
+                ? `${STATUTS_PRESENCE[v as StatutPresence].emoji} ${STATUTS_PRESENCE[v as StatutPresence].libelle}`
+                : k === 'personne_cuisine_id'
+                  ? v
+                    ? 'oui'
+                    : 'non'
+                  : valeurLisible(v)
         return `${CHAMPS[k] ?? k} : ${lisible(avant[k])} → ${lisible(apres[k])}`
       })
   }

@@ -24,6 +24,12 @@ interface EtatAuth {
   employeTemps: string | null
   peutLire: (module: ModuleId) => boolean
   peutEcrire: (module: ModuleId) => boolean
+  /**
+   * Peut ouvrir le module (menu, accueil, adresse) : `peutLire`, sauf un
+   * module caché à tous sauf les admins (`cacheSaufAdmins`, modules.ts). Ses
+   * données, elles, suivent `peutLire` (d'autres écrans les lisent).
+   */
+  peutOuvrir: (module: ModuleId) => boolean
   deconnexion: () => Promise<void>
 }
 
@@ -92,6 +98,7 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     employeTemps,
     peutLire: (m) => niveau(m) !== null,
     peutEcrire: (m) => niveau(m) === 'ecriture',
+    peutOuvrir: (m) => niveau(m) !== null && (estAdmin || !MODULES.find((d) => d.id === m)?.cacheSaufAdmins),
     deconnexion: async () => {
       await viderCache()
       await supabase.auth.signOut({ scope: 'local' })

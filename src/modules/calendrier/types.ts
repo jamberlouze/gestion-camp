@@ -29,7 +29,23 @@ export interface Personne extends Trace {
   actif: boolean
   ordre: number
   notes: string | null
+  /** Courriel du compte (minuscules) : « + » choisit d'office la personne connectée. */
+  courriel: string | null
+  /** Aussi à l'horaire de cuisine (commande.personnel) : Cuisine › Horaire lit ses journées. */
+  personne_cuisine_id: string | null
 }
+
+/**
+ * Choix rapide de l'horaire de la direction (null = présent, sans
+ * précision). Un congé n'est pas une journée travaillée.
+ */
+export const STATUTS_PRESENCE = {
+  terrain: { libelle: 'Terrain', emoji: '🏕️' },
+  teletravail: { libelle: 'Télétravail', emoji: '💻' },
+  conge: { libelle: 'Congé', emoji: '🌴' },
+} as const
+export type StatutPresence = keyof typeof STATUTS_PRESENCE
+export const LISTE_STATUTS = Object.keys(STATUTS_PRESENCE) as StatutPresence[]
 
 /** Séjour de groupe : copie en lecture seule d'Airtable. */
 export interface Sejour {
@@ -85,6 +101,7 @@ export interface PresenceSimple extends Trace {
   date: string
   secteur: 'direction' | 'terrain'
   description: string | null
+  statut: StatutPresence | null
 }
 
 /** Ligne de la vue commune calendrier.v_presence_jour. */
@@ -94,6 +111,8 @@ export interface PresenceJour {
   date: string
   secteur: Secteur
   description: string
+  /** Direction et terrain seulement (jamais « conge » : un congé n'y est pas). */
+  statut: StatutPresence | null
 }
 
 export interface Synchro {

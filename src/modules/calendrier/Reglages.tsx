@@ -6,8 +6,9 @@ import { IconePlus } from '@/lib/icones'
 import { messageErreur } from '@/lib/donnees'
 import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
 import { Chargement, Section } from './commun'
-import { appelerWorker, useEcriture, useEnregistrer, usePersonnel, useRetirer, useSynchros } from './donnees'
+import { appelerWorker, useEcriture, useEnregistrer, usePersonnel, usePersonnelCuisine, useRetirer, useSynchros } from './donnees'
 import { META_SECTEUR, SECTEURS_PERSONNEL, type Personne, type SecteurPersonnel } from './types'
 
 export function Reglages() {
@@ -21,7 +22,12 @@ export function Reglages() {
 
 function ListePersonnel() {
   const ecriture = useEcriture()
+  const { peutLire } = useAuth()
   const personnel = usePersonnel()
+  // « Aussi à l'horaire de cuisine » : l'équipe de Cuisine, pour qui la lit.
+  const cuisine = usePersonnelCuisine(peutLire('commande'))
+  const lieesAilleurs = (p: Personne) =>
+    new Set((personnel.data ?? []).filter((x) => x.id !== p.id && x.personne_cuisine_id).map((x) => x.personne_cuisine_id))
   const enregistrer = useEnregistrer<Personne>('personnel')
   const retirer = useRetirer('personnel')
   const [ajout, setAjout] = useState(false)
@@ -50,6 +56,11 @@ function ListePersonnel() {
     >
       <p className="mb-3 text-sm text-pierre-500">
         Direction et terrain. L'équipe de cuisine se gère dans Cuisine › Équipe et réglages, les animateurs dans Animation : ils apparaissent d'eux-mêmes dans le calendrier.
+      </p>
+      <p className="mb-3 text-sm text-pierre-500">
+        <b className="font-medium text-pierre-700">Courriel</b> : celui du compte de la personne ; « + » de la rangée Direction la choisit d'office.{' '}
+        <b className="font-medium text-pierre-700">Aussi à l'horaire de cuisine</b> : une personne de la direction qui travaille en cuisine (ex. Frédérique) se
+        saisit seulement ici ; Cuisine › Horaire lit ses journées et elle n'est plus en double dans la rangée Cuisine.
       </p>
       {ajout && (
         <div className="mb-3">
@@ -98,6 +109,36 @@ function ListePersonnel() {
                   </option>
                 ))}
               </select>
+              {(p.secteur_principal === 'direction' || p.courriel) && (
+                <ChampTexte
+                  type="email"
+                  aria-label={`Courriel du compte de ${p.nom}`}
+                  placeholder="Courriel du compte"
+                  className={`${ui.champ} w-56! py-1.5`}
+                  valeur={p.courriel ?? ''}
+                  disabled={!ecriture}
+                  enregistrer={(v) => enregistrer.mutate({ id: p.id, courriel: v.toLowerCase() || null })}
+                />
+              )}
+              {p.secteur_principal === 'direction' && (cuisine.data || p.personne_cuisine_id) && (
+                <select
+                  aria-label={`Horaire de cuisine de ${p.nom}`}
+                  className={`${ui.champ} w-auto! py-1.5`}
+                  value={p.personne_cuisine_id ?? ''}
+                  disabled={!ecriture || !cuisine.data}
+                  onChange={(e) => enregistrer.mutate({ id: p.id, personne_cuisine_id: e.target.value || null })}
+                >
+                  <option value="">Pas à l'horaire de cuisine</option>
+                  {(cuisine.data ?? [])
+                    .filter((c) => (c.actif && !lieesAilleurs(p).has(c.id)) || c.id === p.personne_cuisine_id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        Aussi à l'horaire de cuisine : {c.nom}
+                      </option>
+                    ))}
+                  {p.personne_cuisine_id && !cuisine.data && <option value={p.personne_cuisine_id}>Aussi à l'horaire de cuisine</option>}
+                </select>
+              )}
               <label className="flex items-center gap-1.5 text-sm text-pierre-600">
                 <input type="checkbox" className="size-4 accent-foret-700" checked={p.actif} disabled={!ecriture} onChange={(e) => enregistrer.mutate({ id: p.id, actif: e.target.checked })} />
                 Actif

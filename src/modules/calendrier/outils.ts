@@ -71,3 +71,18 @@ export function teinteSejour(s: Sejour): string {
 
 /** Réservation pas encore confirmée : bordure pointillée et mention de l'état. */
 export const nonConfirme = (s: Sejour) => !!s.etat && s.etat !== 'Confirmée'
+
+const sansAccents = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
+
+/**
+ * Rangée Cuisine du Calendrier (demande de Maxime) : gestionnaires, puis
+ * leads, puis help, puis les autres. La fonction (Cuisine › Équipe) arrive
+ * dans la description de v_presence_jour ; elle n'est pas affichée.
+ */
+export function rangFonctionCuisine(fonction: string | null | undefined): number {
+  const f = sansAccents(fonction ?? '')
+  if (f.startsWith('gestionnaire')) return 0
+  if (f.startsWith('lead')) return 1
+  if (f.startsWith('help')) return 2
+  return 3
+}

@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
+import { dateCourtePaie, dateVersementPaie, debutPeriodePaie, finPeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { nonConfirme, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
-import { useEcriture, useEvenements, usePersonnel, usePresence, usePresenceJour, usePresencesSimples, useSejours } from './donnees'
+import { useEcriture, useEvenements, useMoi, usePersonnel, usePresence, usePresenceJour, usePresencesLot, usePresencesSimples, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
+import { RangeeDirection, type Annulable, type Ecrire } from './HoraireDirection'
 import { META_SECTEUR, TYPES_EVENEMENT, type Evenement, type Personne, type PresenceJour, type PresenceSimple, type Sejour, type Secteur } from './types'
 
 const SANS_SECTION = 'Section à préciser'
@@ -18,19 +20,25 @@ type Mode = 'semaine' | 'mois' | 'periode'
 const MAX_JOURS = 62
 
 /**
- * Calendrier : semaine, mois ou période libre (dates exactes, pour couvrir un
- * groupe qui chevauche deux semaines ou deux mois). Une colonne par jour,
- * une rangée par section du bâtiment.
+ * Calendrier : semaine, mois ou période de paie (14 jours, du dimanche au
+ * samedi, avec son numéro PP : src/lib/periodesPaie.ts). Un clic sur un
+ * groupe cadre une période libre sur ses jours exacts (?du=…&au=…). Une
+ * colonne par jour, une rangée par section du bâtiment.
  */
 export function Vue() {
   const [date, choisir] = useDateChoisie()
   const [params, setParams] = useSearchParams()
   const mode: Mode = params.get('vue') === 'mois' ? 'mois' : params.get('vue') === 'periode' ? 'periode' : 'semaine'
-  // Période libre : ?du=…&au=… (sinon la semaine de la date choisie).
-  const du = estIso(params.get('du')) ? params.get('du')! : lundiDe(date)
+  // Période libre (un séjour cadré) : ?du=…&au=… ; sinon la période de paie de la date choisie.
+  const libre = mode === 'periode' && estIso(params.get('du'))
+  const du = libre ? params.get('du')! : lundiDe(date)
   const auBrut = estIso(params.get('au')) ? params.get('au')! : ajouterJours(du, 6)
   const au = auBrut < du ? du : ecartJours(du, auBrut) >= MAX_JOURS ? ajouterJours(du, MAX_JOURS - 1) : auBrut
-  const jours = useMemo(() => (mode === 'mois' ? grilleMois(date) : mode === 'periode' ? joursEntre(du, au) : semaine(date)), [mode, date, du, au])
+  const paie = debutPeriodePaie(date)
+  const jours = useMemo(
+    () => (mode === 'mois' ? grilleMois(date) : mode === 'periode' ? (libre ? joursEntre(du, au) : joursEntre(paie, finPeriodePaie(paie))) : semaine(date)),
+    [mode, date, du, au, libre, paie],
+  )
   const debut = jours[0]
   const fin = jours[jours.length - 1]
 
@@ -48,12 +56,28 @@ export function Vue() {
   const personnel = usePersonnel()
   const simples = usePresencesSimples(debut, fin)
   const cocher = usePresence(debut, fin)
+  // Direction : choix rapide (un ou plusieurs jours), annulable.
+  const moi = useMoi(personnel.data)
+  const lot = usePresencesLot(debut, fin)
+  const [annulable, setAnnulable] = useState<Annulable | null>(null)
+  const ecrire: Ecrire = (lignes, a) => {
+    lot.mutate(lignes)
+    setAnnulable(a)
+  }
+  useEffect(() => {
+    if (!annulable) return
+    const minuterie = setTimeout(() => setAnnulable(null), 20000)
+    return () => clearTimeout(minuterie)
+  }, [annulable])
   // Fiche d'événement : un existant (cliqué ce jour-là) ou un nouveau à cette date.
   const [fiche, setFiche] = useState<{ evenement?: Evenement; date: string } | null>(null)
   const ecriture = useEcriture()
   const nouveau = (jour: string) => setFiche({ date: jour })
 
-  /** Change le mode ; la période libre reprend les jours affichés. */
+  /**
+   * Change le mode. Période sans `periode` : la période de paie de la date
+   * choisie ; avec : une période libre (jours exacts d'un séjour).
+   */
   const changerMode = (v: Mode, periode?: { du: string; au: string }) =>
     setParams(
       (p) => {
@@ -62,12 +86,15 @@ export function Vue() {
         n.delete('du')
         n.delete('au')
         if (v !== 'semaine') n.set('vue', v)
-        if (v === 'periode') {
-          const cible = periode ?? (mode === 'mois' ? { du: premierDuMois(date), au: dernierDuMois(date) } : { du: debut, au: fin })
-          n.set('du', cible.du)
-          n.set('au', cible.au)
+        if (v === 'periode' && periode) {
+          n.set('du', periode.du)
+          n.set('au', periode.au)
         }
-        if (v !== 'periode' && mode === 'periode') n.set('date', du)
+        // Quitter une période libre : on garde son premier jour.
+        if (libre && !periode) {
+          if (du === aujourdhui()) n.delete('date')
+          else n.set('date', du)
+        }
         return n
       },
       { replace: true },
@@ -80,10 +107,11 @@ export function Vue() {
       {(['semaine', 'mois', 'periode'] as const).map((v) => (
         <button
           key={v}
-          className={`rounded-md px-3 py-1 ${v === mode ? 'bg-foret-700 text-white' : 'text-pierre-700 hover:bg-pierre-50'}`}
+          // Période libre (un séjour cadré) : aucun bouton allumé, « Période de paie » y ramène.
+          className={`rounded-md px-3 py-1 ${v === mode && !libre ? 'bg-foret-700 text-white' : 'text-pierre-700 hover:bg-pierre-50'}`}
           onClick={() => changerMode(v)}
         >
-          {v === 'semaine' ? 'Semaine' : v === 'mois' ? 'Mois' : 'Période'}
+          {v === 'semaine' ? 'Semaine' : v === 'mois' ? 'Mois' : 'Période de paie'}
         </button>
       ))}
     </div>
@@ -92,7 +120,7 @@ export function Vue() {
   const droite = (
     <>
       {ecriture && (
-        <button className={ui.boutonSecondaire} onClick={() => nouveau(mode === 'periode' ? du : date)}>
+        <button className={ui.boutonSecondaire} onClick={() => nouveau(libre ? du : date)}>
           <IconePlus /> Événement
         </button>
       )}
@@ -106,15 +134,31 @@ export function Vue() {
 
   return (
     <div>
-      {mode === 'periode' ? (
-        <NavPeriode du={du} au={au} changer={(d, a) => changerMode('periode', { du: d, au: a })} droite={droite} />
+      {libre ? (
+        <NavPeriode
+          du={du}
+          au={au}
+          changer={(d, a) => changerMode('periode', { du: d, au: a })}
+          droite={droite}
+        />
       ) : (
         <NavDate
-          titre={mode === 'mois' ? titreMois(date) : titreSemaine(date)}
+          titre={
+            mode === 'mois' ? (
+              titreMois(date)
+            ) : mode === 'periode' ? (
+              <>
+                {libellePeriodePaie(paie, { annee: true })}
+                <span className="ml-2 text-sm font-normal text-pierre-500">paie le {dateCourtePaie(dateVersementPaie(paie))}</span>
+              </>
+            ) : (
+              titreSemaine(date)
+            )
+          }
           date={date}
           choisir={choisir}
-          precedent={mode === 'mois' ? ajouterMois(date, -1) : ajouterJours(date, -7)}
-          suivant={mode === 'mois' ? ajouterMois(date, 1) : ajouterJours(date, 7)}
+          precedent={mode === 'mois' ? ajouterMois(date, -1) : ajouterJours(date, mode === 'periode' ? -14 : -7)}
+          suivant={mode === 'mois' ? ajouterMois(date, 1) : ajouterJours(date, mode === 'periode' ? 14 : 7)}
           droite={droite}
         />
       )}
@@ -132,6 +176,8 @@ export function Vue() {
           personnel={personnel.data ?? []}
           simples={simples.data ?? []}
           cocher={cocher.mutate}
+          moi={moi}
+          ecrire={ecrire}
           ouvrir={ouvrir}
           nouveau={nouveau}
           cadrer={cadrer}
@@ -150,9 +196,30 @@ export function Vue() {
         </span>
       </div>
       <p className="mt-1 text-xs text-pierre-500">
-        Cliquez sur un groupe pour afficher exactement ses jours (vue Période).
-        {mode === 'periode' && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
+        Cliquez sur un groupe pour afficher exactement ses jours.
+        {mode !== 'mois' && ecriture && " Direction : « + » ou glissez sur plusieurs jours (souris ou doigt) pour les remplir d'un coup."}
+        {libre && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
+      {annulable && (
+        <div
+          role="status"
+          className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-3 rounded-2xl border border-pierre-200 bg-white px-4 py-2 shadow-lg lg:left-(--largeur-menu) print:hidden"
+        >
+          <span className="text-sm">{annulable.texte}</span>
+          <button
+            className="text-sm font-medium text-foret-700 underline"
+            onClick={() => {
+              lot.mutate(annulable.avant)
+              setAnnulable(null)
+            }}
+          >
+            Annuler
+          </button>
+          <button aria-label="Fermer" className="px-1 text-pierre-500" onClick={() => setAnnulable(null)}>
+            ✕
+          </button>
+        </div>
+      )}
       {fiche && (
         <FicheEvenement
           evenement={fiche.evenement}
@@ -165,11 +232,18 @@ export function Vue() {
   )
 }
 
-const premierDuMois = (iso: string) => `${iso.slice(0, 7)}-01`
-const dernierDuMois = (iso: string) => ajouterJours(ajouterMois(premierDuMois(iso), 1), -1)
-
-/** En-tête de la période libre : ← → décalent de toute sa longueur ; Du / Au exacts. */
-function NavPeriode({ du, au, changer, droite }: { du: string; au: string; changer: (du: string, au: string) => void; droite: React.ReactNode }) {
+/** En-tête de la période libre (un séjour cadré) : ← → décalent de toute sa longueur ; Du / Au exacts. */
+function NavPeriode({
+  du,
+  au,
+  changer,
+  droite,
+}: {
+  du: string
+  au: string
+  changer: (du: string, au: string) => void
+  droite: React.ReactNode
+}) {
   const n = ecartJours(du, au) + 1
   const annee = depuisIso(au).getFullYear()
   return (
@@ -232,19 +306,23 @@ function LienJour({ jour, children, className = '' }: { jour: string; children: 
 }
 
 /** Qui travaille ce jour-là dans un secteur lu ailleurs (cuisine, animation). */
-function NomsSecteur({ liste }: { liste: PresenceJour[] }) {
+function NomsSecteur({ liste, sansDescription }: { liste: PresenceJour[]; sansDescription?: boolean }) {
   if (!liste.length) return null
   return (
     <ul className="space-y-0.5 text-xs leading-4">
       {liste.map((p, i) => (
         <li key={`${p.personnel_id}|${i}`}>
           <span className="font-medium">{p.nom}</span>
-          {p.description && <span className="text-pierre-500"> · {p.description}</span>}
+          {p.description && !sansDescription && <span className="text-pierre-500"> · {p.description}</span>}
         </li>
       ))}
     </ul>
   )
 }
+
+/** Cuisine : gestionnaires, leads, help, puis les autres (rôles cachés). */
+const ordreCuisine = (liste: PresenceJour[]) =>
+  [...liste].sort((a, b) => rangFonctionCuisine(a.description) - rangFonctionCuisine(b.description) || a.nom.localeCompare(b.nom, 'fr'))
 
 function PuceEvenement({ ev, jour, ouvrir }: { ev: Evenement; jour: string; ouvrir: (e: Evenement, d: string) => void }) {
   const ecriture = useEcriture()
@@ -286,6 +364,8 @@ function GrilleJours({
   personnel,
   simples,
   cocher,
+  moi,
+  ecrire,
   ouvrir,
   nouveau,
   cadrer,
@@ -297,6 +377,8 @@ function GrilleJours({
   personnel: Personne[]
   simples: PresenceSimple[]
   cocher: React.ComponentProps<typeof CellulePresence>['cocher']
+  moi: Personne | null
+  ecrire: Ecrire
   ouvrir: (e: Evenement, d: string) => void
   nouveau: (jour: string) => void
   cadrer: (s: Sejour) => void
@@ -392,31 +474,43 @@ function GrilleJours({
             </div>
           ))}
         </div>
-        {/* Qui travaille : direction et terrain se cochent ici ; cuisine et animation viennent de leurs modules. */}
-        {(['direction', 'terrain'] as const).map((secteur) => (
-          <div key={secteur} className={colonnes} style={gabarit}>
-            <EnteteSecteur secteur={secteur} />
-            {jours.map((j) => (
-              <CellulePresence
-                key={j}
-                jour={j}
-                secteur={secteur}
-                presences={simples.filter((p) => p.date === j && p.secteur === secteur)}
-                personnel={personnel}
-                ecriture={ecriture}
-                cocher={cocher}
-              />
-            ))}
-          </div>
-        ))}
+        {/* Qui travaille : direction (choix rapide, plusieurs jours en glissant) et terrain se saisissent ici ; cuisine et animation viennent de leurs modules. */}
+        <RangeeDirection
+          jours={jours}
+          entete={<EnteteSecteur secteur="direction" />}
+          colonnes={colonnes}
+          gabarit={gabarit}
+          personnel={personnel}
+          presences={simples.filter((p) => p.secteur === 'direction')}
+          ecriture={ecriture}
+          moi={moi}
+          ecrire={ecrire}
+        />
+        <div className={colonnes} style={gabarit}>
+          <EnteteSecteur secteur="terrain" />
+          {jours.map((j) => (
+            <CellulePresence
+              key={j}
+              jour={j}
+              secteur="terrain"
+              presences={simples.filter((p) => p.date === j && p.secteur === 'terrain')}
+              personnel={personnel}
+              ecriture={ecriture}
+              cocher={cocher}
+            />
+          ))}
+        </div>
         {(['cuisine', 'animation'] as const).map((secteur) => (
           <div key={secteur} className={colonnes} style={gabarit}>
             <EnteteSecteur secteur={secteur} source={secteur === 'cuisine' ? '/cuisine/horaire' : '/horaire'} />
-            {jours.map((j) => (
-              <div key={j} className="border-b border-l border-pierre-200 p-1.5">
-                <NomsSecteur liste={(presenceParJour.get(j) ?? []).filter((p) => p.secteur === secteur)} />
-              </div>
-            ))}
+            {jours.map((j) => {
+              const liste = (presenceParJour.get(j) ?? []).filter((p) => p.secteur === secteur)
+              return (
+                <div key={j} className="border-b border-l border-pierre-200 p-1.5">
+                  {secteur === 'cuisine' ? <NomsSecteur liste={ordreCuisine(liste)} sansDescription /> : <NomsSecteur liste={liste} />}
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>

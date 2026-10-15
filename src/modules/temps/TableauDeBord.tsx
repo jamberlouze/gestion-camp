@@ -7,7 +7,22 @@ import { ChoixPeriode } from './commun'
 import { menu, usePeriode } from './outils'
 import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre, type Statut } from './donnees'
 import { PastilleStatut } from './Statut'
-import { ajouterJours, dateCourte, finPeriode, formatHeures, libellePeriode, periodesEntre, PREMIERE_PERIODE, TYPES, type TypeHeures } from './periodes'
+import {
+  ajouterJours,
+  codeAnneePeriode,
+  codePeriodePaie,
+  dateCourte,
+  datePaie,
+  finPeriode,
+  formatHeures,
+  libellePaie,
+  libellePeriode,
+  numeroPeriodePaie,
+  periodesEntre,
+  PREMIERE_PERIODE,
+  TYPES,
+  type TypeHeures,
+} from './periodes'
 
 interface Ligne {
   membre: Membre
@@ -19,7 +34,7 @@ interface Ligne {
   statut: Statut
 }
 
-const vide = (): Record<TypeHeures, number> => ({ regulieres: 0, vacances: 0, maladie: 0 })
+const vide = (): Record<TypeHeures, number> => ({ regulieres: 0, vacances: 0, maladie: 0, banque: 0 })
 
 /**
  * Administrateurs seulement : toutes les feuilles d'une période (heures
@@ -54,7 +69,7 @@ export function TableauDeBord() {
         sem1: reg.filter((h) => h.jour < milieu).reduce((s, h) => s + h.heures, 0),
         sem2: reg.filter((h) => h.jour >= milieu).reduce((s, h) => s + h.heures, 0),
         types,
-        total: types.regulieres + types.vacances + types.maladie,
+        total: types.regulieres + types.vacances + types.maladie + types.banque,
         note: feuilles.data.find((f) => f.user_id === m.id)?.note ?? null,
         statut: feuilles.data.find((f) => f.user_id === m.id)?.statut ?? 'ouverte',
       }
@@ -88,13 +103,15 @@ export function TableauDeBord() {
         <Tuile titre="Feuilles remplies" valeur={donnees ? `${remplies} / ${nb}` : '…'} />
         <Tuile titre="Heures de la période" valeur={donnees ? `${formatHeures(somme(donnees.periode, (l) => l.total))} h` : '…'} />
         <Tuile
-          titre="Vacances et maladie"
-          valeur={donnees ? `${formatHeures(somme(donnees.periode, (l) => l.types.vacances + l.types.maladie))} h` : '…'}
+          titre="Vacances, maladie et banque"
+          valeur={donnees ? `${formatHeures(somme(donnees.periode, (l) => l.types.vacances + l.types.maladie + l.types.banque))} h` : '…'}
         />
       </div>
 
       <section className={ui.carte}>
-        <h2 className="border-b border-pierre-100 px-3 py-2 text-sm font-semibold">Période du {libellePeriode(debut)}</h2>
+        <h2 className="border-b border-pierre-100 px-3 py-2 text-sm font-semibold">
+          {libellePeriode(debut)} <span className="font-normal text-pierre-500">· {libellePaie(debut)}</span>
+        </h2>
         {!donnees ? (
           <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
         ) : (
@@ -174,7 +191,7 @@ export function TableauDeBord() {
           <select aria-label="Cumul depuis la période" className={menu} value={du} onChange={(e) => setCumulDu(e.target.value)}>
             {periodesEntre(PREMIERE_PERIODE, debut).map((d) => (
               <option key={d} value={d}>
-                {dateCourte(d)}
+                {codePeriodePaie(d)} · {dateCourte(d)}
               </option>
             ))}
           </select>
@@ -230,8 +247,25 @@ function Tuile({ titre, valeur }: { titre: string; valeur: string }) {
 function exporter(debut: string, lignes: Ligne[]) {
   const nombre = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',')
   const champ = (t: string) => (/[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t)
-  const entete = ['Personne', 'Courriel', 'Début', 'Fin', 'Régulières sem. 1', 'Régulières sem. 2', 'Régulières', 'Vacances', 'Maladie', 'Total', 'Note']
+  const entete = [
+    'Période de paie',
+    'Date de paie',
+    'Personne',
+    'Courriel',
+    'Début',
+    'Fin',
+    'Régulières sem. 1',
+    'Régulières sem. 2',
+    'Régulières',
+    'Vacances',
+    'Maladie',
+    'Prises en banque',
+    'Total',
+    'Note',
+  ]
   const rangees = lignes.map((l) => [
+    codeAnneePeriode(debut),
+    datePaie(debut),
     champ(nomDe(l.membre)),
     champ(l.membre.courriel),
     debut,
@@ -241,13 +275,15 @@ function exporter(debut: string, lignes: Ligne[]) {
     nombre(l.types.regulieres),
     nombre(l.types.vacances),
     nombre(l.types.maladie),
+    nombre(l.types.banque),
     nombre(l.total),
     champ(l.note ?? ''),
   ])
   const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')
   lien.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  lien.download = `Feuilles de temps ${debut} au ${finPeriode(debut)}.csv`
+  const { numero, annee } = numeroPeriodePaie(debut)
+  lien.download = `Feuilles de temps PP${numero}-${annee} (${debut} au ${finPeriode(debut)}).csv`
   lien.click()
   setTimeout(() => URL.revokeObjectURL(lien.href), 1000)
 }

@@ -41,9 +41,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // SheetJS ne sert qu'à l'import/export Excel de l'Horaire (ordinateur) :
-        // inutile de le télécharger d'avance sur les téléphones.
-        globIgnores: ['**/xlsx-*.js'],
+        // SheetJS ne sert qu'à l'import/export Excel de l'Horaire (ordinateur) et
+        // Three.js qu'à la maquette 3D de l'accueil : inutile de les télécharger
+        // d'avance sur les téléphones.
+        globIgnores: ['**/xlsx-*.js', '**/MaquetteCamp-*.js'],
         // Toute page de l'app s'ouvre hors ligne (le routeur React prend le relais).
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/_ping/, /^\/api\//],

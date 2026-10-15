@@ -37,7 +37,7 @@ export interface Idee {
 export const CIBLES: { id: string; nom: string; icone: string }[] = [
   ...MODULES.filter(estEntree).map((m) => ({ id: m.id as string, nom: m.nom, icone: m.icone })),
   { id: 'referentiel', nom: 'Référentiel', icone: '📇' },
-  { id: 'utilisateurs', nom: 'Utilisateurs et accès', icone: '👥' },
+  { id: 'utilisateurs', nom: 'Utilisateurs et accès', icone: '🔑' },
   { id: 'poke', nom: 'Poke', icone: '👉' },
   { id: 'cadre', nom: 'Menu, accueil et connexion', icone: '🧭' },
 ]

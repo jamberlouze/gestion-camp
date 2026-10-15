@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useParams } from 'react-router'
 import { Compagnies, Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
 import { Utilisateurs } from '@/core/Utilisateurs'
 import { configManquante } from '@/lib/supabase'
-import { Accueil } from '@/shell/Accueil'
+import { Accueil } from '@/shell/accueil/Accueil'
 import { useAuth } from '@/shell/auth'
 import { Chargement, GardeAdmin, GardeDirection, GardeModule } from '@/shell/Gardes'
 import { Layout } from '@/shell/Layout'
@@ -90,8 +90,8 @@ export default function App() {
  * qui n'a que Travaux) y va directement ; les autres voient l'accueil.
  */
 function Depart() {
-  const { estDirection, peutLire } = useAuth()
-  const siens = MODULES.filter((m) => estEntree(m) && peutLire(m.id))
+  const { estDirection, peutOuvrir } = useAuth()
+  const siens = MODULES.filter((m) => estEntree(m) && peutOuvrir(m.id))
   return !estDirection && siens.length === 1 ? <Navigate to={siens[0].chemin} replace /> : <Accueil />
 }
 

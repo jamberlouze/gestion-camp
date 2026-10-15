@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Role } from '@/lib/types'
-import { finPeriode, type TypeHeures } from './periodes'
+import type { AjustementBanque, Banque, EtatBanqueHeures, ReglageMaladie } from './banques'
+import { finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
 
 // Module en ligne seulement : mutations networkMode « always », erreurs dans
 // le bandeau du module (racine S). Pas de temps réel (voir la migration) ni
@@ -190,6 +191,7 @@ export function useSaisir(userId: string, debut: string) {
     onSettled: () => {
       client.invalidateQueries({ queryKey: cle })
       client.invalidateQueries({ queryKey: [S, 'plage-heures'] })
+      client.invalidateQueries({ queryKey: [S, 'banques'] })
     },
   })
 }
@@ -253,7 +255,26 @@ export function useJournal(colonne: 'feuille_id' | 'feuille_employe_id', id: str
   })
 }
 
-/** Feuilles soumises qui attendent une approbation (la base ne renvoie que celles qu'on peut voir). */
+/** Une feuille soumise qui attend une approbation (temps.feuilles_a_approuver). */
+export interface FeuilleAApprouver {
+  genre: 'employe' | 'direction'
+  feuille_id: string
+  /** Direction : le compte ; employé : null. */
+  user_id: string | null
+  employe_id: string | null
+  entreprise_id: string | null
+  debut: string
+  /** Heures payées (tout sauf le woofing). */
+  heures: number
+  woofing: number
+  soumise_le: string | null
+}
+
+/**
+ * Feuilles soumises qui attendent une approbation (la base ne renvoie que
+ * celles qu'on peut voir). Forme d'origine, gardée pour l'accueil (« À faire
+ * pour moi ») ; l'onglet À approuver lit useFeuillesAApprouver.
+ */
 export function useAApprouver(avecDirection: boolean) {
   return useQuery({
     queryKey: [S, 'a-approuver', avecDirection],
@@ -271,6 +292,261 @@ export function useAApprouver(avecDirection: boolean) {
         employes: employes.data as { id: string; employe_id: string; entreprise_id: string; debut: string; statut: Statut }[],
         direction: direction.data as Feuille[],
       }
+    },
+  })
+}
+
+/**
+ * Feuilles soumises que la personne connectée peut approuver, avec leur
+ * total d'heures et leur date de soumission : celles des employés pour
+ * toute la direction, plus celles de la direction pour un admin (jamais la
+ * sienne). La base décide (temps.feuilles_a_approuver, avec les politiques
+ * des tables).
+ */
+export function useFeuillesAApprouver() {
+  return useQuery({
+    queryKey: [S, 'a-approuver', 'liste'],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await db().rpc('feuilles_a_approuver')
+      if (error) throw error
+      return (data as FeuilleAApprouver[])
+        .map((f) => ({ ...f, heures: Number(f.heures), woofing: Number(f.woofing) }))
+        .sort((a, b) => a.debut.localeCompare(b.debut) || (a.soumise_le ?? '').localeCompare(b.soumise_le ?? ''))
+    },
+  })
+}
+
+// ------------------------------------------------------------------
+// Banques (maladie, heures accumulées) : calculées par banques.ts
+// ------------------------------------------------------------------
+
+/** À qui sont les banques : un compte (direction, admin) ou un employé du référentiel. */
+export type Titulaire = { userId: string; employeId?: undefined } | { employeId: string; userId?: undefined }
+
+const cleTitulaire = (t: Titulaire) => (t.userId ? `u:${t.userId}` : `e:${t.employeId}`)
+const colonne = (t: Titulaire) => (t.userId ? (['user_id', t.userId] as const) : (['employe_id', t.employeId!] as const))
+
+export interface ReglageMaladieLigne extends ReglageMaladie {
+  id: string
+  auteur_nom: string
+  updated_at: string
+}
+
+/** Un changement de l'interrupteur « Heures en banque » (temps.banque_heures_etats). */
+export interface EtatBanqueHeuresLigne extends EtatBanqueHeures {
+  id: string
+  user_id: string | null
+  employe_id: string | null
+  auteur_nom: string
+  created_at: string
+}
+
+/** Défaut de l'interrupteur : activé pour un compte (direction, admin), désactivé pour un employé. */
+export const heuresActivesParDefaut = (t: Titulaire) => !!t.userId
+
+/** Heures d'une banque : avec la compagnie pour un employé (une feuille par compagnie). */
+export interface HeureBanqueLigne {
+  jour: string
+  type: string
+  heures: number
+  entreprise_id: string | null
+}
+
+/**
+ * Tout ce qu'il faut pour les banques d'une personne jusqu'au jour `au` :
+ * ses heures depuis la première période (toutes compagnies pour un employé),
+ * ses ajustements et ses jours de maladie par année. La base ne renvoie que
+ * ce qu'on peut voir (temps.peut_voir_banque, mêmes règles que la feuille).
+ */
+export function useDonneesBanques(t: Titulaire, au: string) {
+  return useQuery({
+    queryKey: [S, 'banques', cleTitulaire(t), au],
+    queryFn: async () => {
+      const [col, id] = colonne(t)
+      const heures = t.userId
+        ? toutLire<HeureBanqueLigne>((a, b) =>
+            db().from('heures').select('jour, type, heures').eq('user_id', t.userId).gte('jour', PREMIERE_PERIODE).lte('jour', au).order('jour').order('id').range(a, b),
+          )
+        : toutLire<HeureBanqueLigne>((a, b) =>
+            db()
+              .from('heures_employes')
+              .select('jour, type, heures, entreprise_id')
+              .eq('employe_id', t.employeId!)
+              .gte('jour', PREMIERE_PERIODE)
+              .lte('jour', au)
+              .order('jour')
+              .order('id')
+              .range(a, b),
+          )
+      const [h, ajustements, maladie, etats] = await Promise.all([
+        heures,
+        db().from('ajustements_banques').select('id, banque, jour, heures, note, auteur_nom, created_at').eq(col, id).order('jour').order('created_at'),
+        db().from('jours_maladie').select('id, annee, jours, auteur_nom, updated_at').eq(col, id).order('annee'),
+        db().from('banque_heures_etats').select('*').eq(col, id).order('depuis'),
+      ])
+      if (ajustements.error) throw ajustements.error
+      if (maladie.error) throw maladie.error
+      if (etats.error) throw etats.error
+      return {
+        heures: h.map((x) => ({ ...x, heures: Number(x.heures), entreprise_id: x.entreprise_id ?? null })),
+        ajustements: (ajustements.data as AjustementBanque[]).map((a) => ({ ...a, heures: Number(a.heures) })),
+        reglagesMaladie: (maladie.data as ReglageMaladieLigne[]).map((r) => ({ ...r, jours: Number(r.jours) })),
+        etatsHeures: etats.data as EtatBanqueHeuresLigne[],
+      }
+    },
+  })
+}
+
+/** Heures d'une personne pour une semaine (temps.semaines_banques). */
+export interface SemaineBanque {
+  user_id: string | null
+  employe_id: string | null
+  semaine: string
+  regulieres: number
+  maladie: number
+  banque: number
+}
+
+/**
+ * Onglet Banques : tout ce que la personne connectée peut voir, jusqu'au
+ * jour `au` — heures par personne et par semaine, ajustements, jours de
+ * maladie et interrupteurs. La base filtre (admin : tout ; direction : les
+ * employés et elle-même, jamais un autre membre de la direction).
+ */
+export function useBanquesTous(au: string) {
+  return useQuery({
+    queryKey: [S, 'banques', 'tous', au],
+    queryFn: async () => {
+      const [semaines, ajustements, maladie, etats] = await Promise.all([
+        toutLire<SemaineBanque>((a, b) => db().rpc('semaines_banques', { p_au: au }).order('semaine').order('user_id').order('employe_id').range(a, b)),
+        toutLire<AjustementBanque & { user_id: string | null; employe_id: string | null }>((a, b) =>
+          db().from('ajustements_banques').select('id, user_id, employe_id, banque, jour, heures, note, auteur_nom, created_at').order('jour').order('id').range(a, b),
+        ),
+        toutLire<ReglageMaladieLigne & { user_id: string | null; employe_id: string | null }>((a, b) =>
+          db().from('jours_maladie').select('id, user_id, employe_id, annee, jours, auteur_nom, updated_at').order('annee').order('id').range(a, b),
+        ),
+        toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
+      ])
+      return {
+        semaines: semaines.map((x) => ({ ...x, regulieres: Number(x.regulieres), maladie: Number(x.maladie), banque: Number(x.banque) })),
+        ajustements: ajustements.map((x) => ({ ...x, heures: Number(x.heures) })),
+        reglagesMaladie: maladie.map((x) => ({ ...x, jours: Number(x.jours) })),
+        etatsHeures: etats,
+      }
+    },
+  })
+}
+
+/** Interrupteurs « Heures en banque » des employés (grille Employés : ligne « Prises en banque »). */
+export function useEtatsBanqueHeures() {
+  return useQuery({
+    queryKey: [S, 'banques', 'etats'],
+    queryFn: () => toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
+  })
+}
+
+const titulaireRpc = (t: Titulaire) => ({ p_user: t.userId ?? null, p_employe: t.employeId ?? null })
+
+/**
+ * Active ou désactive la mise en banque des heures au-delà de 40 h, à partir
+ * de la période en cours (admins seulement : temps.regler_banque_heures).
+ * Rend le début de la période où le changement prend effet.
+ */
+export function useReglerBanqueHeures() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'banque-heures'],
+    networkMode: 'always',
+    mutationFn: async (p: { titulaire: Titulaire; active: boolean }) => {
+      const { data, error } = await db().rpc('regler_banque_heures', { ...titulaireRpc(p.titulaire), p_active: p.active })
+      if (error) throw error
+      return data as string
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
+  })
+}
+
+/** Ajustement manuel d'une banque (+ ou − des heures), avec une note. Jamais effacé. */
+export function useAjusterBanque() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'banque'],
+    networkMode: 'always',
+    mutationFn: async (p: { titulaire: Titulaire; banque: Banque; jour: string; heures: number; note: string }) => {
+      const { error } = await db().rpc('ajuster_banque', {
+        ...titulaireRpc(p.titulaire),
+        p_banque: p.banque,
+        p_jour: p.jour,
+        p_heures: p.heures,
+        p_note: p.note,
+      })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
+  })
+}
+
+/** Jours de maladie par année, à partir d'une année (les années d'avant ne changent pas). */
+export function useReglerJoursMaladie() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'jours-maladie'],
+    networkMode: 'always',
+    mutationFn: async (p: { titulaire: Titulaire; annee: number; jours: number }) => {
+      const { error } = await db().rpc('regler_jours_maladie', { ...titulaireRpc(p.titulaire), p_annee: p.annee, p_jours: p.jours })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
+  })
+}
+
+// ------------------------------------------------------------------
+// Dossiers à fermer (relevé d'emploi)
+// ------------------------------------------------------------------
+
+/** Employé actif sans heures depuis 2 périodes (ses dernières heures : `derniere_periode`). */
+export interface DossierAFermer {
+  employe_id: string
+  surnom: string
+  nom_complet: string | null
+  derniere_periode: string
+}
+
+/**
+ * Alertes « Produire le relevé d'emploi » : employés actifs qui ont eu des
+ * heures, mais aucune pendant les 2 périodes avant `periode` (null = la
+ * période en cours ; une période à venir compte comme la période en cours).
+ * Vide pour qui n'entre pas dans le module (temps.a_acces). Réutilisable
+ * ailleurs (ex. l'accueil) : `actif = false` n'interroge pas la base.
+ */
+export function useDossiersAFermer(periode: string | null = null, actif = true) {
+  return useQuery({
+    queryKey: [S, 'dossiers-a-fermer', periode],
+    enabled: actif,
+    refetchInterval: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await db().rpc('dossiers_a_fermer', { p_periode: periode })
+      if (error) throw error
+      return data as DossierAFermer[]
+    },
+  })
+}
+
+/** Relevé d'emploi produit : la fiche de l'employé est désactivée dans le référentiel (temps.fermer_dossier). */
+export function useFermerDossier() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'fermer-dossier'],
+    networkMode: 'always',
+    mutationFn: async (employeId: string) => {
+      const { error } = await db().rpc('fermer_dossier', { p_employe: employeId })
+      if (error) throw error
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: [S, 'dossiers-a-fermer'] })
+      client.invalidateQueries({ queryKey: [S, 'employes'] })
+      client.invalidateQueries({ queryKey: ['core', 'employes'] })
     },
   })
 }

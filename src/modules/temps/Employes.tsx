@@ -1,12 +1,14 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeTableur } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { ChoixPeriode } from './commun'
-import type { Statut } from './donnees'
+import { etatBanqueHeures } from './banques'
+import { useDossiersAFermer, useEtatsBanqueHeures, useFermerDossier, type DossierAFermer, type Statut } from './donnees'
 import {
   nomEmploye,
   useEmployesFeuille,
@@ -23,7 +25,20 @@ import {
 import { Case } from './Feuille'
 import { PastilleStatut } from './Statut'
 import { menu, usePeriode } from './outils'
-import { aujourdhui, depuisIso, finPeriode, formatHeures, jourCourt, joursPeriode, JOURS_COURTS, libellePeriode } from './periodes'
+import {
+  aujourdhui,
+  codeAnneePeriode,
+  datePaie,
+  depuisIso,
+  finPeriode,
+  formatHeures,
+  jourCourt,
+  joursPeriode,
+  JOURS_COURTS,
+  libellePaie,
+  libellePeriode,
+  numeroPeriodePaie,
+} from './periodes'
 
 /** Filtres « secteur » et « compagnie » : '' = tous, SANS = sans secteur ou sans compagnie. */
 const SANS = '-'
@@ -38,9 +53,18 @@ interface Ligne {
   sem1: number
   sem2: number
   total: number
+  /** Heures de maladie et prises en banque (employé qui remplit sa feuille), payées à part. */
+  maladie: number
+  banque: number
+  /** Heures prises en banque, par jour (ligne « Prises en banque » d'un employé sans compte). */
+  banqueParJour: Map<string, number>
+  /** Mise en banque des heures activée pour cette période (interrupteur de l'onglet Banques). */
+  banqueActive: boolean
   note: string
   /** État de sa feuille s'il remplit la sienne (ou si elle a un état) ; null sinon. */
   statut: Statut | null
+  /** Aucune heure depuis 2 périodes : retiré de la saisie (réaffichable), relevé d'emploi à produire. */
+  aFermer: boolean
 }
 
 const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'Soumise', approuvee: 'Approuvée' }
@@ -55,6 +79,12 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
  * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
+ * Ses heures de maladie et prises en banque paraissent sous son nom et dans
+ * l'export. Employé sans compte dont la mise en banque est activée (onglet
+ * Banques) : une ligne « Prises en banque » sous la sienne, saisie ici.
+ * Dossier à fermer : un employé sans heures depuis 2 périodes disparaît de
+ * la saisie (« Afficher les dossiers masqués ») et la direction voit
+ * « Produire le relevé d'emploi » ; confirmer désactive sa fiche.
  */
 export function FeuilleEmployes() {
   const [debut, setDebut] = usePeriode()
@@ -83,6 +113,10 @@ export function FeuilleEmployes() {
   const saisir = useSaisirEmploye(debut)
   const noter = useNoterEmploye(debut)
   const [erreurNote, setErreurNote] = useState<string | null>(null)
+  // Dossiers à fermer pour la période affichée (masqués) et pour la période en cours (alertes).
+  const masques = useDossiersAFermer(debut)
+  const [afficherMasques, setAfficherMasques] = useState(false)
+  const etatsBanque = useEtatsBanqueHeures()
 
   const nomCompagnie =
     compagnie === SANS ? 'Sans compagnie' : (entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null)
@@ -100,12 +134,32 @@ export function FeuilleEmployes() {
   // assignée (s'il est actif) ou qui a des heures ou une note ; un employé actif sans compagnie a une
   // ligne vide pour le signaler.
   const toutes = useMemo(() => {
-    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data || !propres.data) return null
+    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data || !propres.data || !masques.data || !etatsBanque.data)
+      return null
+    const banqueActive = (employeId: string) =>
+      etatBanqueHeures(
+        etatsBanque.data.filter((x) => x.employe_id === employeId),
+        false,
+        debut,
+      ).active
+    const banqueParLigne = new Map<string, Map<string, number>>()
     const statutDe = new Map(feuilles.data.map((f) => [`${f.employe_id}|${f.entreprise_id}`, f.statut]))
     const parCompagnie = new Map(entreprises.data.map((x) => [x.id, x]))
+    const aFermer = new Set(masques.data.map((d) => d.employe_id))
     const parLigne = new Map<string, Map<string, number>>()
+    const autres = new Map<string, { maladie: number; banque: number }>()
     for (const h of heures.data) {
       const cle = `${h.employe_id}|${h.entreprise_id}`
+      if (h.type === 'maladie' || h.type === 'banque') {
+        const a = autres.get(cle) ?? { maladie: 0, banque: 0 }
+        a[h.type] += h.heures
+        autres.set(cle, a)
+        if (h.type === 'banque') {
+          if (!banqueParLigne.has(cle)) banqueParLigne.set(cle, new Map())
+          banqueParLigne.get(cle)!.set(h.jour, h.heures)
+        }
+        continue
+      }
       if (!parLigne.has(cle)) parLigne.set(cle, new Map())
       parLigne.get(cle)!.set(h.jour, h.heures)
     }
@@ -121,7 +175,22 @@ export function FeuilleEmployes() {
       const compagnies = [...ids].map((id) => parCompagnie.get(id)).filter((x): x is Entreprise => !!x)
       if (!compagnies.length) {
         if (e.actif)
-          resultat.push({ cle: `${e.id}|`, employe: e, entreprise: null, parJour: new Map(), sem1: 0, sem2: 0, total: 0, note: '', statut: null })
+          resultat.push({
+            cle: `${e.id}|`,
+            employe: e,
+            entreprise: null,
+            parJour: new Map(),
+            sem1: 0,
+            sem2: 0,
+            total: 0,
+            maladie: 0,
+            banque: 0,
+            banqueParJour: new Map(),
+            banqueActive: false,
+            note: '',
+            statut: null,
+            aFermer: aFermer.has(e.id),
+          })
         continue
       }
       for (const x of compagnies) {
@@ -134,7 +203,23 @@ export function FeuilleEmployes() {
           else sem2 += h
         }
         const statut = statutDe.get(cle) ?? (propres.data.has(e.id) ? 'ouverte' : null)
-        resultat.push({ cle, employe: e, entreprise: x, parJour, sem1, sem2, total: sem1 + sem2, note: noteDe.get(cle) ?? '', statut })
+        const a = autres.get(cle) ?? { maladie: 0, banque: 0 }
+        resultat.push({
+          cle,
+          employe: e,
+          entreprise: x,
+          parJour,
+          sem1,
+          sem2,
+          total: sem1 + sem2,
+          maladie: a.maladie,
+          banque: a.banque,
+          banqueParJour: banqueParLigne.get(cle) ?? new Map(),
+          banqueActive: banqueActive(e.id),
+          note: noteDe.get(cle) ?? '',
+          statut,
+          aFermer: aFermer.has(e.id),
+        })
       }
     }
     return resultat.sort(
@@ -146,9 +231,10 @@ export function FeuilleEmployes() {
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise?.nom ?? '').localeCompare(b.entreprise?.nom ?? '', 'fr'),
     )
-  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, milieu])
+  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, masques.data, etatsBanque.data, milieu, debut])
 
-  const erreur = employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error ?? propres.error
+  const erreur =
+    employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error ?? propres.error ?? masques.error ?? etatsBanque.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!toutes) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
@@ -157,11 +243,15 @@ export function FeuilleEmployes() {
   const compagnies = (entreprises.data ?? []).filter((x) => toutes.some((l) => l.entreprise?.id === x.id))
   const aSansCompagnie = toutes.some((l) => !l.entreprise)
   const mots = recherche.trim().toLocaleLowerCase('fr')
+  // Dossier à fermer sans rien dans la période : retiré de la saisie, sauf si on demande à le voir.
+  const masquee = (l: Ligne) => l.aFermer && !l.total && !l.maladie && !l.banque && !l.note
+  const nbMasques = new Set(toutes.filter(masquee).map((l) => l.employe.id)).size
   const lignes = toutes.filter((l) => {
     const e = l.employe
+    if (!afficherMasques && masquee(l)) return false
     if (secteur === SANS ? e.secteur : secteur && e.secteur !== secteur) return false
     if (compagnie === SANS ? l.entreprise : compagnie && l.entreprise?.id !== compagnie) return false
-    if (avecHeures && !l.total && !l.note) return false
+    if (avecHeures && !l.total && !l.maladie && !l.banque && !l.note) return false
     if (mots && ![e.surnom, e.nom_complet, e.poste].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
@@ -236,6 +326,12 @@ export function FeuilleEmployes() {
           <input type="checkbox" checked={avecHeures} onChange={(e) => setAvecHeures(e.target.checked)} />
           Seulement ceux qui ont des heures
         </label>
+        {(nbMasques > 0 || afficherMasques) && (
+          <label className="flex items-center gap-2 text-sm text-pierre-700">
+            <input type="checkbox" checked={afficherMasques} onChange={(e) => setAfficherMasques(e.target.checked)} />
+            Afficher les dossiers masqués ({nbMasques})
+          </label>
+        )}
         <Link to="/referentiel/employes" className="text-sm text-foret-700 underline">
           Gérer les employés (secteurs, compagnies)
         </Link>
@@ -243,8 +339,12 @@ export function FeuilleEmployes() {
 
       <div className="hidden print:block">
         <h2 className="text-lg font-semibold">Heures des employés{sousTitre}</h2>
-        <p className="text-sm">Période du {libellePeriode(debut)}</p>
+        <p className="text-sm">
+          {libellePeriode(debut)} · {libellePaie(debut)}
+        </p>
       </div>
+
+      <AlertesReleve />
 
       {erreurNote && <p className={ui.erreur}>{erreurNote}</p>}
 
@@ -297,8 +397,18 @@ export function FeuilleEmployes() {
                     // Remplie par l'employé : on corrige dans sa feuille. Approuvée : gelée.
                     const parSaFeuille = !!propres.data?.has(e.id) || (l.statut != null && l.statut !== 'ouverte')
                     const saFeuille = l.entreprise ? `/temps/employe/${e.id}/${l.entreprise.id}?periode=${debut}` : null
+                    // Employé sans compte dont la mise en banque est activée : ses heures prises en banque se saisissent ici.
+                    const ligneBanque = !!l.entreprise && !parSaFeuille && (l.banqueActive || l.banque > 0)
+                    const nb = ligneBanque ? numero++ : -1
+                    let semBanque1 = 0
+                    let semBanque2 = 0
+                    for (const [jour, h] of l.banqueParJour) {
+                      if (jour < milieu) semBanque1 += h
+                      else semBanque2 += h
+                    }
                     return (
-                      <tr key={l.cle} className="break-inside-avoid">
+                      <Fragment key={l.cle}>
+                      <tr className="break-inside-avoid">
                         <th className="sticky left-0 z-10 min-w-40 bg-white px-3 py-1 text-left font-normal whitespace-nowrap">
                           <span className="flex items-center gap-1.5 font-medium text-pierre-900">
                             {parSaFeuille && saFeuille ? (
@@ -310,6 +420,11 @@ export function FeuilleEmployes() {
                             )}
                             {!e.actif && <span className="text-xs font-normal text-pierre-400">(inactif)</span>}
                             {parSaFeuille && l.statut && <PastilleStatut statut={l.statut} className="px-1.5! py-px!" />}
+                            {l.aFermer && (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-px text-xs font-medium text-amber-800" title="Aucune heure depuis 2 périodes">
+                                Dossier à fermer
+                              </span>
+                            )}
                           </span>
                           <span className="flex items-center gap-1.5 text-xs text-pierre-500">
                             {l.entreprise ? (
@@ -321,6 +436,13 @@ export function FeuilleEmployes() {
                             )}
                             {details}
                           </span>
+                          {(l.maladie > 0 || (l.banque > 0 && !ligneBanque)) && (
+                            <span className="block text-xs font-medium text-amber-800">
+                              {[l.maladie ? `Maladie ${formatHeures(l.maladie)} h` : null, l.banque && !ligneBanque ? `Prises en banque ${formatHeures(l.banque)} h` : null]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          )}
                         </th>
                         {jours.map((j, i) => (
                           <td key={j} className={`px-0.5 py-1 text-center ${fond(j)} ${coupure(i)}`}>
@@ -355,6 +477,36 @@ export function FeuilleEmployes() {
                           )}
                         </td>
                       </tr>
+                      {ligneBanque && (
+                        <tr className="break-inside-avoid bg-amber-50/40">
+                          <th className="sticky left-0 z-10 bg-amber-50 px-3 py-1 pl-6 text-left text-xs font-medium whitespace-nowrap text-amber-900">
+                            ↳ Prises en banque
+                            {!l.banqueActive && <span className="block font-normal text-amber-800/80">mise en banque désactivée</span>}
+                          </th>
+                          {jours.map((j, i) => (
+                            <td key={j} className={`px-0.5 py-1 text-center ${coupure(i)}`}>
+                              <Case
+                                etroite
+                                modifiable
+                                ligne={nb}
+                                colonne={i}
+                                valeur={l.banqueParJour.get(j) ?? 0}
+                                libelle={`Prises en banque, ${nomEmploye(e)}, ${l.entreprise!.nom}, ${jourCourt(j)}`}
+                                onSaisir={(h) =>
+                                  saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise!.id, jour: j, heures: h, type: 'banque' })
+                                }
+                              />
+                            </td>
+                          ))}
+                          <td className="border-l-2 border-pierre-300 px-2 py-1 text-right text-xs tabular-nums text-amber-900">
+                            {formatHeures(semBanque1)}
+                          </td>
+                          <td className="px-2 py-1 text-right text-xs tabular-nums text-amber-900">{formatHeures(semBanque2)}</td>
+                          <td className="px-2 py-1 text-right text-xs font-semibold tabular-nums text-amber-900">{formatHeures(l.banque)}</td>
+                          <td className="px-3 py-1 text-xs text-amber-900/80">payées, déduites de sa banque</td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </Fragment>
@@ -391,7 +543,9 @@ export function FeuilleEmployes() {
         Feuille partagée : toute la direction voit et modifie ces heures. Saisie au quart d’heure (7,5 ou 7h30) ; Entrée
         passe à la ligne suivante, Tab au jour suivant. Un employé qui travaille pour deux compagnies a une ligne pour chacune.
         Un employé avec un état (En cours, Soumise, Approuvée) remplit sa propre feuille : ses heures régulières
-        s’affichent ici, et on les corrige dans sa feuille (clic sur son nom).
+        s’affichent ici (maladie et heures prises en banque sous son nom), et on les corrige dans sa feuille (clic sur son
+        nom). Un employé sans compte dont la mise en banque est activée (onglet Banques) a une ligne « Prises en banque »
+        sous la sienne. Un employé sans heures depuis 2 périodes est retiré de la saisie (dossier à fermer).
       </p>
     </div>
   )
@@ -435,8 +589,27 @@ function CaseNote({ valeur, libelle, onEnregistrer }: { valeur: string; libelle:
 function exporter(debut: string, jours: string[], lignes: Ligne[]) {
   const nombre = (n: number) => (n ? String(Math.round(n * 100) / 100).replace('.', ',') : '')
   const champ = (t: string | null) => (t && /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : (t ?? ''))
-  const entete = ['Employé', 'Nom de camp', 'Compagnie', 'Secteur', 'Poste', ...jours, 'Semaine 1', 'Semaine 2', 'Total', 'Note', 'État']
+  const entete = [
+    'Période de paie',
+    'Date de paie',
+    'Employé',
+    'Nom de camp',
+    'Compagnie',
+    'Secteur',
+    'Poste',
+    ...jours,
+    'Semaine 1',
+    'Semaine 2',
+    'Total',
+    'Maladie',
+    'Prises en banque',
+    'Note',
+    'État',
+  ]
+  const pp = codeAnneePeriode(debut)
   const rangees = lignes.map((l) => [
+    pp,
+    datePaie(debut),
     champ(l.employe.nom_complet ?? l.employe.surnom),
     champ(l.employe.surnom),
     champ(l.entreprise?.nom ?? null),
@@ -446,13 +619,68 @@ function exporter(debut: string, jours: string[], lignes: Ligne[]) {
     nombre(l.sem1) || '0',
     nombre(l.sem2) || '0',
     nombre(l.total) || '0',
+    nombre(l.maladie),
+    nombre(l.banque),
     champ(l.note),
     l.statut ? LIBELLES_ETAT[l.statut] : '',
   ])
   const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')
   lien.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  lien.download = `Heures des employés ${debut} au ${finPeriode(debut)}.csv`
+  const { numero, annee } = numeroPeriodePaie(debut)
+  lien.download = `Heures des employés PP${numero}-${annee} (${debut} au ${finPeriode(debut)}).csv`
   lien.click()
   setTimeout(() => URL.revokeObjectURL(lien.href), 1000)
+}
+
+/**
+ * « Produire le relevé d'emploi » (période en cours) : employés sans heures
+ * depuis 2 périodes. Confirmer = fiche désactivée (temps.fermer_dossier),
+ * jamais sans confirmation.
+ */
+function AlertesReleve() {
+  const alertes = useDossiersAFermer()
+  const fermer = useFermerDossier()
+  const [erreur, setErreur] = useState<string | null>(null)
+  if (!alertes.data?.length) return null
+
+  const confirmerFermeture = async (d: DossierAFermer) => {
+    const nom = d.nom_complet || d.surnom
+    if (
+      !(await confirmer({
+        titre: `Relevé d’emploi produit pour ${nom} ?`,
+        message:
+          'Sa fiche sera désactivée dans le référentiel (on peut la réactiver dans Référentiel › Employés). Ses heures restent.',
+        libelleOk: 'Désactiver la fiche',
+        danger: false,
+      }))
+    )
+      return
+    setErreur(null)
+    fermer.mutate(d.employe_id, { onError: (e) => setErreur(messageErreur(e)) })
+  }
+
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 print:hidden">
+      <h2 className="font-semibold text-amber-900">Produire le relevé d’emploi</h2>
+      <p className="text-sm text-amber-900/80">
+        Aucune heure depuis 2 périodes de paie : produisez le relevé d’emploi dans Employeur D, puis confirmez pour désactiver la
+        fiche.
+      </p>
+      <ul className="mt-2 divide-y divide-amber-200/70">
+        {alertes.data.map((d) => (
+          <li key={d.employe_id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5 text-sm">
+            <span>
+              <b className="text-pierre-900">{d.nom_complet || d.surnom}</b>
+              <span className="text-pierre-600"> · dernières heures : {libellePeriode(d.derniere_periode)}</span>
+            </span>
+            <button className={ui.boutonSecondaire} disabled={fermer.isPending} onClick={() => confirmerFermeture(d)}>
+              Relevé produit : désactiver la fiche
+            </button>
+          </li>
+        ))}
+      </ul>
+      {erreur && <p className={`${ui.erreur} mt-2`}>{erreur}</p>}
+    </section>
+  )
 }

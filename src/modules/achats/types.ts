@@ -18,6 +18,8 @@ export interface Achat {
   entreprise_id: string | null
   fournisseur_id: string | null
   note: string | null
+  /** Commander au plus tard ce jour-là (AAAA-MM-JJ) ; null = pas de date. */
+  date_cible: string | null
   created_at: string
 }
 
@@ -25,6 +27,7 @@ export interface Achat {
 export interface Entreprise {
   id: string
   nom: string
+  abreviation: string | null
   couleur: string | null
   ordre: number
   actif: boolean
