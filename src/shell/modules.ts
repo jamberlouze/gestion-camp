@@ -123,6 +123,14 @@ export const MODULES: DefinitionModule[] = [
     famille: 'batiment',
   },
   {
+    id: 'batiments',
+    nom: 'Bâtiments',
+    description: 'Disjoncteurs et valves d’eau de chaque bâtiment',
+    icone: '🏘️',
+    chemin: '/batiments',
+    famille: 'batiment',
+  },
+  {
     id: 'inventaire',
     nom: 'Inventaire',
     description: "Équipement du camp et comptage de chaque saison",
