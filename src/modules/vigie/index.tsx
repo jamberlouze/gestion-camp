@@ -2,10 +2,11 @@ import { NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { Activites } from './Activites'
 import { AValider } from './AValider'
-import { useAValider, useCamps } from './donnees'
+import { useAValider, useCamps, useProgrammes } from './donnees'
 import { FicheActivite } from './FicheActivite'
 import { FicheCamp } from './FicheCamp'
 import { Journal } from './Journal'
+import { ListeProgrammes } from './Programmes'
 import { Reglages } from './Reglages'
 import { TableauDeBord } from './TableauDeBord'
 
@@ -17,7 +18,11 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 export default function ModuleVigie() {
   const aValider = useAValider()
   const camps = useCamps()
+  const programmes = useProgrammes()
   const nb = (aValider.data?.length ?? 0) + (camps.data ?? []).filter((c) => c.statut_inclusion === 'propose').length
+  // Types de séjour proposés par Claude, pas encore confirmés (camps exclus mis à part).
+  const exclus = new Set((camps.data ?? []).filter((c) => c.statut_inclusion === 'exclu').map((c) => c.id))
+  const nbAVerifier = (programmes.data ?? []).filter((p) => p.actif && p.type_a_verifier && !exclus.has(p.camp_id)).length
   return (
     <>
       <h1 className="text-2xl font-semibold">Vigie des camps compétiteurs</h1>
@@ -29,6 +34,14 @@ export default function ModuleVigie() {
         <NavLink to="/vigie/a-valider" className={onglet}>
           À valider
           {nb > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-xs tabular-nums text-amber-900">{nb}</span>}
+        </NavLink>
+        <NavLink to="/vigie/programmes" className={onglet}>
+          Programmes
+          {nbAVerifier > 0 && (
+            <span className="rounded-full bg-amber-100 px-1.5 text-xs tabular-nums text-amber-900" title="Types de séjour à vérifier">
+              {nbAVerifier}
+            </span>
+          )}
         </NavLink>
         <NavLink to="/vigie/activites" className={onglet}>
           Activités
@@ -45,6 +58,7 @@ export default function ModuleVigie() {
         <Route index element={<TableauDeBord />} />
         <Route path="a-valider" element={<AValider />} />
         <Route path="camps/:id" element={<FicheCamp />} />
+        <Route path="programmes" element={<ListeProgrammes />} />
         <Route path="activites" element={<Activites />} />
         <Route path="activites/:id" element={<FicheActivite />} />
         <Route path="journal" element={<Journal />} />

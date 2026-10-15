@@ -8,7 +8,17 @@ import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType } from './commun'
 import { useDecider, useEnregistrer, useEntreprises, useNotes, useSubventions } from './donnees'
-import { CATEGORIES, cleProgramme, correspond, dateCourte, joursAvant, montantsPotentiels, trierAValider, TYPES } from './outils'
+import {
+  CATEGORIES,
+  cleProgramme,
+  correspond,
+  dateCourte,
+  joursAvant,
+  montantsPotentiels,
+  prochainTrimestre,
+  trierAValider,
+  TYPES,
+} from './outils'
 import type { CategorieRejet, Entreprise, Subvention, TypeSubvention } from './types'
 
 type FiltreStatut = 'tous' | 'nouveau' | 'a_valider'
@@ -98,7 +108,7 @@ export function Validation() {
             ? `Aucune subvention à valider ne correspond à « ${recherche.trim()} ».`
             : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à valider correspond${liste.length > 1 ? 'ent' : ''} à « ${recherche.trim()} ».`
           : liste.length === 0
-          ? 'Rien à valider. La prochaine recherche a lieu lundi matin ; vous pouvez aussi en lancer une dans l’onglet Recherches.'
+          ? `Rien à valider. La prochaine recherche automatique a lieu le ${dateCourte(prochainTrimestre().date)} ; vous pouvez aussi en lancer une dans l’onglet Recherches.`
           : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à regarder — salariales d’abord, puis date limite la plus proche.`}
       </p>
 
@@ -277,8 +287,8 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
   return (
     <Dialogue titre="Retenir cette subvention" fermer={fermer}>
       <p className="mb-4 text-sm text-pierre-600">
-        « {g.program_name} » passe <b>en cours</b> : la demande est à préparer. Cette décision aide aussi Claude à mieux cibler
-        les prochaines recherches.
+        « {g.program_name} » passe <b>en cours</b> : la demande est à préparer, et ses dates d’ouverture et de fermeture vont dans
+        l’agenda « Subventions ». Cette décision aide aussi Claude à mieux cibler les prochaines recherches.
       </p>
       <label className={ui.etiquette} htmlFor="demandeur">
         Entreprise qui dépose la demande

@@ -73,6 +73,17 @@ function adresseWeb(v) {
   }
 }
 
+/** Montants min et max (dans l'ordre), période financée (dans l'ordre). */
+function montantsEtPeriode(brut) {
+  let min = montant(brut.potential_amount_min)
+  let max = montant(brut.potential_amount_max)
+  if (min != null && max != null && min > max) [min, max] = [max, min]
+  let debut = dateIso(brut.funded_start)
+  let fin = dateIso(brut.funded_end)
+  if (debut && fin && fin < debut) [debut, fin] = [fin, debut]
+  return { potential_amount_min: min, potential_amount_max: max, funded_start: debut, funded_end: fin }
+}
+
 /** Un élément de la réponse → { ok, valeur } ou { ok: false, raison }. */
 export function validerProgramme(brut) {
   if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return { ok: false, raison: 'élément qui n’est pas un objet' }
@@ -80,9 +91,7 @@ export function validerProgramme(brut) {
   if (!nom) return { ok: false, raison: 'nom de programme manquant' }
   const url = adresseWeb(brut.source_url)
   if (!url) return { ok: false, raison: `adresse web manquante ou invalide (${nom})` }
-  let min = montant(brut.potential_amount_min)
-  let max = montant(brut.potential_amount_max)
-  if (min != null && max != null && min > max) [min, max] = [max, min]
+  const { potential_amount_min, potential_amount_max, funded_start, funded_end } = montantsEtPeriode(brut)
   return {
     ok: true,
     valeur: {
@@ -91,14 +100,88 @@ export function validerProgramme(brut) {
       description: texteOuNull(brut.description, 4000),
       source_url: url,
       grant_type: typeSubvention(brut.grant_type),
-      potential_amount_min: min,
-      potential_amount_max: max,
+      potential_amount_min,
+      potential_amount_max,
       open_date: dateIso(brut.open_date),
       deadline_date: dateIso(brut.deadline_date),
+      funded_start,
+      funded_end,
+      eligibility_criteria: texteOuNull(brut.eligibility_criteria, 4000),
       relevance_justification: texteOuNull(brut.relevance_justification, 4000),
       program_key: cleProgramme(brut.program_key) || cleProgramme(nom),
     },
   }
+}
+
+/** Champs qu'une mise à jour ciblée peut remplir ou proposer (mêmes que grant_proposals.field). */
+export const CHAMPS_MISE_A_JOUR = [
+  'source_url',
+  'open_date',
+  'deadline_date',
+  'funded_start',
+  'funded_end',
+  'potential_amount_min',
+  'potential_amount_max',
+  'eligibility_criteria',
+]
+
+/**
+ * Un élément de la réponse d'une mise à jour ciblée → { ok, valeur } ou
+ * { ok: false, raison }. `parRef` : « S1 » → la subvention envoyée. Une
+ * subvention obtenue ne change jamais : seule sa nouvelle édition compte.
+ */
+export function validerMiseAJour(brut, parRef) {
+  if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return { ok: false, raison: 'élément qui n’est pas un objet' }
+  const g = parRef.get(String(brut.ref ?? '').trim().toUpperCase())
+  if (!g) return { ok: false, raison: `référence inconnue (${String(brut.ref ?? '').slice(0, 20) || 'aucune'})` }
+  const enCours = g.status === 'en_cours'
+  const champs = {
+    source_url: adresseWeb(brut.source_url),
+    open_date: dateIso(brut.open_date),
+    deadline_date: dateIso(brut.deadline_date),
+    ...montantsEtPeriode(brut),
+    eligibility_criteria: texteOuNull(brut.eligibility_criteria, 4000),
+  }
+  const valeur = {
+    grant_id: g.id,
+    ...Object.fromEntries(CHAMPS_MISE_A_JOUR.map((c) => [c, enCours ? champs[c] : null])),
+    verification_url: adresseWeb(brut.verification_url),
+    comment: texteOuNull(brut.comment, 1000),
+    new_edition: null,
+  }
+  const ed = brut.new_edition
+  if (g.status === 'obtenu' && ed && typeof ed === 'object' && !Array.isArray(ed)) {
+    const dates = { open_date: dateIso(ed.open_date), deadline_date: dateIso(ed.deadline_date) }
+    // Une « nouvelle édition » sans aucune date ni adresse n'apprend rien : ignorée.
+    if (dates.open_date || dates.deadline_date || adresseWeb(ed.source_url)) {
+      valeur.new_edition = {
+        program_name: texteOuNull(ed.program_name, 300),
+        source_url: adresseWeb(ed.source_url),
+        ...dates,
+        ...montantsEtPeriode(ed),
+        eligibility_criteria: texteOuNull(ed.eligibility_criteria, 4000),
+        description: texteOuNull(ed.description, 4000),
+      }
+    }
+  }
+  return { ok: true, valeur }
+}
+
+/** Sépare les mises à jour valides des autres ; une seule par subvention (la première). */
+export function validerMisesAJour(elements, parRef) {
+  const valides = []
+  const invalides = []
+  const vues = new Set()
+  for (const e of elements) {
+    const r = validerMiseAJour(e, parRef)
+    if (!r.ok) invalides.push(r.raison)
+    else if (vues.has(r.valeur.grant_id)) invalides.push('subvention donnée deux fois')
+    else {
+      vues.add(r.valeur.grant_id)
+      valides.push(r.valeur)
+    }
+  }
+  return { valides, invalides }
 }
 
 /** Sépare les éléments valides des autres (avec la raison du rejet). */

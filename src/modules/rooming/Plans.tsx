@@ -11,7 +11,7 @@ import { copierPlan, creerPlan, mettreEnVigueur, modifierPlan, supprimerPlan, us
 import { arbrePlan, type Totaux } from './outils'
 import type { Plan } from './types'
 
-/** Les plans (scénarios) : un seul en vigueur ; les vieux peuvent être archivés. */
+/** Les plans : un par été (Été 2026, Été 2027…), un seul en vigueur ; les vieux sont archivés. */
 export function Plans({ d }: { d: Donnees }) {
   const ecriture = useAuth().peutEcrire('rooming')
   const naviguer = useNavigate()
@@ -147,7 +147,7 @@ export function Plans({ d }: { d: Donnees }) {
           {creation ? (
             <div className="w-full max-w-md">
               <SaisieNom
-                placeholder="Nom du nouveau plan (ex. Classe nature – École X)"
+                placeholder="Nom du nouveau plan (ex. Été 2027)"
                 libelleOk="Créer"
                 annuler={() => setCreation(false)}
                 valider={async (nom) => {

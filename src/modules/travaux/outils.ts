@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import type { Tache } from './types'
 
@@ -108,3 +109,11 @@ export const ContexteFenetre = createContext<(f: Fenetre | null) => void>(() => 
 export function useOuvrir() {
   return useContext(ContexteFenetre)
 }
+
+// ------------------------------------------------------------- champs ---
+
+/**
+ * Champ des fenêtres de Travaux : 16 px sur téléphone (sous 16 px, l'iPhone
+ * zoome à chaque toucher d'un champ), 14 px dès `sm`, comme ailleurs.
+ */
+export const champ = ui.champ.replace('text-sm', 'text-base sm:text-sm')

@@ -3,14 +3,31 @@ import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { IconeAttention } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { ChoixCategorie, Chargement, PastilleCategorie } from './commun'
-import { dateCourte, estComparable, estLeader, fourchetteParNuit, indexer, menu, rangCategorie } from './outils'
+import { ChoixCategorie, Chargement, PastilleCategorie, Puces } from './commun'
+import {
+  dateCourte,
+  duType,
+  estComparable,
+  estLeader,
+  fourchetteParNuit,
+  indexer,
+  lienCamp,
+  menu,
+  rangCategorie,
+  resumeStats,
+  statsParNuit,
+  useTypeChoisi,
+} from './outils'
 import { useActivites, useAValider, useCamps, useEcriture, useLiens, useModifier, useProgrammes } from './donnees'
-import type { Camp, Categorie, StatutInclusion } from './types'
+import { nomTypeSejour, TYPES_SEJOUR, type Camp, type Categorie, type StatutInclusion, type TypeSejour } from './types'
 
 type Tri = 'nom' | 'region' | 'prix' | 'activites'
 
-/** Métriques en haut, puis la liste des camps (filtres catégorie et région). */
+/**
+ * Métriques en haut, puis la liste des camps (filtres type de séjour, catégorie
+ * et région). Avec un type de séjour, seuls les camps qui ont un programme de ce
+ * type restent, et programmes et prix sont ceux de ce type.
+ */
 export function TableauDeBord() {
   const ecriture = useEcriture()
   const camps = useCamps()
@@ -28,6 +45,9 @@ export function TableauDeBord() {
     else p.delete('categorie')
     setParams(p, { replace: true })
   }
+  const [typeChoisi, setType] = useTypeChoisi()
+  // « Pas classé » n'a de sens que dans l'onglet Programmes.
+  const type = typeChoisi === 'aucun' ? '' : typeChoisi
   const [region, setRegion] = useState('')
   const [statut, setStatut] = useState<StatutInclusion>('inclus')
   const [texte, setTexte] = useState('')
@@ -69,13 +89,17 @@ export function TableauDeBord() {
   if (!camps.data || !activites.data || !liens.data || !programmes.data) return <Chargement />
 
   const regions = [...new Set(camps.data.map((c) => c.region).filter((r): r is string => !!r))].sort((a, b) => a.localeCompare(b, 'fr'))
-  const prixMin = (c: Camp) => Math.min(...(idx.programmesParCamp.get(c.id) ?? []).map((p) => (p.prix_par_nuit == null ? Infinity : Number(p.prix_par_nuit))))
+  const progsDe = (c: Camp, t: TypeSejour | '' = type) => duType(idx.programmesParCamp.get(c.id) ?? [], t)
+  const prixMin = (c: Camp) => Math.min(...progsDe(c).map((p) => (p.prix_par_nuit == null ? Infinity : Number(p.prix_par_nuit))))
   const recherche = texte.trim().toLowerCase()
-  const liste = camps.data
+  // Tous les filtres sauf le type : sert aussi aux nombres des puces.
+  const filtres = camps.data
     .filter((c) => c.statut_inclusion === statut)
     .filter((c) => !categorie || c.categorie === categorie)
     .filter((c) => !region || c.region === region)
     .filter((c) => !recherche || `${c.nom} ${c.ville ?? ''}`.toLowerCase().includes(recherche))
+  const liste = filtres
+    .filter((c) => !type || progsDe(c).length > 0)
     .sort((a, b) => {
       if (tri === 'region') return (a.region ?? '~').localeCompare(b.region ?? '~', 'fr') || a.nom.localeCompare(b.nom, 'fr')
       if (tri === 'prix') return prixMin(a) - prixMin(b) || a.nom.localeCompare(b.nom, 'fr')
@@ -83,6 +107,10 @@ export function TableauDeBord() {
       return rangCategorie(a) - rangCategorie(b) || a.nom.localeCompare(b.nom, 'fr')
     })
   const nbAValider = (aValider.data?.length ?? 0) + camps.data.filter((c) => c.statut_inclusion === 'propose').length
+  const nonExclus = new Set(camps.data.filter((c) => c.statut_inclusion !== 'exclu').map((c) => c.id))
+  const nbAVerifier = programmes.data.filter((p) => p.actif && p.type_a_verifier && nonExclus.has(p.camp_id)).length
+  // Comparaison entre programmes du même type : camps comparables seulement.
+  const stats = type ? statsParNuit(camps.data.filter(estComparable).flatMap((c) => progsDe(c))) : null
 
   return (
     <div className="space-y-5">
@@ -125,6 +153,26 @@ export function TableauDeBord() {
       </div>
 
       <section>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Puces
+            libelle="Type de séjour"
+            options={TYPES_SEJOUR.map((t) => ({ id: t.id, nom: t.libelle }))}
+            valeur={type}
+            changer={setType}
+            tout="Tous les types"
+            compte={(t) => (t ? filtres.filter((c) => progsDe(c, t).length > 0).length : filtres.length)}
+          />
+          {nbAVerifier > 0 && (
+            <Link to="/vigie/programmes?verifier=1" className="text-sm text-amber-800 underline decoration-amber-800/30 hover:decoration-amber-800">
+              {nbAVerifier} type{nbAVerifier > 1 ? 's' : ''} de séjour à vérifier
+            </Link>
+          )}
+        </div>
+        {type && (
+          <p className="mb-2 text-sm text-pierre-600">
+            {nomTypeSejour(type)}, camps comparables : {resumeStats(stats)}. Programmes et prix ci-dessous : ce type seulement.
+          </p>
+        )}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="mr-2 font-semibold">Camps</h2>
           <select aria-label="Statut" className={menu} value={statut} onChange={(e) => setStatut(e.target.value as StatutInclusion)}>
@@ -172,11 +220,11 @@ export function TableauDeBord() {
             </thead>
             <tbody className="divide-y divide-pierre-100">
               {liste.map((c) => {
-                const progs = idx.programmesParCamp.get(c.id) ?? []
+                const progs = progsDe(c)
                 return (
                   <tr key={c.id} className="hover:bg-pierre-50">
                     <td className="px-3 py-2">
-                      <Link to={`/vigie/camps/${c.id}`} className="font-medium hover:underline">
+                      <Link to={lienCamp(c.id, type)} className="font-medium hover:underline">
                         {c.nom}
                       </Link>
                       <div className="text-xs text-pierre-500">
@@ -203,7 +251,7 @@ export function TableauDeBord() {
               {!liste.length && (
                 <tr>
                   <td colSpan={8} className="px-3 py-6 text-center text-pierre-500">
-                    Aucun camp.
+                    {type ? `Aucun camp avec un programme « ${nomTypeSejour(type)} ».` : 'Aucun camp.'}
                   </td>
                 </tr>
               )}

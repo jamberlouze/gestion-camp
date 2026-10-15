@@ -1,12 +1,24 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { messageErreur, useListe } from '@/lib/donnees'
 import { IconeAttention, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
+import { REGLAGE_AGENDA_DEFAUT, type ReglageAgenda } from './agenda'
 import { Section, ZoneTexte } from './commun'
-import { useEnregistrer, useEntreprises, useModifierReglage, useReglages } from './donnees'
-import { cleProgramme } from './outils'
+import {
+  appelerWorker,
+  erreurWorker,
+  synchroniserAgenda,
+  useEnregistrer,
+  useEntreprises,
+  useEvenementsAgenda,
+  useModifierReglage,
+  useReglages,
+  type ResultatAgenda,
+} from './donnees'
+import { cleProgramme, dateCourte, moment } from './outils'
 import type { Entreprise as Compagnie } from '@/lib/types'
 import type { Entreprise } from './types'
 
@@ -24,7 +36,7 @@ export function Reglages() {
 
   return (
     <div className="max-w-4xl space-y-4">
-      <Section titre="Recherche hebdomadaire">
+      <Section titre="Recherche automatique">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -32,12 +44,16 @@ export function Reglages() {
             checked={active}
             onChange={(e) => modifier.mutate({ key: 'recherche_active', value: e.target.checked })}
           />
-          Chercher chaque lundi matin et envoyer le courriel de rappel
+          Chercher 4 fois par année : début d’octobre, janvier, avril et juillet
         </label>
         <p className="mt-1 text-xs text-pierre-500">
-          En pause, rien ne part le lundi (ni recherche ni courriel) ; la recherche manuelle reste possible.
+          À chaque fois : une recherche large de nouvelles subventions pour chaque entreprise, puis la mise à jour des subventions retenues
+          et obtenues. En pause, rien ne part tout seul ; « Lancer maintenant » (onglet Recherches) reste possible. Ce module n’envoie aucun
+          courriel.
         </p>
       </Section>
+
+      <AgendaGoogle valeur={valeur('agenda')} />
 
       <Section titre="Consignes pour tout le groupe (facultatif)">
         <p className="mb-2 text-sm text-pierre-600">
@@ -54,16 +70,6 @@ export function Reglages() {
         />
       </Section>
 
-      <Section titre="Destinataires du courriel du lundi">
-        <ChampTexte
-          className={ui.champ}
-          placeholder="Vide : toutes les personnes qui ont accès au module"
-          valeur={String(valeur('destinataires') ?? '')}
-          enregistrer={(v) => modifier.mutate({ key: 'destinataires', value: v })}
-        />
-        <p className="mt-1 text-xs text-pierre-500">Adresses séparées par des virgules.</p>
-      </Section>
-
       <Section titre="Entreprises (une recherche chacune, en silo)">
         <div className="space-y-4">
           {entreprises.data.map((e) => (
@@ -76,6 +82,107 @@ export function Reglages() {
         </div>
       </Section>
     </div>
+  )
+}
+
+const MODES: Record<ResultatAgenda['mode'], string> = {
+  simule: 'simulé (base locale : rien n’est écrit dans Google)',
+  google: 'Google Agenda branché',
+  non_configure: 'Google Agenda pas encore branché (secret SUBVENTIONS_AGENDA_REFRESH_TOKEN, README section 8)',
+}
+
+/** Agenda Google « Subventions » : dédié, pour ne pas toucher l'agenda d'inscription. */
+function AgendaGoogle({ valeur }: { valeur: unknown }) {
+  const client = useQueryClient()
+  const modifier = useModifierReglage()
+  const evenements = useEvenementsAgenda()
+  const config: ReglageAgenda = { ...REGLAGE_AGENDA_DEFAUT, ...(valeur && typeof valeur === 'object' ? (valeur as Partial<ReglageAgenda>) : {}) }
+  const changer = (champs: Partial<ReglageAgenda>) => modifier.mutate({ key: 'agenda', value: { ...config, ...champs } })
+  const etat = useQuery({
+    queryKey: ['subventions-worker', 'etat'],
+    queryFn: async () => {
+      const res = await appelerWorker('etat')
+      if (!res.ok) throw new Error(await erreurWorker(res))
+      return (await res.json()) as { agenda?: ResultatAgenda['mode'] }
+    },
+    retry: false,
+    staleTime: 60_000,
+  })
+  const [synchro, setSynchro] = useState<{ enCours: boolean; message?: string; erreur?: boolean }>({ enCours: false })
+
+  const ecrire = async () => {
+    setSynchro({ enCours: true })
+    try {
+      const r = await synchroniserAgenda()
+      client.invalidateQueries({ queryKey: ['subventions', 'grant_calendar_events'] })
+      if (r.erreur) setSynchro({ enCours: false, erreur: true, message: r.erreur })
+      else if (!r.actif) setSynchro({ enCours: false, message: 'L’écriture dans l’agenda est désactivée.' })
+      else
+        setSynchro({
+          enCours: false,
+          erreur: !!r.erreurs,
+          message: `${r.faites} changement${r.faites > 1 ? 's' : ''} écrit${r.faites > 1 ? 's' : ''}${r.erreurs ? `, ${r.erreurs} en erreur` : ''}${
+            r.restantes ? `, ${r.restantes} au prochain passage` : ''
+          }${r.mode === 'simule' ? ' (simulé)' : ''}.`,
+        })
+    } catch (e) {
+      setSynchro({ enCours: false, erreur: true, message: messageErreur(e) })
+    }
+  }
+
+  const lignes = evenements.data ?? []
+  const ecrits = lignes.filter((l) => l.google_id).length
+  const enErreur = lignes.filter((l) => l.error).length
+  const derniere = lignes.reduce<string | null>((m, l) => (l.synced_at && (!m || l.synced_at > m) ? l.synced_at : m), null)
+
+  return (
+    <Section titre="Agenda Google « Subventions »">
+      <p className="mb-3 text-sm text-pierre-600">
+        Dès qu’une subvention est retenue, ses dates d’ouverture et de fermeture y sont écrites (journée entière) ; une subvention obtenue
+        y met aussi ses échéances de reddition de compte. Les dates suivent les changements et disparaissent si la subvention est
+        rejetée, refusée, expirée ou remise en nouvelle. Agenda dédié : l’agenda d’inscription n’est jamais touché.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <label className="block">
+          <span className={ui.etiquette}>Identifiant de l’agenda</span>
+          <ChampTexte
+            className={ui.champ}
+            placeholder="…@group.calendar.google.com"
+            valeur={config.calendrier}
+            enregistrer={(calendrier) => changer({ calendrier })}
+          />
+        </label>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-foret-700"
+            checked={config.actif}
+            onChange={(e) => changer({ actif: e.target.checked })}
+          />
+          Écrire dans l’agenda
+        </label>
+      </div>
+      <p className="mt-1 text-xs text-pierre-500">
+        Google Agenda → paramètres de l’agenda « Subventions » → « Intégrer l’agenda » → Identifiant de l’agenda. Rien d’avant le{' '}
+        {dateCourte(config.depuis)} n’est écrit.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <button className={ui.boutonSecondaire} disabled={synchro.enCours || !config.actif} onClick={ecrire}>
+          {synchro.enCours ? 'Écriture…' : 'Écrire maintenant'}
+        </button>
+        <span className="text-pierre-600">
+          {etat.data?.agenda ? MODES[etat.data.agenda] : etat.error ? `Le Worker ne répond pas : ${messageErreur(etat.error)}` : ''}
+        </span>
+        {synchro.message && <span className={synchro.erreur ? 'text-red-700' : 'text-foret-700'}>{synchro.message}</span>}
+      </div>
+      {lignes.length > 0 && (
+        <p className="mt-2 text-xs text-pierre-500">
+          {ecrits} date{ecrits > 1 ? 's' : ''} dans l’agenda
+          {enErreur ? `, ${enErreur} en erreur (voir la fiche)` : ''}
+          {derniere ? ` · dernière écriture ${moment(derniere)}` : ''}. Mis à jour aux 15 minutes, et tout de suite depuis la fiche.
+        </p>
+      )}
+    </Section>
   )
 }
 

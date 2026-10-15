@@ -4,12 +4,15 @@ import { ChoixEtiquettes } from '@/lib/Etiquettes'
 import { BoutonAjouterPiece } from '@/lib/PiecesJointes'
 import { preparerFichier, type FichierJoint } from '@/lib/photos'
 import { ui } from '@/lib/ui'
+import { BarreActions } from './commun'
 import { useAjouterPhoto, useCreerTache, type Donnees, type NouvelleTache } from './donnees'
-import { useDroits } from './outils'
-import type { Tache } from './types'
+import { champ, useDroits } from './outils'
+import { PRIORITES, type Priorite, type Tache } from './types'
 
 /**
- * Signaler un problème (ou, pour la direction, ajouter une tâche déjà triée).
+ * Signaler un problème (ou, pour la direction, ajouter une tâche déjà triée,
+ * avec toute la fiche : priorité, assignation, échéance, heures, chantier,
+ * fournisseur, étiquettes — sur téléphone comme sur ordinateur).
  * Marche hors ligne : la tâche, ses photos et ses PDF partent au retour du réseau.
  */
 export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial<Tache>; fermer: () => void }) {
@@ -21,6 +24,9 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
   const [lieu, setLieu] = useState(defauts?.lieu_id ?? '')
   const [categorie, setCategorie] = useState(defauts?.categorie_id ?? '')
   const [urgent, setUrgent] = useState(false)
+  const [priorite, setPriorite] = useState<Priorite>(3)
+  const [heures, setHeures] = useState('')
+  const [fournisseur, setFournisseur] = useState('')
   const [assigne, setAssigne] = useState('')
   const [chantier, setChantier] = useState(defauts?.chantier_id ?? '')
   const [echeance, setEcheance] = useState('')
@@ -58,6 +64,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
     e.preventDefault()
     if (!titre.trim()) return setErreur('Écris ce qu’il faut faire.')
     if (!lieu) return setErreur('Choisis le lieu.')
+    if (heures !== '' && !(Number(heures) >= 0)) return setErreur('Les heures prévues doivent être un nombre.')
     const id = crypto.randomUUID()
     const nouvelle: NouvelleTache = {
       id,
@@ -65,7 +72,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
       description: description.trim() || null,
       lieu_id: lieu,
       categorie_id: categorie || null,
-      priorite: urgent ? 1 : 3,
+      priorite: droits.trieur ? priorite : urgent ? 1 : 3,
       signale_par: droits.moi,
       ...(droits.trieur
         ? {
@@ -73,6 +80,8 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
             assigne_a: assigne || null,
             chantier_id: chantier || null,
             echeance: echeance || null,
+            heures_prevues: heures === '' ? null : Number(heures),
+            fournisseur_id: fournisseur || null,
             position: defauts?.position ?? null,
             etiquette_ids: etiquettes,
           }
@@ -92,12 +101,12 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
       <form onSubmit={envoyer} className="space-y-4">
         <label className="block">
           <span className={ui.etiquette}>Quoi ?</span>
-          <input className={ui.champ} value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. La porte du chalet ferme mal" autoFocus />
+          <input className={champ} value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex. La porte du chalet ferme mal" autoFocus />
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className={ui.etiquette}>Où ?</span>
-            <select className={ui.champ} value={lieu} onChange={(e) => setLieu(e.target.value)}>
+            <select className={champ} value={lieu} onChange={(e) => setLieu(e.target.value)}>
               <option value="">Choisir le lieu…</option>
               {d.lieux.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -108,7 +117,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
           </label>
           <label className="block">
             <span className={ui.etiquette}>Catégorie</span>
-            <select className={ui.champ} value={categorie} onChange={(e) => setCategorie(e.target.value)}>
+            <select className={champ} value={categorie} onChange={(e) => setCategorie(e.target.value)}>
               <option value="">—</option>
               {d.categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -120,7 +129,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
         </div>
         <label className="block">
           <span className={ui.etiquette}>Détails (optionnel)</span>
-          <textarea className={ui.champ} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea className={champ} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
 
         <div>
@@ -150,17 +159,29 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="h-4 w-4 accent-red-600" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
-          C'est urgent (sécurité, bris qui empêche une activité…)
-        </label>
+        {!droits.trieur && (
+          <label className="flex items-center gap-2 py-1 text-sm">
+            <input type="checkbox" className="h-5 w-5 accent-red-600" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
+            C'est urgent (sécurité, bris qui empêche une activité…)
+          </label>
+        )}
 
         {droits.trieur && (
           <fieldset className="grid gap-3 rounded-xl bg-pierre-50 p-3 sm:grid-cols-2">
             <legend className="sr-only">Tri</legend>
             <label className="block">
+              <span className={ui.etiquette}>Priorité</span>
+              <select className={champ} value={priorite} onChange={(e) => setPriorite(Number(e.target.value) as Priorite)}>
+                {Object.entries(PRIORITES).map(([n, nom]) => (
+                  <option key={n} value={n}>
+                    {nom}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
               <span className={ui.etiquette}>Assigner à</span>
-              <select className={ui.champ} value={assigne} onChange={(e) => setAssigne(e.target.value)}>
+              <select className={champ} value={assigne} onChange={(e) => setAssigne(e.target.value)}>
                 <option value="">À assigner</option>
                 {d.personnes
                   .filter((p) => p.peut_assigner)
@@ -173,11 +194,15 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
             </label>
             <label className="block">
               <span className={ui.etiquette}>Échéance</span>
-              <input type="date" className={ui.champ} value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+              <input type="date" className={champ} value={echeance} onChange={(e) => setEcheance(e.target.value)} />
             </label>
-            <label className="block sm:col-span-2">
+            <label className="block">
+              <span className={ui.etiquette}>Heures prévues</span>
+              <input type="number" inputMode="decimal" min={0} step={0.5} className={champ} value={heures} onChange={(e) => setHeures(e.target.value)} />
+            </label>
+            <label className="block">
               <span className={ui.etiquette}>Chantier</span>
-              <select className={ui.champ} value={chantier} onChange={(e) => setChantier(e.target.value)}>
+              <select className={champ} value={chantier} onChange={(e) => setChantier(e.target.value)}>
                 <option value="">Aucun</option>
                 {d.chantiers
                   .filter((c) => !c.termine_le || c.id === chantier)
@@ -186,6 +211,17 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
                       {c.nom}
                     </option>
                   ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className={ui.etiquette}>Fournisseur</span>
+              <select className={champ} value={fournisseur} onChange={(e) => setFournisseur(e.target.value)}>
+                <option value="">—</option>
+                {d.fournisseurs.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nom}
+                  </option>
+                ))}
               </select>
             </label>
             {d.etiquettes.length > 0 && (
@@ -199,14 +235,14 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
 
         {!droits.trieur && <p className="text-xs text-pierre-500">La direction recevra ton signalement dans « À trier ».</p>}
         {erreur && <p className={ui.erreur}>{erreur}</p>}
-        <div className="flex gap-2">
+        <BarreActions>
           <button type="submit" className={ui.bouton} disabled={lecture}>
             {droits.trieur ? 'Ajouter' : 'Envoyer'}
           </button>
           <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
             Annuler
           </button>
-        </div>
+        </BarreActions>
       </form>
     </Dialogue>
   )

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { ChampTexte } from '@/lib/ChampTexte'
@@ -7,37 +8,47 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
+import { etatEvenement, evenementsVoulus, REGLAGE_AGENDA_DEFAUT, type ReglageAgenda } from './agenda'
 import { ChampDate, ChampMontant, FilNotes, LienOfficiel, PastilleStatut, Section, ZoneTexte } from './commun'
 import {
   copierEtapes,
+  ecrireAgendaPlusTard,
+  useDeciderProposition,
   useEnregistrer,
   useEntreprises,
   useEtapes,
+  useEvenementsAgenda,
   useFeedback,
   useHeures,
   useProfils,
+  usePropositions,
+  useReglages,
   useSubventions,
   useSupprimer,
 } from './donnees'
 import {
+  anneeFiscaleCourante,
+  anneeFiscaleProposee,
   argent,
   aujourdhui,
   champ,
   CATEGORIES,
   dateCourte,
+  estRetenue,
   heures as formatHeures,
+  LIBELLES_CHAMPS,
   libelleAnneeFiscale,
-  anneeFiscale,
   montantsPotentiels,
-  dateRattachement,
   moment,
   nomPersonne,
   ORDRE_STATUTS,
+  periode,
   STATUTS,
   STATUTS_ETAPE,
   TYPES,
+  valeurChamp,
 } from './outils'
-import type { Entreprise, Etape, Heures, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
+import type { Entreprise, Etape, Heures, Proposition, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
 import { DialogueRejeter, DialogueValider } from './Validation'
 
 export function Fiche() {
@@ -69,6 +80,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
   const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
   const [modifier, setModifier] = useState(false)
   const aDecider = g.status === 'nouveau' || g.status === 'a_valider'
+  useEcrireAgenda(g)
 
   const changerStatut = (status: Statut) => {
     // Obtenue sans date d'octroi : aujourd'hui (rattache la subvention à l'année fiscale).
@@ -85,7 +97,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
       </button>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-80">
           <ChampTexte
             className="w-full rounded-lg border border-transparent px-1 py-0.5 text-2xl font-semibold hover:border-pierre-200 focus:border-foret-600 focus:outline-none"
             aria-label="Nom du programme"
@@ -96,9 +108,9 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
           <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-sm text-pierre-500">
             <PastilleStatut statut={g.status} />
             <span>
-              {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)} · année fiscale{' '}
-              {libelleAnneeFiscale(anneeFiscale(dateRattachement(g)))}
+              {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)} ·
             </span>
+            <ChoixAnneeFiscale g={g} maj={maj} />
             <LienOfficiel url={g.source_url} />
           </div>
         </div>
@@ -132,7 +144,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
                 await confirmer({
                   titre: 'Supprimer cette subvention ?',
                   message:
-                    'Ses notes, heures, décisions et étapes de reddition de compte seront supprimées. Pour l’écarter seulement, rejetez-la : Claude ne la reproposera pas.',
+                    'Ses notes, heures, décisions, étapes de reddition de compte et attributions salariales seront supprimées, et ses dates retirées de l’agenda. Pour l’écarter seulement, rejetez-la : Claude ne la reproposera pas.',
                 })
               ) {
                 supprimer.mutate(g.id, { onSuccess: () => navigate('/subventions', { replace: true }) })
@@ -154,7 +166,9 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
           )
         }
       >
+        <Propositions g={g} />
         {modifier ? <InfosProgramme g={g} entreprises={entreprises} maj={maj} /> : <ApercuProgramme g={g} entreprises={entreprises} />}
+        <EtatAgenda g={g} entreprises={entreprises} />
       </Section>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -184,7 +198,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
                   <Link className="text-foret-700 underline" to={`/subventions/fiche/${precedente.id}`}>
                     {precedente.program_name}
                   </Link>{' '}
-                  ({STATUTS[precedente.status].libelle.toLowerCase()}, {libelleAnneeFiscale(anneeFiscale(dateRattachement(precedente)))})
+                  ({STATUTS[precedente.status].libelle.toLowerCase()}, {libelleAnneeFiscale(precedente.fiscal_year)})
                 </li>
               )}
               {suivantes.map((s) => (
@@ -193,7 +207,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
                   <Link className="text-foret-700 underline" to={`/subventions/fiche/${s.id}`}>
                     {s.program_name}
                   </Link>{' '}
-                  ({libelleAnneeFiscale(anneeFiscale(dateRattachement(s)))})
+                  ({libelleAnneeFiscale(s.fiscal_year)})
                 </li>
               ))}
             </ul>
@@ -227,6 +241,7 @@ function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entre
     ['Montant potentiel', montantsPotentiels(g)],
     ['Ouverture de la demande', g.open_date && dateCourte(g.open_date)],
     ['Date limite', g.deadline_date && dateCourte(g.deadline_date)],
+    ['Période financée', periode(g.funded_start, g.funded_end)],
   ]
   return (
     <div className="space-y-3">
@@ -239,6 +254,12 @@ function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entre
         ))}
       </dl>
       {g.description && <p className="whitespace-pre-line text-sm">{g.description}</p>}
+      {g.eligibility_criteria && (
+        <div className="text-sm">
+          <p className="text-xs uppercase tracking-wide text-pierre-500">Critères d’admissibilité</p>
+          <p className="mt-0.5 whitespace-pre-line">{g.eligibility_criteria}</p>
+        </div>
+      )}
       {g.relevance_justification && (
         <div className="rounded-lg bg-pierre-50 px-3 py-2 text-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-pierre-500">
@@ -246,6 +267,9 @@ function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entre
           </p>
           <p className="mt-0.5 whitespace-pre-line">{g.relevance_justification}</p>
         </div>
+      )}
+      {g.update_checked_at && (
+        <p className="text-xs text-pierre-500">Dernière mise à jour par Claude : {dateCourte(g.update_checked_at)}.</p>
       )}
     </div>
   )
@@ -310,8 +334,22 @@ function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: E
       <Champ etiquette="Date limite">
         <ChampDate valeur={g.deadline_date} enregistrer={(v) => maj({ deadline_date: v })} />
       </Champ>
+      <Champ etiquette="Période financée : début">
+        <ChampDate valeur={g.funded_start} enregistrer={(v) => maj({ funded_start: v })} />
+      </Champ>
+      <Champ etiquette="Période financée : fin">
+        <ChampDate valeur={g.funded_end} enregistrer={(v) => maj({ funded_end: v })} />
+      </Champ>
       <Champ etiquette="Description" large>
         <ZoneTexte className={ui.champ} rows={4} valeur={g.description ?? ''} enregistrer={(v) => maj({ description: v || null })} />
+      </Champ>
+      <Champ etiquette="Critères d’admissibilité" large>
+        <ZoneTexte
+          className={ui.champ}
+          rows={3}
+          valeur={g.eligibility_criteria ?? ''}
+          enregistrer={(v) => maj({ eligibility_criteria: v || null })}
+        />
       </Champ>
       <Champ etiquette={g.origin === 'claude' ? 'Pourquoi Claude la propose' : 'Pertinence'} large>
         <ZoneTexte
@@ -324,6 +362,203 @@ function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: E
       <Champ etiquette="Clé du programme (récurrence d'une année à l'autre)" large>
         <ChampTexte className={ui.champ} valeur={g.program_key ?? ''} enregistrer={(v) => maj({ program_key: v || null })} />
       </Champ>
+    </div>
+  )
+}
+
+/**
+ * Année fiscale de la subvention : proposée (période financée, sinon date
+ * limite…), ou choisie à la main.
+ */
+function ChoixAnneeFiscale({ g, maj }: { g: Subvention; maj: (c: Partial<Subvention>) => void }) {
+  const proposee = anneeFiscaleProposee(g)
+  const courante = anneeFiscaleCourante()
+  const debut = Math.min(courante - 3, g.fiscal_year, proposee.annee)
+  const fin = Math.max(courante + 2, g.fiscal_year, proposee.annee)
+  const annees = Array.from({ length: fin - debut + 1 }, (_, i) => fin - i)
+  return (
+    <label className="inline-flex items-center gap-1.5" title={`Proposée d’après ${proposee.selon} ; modifiable.`}>
+      année fiscale
+      <select
+        aria-label="Année fiscale"
+        className="fleche-serree rounded-md border border-pierre-200 bg-white py-0.5 pl-1.5 text-sm text-pierre-800"
+        value={g.fiscal_year_manual ? String(g.fiscal_year) : 'auto'}
+        onChange={(e) =>
+          maj(e.target.value === 'auto' ? { fiscal_year_manual: false } : { fiscal_year: Number(e.target.value), fiscal_year_manual: true })
+        }
+      >
+        <option value="auto">{libelleAnneeFiscale(proposee.annee)} (proposée)</option>
+        {annees.map((a) => (
+          <option key={a} value={a}>
+            {libelleAnneeFiscale(a)}
+          </option>
+        ))}
+      </select>
+      {g.fiscal_year_manual && <span className="text-xs">(choisie à la main)</span>}
+    </label>
+  )
+}
+
+/** Réglage de l'agenda Google « Subventions » (Réglages). */
+function useReglageAgenda(): ReglageAgenda {
+  const v = useReglages().data?.find((r) => r.key === 'agenda')?.value
+  return { ...REGLAGE_AGENDA_DEFAUT, ...(v && typeof v === 'object' ? (v as Partial<ReglageAgenda>) : {}) }
+}
+
+/**
+ * Écrit tout de suite dans l'agenda ce qui change sur la fiche (statut,
+ * dates, étapes), 1,5 s après le dernier changement ; le cron (15 min)
+ * rattrape une panne.
+ */
+function useEcrireAgenda(g: Subvention) {
+  const client = useQueryClient()
+  const { actif } = useReglageAgenda()
+  const etapes = useEtapes().data
+  const signature = JSON.stringify([
+    g.status,
+    g.program_name,
+    g.open_date,
+    g.deadline_date,
+    g.source_url,
+    g.target_company_id,
+    g.applicant_company_id,
+    g.potential_amount_min,
+    g.potential_amount_max,
+    g.amount_granted,
+    (etapes ?? []).filter((e) => e.grant_id === g.id).map((e) => [e.id, e.description, e.due_date, e.status]),
+  ])
+  useEffect(() => {
+    if (!actif) return
+    const t = setTimeout(() => ecrireAgendaPlusTard(client, g.id), 1500)
+    return () => clearTimeout(t)
+  }, [signature, actif, client, g.id])
+}
+
+/** Les dates de la subvention dans l'agenda Google « Subventions ». */
+function EtatAgenda({ g, entreprises }: { g: Subvention; entreprises: Entreprise[] }) {
+  const config = useReglageAgenda()
+  const lignes = (useEvenementsAgenda().data ?? []).filter((l) => l.grant_id === g.id)
+  const etapes = useEtapes().data ?? []
+  if (!config.actif || !estRetenue(g)) return null
+  const voulus = evenementsVoulus([g], etapes, {
+    entreprise: (id) => entreprises.find((e) => e.id === id)?.name,
+    lien: () => '',
+    depuis: config.depuis,
+  })
+  const NOMS = { ouverture: 'Ouverture', fermeture: 'Date limite', reddition: 'Reddition' }
+  const erreur = lignes.find((l) => l.error)?.error
+  return (
+    <div className="mt-3 border-t border-pierre-100 pt-3 text-sm text-pierre-600">
+      <span className="font-medium text-pierre-700">Agenda « Subventions »{config.calendrier.startsWith('essai') ? ' (simulé en DEV)' : ''} :</span>{' '}
+      {voulus.length === 0 ? (
+        'aucune date à écrire (ni ouverture ni date limite connues).'
+      ) : (
+        <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
+          {voulus.map((v) => {
+            const etat = etatEvenement(v, lignes, config.calendrier)
+            return (
+              <span key={v.cle} className={etat === 'erreur' ? 'text-red-700' : undefined}>
+                {NOMS[v.genre]} {dateCourte(v.date)}{' '}
+                {etat === 'ecrit' ? <span className="text-foret-700">✓</span> : etat === 'erreur' ? '✗' : <span className="text-pierre-400">(à écrire)</span>}
+              </span>
+            )
+          })}
+        </span>
+      )}
+      {erreur && <p className="mt-1 text-xs text-red-700">{erreur}</p>}
+    </div>
+  )
+}
+
+/**
+ * Mises à jour proposées par Claude (mise à jour ciblée) : un champ déjà
+ * rempli n'est jamais changé sans accord. Les champs vides qu'il a remplis
+ * sont rappelés dessous.
+ */
+function Propositions({ g }: { g: Subvention }) {
+  const toutes = (usePropositions().data ?? []).filter((p) => p.grant_id === g.id)
+  const decider = useDeciderProposition()
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [enCours, setEnCours] = useState<string | null>(null)
+  const ouvertes = toutes.filter((p) => p.status === 'a_valider')
+  const remplies = toutes.filter((p) => p.status === 'appliquee').sort((a, b) => b.created_at.localeCompare(a.created_at))
+  if (!ouvertes.length && !remplies.length) return null
+
+  const choisir = async (p: Proposition, accepter: boolean) => {
+    setErreur(null)
+    setEnCours(p.id)
+    try {
+      await decider.mutateAsync({ id: p.id, accepter })
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnCours(null)
+    }
+  }
+  const long = (p: Proposition) => p.field === 'eligibility_criteria' || p.field === 'source_url'
+
+  return (
+    <div className="mb-4 space-y-2">
+      {ouvertes.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {ouvertes.length === 1 ? 'Claude propose un changement' : `Claude propose ${ouvertes.length} changements`} (à valider)
+          </p>
+          <ul className="mt-2 divide-y divide-amber-200">
+            {ouvertes.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-pierre-800">{LIBELLES_CHAMPS[p.field]}</p>
+                  {long(p) ? (
+                    <div className="mt-0.5 space-y-1">
+                      <p className="whitespace-pre-line text-pierre-500 line-through">{valeurChamp(p.field, p.current_value)}</p>
+                      <p className="whitespace-pre-line break-words">{valeurChamp(p.field, p.proposed_value)}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-0.5">
+                      <span className="text-pierre-500 line-through">{valeurChamp(p.field, p.current_value)}</span> →{' '}
+                      <b className="font-semibold">{valeurChamp(p.field, p.proposed_value)}</b>
+                    </p>
+                  )}
+                  {(p.comment || p.source_url) && (
+                    <p className="mt-0.5 text-xs text-pierre-600">
+                      {p.comment}
+                      {p.source_url && (
+                        <>
+                          {' '}
+                          <a href={p.source_url} target="_blank" rel="noopener noreferrer" className="underline">
+                            source ↗
+                          </a>
+                        </>
+                      )}{' '}
+                      · {moment(p.created_at)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button className={ui.bouton} disabled={enCours === p.id} onClick={() => choisir(p, true)}>
+                    Accepter
+                  </button>
+                  <button className={ui.boutonSecondaire} disabled={enCours === p.id} onClick={() => choisir(p, false)}>
+                    Refuser
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {erreur && <p className={`${ui.erreur} mt-2`}>{erreur}</p>}
+        </div>
+      )}
+      {remplies.length > 0 && (
+        <p className="text-xs text-pierre-500">
+          Complété par Claude (champs qui étaient vides) :{' '}
+          {remplies
+            .slice(0, 8)
+            .map((p) => `${LIBELLES_CHAMPS[p.field].toLowerCase()} (${dateCourte(p.created_at)})`)
+            .join(', ')}
+          .
+        </p>
+      )}
     </div>
   )
 }
@@ -479,7 +714,7 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
       x.id === g.previous_grant_id || (!!g.program_key && x.program_key === g.program_key)
     return toutes
       .filter((x) => x.id !== g.id && avecEtapes.has(x.id))
-      .sort((a, b) => Number(memeProgramme(b)) - Number(memeProgramme(a)) || dateRattachement(b).localeCompare(dateRattachement(a)))
+      .sort((a, b) => Number(memeProgramme(b)) - Number(memeProgramme(a)) || b.fiscal_year - a.fiscal_year)
       .map((x) => ({ g: x, suggeree: memeProgramme(x) }))
   }, [etapesToutes, toutes, g])
   const nomEntreprise = new Map(entreprises.map((e) => [e.id, e.name]))
@@ -636,7 +871,7 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
               <option key={x.id} value={x.id}>
                 {suggeree ? '★ ' : ''}
                 {x.program_name} — {nomEntreprise.get(x.applicant_company_id ?? x.target_company_id)} —{' '}
-                {libelleAnneeFiscale(anneeFiscale(dateRattachement(x)))}
+                {libelleAnneeFiscale(x.fiscal_year)}
               </option>
             ))}
           </select>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
+import { clicLigne } from '@/lib/ligneCliquable'
 import { ui } from '@/lib/ui'
 import { Puce } from './commun'
 import { useAdressePhoto, useMajTache, useSupprimerTache, type Donnees } from './donnees'
@@ -7,7 +8,8 @@ import { GaleriePieces } from '@/lib/PiecesJointes'
 import { dateCourte, useDroits, useOuvrir } from './outils'
 import { PRIORITES, type Priorite, type Tache } from './types'
 
-const petit = 'rounded-lg border border-pierre-300 bg-white px-2 py-1.5 text-sm'
+// 16 px sur téléphone (pas de zoom de l'iPhone au toucher), 14 px dès `sm`.
+const petit = 'rounded-lg border border-pierre-300 bg-white px-2 py-1.5 text-base sm:text-sm'
 
 /**
  * Bandeau en haut de la liste des tâches (comme les notes à traiter
@@ -55,12 +57,15 @@ function CarteTri({ tache: t, d, trieur }: { tache: Tache; d: Donnees; trieur: b
     supprimer.mutate({ id: t.id, chemins: photos.map((p) => p.chemin) })
   }
 
+  const ouvrirFiche = () => ouvrir({ type: 'fiche', id: t.id })
+
+  // Toute la carte ouvre la fiche, sauf les photos et les menus du tri.
   return (
-    <li className="rounded-lg bg-white p-3 shadow-sm">
+    <li className="cursor-pointer rounded-lg bg-white p-3 shadow-sm hover:ring-1 hover:ring-amber-300" onClick={clicLigne(ouvrirFiche)}>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <button type="button" className="text-left text-sm font-medium text-pierre-900 hover:underline" onClick={() => ouvrir({ type: 'fiche', id: t.id })}>
+            <button type="button" className="text-left text-sm font-medium text-pierre-900 hover:underline" onClick={ouvrirFiche}>
               {t.titre}
             </button>
             {t.priorite === 1 && <Puce ton="urgent">Signalé urgent</Puce>}
@@ -79,7 +84,7 @@ function CarteTri({ tache: t, d, trieur }: { tache: Tache; d: Donnees; trieur: b
           )}
         </div>
         {trieur && (
-          <div className="flex shrink-0 flex-col gap-2 lg:w-[26rem]">
+          <div className="flex shrink-0 cursor-default flex-col gap-2 lg:w-[26rem]" data-garde-clic>
             <div className="grid grid-cols-2 gap-2">
               <select aria-label="Assigner à" className={petit} value={assigne} onChange={(e) => setAssigne(e.target.value)}>
                 <option value="">À assigner</option>

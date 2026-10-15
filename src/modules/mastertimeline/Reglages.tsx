@@ -1,41 +1,61 @@
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router'
 import { TableauReferentiel } from '@/core/TableauReferentiel'
+import { useAuth } from '@/shell/auth'
 import { useEntreprises } from './donnees'
 import type { Etiquette, Fournisseur, Projet, Responsable } from './types'
 
+// Même apparence que le Référentiel (demande de Maxime du 2026-10-14) : mêmes
+// tableaux (TableauReferentiel), mêmes boutons Modifier / Supprimer, mêmes
+// confirmations. Choix des listes en boutons groupés, comme « Regrouper par ».
 const onglet = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-1.5 text-sm font-medium ${isActive ? 'bg-pierre-200 text-pierre-900' : 'text-pierre-600 hover:bg-pierre-100'}`
+  `whitespace-nowrap rounded-md px-2.5 py-1 ${isActive ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`
 
-/** Listes du module : responsables, fournisseurs, entreprises, projets, étiquettes. */
+const note = 'mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700'
+
+/**
+ * Listes du module : responsables, fournisseurs, projets, étiquettes. Les
+ * compagnies ne se gèrent qu'à un endroit : Référentiel › Compagnies
+ * (l'onglet Entreprises d'ici est retiré, son adresse y mène).
+ */
 export function Reglages() {
+  const { estDirection } = useAuth()
   const entreprises = useEntreprises()
-  const optionsEntreprises = (entreprises.data ?? []).map((e) => ({ id: e.id, libelle: e.nom }))
+  const optionsEntreprises = (entreprises.data ?? []).map((e) => ({ id: e.id, libelle: e.nom, court: e.abreviation, couleur: e.couleur }))
   return (
     <div>
-      <nav className="mb-4 flex flex-wrap gap-1">
-        <NavLink to="/mastertimeline/reglages/responsables" className={onglet}>
-          Responsables
-        </NavLink>
-        <NavLink to="/mastertimeline/reglages/fournisseurs" className={onglet}>
-          Fournisseurs
-        </NavLink>
-        <NavLink to="/mastertimeline/reglages/entreprises" className={onglet}>
-          Entreprises
-        </NavLink>
-        <NavLink to="/mastertimeline/reglages/projets" className={onglet}>
-          Projets
-        </NavLink>
-        <NavLink to="/mastertimeline/reglages/etiquettes" className={onglet}>
-          Étiquettes
-        </NavLink>
-      </nav>
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <nav className="sans-barre inline-flex max-w-full overflow-x-auto rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" aria-label="Listes du module">
+          <NavLink to="/mastertimeline/reglages/responsables" className={onglet}>
+            Responsables
+          </NavLink>
+          <NavLink to="/mastertimeline/reglages/fournisseurs" className={onglet}>
+            Fournisseurs
+          </NavLink>
+          <NavLink to="/mastertimeline/reglages/projets" className={onglet}>
+            Projets
+          </NavLink>
+          <NavLink to="/mastertimeline/reglages/etiquettes" className={onglet}>
+            Étiquettes
+          </NavLink>
+        </nav>
+        <p className="text-sm text-pierre-500">
+          Compagnies :{' '}
+          {estDirection ? (
+            <Link to="/referentiel/compagnies" className="text-foret-700 underline">
+              Référentiel › Compagnies
+            </Link>
+          ) : (
+            'Référentiel › Compagnies (direction)'
+          )}
+        </p>
+      </div>
       <Routes>
         <Route index element={<Navigate to="responsables" replace />} />
         <Route
           path="responsables"
           element={
             <>
-              <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+              <p className={note}>
                 Les personnes qui reçoivent des tâches. Le courriel servira au rappel du 1er du mois. Pour passer toutes les tâches
                 de quelqu'un à une autre personne, utilisez l'onglet Responsables du module.
               </p>
@@ -57,41 +77,36 @@ export function Reglages() {
         <Route
           path="fournisseurs"
           element={
-            <TableauReferentiel<Fournisseur>
-              schema="mastertimeline"
-              table="fournisseurs"
-              tri="nom"
-              nomLigne={(f) => f.nom}
-              valeursDefaut={{}}
-              colonnes={[
-                { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
-                { champ: 'personne_ressource', libelle: 'Personne', type: 'texte' },
-                { champ: 'telephone', libelle: 'Téléphone', type: 'texte' },
-                { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
-                { champ: 'site_web', libelle: 'Site web', type: 'texte' },
-                { champ: 'service', libelle: 'Service', type: 'texte' },
-                { champ: 'notes', libelle: 'Notes', type: 'texte' },
-              ]}
-            />
+            <>
+              <p className={note}>
+                Liste commune : Mastertimeline, Travaux et Achats s'en servent (on la modifie seulement ici).
+              </p>
+              <TableauReferentiel<Fournisseur>
+                schema="mastertimeline"
+                table="fournisseurs"
+                tri="nom"
+                nomLigne={(f) => f.nom}
+                valeursDefaut={{}}
+                colonnes={[
+                  { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
+                  { champ: 'personne_ressource', libelle: 'Personne', type: 'texte' },
+                  { champ: 'telephone', libelle: 'Téléphone', type: 'texte' },
+                  { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
+                  { champ: 'site_web', libelle: 'Site web', type: 'texte' },
+                  { champ: 'service', libelle: 'Service', type: 'texte' },
+                  { champ: 'notes', libelle: 'Notes', type: 'texte' },
+                ]}
+              />
+            </>
           }
         />
-        <Route
-          path="entreprises"
-          element={
-            <p className="rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
-              Les entreprises sont maintenant les compagnies du référentiel commun, partagées par plusieurs modules :{' '}
-              <Link to="/referentiel/compagnies" className="text-foret-700 underline">
-                Référentiel › Compagnies
-              </Link>{' '}
-              (direction).
-            </p>
-          }
-        />
+        {/* Ancien onglet Entreprises : les compagnies sont dans le référentiel commun. */}
+        <Route path="entreprises" element={estDirection ? <Navigate to="/referentiel/compagnies" replace /> : <Navigate to="/mastertimeline/reglages/responsables" replace />} />
         <Route
           path="projets"
           element={
             <>
-              <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+              <p className={note}>
                 Un projet regroupe des tâches qui reviennent chaque année (les chantiers ponctuels sont dans le module Travaux). Les entreprises cochées sont celles où le projet est offert dans la fiche d'une tâche (aucune
                 = toutes). Supprimer un projet ici garde ses tâches, sans projet.
               </p>
@@ -115,7 +130,7 @@ export function Reglages() {
           path="etiquettes"
           element={
             <>
-              <p className="mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
+              <p className={note}>
                 Les étiquettes se posent sur les tâches dans leur fiche (une tâche peut en avoir plusieurs) et servent de filtre dans
                 toutes les vues : Corvée, Woofing… Supprimer une étiquette l'enlève des tâches qui la portaient.
               </p>

@@ -26,11 +26,93 @@ const FORMAT_JSON = `Réponds uniquement avec un tableau JSON, sans texte autour
   "potential_amount_max": number | null,
   "open_date": "YYYY-MM-DD" | null,
   "deadline_date": "YYYY-MM-DD" | null,
+  "funded_start": "YYYY-MM-DD" | null (début de la période financée : emplois, projet ou dépenses admissibles),
+  "funded_end": "YYYY-MM-DD" | null (fin de la période financée),
+  "eligibility_criteria": string | null (principaux critères d'admissibilité, 1 à 3 phrases),
   "relevance_justification": string,
   "program_key": string (identifiant normalisé en minuscules, sans accents, ex. "emplois-ete-canada")
 }
 Si tu n'es pas certain d'une date ou d'un montant, mets null plutôt que d'inventer.
 Si tu ne trouves rien de nouveau, réponds [].`
+
+const LIBELLES_CHAMPS = {
+  source_url: 'lien',
+  open_date: 'ouverture',
+  deadline_date: 'date limite',
+  funded_start: 'période financée du',
+  funded_end: 'au',
+  potential_amount_min: 'montant min.',
+  potential_amount_max: 'montant max.',
+  eligibility_criteria: 'critères',
+}
+
+const FORMAT_MISE_A_JOUR = `Réponds uniquement avec un tableau JSON, un élément par subvention vérifiée, sans texte autour :
+{
+  "ref": "S1",
+  "source_url": string | null (page officielle à jour de l'édition visée),
+  "open_date": "YYYY-MM-DD" | null,
+  "deadline_date": "YYYY-MM-DD" | null,
+  "funded_start": "YYYY-MM-DD" | null,
+  "funded_end": "YYYY-MM-DD" | null,
+  "potential_amount_min": number | null,
+  "potential_amount_max": number | null,
+  "eligibility_criteria": string | null,
+  "verification_url": string | null (page où tu as vérifié),
+  "comment": string | null (ce qui a changé, en une phrase),
+  "new_edition": null | {
+    "program_name": string, "source_url": string | null, "open_date": "YYYY-MM-DD" | null,
+    "deadline_date": "YYYY-MM-DD" | null, "funded_start": "YYYY-MM-DD" | null, "funded_end": "YYYY-MM-DD" | null,
+    "potential_amount_min": number | null, "potential_amount_max": number | null,
+    "eligibility_criteria": string | null, "description": string | null
+  }
+}
+Donne les dates, montants et le lien tels que la page officielle les indique aujourd'hui, même s'ils sont
+identiques à ceux connus (l'app ne garde que ce qui change). "eligibility_criteria" : seulement si les
+critères connus sont absents ou ont changé sur le fond, sinon null. Mets null pour tout ce que tu n'as pas
+pu vérifier : n'invente rien.`
+
+/**
+ * Prompt de la mise à jour ciblée : les subventions retenues (en cours) ou
+ * obtenues d'une entreprise, avec ce que l'app en sait. Une obtenue ne
+ * change pas : on n'y cherche que la nouvelle édition.
+ * @param {{ entreprise: {name: string, legal_status: string|null},
+ *           subventions: (object & {ref: string})[], aujourdhui: string }} p
+ */
+export function invitationMiseAJour({ entreprise, subventions, aujourdhui }) {
+  const valeur = (g, c) => {
+    const v = g[c]
+    if (v == null || v === '') return '—'
+    return typeof v === 'string' ? v.replace(/\s+/g, ' ').slice(0, 600) : String(v)
+  }
+  const lignes = subventions
+    .map((g) =>
+      [
+        g.ref,
+        g.status === 'obtenu' ? `obtenue (${libelleAnneeFiscale(g.fiscal_year)})` : 'en cours',
+        g.program_name,
+        g.organisme ?? '—',
+        ...Object.entries(LIBELLES_CHAMPS).map(([c, libelle]) => `${libelle} ${valeur(g, c)}`),
+      ].join(' | '),
+    )
+    .join('\n')
+
+  return `Tu es un agent de veille de financement pour ${entreprise.name}${entreprise.legal_status?.trim() ? ` (${entreprise.legal_status.trim()})` : ''},
+située au Québec (région des Laurentides). Nous sommes le ${aujourdhui}. L'année fiscale du groupe va du
+1er octobre au 30 septembre.
+
+La direction suit déjà les subventions ci-dessous. Vérifie chacune sur sa page officielle (au besoin par
+une recherche web) :
+- « en cours » (demande à préparer ou déposée) : la date d'ouverture, la date limite, la période financée,
+  les montants, les critères d'admissibilité et le lien officiel de l'édition visée ; "new_edition" = null.
+- « obtenue » : ne change rien à cette subvention (laisse les autres champs à null) ; cherche seulement si
+  une nouvelle édition (nouvel appel, nouvelle année) est ouverte ou annoncée, et donne-la dans
+  "new_edition" (sinon null).
+
+Subventions à vérifier — réf. | statut | nom | organisme | ce que l'app en sait :
+${lignes}
+
+${FORMAT_MISE_A_JOUR}`
+}
 
 const PRIORITE_SALARIALE = `Priorité absolue : les subventions salariales (embauche, main-d'œuvre, formation, jeunes,
 emplois d'été).`
@@ -124,10 +206,10 @@ Historique (${feedback.length} décision${feedback.length > 1 ? 's' : ''}, la pl
 ${lignes.join('\n')}`
 }
 
-/** Prompt de rattrapage : remettre en JSON une réponse mal formée. */
-export function invitationReparation(texte) {
+/** Prompt de rattrapage : remettre en JSON une réponse mal formée (programmes ou mises à jour). */
+export function invitationReparation(texte, quoi = 'programmes') {
   return `La réponse ci-dessous, produite par un agent de veille de subventions, devait être un tableau
-JSON de programmes. Extrais-en tous les programmes, sans en inventer ni en ajouter, et rends-les dans
+JSON de ${quoi}. Extrais-en tous les éléments, sans en inventer ni en ajouter, et rends-les dans
 le format demandé. Mets null pour toute valeur absente.
 
 Réponse à convertir :

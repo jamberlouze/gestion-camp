@@ -43,7 +43,7 @@ export const persistance = {
   // Feuilles de temps, petite caisse et coût par assiette : jamais gardés sur
   // l'appareil (renseignements personnels, argent, noms des clients, salaires).
   dehydrateOptions: {
-    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && !['temps', 'caisse', 'cuisine-couts', 'mastertimeline-adresses', 'vehicules-adresses'].includes(String(q.queryKey[0])),
+    shouldDehydrateQuery: (q: Query) => defaultShouldDehydrateQuery(q) && !['temps', 'caisse', 'cuisine-couts', 'mastertimeline-adresses', 'vehicules-adresses', 'subventions-salaires'].includes(String(q.queryKey[0])),
   },
 }
 

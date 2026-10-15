@@ -91,10 +91,11 @@ export interface Etiquette {
 
 export type Priorite = 1 | 2 | 3
 
+/** Noms choisis par la direction (3e niveau « Éventuellement » depuis le 2026-10-14, ex-« Normal ») ; 3 = défaut. */
 export const PRIORITES: Record<Priorite, string> = {
   1: 'Urgent',
   2: 'Prioritaire',
-  3: 'Normal',
+  3: 'Éventuellement',
 }
 
 /** Couleur de chaque niveau (pastille des groupes par urgence). */

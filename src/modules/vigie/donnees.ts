@@ -164,6 +164,32 @@ export function useModifier<T extends { id?: string }>(table: Table) {
   })
 }
 
+/** Confirme d'un coup le type de séjour proposé par Claude pour ces programmes. */
+export function useConfirmerTypes() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [S, 'programmes'],
+    networkMode: 'always',
+    mutationFn: async (ids: string[]) => {
+      const { error } = await db().from('programmes').update({ type_a_verifier: false }).in('id', ids)
+      if (error) throw error
+    },
+    onMutate: async (ids) => {
+      await client.cancelQueries({ queryKey: [S, 'programmes'] })
+      const avant = client.getQueryData<Programme[]>([S, 'programmes'])
+      const choisis = new Set(ids)
+      client.setQueryData<Programme[]>([S, 'programmes'], (liste = []) =>
+        liste.map((p) => (choisis.has(p.id) ? { ...p, type_a_verifier: false } : p)),
+      )
+      return { avant }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.avant) client.setQueryData([S, 'programmes'], ctx.avant)
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'programmes'] }),
+  })
+}
+
 /** Lier ou délier une activité d'un camp. */
 export function useLier() {
   const client = useQueryClient()

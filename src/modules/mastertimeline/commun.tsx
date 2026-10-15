@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Etiquettes'
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
@@ -182,9 +183,10 @@ export function LigneTache({
   const responsableModifiable = montrer.responsableModifiable && ecriture
   const ouvrirFiche = () => ouvrir({ tache: t, periode })
 
-  // Seul le titre ouvre la fiche : les étiquettes peuvent contenir un menu.
+  // Toute la ligne ouvre la fiche, sauf la case et le menu du responsable ;
+  // au clavier, le titre (un bouton).
   return (
-    <li className="flex items-start gap-3 px-3 py-2.5">
+    <li className={`flex items-start gap-3 px-3 py-2.5 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!ecriture} />
       <div className="min-w-0 flex-1">
         <button

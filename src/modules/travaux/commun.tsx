@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { PucesEtiquettes } from '@/lib/Etiquettes'
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -71,7 +72,7 @@ export interface Montrer {
   personne?: boolean
 }
 
-/** Une tâche dans une liste : case, titre (ouvre la fiche) et étiquettes. */
+/** Une tâche dans une liste : case, titre et étiquettes ; toute la ligne ouvre la fiche. */
 export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true, personne: true } }: { tache: Tache; d: Donnees; montrer?: Montrer }) {
   const ouvrir = useOuvrir()
   const faite = t.statut === 'terminee'
@@ -82,15 +83,17 @@ export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true
   const assigne = t.assigne_a ? d.personne.get(t.assigne_a) : null
   const fait = t.fait_par ? d.personne.get(t.fait_par) : null
   const nbCommentaires = d.commentaires.get(t.id)?.length ?? 0
+  const ouvrirFiche = () => ouvrir({ type: 'fiche', id: t.id })
 
+  // Toute la ligne ouvre la fiche, sauf la case ; au clavier, le titre (un bouton).
   return (
-    <li className="flex items-start gap-3 px-3 py-2.5">
+    <li className={`flex items-start gap-3 px-3 py-2.5 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <CaseTache tache={t} />
       <div className="min-w-0 flex-1">
         <button
           type="button"
           className={`text-left text-sm hover:underline ${faite ? 'text-pierre-500 line-through decoration-pierre-300' : 'font-medium text-pierre-900 decoration-pierre-300'}`}
-          onClick={() => ouvrir({ type: 'fiche', id: t.id })}
+          onClick={ouvrirFiche}
         >
           {t.titre}
         </button>
@@ -222,9 +225,11 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
   const fait = t.fait_par ? d.personne.get(t.fait_par) : null
   const nbCommentaires = d.commentaires.get(t.id)?.length ?? 0
   const secondaire = faite ? 'text-pierre-400' : 'text-pierre-600'
+  const ouvrirFiche = () => ouvrir({ type: 'fiche', id: t.id })
 
+  // Toute la rangée ouvre la fiche, sauf la case et le menu « Assignée à ».
   return (
-    <tr className="align-top hover:bg-pierre-50/60">
+    <tr className={`align-top ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <td className="px-3 py-1.5">
         <CaseTache tache={t} />
       </td>
@@ -233,7 +238,7 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
           <button
             type="button"
             className={`text-left hover:underline ${faite ? 'text-pierre-500 line-through decoration-pierre-300' : 'text-pierre-900 decoration-pierre-300'}`}
-            onClick={() => ouvrir({ type: 'fiche', id: t.id })}
+            onClick={ouvrirFiche}
           >
             {t.titre}
           </button>
@@ -304,4 +309,19 @@ export function ChoixAssigne({ tache: t, d }: { tache: Tache; d: Donnees }) {
 
 export function Chargement() {
   return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+}
+
+// ------------------------------------------------------ fenêtres (téléphone) ---
+
+/**
+ * Boutons du bas d'une fenêtre (Ajouter, Fermer…), collés au bas de l'écran
+ * sur téléphone pendant que la fiche défile au-dessus : plus besoin de
+ * descendre jusqu'en bas pour fermer.
+ */
+export function BarreActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="sticky -bottom-5 z-10 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t border-pierre-100 bg-white px-5 pb-5 pt-3 sm:static sm:mx-0 sm:mb-0 sm:px-0 sm:pb-0">
+      {children}
+    </div>
+  )
 }

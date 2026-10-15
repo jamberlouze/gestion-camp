@@ -4,23 +4,14 @@ import { Link } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { menu, Pastille, Section } from './commun'
-import { appelerWorker, erreurWorker, useEntreprises, useRappels, useRecherches, useReglages, useRegles } from './donnees'
-import { dateCourte, moment } from './outils'
+import { appelerWorker, erreurWorker, useEntreprises, useRecherches, useReglages, useRegles } from './donnees'
+import { dateCourte, moment, prochainTrimestre } from './outils'
 import type { Entreprise, Recherche, Regles } from './types'
 
 interface Etat {
   anthropic: boolean
   supabase: boolean
-  gmail: boolean
   modele: string
-}
-
-/** Date (AAAA-MM-JJ) de la prochaine recherche : lundi, ou aujourd'hui si on est lundi avant la fin des passages (11 h UTC). */
-function prochainLundi() {
-  const d = new Date()
-  const jours = d.getDay() === 1 && d.getUTCHours() < 11 ? 0 : (8 - d.getDay()) % 7 || 7
-  d.setDate(d.getDate() + jours)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function Recherches() {
@@ -28,7 +19,6 @@ export function Recherches() {
   const recherches = useRecherches()
   const regles = useRegles()
   const reglages = useReglages()
-  const rappels = useRappels()
   const etat = useQuery({
     queryKey: ['subventions-worker', 'etat'],
     queryFn: async () => {
@@ -46,6 +36,7 @@ export function Recherches() {
 
   const active = reglages.data?.find((r) => r.key === 'recherche_active')?.value !== false
   const nomEntreprise = new Map(entreprises.data.map((e) => [e.id, e.name]))
+  const prochaine = prochainTrimestre()
 
   return (
     <div className="space-y-4">
@@ -56,8 +47,10 @@ export function Recherches() {
             Recherche automatique :{' '}
             {active ? (
               <>
-                <b>active</b>, prochaine le lundi {dateCourte(prochainLundi())} entre 4 h et 7 h (une entreprise à la fois), puis le
-                courriel de rappel.
+                <b>active</b>, 4 fois par année (début d’octobre, janvier, avril et juillet) :{' '}
+                {prochaine.enCours ? <>en cours depuis le {dateCourte(prochaine.date)}</> : <>prochaine le {dateCourte(prochaine.date)}</>}, tôt
+                le matin. D’abord une recherche large de nouvelles subventions pour chaque entreprise, puis la mise à jour des subventions
+                retenues et obtenues ; un travail à la fois.
               </>
             ) : (
               <>
@@ -82,24 +75,6 @@ export function Recherches() {
       <Section titre="Mémoire : règles apprises du feedback">
         <Memoire regles={regles.data} entreprises={entreprises.data} />
       </Section>
-
-      <Section titre="Courriels de rappel">
-        <CourrielEssai pret={!!etat.data?.gmail && !!etat.data?.supabase} />
-        {(rappels.data ?? []).length > 0 && (
-          <ul className="mt-3 divide-y divide-pierre-100 text-sm">
-            {[...(rappels.data ?? [])]
-              .reverse()
-              .slice(0, 8)
-              .map((r) => (
-                <li key={r.week_start} className="py-1.5">
-                  Semaine du {dateCourte(r.week_start)} : {r.new_count} nouvelle{r.new_count > 1 ? 's' : ''}, {r.recipients.length}{' '}
-                  destinataire{r.recipients.length > 1 ? 's' : ''}
-                  {r.error ? <span className="text-red-700"> — non envoyé : {r.error}</span> : <span className="text-foret-700"> — envoyé</span>}
-                </li>
-              ))}
-          </ul>
-        )}
-      </Section>
     </div>
   )
 }
@@ -121,7 +96,6 @@ function ConfigWorker({ etat, erreur, chargement }: { etat?: Etat; erreur: unkno
       <ul className="space-y-1.5 text-sm">
         {ligne(etat.anthropic, 'Clé API Claude (ANTHROPIC_API_KEY)', 'Secret Cloudflare à ajouter : voir README, « Vigie de subventions ».')}
         {ligne(etat.supabase, 'Clé secrète Supabase (SUPABASE_SECRET_KEY)', 'Secret Cloudflare à ajouter : voir README.')}
-        {ligne(etat.gmail, 'Envoi par Gmail (GMAIL_*)', 'Quatre secrets Cloudflare à ajouter : voir README.')}
       </ul>
       <p className="mt-2 text-xs text-pierre-500">Modèle : {etat.modele}</p>
     </>
@@ -130,8 +104,11 @@ function ConfigWorker({ etat, erreur, chargement }: { etat?: Etat; erreur: unkno
 
 type Progres = { etat: 'en_cours'; debut: number } | { etat: 'fini'; message: string; erreur: boolean }
 
+type Genre = 'large' | 'ciblee'
+
 function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pret: boolean }) {
   const [entreprise, setEntreprise] = useState(entreprises.find((e) => e.active)?.id ?? '')
+  const [genre, setGenre] = useState<Genre>('large')
   const [sansMemoire, setSansMemoire] = useState(false)
   const [progres, setProgres] = useState<Progres | null>(null)
   const [maintenant, setMaintenant] = useState(0)
@@ -149,7 +126,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
     try {
       const res = await appelerWorker('recherche', {
         method: 'POST',
-        body: JSON.stringify({ company_id: entreprise, sans_memoire: sansMemoire }),
+        body: JSON.stringify({ company_id: entreprise, genre, sans_memoire: genre === 'large' && sansMemoire }),
       })
       if (!res.ok || !res.body) throw new Error(await erreurWorker(res))
       // Flux de lignes JSON : battements « en_cours », puis le bilan.
@@ -167,12 +144,16 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
       if (!fin?.fin) throw new Error('La connexion a été coupée avant la fin. Voir le journal ci-dessous.')
       if (fin.erreur) throw new Error(String(fin.erreur))
       const n = Number(fin.new)
+      const ecartees = Number(fin.invalid) ? `, ${fin.invalid} écartée${Number(fin.invalid) > 1 ? 's' : ''} (mal formée)` : ''
       setProgres({
         etat: 'fini',
         erreur: false,
-        message: `${fin.entreprise} : ${n} nouvelle${n > 1 ? 's' : ''}, ${fin.duplicate} déjà connue${Number(fin.duplicate) > 1 ? 's' : ''}${
-          Number(fin.invalid) ? `, ${fin.invalid} écartée${Number(fin.invalid) > 1 ? 's' : ''} (mal formée)` : ''
-        }.`,
+        message:
+          'checked' in fin
+            ? Number(fin.checked) === 0
+              ? `${fin.entreprise} : aucune subvention retenue ou obtenue à mettre à jour.`
+              : `${fin.entreprise} : ${bilanMiseAJour(Number(fin.checked), Number(fin.filled), Number(fin.proposed), n)}${ecartees}.`
+            : `${fin.entreprise} : ${n} nouvelle${n > 1 ? 's' : ''}, ${fin.duplicate} déjà connue${Number(fin.duplicate) > 1 ? 's' : ''}${ecartees}.`,
       })
     } catch (e) {
       setProgres({ etat: 'fini', erreur: true, message: messageErreur(e) })
@@ -185,8 +166,24 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
   return (
     <div className="space-y-3">
       <p className="text-sm text-pierre-600">
-        Même recherche que celle du lundi, pour une entreprise. Elle prend de 3 à 10 minutes : gardez cette page ouverte.
+        Même travail que la recherche automatique, pour une entreprise. Il prend de 3 à 10 minutes : gardez cette page ouverte.
       </p>
+      <fieldset className="space-y-1 text-sm">
+        <legend className="sr-only">Genre de recherche</legend>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'large'} disabled={enCours} onChange={() => setGenre('large')} />
+          <span>
+            <b className="font-medium">Recherche large</b> : nouvelles subventions pour l’entreprise
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'ciblee'} disabled={enCours} onChange={() => setGenre('ciblee')} />
+          <span>
+            <b className="font-medium">Mise à jour des retenues</b> : dates, montants, critères et lien de ses subventions en cours ; nouvelle
+            édition de ses obtenues (10 à la fois)
+          </span>
+        </label>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-2">
         <select aria-label="Entreprise" className={menu} value={entreprise} disabled={enCours} onChange={(e) => setEntreprise(e.target.value)}>
           {entreprises.map((e) => (
@@ -197,13 +194,15 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
           ))}
         </select>
         <button className={ui.bouton} disabled={!pret || !entreprise || enCours} onClick={lancer}>
-          {enCours ? 'Recherche en cours…' : 'Lancer la recherche'}
+          {enCours ? 'Recherche en cours…' : 'Lancer maintenant'}
         </button>
       </div>
-      <label className="flex items-center gap-2 text-sm text-pierre-600">
-        <input type="checkbox" className="accent-foret-700" checked={sansMemoire} disabled={enCours} onChange={(e) => setSansMemoire(e.target.checked)} />
-        Sans la mémoire (pour comparer la qualité avec et sans les règles apprises)
-      </label>
+      {genre === 'large' && (
+        <label className="flex items-center gap-2 text-sm text-pierre-600">
+          <input type="checkbox" className="accent-foret-700" checked={sansMemoire} disabled={enCours} onChange={(e) => setSansMemoire(e.target.checked)} />
+          Sans la mémoire (pour comparer la qualité avec et sans les règles apprises)
+        </label>
+      )}
       {enCours && (
         <p className="text-sm text-pierre-600">
           Claude cherche sur le web… {Math.floor(secondes / 60)} min {String(secondes % 60).padStart(2, '0')} s
@@ -212,7 +211,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
       {progres?.etat === 'fini' && (
         <p className={progres.erreur ? ui.erreur : 'rounded-lg bg-foret-50 px-3 py-2 text-sm text-foret-800'}>
           {progres.message}{' '}
-          {!progres.erreur && (
+          {!progres.erreur && genre === 'large' && (
             <Link className="underline" to="/subventions">
               Voir la validation
             </Link>
@@ -224,30 +223,14 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
   )
 }
 
-function CourrielEssai({ pret }: { pret: boolean }) {
-  const [etat, setEtat] = useState<{ envoi: boolean; message?: string; erreur?: boolean }>({ envoi: false })
-  const envoyer = async () => {
-    setEtat({ envoi: true })
-    try {
-      const res = await appelerWorker('courriel', { method: 'POST' })
-      if (!res.ok) throw new Error(await erreurWorker(res))
-      const { envoye } = await res.json()
-      setEtat({ envoi: false, message: `Courriel d'essai envoyé à ${envoye}.` })
-    } catch (e) {
-      setEtat({ envoi: false, erreur: true, message: messageErreur(e) })
-    }
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <p className="text-sm text-pierre-600">
-        Chaque lundi, après les recherches. Un essai reprend les 7 derniers jours et part à vous seulement.
-      </p>
-      <button className={ui.boutonSecondaire} disabled={!pret || etat.envoi} onClick={envoyer}>
-        {etat.envoi ? 'Envoi…' : 'M’envoyer un courriel d’essai'}
-      </button>
-      {etat.message && <span className={`text-sm ${etat.erreur ? 'text-red-700' : 'text-foret-700'}`}>{etat.message}</span>}
-    </div>
-  )
+/** « 4 vérifiées : 2 champs complétés, 1 changement à valider, 1 nouvelle édition ». */
+function bilanMiseAJour(verifiees: number, remplis: number, proposes: number, editions: number) {
+  const morceaux = [
+    remplis ? `${remplis} champ${remplis > 1 ? 's' : ''} complété${remplis > 1 ? 's' : ''}` : null,
+    proposes ? `${proposes} changement${proposes > 1 ? 's' : ''} à valider sur la fiche` : null,
+    editions ? `${editions} nouvelle${editions > 1 ? 's' : ''} édition${editions > 1 ? 's' : ''} (à valider)` : null,
+  ].filter(Boolean)
+  return `${verifiees} vérifiée${verifiees > 1 ? 's' : ''}${morceaux.length ? ` : ${morceaux.join(', ')}` : ', rien de changé'}`
 }
 
 function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEntreprise: Map<string, string> }) {
@@ -278,8 +261,9 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
               <td className="whitespace-nowrap px-2 py-1.5">
                 {moment(r.started_at)}
                 <div className="mt-0.5 flex gap-1">
+                  {r.kind === 'ciblee' && <Pastille classe="bg-violet-100 text-violet-800">mise à jour</Pastille>}
                   {r.trigger_source === 'manuel' && <Pastille>manuelle</Pastille>}
-                  {!r.memory_version_id && <Pastille>sans mémoire</Pastille>}
+                  {r.kind === 'large' && !r.memory_version_id && <Pastille>sans mémoire</Pastille>}
                 </div>
               </td>
               <td className="px-2 py-1.5">{nomEntreprise.get(r.company_id)}</td>
@@ -288,6 +272,8 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
                   <span className="text-pierre-500">En cours…</span>
                 ) : r.error ? (
                   <span className="text-red-700">{r.error}</span>
+                ) : r.kind === 'ciblee' ? (
+                  <span className="text-foret-700">{bilanMiseAJour(r.found_count, r.filled_count, r.proposed_count, r.new_count)}</span>
                 ) : (
                   <span className="text-foret-700">
                     {r.new_count} nouvelle{r.new_count > 1 ? 's' : ''}
@@ -306,7 +292,7 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
                 )}
               </td>
               <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
-                {r.found_count} / {r.new_count} / {r.duplicate_count} / {r.invalid_count}
+                {r.kind === 'ciblee' ? '—' : `${r.found_count} / ${r.new_count} / ${r.duplicate_count} / ${r.invalid_count}`}
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">{nombre(r.web_search_count)}</td>
               <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
@@ -316,7 +302,10 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-pierre-500">Trouvées : proposées / nouvelles / déjà connues / écartées (mal formées).</p>
+      <p className="mt-2 text-xs text-pierre-500">
+        Trouvées (recherche large) : proposées / nouvelles / déjà connues / écartées (mal formées). Mise à jour : un champ vide est
+        complété directement ; un champ déjà rempli qui changerait attend votre accord sur la fiche.
+      </p>
     </div>
   )
 }
