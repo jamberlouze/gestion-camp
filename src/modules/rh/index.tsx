@@ -9,6 +9,7 @@ import { ContexteRh, type DonneesRh } from './contexte'
 import { useCandidatures, useCompagnies, useCourriels, useDatesSaisons, useEmbauches, useInvitations, usePersonnes, usePostes, useSaisons, useTextes } from './donnees'
 import { Employes } from './Employes'
 import { FicheCandidature } from './FicheCandidature'
+import { FichesStaff } from './fiches'
 import { FichePersonne } from './FichePersonne'
 import { OngletCourriels } from './OngletCourriels'
 import { aujourdhui } from './outils'
@@ -28,8 +29,33 @@ function grouper<T>(lignes: T[], cle: (l: T) => string) {
   return m
 }
 
-/** RH : candidatures, embauches et dossiers d'employés (plan : docs/plan-rh.md). */
+/**
+ * RH : candidatures, embauches et dossiers d'employés (plan : docs/plan-rh.md).
+ * Avec seulement l'accès aux fiches (coordonnateurs) : l'onglet Fiches, rien d'autre.
+ */
 export default function ModuleRh() {
+  const { peutLire } = useAuth()
+  return peutLire('rh') ? <RhComplet /> : <RhFichesSeulement />
+}
+
+function RhFichesSeulement() {
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold print:hidden">RH</h1>
+      <nav className="sans-barre mt-3 mb-4 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
+        <NavLink to="/rh/fiches" className={onglet}>
+          Fiches
+        </NavLink>
+      </nav>
+      <Routes>
+        <Route path="fiches/*" element={<FichesStaff />} />
+        <Route path="*" element={<Navigate to="/rh/fiches" replace />} />
+      </Routes>
+    </div>
+  )
+}
+
+function RhComplet() {
   const { peutEcrire, peutLire } = useAuth()
   const saisons = useSaisons()
   const dates = useDatesSaisons()
@@ -88,6 +114,9 @@ export default function ModuleRh() {
           Employés
           <Pastille n={dossiersRecus} titre="Dossiers d'embauche reçus, à valider" />
         </NavLink>
+        <NavLink to="/rh/fiches" className={onglet}>
+          Fiches
+        </NavLink>
         <NavLink to="/rh/planification" className={onglet}>
           Planification
         </NavLink>
@@ -113,6 +142,7 @@ export default function ModuleRh() {
             <Route index element={<Candidatures />} />
             <Route path="c/:id" element={<FicheCandidature />} />
             <Route path="employes" element={<Employes />} />
+            <Route path="fiches/*" element={<FichesStaff />} />
             <Route path="planification" element={<Planification />} />
             <Route path="personnes" element={<Personnes />} />
             <Route path="p/:id" element={<FichePersonne />} />

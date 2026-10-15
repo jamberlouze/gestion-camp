@@ -302,7 +302,7 @@ Interdits pour cette phase : toute écriture dans Airtable (connecteur en lectur
 
 Demande de Maxime : « une fiche pour chaque employé/bénévole embauché (photo, coordonnées, diète, allergie, fiche médicale, contacts d'urgence, etc.) facilement accessible ». Réponses de Maxime : **direction + coordonnateurs** ; **questions médicales ajoutées au dossier d'embauche** ; **en ligne seulement** (rien de santé gardé sur l'appareil).
 
-- Page `/staff` (« Fiches du staff », 🪪, menu Équipe), accès propre `rh_fiches` en lecture (direction, coordos, développeur). Saison par défaut = celle de l'onglet Employés.
+- Onglet **Fiches** de RH (`/rh/fiches` ; d'abord une page à part, intégrée à RH à la demande de Maxime), une ligne haute par personne avec une grande photo (pas de cartes, demande de Maxime). Accès propre `rh_fiches` (`parent: 'rh'`) en lecture (direction, coordos, développeur) : un coordo ouvre RH et n'y voit que cet onglet. Saison par défaut = celle de l'onglet Employés.
 - Données par `rh.fiches(saison)` seulement (un coordo ne lit aucune table de `rh`) ; photos lisibles avec l'accès (`rh.est_photo`), aucun autre fichier.
 - Dossier : `sante_conditions`, `medicaments`, `auto_injecteur`, `sante_notes` (facultatifs, section « Santé » du dossier d'embauche, été et hors été ; pré-remplis l'année suivante). Photo demandée aussi hors été (« pour ta fiche d'employé »).
 - Migration `20261015164321_rh_fiches`. Vérification : `docs/verification-rh-fiches.md`.

@@ -98,7 +98,11 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     employeTemps,
     peutLire: (m) => niveau(m) !== null,
     peutEcrire: (m) => niveau(m) === 'ecriture',
-    peutOuvrir: (m) => niveau(m) !== null && (estAdmin || !MODULES.find((d) => d.id === m)?.cacheSaufAdmins),
+    peutOuvrir: (m) => {
+      const def = MODULES.find((d) => d.id === m)
+      const acces = niveau(m) !== null || !!def?.ouvertAussiPar?.some((x) => niveau(x) !== null)
+      return acces && (estAdmin || !def?.cacheSaufAdmins)
+    },
     deconnexion: async () => {
       await viderCache()
       await supabase.auth.signOut({ scope: 'local' })

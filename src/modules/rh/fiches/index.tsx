@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams 
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { messageErreur } from '@/lib/donnees'
 import { reduireImage } from '@/lib/photos'
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
@@ -18,12 +19,12 @@ import { lienTel, nomDeCamp, santeAConnaitre, useFiches, usePhotos, type Dossier
  * santé, diète, contacts d'urgence. Lecture seulement ; les corrections se
  * font dans le dossier RH de la personne. En ligne seulement.
  */
-export default function ModuleFiches() {
+export function FichesStaff() {
   return (
     <Routes>
       <Route index element={<Liste />} />
       <Route path=":id" element={<FicheDetaillee />} />
-      <Route path="*" element={<Navigate to="/staff" replace />} />
+      <Route path="*" element={<Navigate to="/rh/fiches" replace />} />
     </Routes>
   )
 }
@@ -37,10 +38,11 @@ function useCompagniesParId() {
 }
 
 // ------------------------------------------------------------------
-// Liste : une carte par personne
+// Liste : une ligne haute par personne, photo bien visible
 // ------------------------------------------------------------------
 function Liste() {
   const [params, setParams] = useSearchParams()
+  const naviguer = useNavigate()
   const saisonDemandee = params.get('saison')
   const compagnie = params.get('compagnie')
   const sante = params.get('sante') === '1'
@@ -56,8 +58,8 @@ function Liste() {
     setParams(p, { replace: true })
   }
 
-  if (fiches.error) return <Cadre><p className={ui.erreur}>{messageErreur(fiches.error)}</p></Cadre>
-  if (!fiches.data) return <Cadre><p className="py-8 text-center text-sm text-pierre-500">Chargement…</p></Cadre>
+  if (fiches.error) return <p className={ui.erreur}>{messageErreur(fiches.error)}</p>
+  if (!fiches.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const { saisons, saison_id } = fiches.data
   const toutes = fiches.data.fiches
@@ -73,10 +75,11 @@ function Liste() {
       (!q || correspond(sansAccents([f.prenom, f.nom_famille, f.surnom, ...f.postes.map((p) => p.poste)].filter(Boolean).join(' ')), q)),
   )
   const nSante = toutes.filter((f) => santeAConnaitre(f.dossier)).length
-  const lien = (f: Fiche) => `/staff/${f.personne_id}${saison_id ? `?saison=${saison_id}` : ''}`
+  const lien = (f: Fiche) => `/rh/fiches/${f.personne_id}${saison_id ? `?saison=${saison_id}` : ''}`
+  const auj = aujourdhui()
 
   return (
-    <Cadre>
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <select className={champ} value={saison_id ?? ''} onChange={(e) => changer('saison', e.target.value || null)} aria-label="Saison">
           {saisons.map((s) => (
@@ -113,52 +116,96 @@ function Liste() {
       ) : lignes.length === 0 ? (
         <p className="py-8 text-center text-sm text-pierre-500">Personne ne correspond.</p>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-          {lignes.map((f) => (
-            <li key={f.personne_id}>
-              <Link to={lien(f)} className={`${ui.carte} group flex h-full flex-col overflow-hidden hover:border-foret-400`}>
-                <Photo fiche={f} url={f.photo ? photos.data?.get(f.photo) : undefined} className="aspect-square w-full" />
-                <div className="flex flex-1 flex-col gap-1 p-2.5">
-                  <p className="truncate font-semibold text-pierre-900 group-hover:text-foret-800">{nomDeCamp(f)}</p>
-                  <p className="-mt-1 truncate text-xs text-pierre-500">{`${f.prenom} ${f.nom_famille}`}</p>
-                  {f.postes.map((p) => {
-                    const c = p.entreprise_id ? parCompagnie.get(p.entreprise_id) : undefined
-                    return (
-                      <div key={p.embauche_id} className="flex min-w-0 items-center gap-1 text-xs text-pierre-700">
-                        {c && <PuceCompagnie compagnie={c} court className="shrink-0 !px-1.5 !py-0 text-[11px]" />}
-                        <span className="truncate">{p.poste ?? (p.genre === 'benevolat' ? 'Bénévole' : 'Poste à préciser')}</span>
+        <div className={`${ui.carte} overflow-hidden`}>
+          <div className={`${GRILLE} hidden border-b border-pierre-200 bg-pierre-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-pierre-500 md:grid`}>
+            <span />
+            <span>Nom et poste</span>
+            <span>Santé et diète</span>
+            <span>Joindre</span>
+          </div>
+          <ul className="divide-y divide-pierre-100">
+            {lignes.map((f) => {
+              const d = f.dossier
+              const ans = age(f.date_naissance, auj)
+              return (
+                <li key={f.personne_id} className={`${GRILLE} grid items-center px-3 py-3 sm:px-4 ${classeLigneCliquable}`} onClick={clicLigne(() => naviguer(lien(f)))}>
+                  <Photo fiche={f} url={f.photo ? photos.data?.get(f.photo) : undefined} className="h-20 w-20 rounded-lg sm:h-28 sm:w-28" />
+                  <div className="min-w-0 space-y-1">
+                    <div>
+                      <Link to={lien(f)} className="block truncate text-lg font-semibold text-pierre-900 hover:text-foret-800">
+                        {nomDeCamp(f)}
+                      </Link>
+                      <p className="truncate text-sm text-pierre-600">
+                        {`${f.prenom} ${f.nom_famille}`}
+                        {ans !== null && <span className="text-pierre-400"> · {ans} ans</span>}
+                      </p>
+                    </div>
+                    <Postes fiche={f} parCompagnie={parCompagnie} />
+                    {/* Téléphone : les pastilles sous le nom */}
+                    <div className="md:hidden">
+                      <PucesSante d={d} />
+                    </div>
+                  </div>
+                  <div className="hidden min-w-0 space-y-1 md:block">
+                    <PucesSante d={d} />
+                    {d?.allergies && <p className="line-clamp-2 text-sm text-amber-900">{d.allergies}</p>}
+                  </div>
+                  <div className="hidden min-w-0 space-y-2 text-sm md:block">
+                    {f.telephone && (
+                      <a href={lienTel(f.telephone)} className="block whitespace-nowrap text-foret-800 hover:underline">
+                        📞 {f.telephone}
+                      </a>
+                    )}
+                    {d?.urgence1_nom || d?.urgence1_telephone ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-pierre-500">
+                          🚨 {d.urgence1_nom}
+                          {d.urgence1_lien && ` · ${d.urgence1_lien}`}
+                        </p>
+                        {d.urgence1_telephone && (
+                          <a href={lienTel(d.urgence1_telephone)} className="whitespace-nowrap text-foret-800 hover:underline">
+                            {d.urgence1_telephone}
+                          </a>
+                        )}
                       </div>
-                    )
-                  })}
-                  <PucesSante d={f.dossier} />
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                    ) : (
+                      d && <p className="text-xs text-pierre-400">Aucun contact d'urgence</p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
-    </Cadre>
-  )
-}
-
-const champ = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-900 focus:border-foret-600 focus:outline-none'
-
-function Cadre({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="space-y-4">
-      <div className="print:hidden">
-        <h1 className="text-2xl font-semibold">Fiches du staff</h1>
-        <p className="text-sm text-pierre-500">Photo, coordonnées, santé et contacts d'urgence des employés et bénévoles embauchés.</p>
-      </div>
-      {children}
     </div>
   )
 }
 
-/** Petites pastilles de la carte : ce qu'il faut savoir d'un coup d'œil. */
+/** Colonnes de la liste : photo, nom et poste, santé, joindre (une seule colonne de texte au téléphone). */
+const GRILLE = 'grid-cols-[auto_1fr] gap-x-4 md:grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(10rem,1fr)]'
+
+const champ = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-900 focus:border-foret-600 focus:outline-none'
+
+function Postes({ fiche, parCompagnie }: { fiche: Fiche; parCompagnie: Map<string, Compagnie> }) {
+  return (
+    <div className="space-y-0.5">
+      {fiche.postes.map((p) => {
+        const c = p.entreprise_id ? parCompagnie.get(p.entreprise_id) : undefined
+        return (
+          <div key={p.embauche_id} className="flex min-w-0 items-center gap-1.5 text-sm text-pierre-700">
+            {c && <PuceCompagnie compagnie={c} court className="shrink-0" />}
+            <span className="truncate">{p.poste ?? (p.genre === 'benevolat' ? 'Bénévole' : 'Poste à préciser')}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Pastilles : ce qu'il faut savoir d'un coup d'œil. */
 function PucesSante({ d }: { d: DossierFiche | null }) {
-  if (!d)
-    return <span className="mt-auto pt-1 text-[11px] text-pierre-400">Dossier pas encore reçu</span>
+  if (!d) return <span className="text-xs text-pierre-400">Dossier pas encore reçu</span>
   const puces: { texte: string; titre: string; classe: string }[] = []
   if (d.auto_injecteur) puces.push({ texte: '💉 EpiPen', titre: "Porte un auto-injecteur d'épinéphrine", classe: 'bg-red-100 text-red-800' })
   if (d.allergies) puces.push({ texte: '⚠️ Allergie', titre: d.allergies, classe: 'bg-amber-100 text-amber-800' })
@@ -166,11 +213,11 @@ function PucesSante({ d }: { d: DossierFiche | null }) {
     puces.push({ texte: '🩺 Santé', titre: [d.sante_conditions, d.medicaments, d.sante_notes].filter(Boolean).join(' · '), classe: 'bg-sky-100 text-sky-800' })
   const diete = dieteParticuliere(d)
   if (diete) puces.push({ texte: diete, titre: 'Diète', classe: 'bg-pierre-100 text-pierre-700' })
-  if (!puces.length) return null
+  if (!puces.length) return <span className="text-xs text-pierre-400">Rien à signaler</span>
   return (
-    <div className="mt-auto flex flex-wrap gap-1 pt-1">
+    <div className="flex flex-wrap gap-1">
       {puces.map((p) => (
-        <span key={p.texte} title={p.titre} className={`rounded-full px-1.5 py-px text-[11px] font-medium ${p.classe}`}>
+        <span key={p.texte} title={p.titre} className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.classe}`}>
           {p.texte}
         </span>
       ))}
@@ -205,8 +252,8 @@ function FicheDetaillee() {
   useTitreImpression(f ? `Fiche - ${f.prenom} ${f.nom_famille}` : null)
 
   const retour = (
-    <Link to={`/staff${saison ? `?saison=${saison}` : ''}`} className="text-sm text-pierre-500 hover:text-pierre-800 print:hidden">
-      ← Fiches du staff
+    <Link to={`/rh/fiches${saison ? `?saison=${saison}` : ''}`} className="text-sm text-pierre-500 hover:text-pierre-800 print:hidden">
+      ← Fiches
     </Link>
   )
   if (fiches.error) return <div className="space-y-3">{retour}<p className={ui.erreur}>{messageErreur(fiches.error)}</p></div>
@@ -226,7 +273,7 @@ function FicheDetaillee() {
           {peutEcrire('rh') && <ChangerPhoto personneId={f.personne_id} />}
           {peutLire('rh') && (
             <button className={ui.boutonSecondaire} onClick={() => naviguer(`/rh/p/${f.personne_id}`)}>
-              Dossier RH
+              Dossier complet
             </button>
           )}
           <button className={ui.boutonSecondaire} onClick={() => window.print()}>
