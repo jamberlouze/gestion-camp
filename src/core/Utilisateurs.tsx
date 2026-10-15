@@ -15,11 +15,12 @@ const ROLES: { id: Role; libelle: string }[] = [
   { id: 'direction', libelle: 'Direction' },
   { id: 'coordo', libelle: 'Coordonnateur' },
   { id: 'terrain', libelle: 'Terrain' },
+  { id: 'developpeur', libelle: 'Développeur' },
 ]
 
 const LIBELLE_ROLE = Object.fromEntries(ROLES.map((r) => [r.id, r.libelle])) as Record<Role, string>
 /** Colonnes de la grille d'accès par rôle (l'admin a tout). */
-const ROLES_GRILLE: AccesRole['role'][] = ['direction', 'coordo', 'terrain']
+const ROLES_GRILLE: AccesRole['role'][] = ['direction', 'coordo', 'terrain', 'developpeur']
 
 /** Fiche du référentiel qu'un compte peut remplir dans les Feuilles de temps. */
 interface FicheEmploye {
@@ -310,7 +311,7 @@ export function Utilisateurs() {
         Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : « Modifier »
         sur sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
       </p>
-      <div className={`${ui.carte} mt-3 max-w-3xl overflow-x-auto`}>
+      <div className={`${ui.carte} mt-3 max-w-4xl overflow-x-auto`}>
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col className="w-60" />
@@ -324,6 +325,7 @@ export function Utilisateurs() {
               <th className="px-3 py-2 font-medium">Direction</th>
               <th className="px-3 py-2 font-medium">Coordonnateurs</th>
               <th className="px-3 py-2 font-medium" title="Aides de camp, équipe d'entretien">Terrain</th>
+              <th className="px-3 py-2 font-medium" title="Voit les modules sans être de la direction">Développeurs</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-pierre-100">

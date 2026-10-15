@@ -1,7 +1,7 @@
 // Types du schéma core. À remplacer par les types générés
 // (npm run db:types) une fois le projet Supabase lié.
 
-export type Role = 'admin' | 'direction' | 'coordo' | 'terrain'
+export type Role = 'admin' | 'direction' | 'coordo' | 'terrain' | 'developpeur'
 export type ModuleId = 'embarcations' | 'commande' | 'horaire' | 'mastertimeline' | 'subventions' | 'vigie' | 'calendrier' | 'temps' | 'vehicules' | 'travaux' | 'achats' | 'rooming' | 'caisse' | 'cuisine_couts' | 'ameliorations' | 'reunions' | 'crm' | 'inventaire' | 'rh' | 'rh_paie' | 'batiments'
 export type Niveau = 'lecture' | 'ecriture'
 

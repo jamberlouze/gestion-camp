@@ -17,7 +17,8 @@ with comptes (id, courriel) as (
     ('00000000-0000-0000-0000-000000000006'::uuid, 'camille@camp.test'),
     ('00000000-0000-0000-0000-000000000007'::uuid, 'noah@camp.test'),
     ('00000000-0000-0000-0000-000000000008'::uuid, 'alex@camp.test'),
-    ('00000000-0000-0000-0000-000000000009'::uuid, 'lea@camp.test')
+    ('00000000-0000-0000-0000-000000000009'::uuid, 'lea@camp.test'),
+    ('00000000-0000-0000-0000-000000000010'::uuid, 'dev@camp.test')
 )
 insert into auth.users (
   instance_id, id, aud, role, email, email_confirmed_at,
@@ -44,7 +45,8 @@ from (values
   ('camille@camp.test', 'Camille Roy', 'coordo'),
   ('noah@camp.test', 'Noah Côté', 'coordo'),
   ('alex@camp.test', 'Alex Bergeron', 'terrain'),
-  ('lea@camp.test', 'Léa Morin', 'terrain')
+  ('lea@camp.test', 'Léa Morin', 'terrain'),
+  ('dev@camp.test', 'Gabriel Dev', 'developpeur')
 ) as v (courriel, nom, role)
 where p.courriel = v.courriel;
 
