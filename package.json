@@ -24,6 +24,7 @@
     "test:rapports": "node --test src/modules/reservations/rapports.test.mjs",
     "test:periodes": "node --test src/lib/periodesPaie.test.mjs",
     "test:temps": "node --test src/modules/temps/banques.test.mjs src/modules/temps/employeurD.test.mjs",
+    "test:rh": "node --test \"src/modules/rh/*.test.mjs\"",
     "test:vigie": "node --test supabase/functions/vigie/vigie.test.ts"
   },
   "dependencies": {

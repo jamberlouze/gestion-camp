@@ -233,6 +233,8 @@ export const MODULES: DefinitionModule[] = [
     icone: '👥',
     chemin: '/rh',
     famille: 'equipe',
+    // Décision de Maxime du 2026-10-15 : vide jusqu'à l'import final d'Airtable.
+    cacheSaufAdmins: "jusqu'à la bascule d'Airtable",
   },
   {
     // NAS, numéro de compte et spécimen de chèque : accès propre (direction
