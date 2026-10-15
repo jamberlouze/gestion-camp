@@ -102,10 +102,15 @@ export function useFeuille(userId: string, debut: string) {
   })
 }
 
-/** Toutes les heures visibles entre deux dates (tableau de bord : toute la direction pour un admin). */
-export function useHeuresPlage(du: string, au: string) {
+/**
+ * Toutes les heures visibles entre deux dates (tableau de bord, section
+ * Direction de l'onglet Employés : toute la direction pour un admin).
+ * `actif` = false : rien n'est lu (ex. pas admin).
+ */
+export function useHeuresPlage(du: string, au: string, actif = true) {
   return useQuery({
     queryKey: [S, 'plage-heures', du, au],
+    enabled: actif,
     queryFn: async () =>
       (
         await toutLire<Heure>((a, b) =>
@@ -115,18 +120,20 @@ export function useHeuresPlage(du: string, au: string) {
   })
 }
 
-export function useFeuillesPlage(du: string, au: string) {
+export function useFeuillesPlage(du: string, au: string, actif = true) {
   return useQuery({
     queryKey: [S, 'plage-feuilles', du, au],
+    enabled: actif,
     queryFn: () =>
       toutLire<Feuille>((a, b) => db().from('feuilles').select('*').gte('debut', du).lte('debut', au).order('debut').order('id').range(a, b)),
   })
 }
 
 /** Comptes qui peuvent avoir une feuille (admins et direction), y compris inactifs. */
-export function useMembres() {
+export function useMembres(actif = true) {
   return useQuery({
     queryKey: [S, 'membres'],
+    enabled: actif,
     queryFn: async () => {
       const { data, error } = await supabase
         .schema('core')

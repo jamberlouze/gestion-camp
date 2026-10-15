@@ -324,6 +324,60 @@ Secrets **Cloudflare** (même endroit qu'en 8) :
 **Vérifier** : app → Calendrier → Réglages → « Synchroniser maintenant » ; la
 liste « Dernières synchros » affiche le bilan (ou l'erreur).
 
+### 15. RH : pages publiques (emplois.camptremblant.com)
+
+Pages sans compte du module RH : `/emplois` (formulaire de candidature, FR et
+EN), `/retour/<jeton>` (intention de retour), `/dossier/<jeton>` (dossier
+d'embauche). Elles parlent seulement au Worker (`/api/rh/*`, voir
+`worker/rh/api.js`) : l'anonyme n'a aucun droit sur le schéma `rh`.
+
+1. **Sous-domaine** `emplois.camptremblant.com` : Cloudflare → Workers →
+   `gestion-camp` → Settings → Domains & Routes → **Add custom domain** (même
+   démarche que la section 11 ; CNAME chez Squarespace si le DNS n'est pas chez
+   Cloudflare).
+2. **Turnstile** : ajouter `emplois.camptremblant.com` aux domaines du widget
+   de la section 11 (même clé du site, même secret `TURNSTILE_SECRET`).
+3. `.env.production` : `VITE_HOTE_EMPLOIS=emplois.camptremblant.com` (sur cet
+   hôte, seules les pages du RH s'affichent ; les liens copiés dans l'app y
+   mènent). À ajouter **une fois le sous-domaine en service**, sinon les liens
+   copiés ne marcheraient pas.
+4. Site camptremblant.com (page Emploi) : remplacer le lien du formulaire
+   Airtable par `https://emplois.camptremblant.com/emplois` (`?lang=en` pour
+   l'anglais) à la bascule.
+
+`SUPABASE_SECRET_KEY` (section 8) sert aussi à ces pages. Variable du Worker
+`HOTE_EMPLOIS=emplois.camptremblant.com` (`vars` de `wrangler.jsonc`, en même
+temps que `VITE_HOTE_EMPLOIS`) : les liens des rappels préparés par le Worker
+y mènent (sinon `APP_URL`).
+
+### 16. RH : courriels des compagnies (une boîte Gmail par compagnie)
+
+Chaque compagnie écrit de sa boîte (RH › Courriels › Compagnies et boîtes) :
+le Worker envoie par l'API Gmail avec le jeton que la boîte a donné en se
+connectant (chiffré dans la base, jamais lisible par l'app). Une seule fois :
+
+1. **Client OAuth Google** : console.cloud.google.com → projet de l'app (celui
+   de l'agenda des Subventions convient) → APIs & Services → activer **Gmail
+   API** → OAuth consent screen : type **External** (les boîtes sont dans
+   plusieurs domaines ; **Internal** seulement si elles sont toutes dans le même
+   Google Workspace), portées `openid`, `email`, `gmail.send` → **Publish app**
+   (« In production » : en mode « Testing », Google coupe l'accès après 7
+   jours ; l'app non vérifiée affiche un avertissement à la connexion, qu'on
+   passe par « Paramètres avancés »).
+2. Credentials → **Create OAuth client ID** → Web application → URI de
+   redirection autorisée : `https://<adresse de l'app>/api/rh/retourgoogle`
+   (celle de `APP_URL`).
+3. Secrets Cloudflare : `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
+   (`npx wrangler secret put …`).
+4. Dans l'app (direction) : pour chaque compagnie, « Connecter la boîte » → se
+   connecter **avec la boîte de la compagnie** (une autre est refusée) →
+   retour « Boîte connectée ✓ » → « M'envoyer un essai ».
+
+Changer l'adresse d'envoi d'une compagnie la met « À reconnecter » ; un jeton
+refusé par Google (mot de passe changé, accès retiré) la met en « Erreur » :
+la reconnecter. En DEV, tout part dans Mailpit (`COURRIELS_MAILPIT` dans
+`.dev.vars`), jamais vers Gmail.
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,

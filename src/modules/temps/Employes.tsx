@@ -6,9 +6,21 @@ import { IconeTableur } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
+import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { etatBanqueHeures } from './banques'
-import { useDossiersAFermer, useEtatsBanqueHeures, useFermerDossier, type DossierAFermer, type Statut } from './donnees'
+import { lignesDirection, type LigneDirection } from './direction'
+import {
+  nomDe,
+  useDossiersAFermer,
+  useEtatsBanqueHeures,
+  useFeuillesPlage,
+  useFermerDossier,
+  useHeuresPlage,
+  useMembres,
+  type DossierAFermer,
+  type Statut,
+} from './donnees'
 import {
   nomEmploye,
   useEmployesFeuille,
@@ -22,7 +34,10 @@ import {
   type EmployeFeuille,
   type Entreprise,
 } from './donneesEmployes'
+import { usePaieDirection } from './donneesEmployeurD'
+import { ExportEmployeurD } from './ExportEmployeurD'
 import { Case } from './Feuille'
+import { RangeesDirection } from './SectionDirection'
 import { PastilleStatut } from './Statut'
 import { menu, usePeriode } from './outils'
 import {
@@ -42,6 +57,8 @@ import {
 
 /** Filtres « secteur » et « compagnie » : '' = tous, SANS = sans secteur ou sans compagnie. */
 const SANS = '-'
+/** Filtre « secteur » : la section Direction seulement (admins). */
+const DIRECTION = '@direction'
 const libelleSecteur = (s: string | null) => s ?? 'Sans secteur'
 
 /** Une ligne = un employé pour une compagnie (null : employé actif sans compagnie, rien à saisir). */
@@ -117,10 +134,20 @@ export function FeuilleEmployes() {
   const masques = useDossiersAFermer(debut)
   const [afficherMasques, setAfficherMasques] = useState(false)
   const etatsBanque = useEtatsBanqueHeures()
+  const [employeurD, setEmployeurD] = useState(false)
+  // Section Direction (admins seulement, qui préparent la paie) : feuilles de la direction, lues ici, jamais saisies.
+  const { estAdmin } = useAuth()
+  const membres = useMembres(estAdmin)
+  const heuresDirection = useHeuresPlage(debut, finPeriode(debut), estAdmin)
+  const feuillesDirection = useFeuillesPlage(debut, debut, estAdmin)
+  const paieDirection = usePaieDirection(estAdmin)
 
   const nomCompagnie =
     compagnie === SANS ? 'Sans compagnie' : (entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null)
-  const sousTitre = [secteur ? (secteur === SANS ? 'Sans secteur' : secteur) : null, compagnie ? nomCompagnie : null]
+  const sousTitre = [
+    secteur ? (secteur === SANS ? 'Sans secteur' : secteur === DIRECTION ? 'Direction' : secteur) : null,
+    compagnie ? nomCompagnie : null,
+  ]
     .filter(Boolean)
     .map((t) => ` - ${t}`)
     .join('')
@@ -233,15 +260,38 @@ export function FeuilleEmployes() {
     )
   }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, masques.data, etatsBanque.data, milieu, debut])
 
+  const direction = useMemo(() => {
+    if (!estAdmin) return []
+    if (!membres.data || !heuresDirection.data || !feuillesDirection.data || !paieDirection.data || !entreprises.data) return null
+    return lignesDirection({
+      membres: membres.data,
+      heures: heuresDirection.data,
+      feuilles: feuillesDirection.data,
+      paie: paieDirection.data,
+      entreprises: entreprises.data,
+      milieu,
+    })
+  }, [estAdmin, membres.data, heuresDirection.data, feuillesDirection.data, paieDirection.data, entreprises.data, milieu])
+
   const erreur =
-    employes.error ?? entreprises.error ?? heures.error ?? notes.error ?? feuilles.error ?? propres.error ?? masques.error ?? etatsBanque.error
+    employes.error ??
+    entreprises.error ??
+    heures.error ??
+    notes.error ??
+    feuilles.error ??
+    propres.error ??
+    masques.error ??
+    etatsBanque.error ??
+    (estAdmin ? (membres.error ?? heuresDirection.error ?? feuillesDirection.error ?? paieDirection.error) : null)
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
-  if (!toutes) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  if (!toutes || !direction) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const secteurs = [...new Set(toutes.map((l) => l.employe.secteur).filter((s): s is string => !!s))]
   const aSansSecteur = toutes.some((l) => !l.employe.secteur)
-  const compagnies = (entreprises.data ?? []).filter((x) => toutes.some((l) => l.entreprise?.id === x.id))
-  const aSansCompagnie = toutes.some((l) => !l.entreprise)
+  const compagnies = (entreprises.data ?? []).filter(
+    (x) => toutes.some((l) => l.entreprise?.id === x.id) || direction.some((d) => d.compagnie?.id === x.id),
+  )
+  const aSansCompagnie = toutes.some((l) => !l.entreprise) || direction.some((d) => !d.compagnie)
   const mots = recherche.trim().toLocaleLowerCase('fr')
   // Dossier à fermer sans rien dans la période : retiré de la saisie, sauf si on demande à le voir.
   const masquee = (l: Ligne) => l.aFermer && !l.total && !l.maladie && !l.banque && !l.note
@@ -255,6 +305,14 @@ export function FeuilleEmployes() {
     if (mots && ![e.surnom, e.nom_complet, e.poste].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
+  // Section Direction : avec tous les secteurs ou « Direction » ; compagnie = sa compagnie de paie.
+  const directionVisibles = direction.filter((d) => {
+    if (secteur && secteur !== DIRECTION) return false
+    if (compagnie === SANS ? d.compagnie : compagnie && d.compagnie?.id !== compagnie) return false
+    if (avecHeures && !d.total && !d.vacances && !d.maladie && !d.banque && !d.note) return false
+    if (mots && ![d.membre.nom, d.membre.courriel].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
+    return true
+  })
   // Regroupées par secteur seulement quand on les voit tous.
   const groupes: { secteur: string | null; lignes: Ligne[] }[] = []
   for (const l of lignes) {
@@ -264,11 +322,19 @@ export function FeuilleEmployes() {
     else groupes.push({ secteur: null, lignes: [l] })
   }
 
-  const totalJour = (jour: string) => lignes.reduce((s, l) => s + (l.parJour.get(jour) ?? 0), 0)
-  const somme = (f: (l: Ligne) => number) => lignes.reduce((s, l) => s + f(l), 0)
-  // Total par compagnie (pour la paie), quand plusieurs compagnies sont affichées.
+  // Totaux : employés et direction affichés (heures régulières).
+  const totalJour = (jour: string) =>
+    lignes.reduce((s, l) => s + (l.parJour.get(jour) ?? 0), 0) + directionVisibles.reduce((s, d) => s + (d.parJour.get(jour) ?? 0), 0)
+  const somme = (f: (l: Ligne | LigneDirection) => number) =>
+    lignes.reduce((s, l) => s + f(l), 0) + directionVisibles.reduce((s, d) => s + f(d), 0)
+  // Total par compagnie (pour la paie), quand plusieurs compagnies sont affichées ; la direction à sa compagnie de paie.
   const parCompagnie = (entreprises.data ?? [])
-    .map((x) => ({ nom: x.nom, total: lignes.filter((l) => l.entreprise?.id === x.id).reduce((s, l) => s + l.total, 0) }))
+    .map((x) => ({
+      nom: x.nom,
+      total:
+        lignes.filter((l) => l.entreprise?.id === x.id).reduce((s, l) => s + l.total, 0) +
+        directionVisibles.filter((d) => d.compagnie?.id === x.id).reduce((s, d) => s + d.total, 0),
+    }))
     .filter((x) => x.total)
   const auj = aujourdhui()
   const fond = (jour: string) => (jour === auj ? 'bg-foret-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : '')
@@ -280,15 +346,26 @@ export function FeuilleEmployes() {
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <ChoixPeriode debut={debut} onChange={setDebut} />
         <div className="flex flex-wrap items-center gap-2">
-          <button className={ui.boutonSecondaire} onClick={() => exporter(debut, jours, lignes)} disabled={!lignes.length}>
+          <button
+            className={ui.boutonSecondaire}
+            onClick={() => exporter(debut, jours, lignes, directionVisibles)}
+            disabled={!lignes.length && !directionVisibles.length}
+          >
             <IconeTableur className="size-4" />
             Exporter
+          </button>
+          <button className={ui.boutonSecondaire} onClick={() => setEmployeurD(true)} title="Fichier de saisie de la paie pour Employeur D (Desjardins)">
+            <IconeTableur className="size-4" />
+            Employeur D
           </button>
           <button className={ui.boutonSecondaire} onClick={() => window.print()}>
             Imprimer
           </button>
         </div>
       </div>
+      {employeurD && (
+        <ExportEmployeurD debut={debut} compagnieDepart={compagnie === SANS ? '' : compagnie} fermer={() => setEmployeurD(false)} />
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
         <select aria-label="Secteur" className={menu} value={secteur} onChange={(e) => choisir('secteur', e.target.value)}>
@@ -299,8 +376,9 @@ export function FeuilleEmployes() {
             </option>
           ))}
           {aSansSecteur && <option value={SANS}>Sans secteur</option>}
+          {estAdmin && <option value={DIRECTION}>Direction</option>}
           {/* Secteur de l'adresse qui n'existe plus : reste choisi, liste vide. */}
-          {secteur && secteur !== SANS && !secteurs.includes(secteur) && <option value={secteur}>{secteur}</option>}
+          {secteur && secteur !== SANS && secteur !== DIRECTION && !secteurs.includes(secteur) && <option value={secteur}>{secteur}</option>}
         </select>
         <select aria-label="Compagnie" className={menu} value={compagnie} onChange={(e) => choisir('compagnie', e.target.value)}>
           <option value="">Toutes les compagnies</option>
@@ -348,14 +426,14 @@ export function FeuilleEmployes() {
 
       {erreurNote && <p className={ui.erreur}>{erreurNote}</p>}
 
-      {!toutes.length ? (
+      {!toutes.length && !direction.length ? (
         <p className={`${ui.carte} px-4 py-8 text-center text-sm text-pierre-500`}>
           Aucun employé actif dans le référentiel.{' '}
           <Link to="/referentiel/employes" className="text-foret-700 underline">
             Ajouter des employés
           </Link>
         </p>
-      ) : !lignes.length ? (
+      ) : !lignes.length && !directionVisibles.length ? (
         <p className={`${ui.carte} px-4 py-8 text-center text-sm text-pierre-500`}>Aucun employé ne correspond aux filtres.</p>
       ) : (
         <div className={`${ui.carte} overflow-x-auto`}>
@@ -511,6 +589,14 @@ export function FeuilleEmployes() {
                   })}
                 </Fragment>
               ))}
+              <RangeesDirection
+                lignes={directionVisibles}
+                jours={jours}
+                debut={debut}
+                avecTitre={secteur === ''}
+                classeJour={fond}
+                coupure={coupure}
+              />
               <tr className="bg-pierre-50 font-semibold">
                 <th className="sticky left-0 z-10 bg-pierre-50 px-3 py-1.5 text-left">
                   Total
@@ -546,6 +632,8 @@ export function FeuilleEmployes() {
         s’affichent ici (maladie et heures prises en banque sous son nom), et on les corrige dans sa feuille (clic sur son
         nom). Un employé sans compte dont la mise en banque est activée (onglet Banques) a une ligne « Prises en banque »
         sous la sienne. Un employé sans heures depuis 2 périodes est retiré de la saisie (dossier à fermer).
+        {estAdmin &&
+          ' Section Direction (admins seulement) : les heures de la feuille de chaque personne de la direction, lues ici (on les corrige dans sa feuille : clic sur son nom) ; sa compagnie de paie et son matricule se règlent dans Employeur D › Réglages.'}
       </p>
     </div>
   )
@@ -585,8 +673,11 @@ function CaseNote({ valeur, libelle, onEnregistrer }: { valeur: string; libelle:
   )
 }
 
-/** CSV pour Excel (séparateur « ; », virgule décimale, BOM pour les accents), lignes affichées seulement. */
-function exporter(debut: string, jours: string[], lignes: Ligne[]) {
+/**
+ * CSV pour Excel (séparateur « ; », virgule décimale, BOM pour les accents),
+ * lignes affichées seulement, la section Direction (admins) comprise.
+ */
+function exporter(debut: string, jours: string[], lignes: Ligne[], direction: LigneDirection[]) {
   const nombre = (n: number) => (n ? String(Math.round(n * 100) / 100).replace('.', ',') : '')
   const champ = (t: string | null) => (t && /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : (t ?? ''))
   const entete = [
@@ -601,6 +692,7 @@ function exporter(debut: string, jours: string[], lignes: Ligne[]) {
     'Semaine 1',
     'Semaine 2',
     'Total',
+    'Vacances',
     'Maladie',
     'Prises en banque',
     'Note',
@@ -619,11 +711,31 @@ function exporter(debut: string, jours: string[], lignes: Ligne[]) {
     nombre(l.sem1) || '0',
     nombre(l.sem2) || '0',
     nombre(l.total) || '0',
+    '',
     nombre(l.maladie),
     nombre(l.banque),
     champ(l.note),
     l.statut ? LIBELLES_ETAT[l.statut] : '',
   ])
+  for (const d of direction)
+    rangees.push([
+      pp,
+      datePaie(debut),
+      champ(nomDe(d.membre)),
+      '',
+      champ(d.compagnie?.nom ?? null),
+      'Direction',
+      d.membre.role === 'admin' ? 'Admin' : 'Direction',
+      ...jours.map((j) => nombre(d.parJour.get(j) ?? 0)),
+      nombre(d.sem1) || '0',
+      nombre(d.sem2) || '0',
+      nombre(d.total) || '0',
+      nombre(d.vacances),
+      nombre(d.maladie),
+      nombre(d.banque),
+      champ(d.note),
+      d.statut ? LIBELLES_ETAT[d.statut] : '',
+    ])
   const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')
   lien.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))

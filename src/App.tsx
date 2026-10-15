@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router'
 import { Compagnies, Employes, Groupes, Referentiel, Semaines } from '@/core/Referentiel'
 import { Utilisateurs } from '@/core/Utilisateurs'
+import { estPagePublique } from '@/lib/pagesPubliques'
 import { configManquante } from '@/lib/supabase'
 import { Accueil } from '@/shell/accueil/Accueil'
 import { useAuth } from '@/shell/auth'
@@ -30,6 +31,10 @@ const Caisse = lazy(() => import('@/modules/caisse'))
 const Ameliorations = lazy(() => import('@/modules/ameliorations'))
 const Reunions = lazy(() => import('@/modules/reunions'))
 const Crm = lazy(() => import('@/modules/crm'))
+const Rh = lazy(() => import('@/modules/rh'))
+// Pages publiques (visiteurs sans compte) : RH (candidature, intention de
+// retour, dossier d'embauche). Aiguillage : src/lib/public.
+const PagesPubliques = lazy(() => import('@/lib/public/PagesPubliques'))
 
 export default function App() {
   const { session, profil, chargement, erreurProfil } = useAuth()
@@ -42,6 +47,13 @@ export default function App() {
       </div>
     )
   }
+  // Pages publiques : ni connexion ni menu (le visiteur n'a pas de compte).
+  if (estPagePublique())
+    return (
+      <Suspense fallback={<Chargement />}>
+        <PagesPubliques />
+      </Suspense>
+    )
   if (chargement) return <Chargement />
   if (!session) return <PageConnexion />
   if (erreurProfil) return <ProfilIndisponible />
@@ -72,6 +84,7 @@ export default function App() {
           <Route path="ameliorations/*" element={<GardeModule module="ameliorations"><Ameliorations /></GardeModule>} />
           <Route path="reunions/*" element={<GardeModule module="reunions"><Reunions /></GardeModule>} />
           <Route path="crm/*" element={<GardeModule module="crm"><Crm /></GardeModule>} />
+          <Route path="rh/*" element={<GardeModule module="rh"><Rh /></GardeModule>} />
           <Route path="referentiel" element={<GardeDirection><Referentiel /></GardeDirection>}>
             <Route index element={<Navigate to="employes" replace />} />
             <Route path="groupes" element={<Groupes />} />

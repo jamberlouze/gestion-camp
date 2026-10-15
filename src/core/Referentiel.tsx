@@ -77,6 +77,7 @@ export function Employes() {
           { champ: 'secteur', libelle: 'Secteur', type: 'texte' },
           { champ: 'poste', libelle: 'Poste', type: 'texte' },
           { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
+          { champ: 'matricule_employeur_d', libelle: 'Matricule Employeur D', type: 'texte' },
           { champ: 'actif', libelle: 'Actif', type: 'booleen' },
         ]}
       />
@@ -99,6 +100,7 @@ export function Compagnies() {
         { champ: 'description', libelle: 'Description', type: 'texte' },
         { champ: 'couleur', libelle: 'Couleur', type: 'couleur' },
         { champ: 'ordre', libelle: 'Ordre', type: 'nombre' },
+        { champ: 'numero_employeur_d', libelle: 'No Employeur D', type: 'texte' },
         { champ: 'actif', libelle: 'Active', type: 'booleen' },
       ]}
     />

@@ -36,3 +36,6 @@ supabase/.branches
 
 # Copie des anciennes bases (données du camp, hors dépôt)
 scripts/migration/sauvegarde/
+
+# Secrets du Worker en DEV (wrangler dev)
+.dev.vars

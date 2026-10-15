@@ -1,7 +1,9 @@
 // Worker de la gestion du camp : sert l'application (fichiers statiques de
 // dist/, voir wrangler.jsonc), garde Supabase éveillé, fait la recherche
-// trimestrielle de la Vigie de subventions (voir subventions/pipeline.js) et
-// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js).
+// trimestrielle de la Vigie de subventions (voir subventions/pipeline.js),
+// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js)
+// et les routes du module RH (candidature, intention de retour, dossier
+// d'embauche, contrat signé en ligne, courriels de chaque compagnie : rh/api.js).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -15,6 +17,8 @@
 
 import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
+import { routeRh } from "./rh/api.js";
+import { preparerAutomatiques } from "./rh/courriels.js";
 import { routeSubventions } from "./subventions/api.js";
 import { passageSubventions } from "./subventions/pipeline.js";
 
@@ -42,6 +46,8 @@ export default {
     ctx.waitUntil(passageSubventions(env, new Date(event.scheduledTime)).catch((e) => console.error("Subventions :", e)));
     // Séjours Airtable → calendrier.sejours (rien tant que les secrets manquent).
     if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
+    // RH : rappels de dossier dus et résumé quotidien à la direction (rh/courriels.js).
+    ctx.waitUntil(preparerAutomatiques(env, new Date(event.scheduledTime)).catch((e) => console.error("Courriels RH :", e)));
   },
 
   async fetch(request, env, ctx) {
@@ -50,6 +56,8 @@ export default {
     if (api) return routeSubventions(request, env, ctx, api[1]);
     const cal = url.pathname.match(/^\/api\/calendrier\/([a-z]+)$/);
     if (cal) return routeCalendrier(request, env, cal[1]);
+    const rh = url.pathname.match(/^\/api\/rh\/([a-z]+)$/);
+    if (rh) return routeRh(request, env, rh[1], ctx);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping
     if (url.pathname === "/_ping") {
       try {
