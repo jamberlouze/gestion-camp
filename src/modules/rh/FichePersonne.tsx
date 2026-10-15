@@ -37,6 +37,7 @@ import {
   useValiderEmbauche,
 } from './donnees'
 import { Journal } from './Journal'
+import { LienReferentielFiche } from './LienReferentiel'
 import { age, correspond, dateCourte, estAncien, horodatage, libelleDate, nasLisible, nasMasque, nomAffiche, texteRecherche } from './outils'
 import { champPetit } from './styles'
 import {
@@ -280,6 +281,7 @@ function Contenu({ p }: { p: Personne }) {
                   <ChampTexte className={ui.champ} valeur={p.vaj_note ?? ''} disabled={!ecriture} enregistrer={(v) => changer({ vaj_note: v || null })} />
                 </Champ>
               </div>
+              <LienReferentielFiche p={p} />
               <label className="flex items-center gap-2">
                 <input type="checkbox" disabled={!ecriture} checked={p.deja_travaille} onChange={(e) => changer({ deja_travaille: e.target.checked })} />
                 A déjà travaillé avec nous avant la base RH (saisons inconnues)
@@ -933,7 +935,7 @@ function SectionPaie({ personneId }: { personneId: string }) {
               <ul className="mt-1 space-y-0.5">
                 {consultations.data!.slice(0, 20).map((c) => (
                   <li key={c.id}>
-                    {horodatage(c.le)} · {c.par_nom ?? '?'} · {c.quoi === 'specimen' ? 'spécimen' : 'NAS et compte'}
+                    {horodatage(c.le)} · {c.par_nom ?? '?'} · {c.quoi === 'specimen' ? 'spécimen' : c.quoi === 'export' ? 'export Employeur D (NAS et compte)' : 'NAS et compte'}
                   </li>
                 ))}
               </ul>

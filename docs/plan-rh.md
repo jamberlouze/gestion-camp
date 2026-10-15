@@ -1,6 +1,6 @@
 # Plan — module RH (recrutement, embauche et dossiers d'employés)
 
-Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12 ; phase 2 (pages publiques) bâtie en DEV le 2026-10-12.
+Version 1, du 2026-10-11. Décisions de Maxime en §12 ; phase 1 commencée le 2026-10-12 ; phase 2 (pages publiques) bâtie en DEV le 2026-10-12 ; phase 3 (courriels, contrat) et phase 4 (§14) bâties en DEV le 2026-10-15.
 Inventaire détaillé de l'existant (champs, formulaires, textes des courriels, Sheets) : `docs/rh-existant.md`.
 
 ## 0. Ce que le module remplace
@@ -156,7 +156,7 @@ Bâti en DEV le 2026-10-15 (phase 3) : migration `rh_contrats`, `src/modules/rh/
 | 1 | Schéma, accès, chiffrement ; saisons et postes ; Candidatures (liste, fiche, journal) ; Employés et fiche d'une personne ; import Airtable à l'essai | — |
 | 2 | Pages publiques : candidature, intention de retour, dossier d'embauche ; dépôt de fichiers ; alertes | bâtie en DEV le 2026-10-12 |
 | 3 | Courriels (modèles, envoi Gmail, journal) ; contrat produit et signé en ligne | bâtie en DEV le 2026-10-15 ; en ligne avant le pic de janvier (122 candidatures en janvier 2026) |
-| 4 | Planification, diètes par semaine, conformité, exports, lien avec le référentiel | avant les formations de mai |
+| 4 | Planification, diètes par semaine, conformité, exports, lien avec le référentiel | bâtie en DEV le 2026-10-15 (§14, migration `rh_phase4`) ; en ligne avant les formations de mai |
 | Bascule | Import final, formulaires Airtable fermés et redirigés, automatisations coupées | après la phase 3 |
 
 Airtable continue de tourner jusqu'à la bascule.
@@ -215,7 +215,22 @@ Réponses de Maxime du 2026-10-15 (phases 3 et 4) :
 - Intention de retour : inviter prépare le courriel des personnes qu'on vient d'inviter ; « Préparer les courriels manquants » pour les invitations faites avant.
 - Modèles de départ des courriels repris d'Airtable (`docs/rh-existant.md`), à relire ; contrat et consentement « à valider ».
 
+Phase 4 (2026-10-15) :
+
+- Codes de départ : textes courts (Anim, Remp, CDJ, Gest, Cuis, Spéc, Lout, Sauv, Oui, Congé, Non, n/a, Coupé) ; seuls Anim et Remp comptent face au besoin ; **CDJ présent mais pas compté au besoin** du camp de vacances.
+- Grille groupée par compagnie puis poste (pas les « branches » de la feuille) ; saison par défaut = la prochaine qui a des embauches **et** des dates.
+- Lettres tapées de suite dans la même case = un code (« co » → Congé) ; une seule lettre fait tourner les codes qui commencent par elle.
+- Disponibilités : une case vide où la personne s'est dite disponible a une pastille ; un code « présent » sur une date pas cochée a un contour rouge, seulement si son dossier a été reçu.
+- Contrat et consentement signalés seulement **avant** la validation (les embauches complètes importées d'Airtable n'ont pas de contrat dans l'app).
+- VAJ : à faire si 18 ans ou plus au début de l'embauche (âge inconnu = à faire) et VAJ absente ou échue au début (validité 3 ans, réglable) ; s'applique aussi aux bénévoles.
+- Cartes : la carte la plus lointaine compte ; expirée avant le début = « expirée », avant la fin = « expire pendant » ; une carte sans date n'est signalée que si le poste l'exige.
+- Liste de la saison et ACQ : embauches non annulées de la saison et de la compagnie choisies, bénévoles compris.
+- Employeur D : une modification (M, un ancien) met la date dans « Date de réembauche » (K) et laisse « Date d'embauche » (I) vide ; titre d'emploi exigé seulement pour un ajout (A) ; type de dépôt 1 = 1 (salaire) ; sans compte bancaire = chèque (mode 1) ; province hors liste (« Laurentides ») ou pays autre que Canada / États-Unis = à corriger au dossier ; États-Unis = province ZZ, code postal américain en T ; assurance maladie « aucun » ou illisible = vide ; téléphone et courriel illisibles ou trop longs = vides (avertissement) ; dates en texte AAAA-MM-JJ, NAS, transit, institution et compte en texte (zéros de tête gardés), matricule, heures et taux en nombres ; le 4 % n'est pas exporté (banque de vacances à régler dans Employeur D).
+- Référentiel : un bénévole validé reçoit aussi une fiche (Animation, Rooming) ; une personne au même courriel qu'un compte de la direction n'en reçoit pas d'office (règle des Feuilles de temps) ; la correspondance par le nom se fait sans tenir compte de la casse (et des accents dans la fenêtre « Relier ») ; une fiche créée par « Relier au référentiel » est active seulement si la dernière embauche complète n'est pas terminée ; « Relier » ne change ni l'état actif ni les compagnies d'une fiche existante.
+
 ## 14. Conception de la phase 4 (2026-10-15)
+
+Bâtie en DEV le 2026-10-15 (migration `20261015125223_rh_phase4`, vérification `docs/verification-rh-phase4.md`) ; écarts et précisions : §13 (phase 4). Le canevas exige aussi le **numéro du titre d'emploi** (colonne G du profil emploi, obligatoire pour un ajout) : réglage `titre_emploi` d'Employeur D, vide au départ.
 
 Remplace la feuille « Suivi RH 2026 » (planification, diètes) et les vues Airtable de conformité (VAJ, premiers soins, certifications) ; ajoute les exports (Employeur D, ACQ, VAJ, liste) et le lien avec le référentiel. En DEV seulement, comme les phases 1 à 3. Inventaire de la feuille : `docs/rh-existant.md` §7. Canevas Employeur D « Données d'emploi » (septembre 2026) : résumé en §14.4.
 

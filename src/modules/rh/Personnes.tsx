@@ -5,6 +5,8 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { useRh } from './contexte'
 import { useAjouterPersonne } from './donnees'
+import { usePersonnesARelier, usePeutRelier } from './donneesConformite'
+import { FenetreReferentiel } from './LienReferentiel'
 import { correspond, nomAffiche, texteRecherche } from './outils'
 import { champPetit } from './styles'
 
@@ -17,6 +19,9 @@ export function Personnes() {
   const [filtre, setFiltre] = useState<'' | 'employes' | 'jamais' | 'ne_pas'>('')
   const [nombre, setNombre] = useState(PAR_PAGE)
   const [ajout, setAjout] = useState(false)
+  const [referentiel, setReferentiel] = useState(false)
+  const peutRelier = usePeutRelier()
+  const aRelier = usePersonnesARelier().length
 
   const lignes = useMemo(() => {
     return personnes
@@ -44,6 +49,12 @@ export function Personnes() {
           <option value="ne_pas">Ne pas réembaucher</option>
         </select>
         <div className="flex-1" />
+        {peutRelier && (
+          <button className={ui.boutonSecondaire} onClick={() => setReferentiel(true)} title="Personnes qui ont une embauche complète sans fiche dans Référentiel › Employés">
+            Relier au référentiel
+            {aRelier > 0 && <span className="rounded-full bg-amber-100 px-1.5 py-px text-xs font-semibold text-amber-800">{aRelier}</span>}
+          </button>
+        )}
         {ecriture && (
           <button className={ui.bouton} onClick={() => setAjout(true)}>
             + Personne
@@ -90,6 +101,7 @@ export function Personnes() {
         )}
       </div>
       {ajout && <NouvellePersonne fermer={() => setAjout(false)} />}
+      {referentiel && <FenetreReferentiel fermer={() => setReferentiel(false)} />}
     </div>
   )
 }

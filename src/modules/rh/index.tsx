@@ -13,6 +13,7 @@ import { FichePersonne } from './FichePersonne'
 import { OngletCourriels } from './OngletCourriels'
 import { aujourdhui } from './outils'
 import { Personnes } from './Personnes'
+import { Planification } from './OngletPlanification'
 import { Reglages } from './Reglages'
 import type { Candidature, Embauche } from './types'
 
@@ -76,9 +77,9 @@ export default function ModuleRh() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">RH</h1>
+      <h1 className="text-2xl font-semibold print:hidden">RH</h1>
       {/* Adresses absolues : voir Embarcations. */}
-      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+      <nav className="sans-barre mt-3 mb-4 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/rh" end className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/c/') })}>
           Candidatures
           <Pastille n={aTraiter} titre="Candidatures à traiter" />
@@ -86,6 +87,9 @@ export default function ModuleRh() {
         <NavLink to="/rh/employes" className={onglet}>
           Employés
           <Pastille n={dossiersRecus} titre="Dossiers d'embauche reçus, à valider" />
+        </NavLink>
+        <NavLink to="/rh/planification" className={onglet}>
+          Planification
         </NavLink>
         <NavLink to="/rh/personnes" className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/p/') })}>
           Personnes
@@ -109,6 +113,7 @@ export default function ModuleRh() {
             <Route index element={<Candidatures />} />
             <Route path="c/:id" element={<FicheCandidature />} />
             <Route path="employes" element={<Employes />} />
+            <Route path="planification" element={<Planification />} />
             <Route path="personnes" element={<Personnes />} />
             <Route path="p/:id" element={<FichePersonne />} />
             <Route path="courriels" element={<OngletCourriels />} />

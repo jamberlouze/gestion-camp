@@ -56,7 +56,17 @@ export interface Poste {
   ordre: number
   /** Tâches reprises dans le contrat (« Tâches ») */
   taches: string | null
+  /** Cartes exigées (« manquante » dans la conformité) */
+  certifications: Certification[]
+  /** Numéro du poste dans Employeur D (8 lettres ou chiffres) */
+  poste_employeur_d: string | null
 }
+
+export type Certification = 'premiers_soins' | 'sauveteur'
+export const CERTIFICATIONS: { id: Certification; nom: string; court: string }[] = [
+  { id: 'premiers_soins', nom: 'Premiers soins', court: 'PS' },
+  { id: 'sauveteur', nom: 'Carte SN ou Croix de bronze', court: 'SN' },
+]
 
 export interface Personne {
   id: string
@@ -279,6 +289,8 @@ export interface Embauche {
   dossier_recu_le: string | null
   /** Lien personnel du dossier d'embauche (/dossier/<jeton>) ; null = pas encore créé */
   jeton: string | null
+  /** Dernier export vers Employeur D (posé par rh.export_employeur_d) */
+  employeur_d_le: string | null
   airtable_id: string | null
   created_at: string
 }
@@ -381,7 +393,7 @@ export interface LigneJournal {
 export interface Consultation {
   id: number
   personne_id: string
-  quoi: 'paie' | 'specimen'
+  quoi: 'paie' | 'specimen' | 'export'
   par_nom: string | null
   le: string
 }
@@ -394,6 +406,8 @@ export interface Compagnie {
   couleur: string | null
   ordre: number
   actif: boolean
+  /** Numéro de compagnie Employeur D (core.entreprises, partagé avec les Feuilles de temps) */
+  numero_employeur_d: string | null
 }
 
 // ------------------------------------------------------------
@@ -465,4 +479,64 @@ export interface Contrat {
   lien_signataire: string | null
   document_id: string | null
   annule_le: string | null
+}
+
+// ------------------------------------------------------------
+// Phase 4 : planification de la saison
+// ------------------------------------------------------------
+
+/** Couleurs des codes de la planification (classes dans Planification.tsx). */
+export const COULEURS_CODE = ['vert', 'sarcelle', 'lime', 'violet', 'orange', 'bleu', 'brun', 'ciel', 'jaune', 'gris', 'rouge', 'rose'] as const
+export type CouleurCode = (typeof COULEURS_CODE)[number]
+
+/** Code d'une case de la planification (« Anim », « Congé »…). */
+export interface CodePlanification {
+  id: string
+  /** Texte court affiché dans la case */
+  code: string
+  nom: string
+  couleur: CouleurCode
+  /** Compte comme présent (diètes, « Tous présents ») */
+  present: boolean
+  /** Compte face au besoin prévu (« Présents », « Écart ») */
+  besoin: boolean
+  ordre: number
+  actif: boolean
+}
+
+/** Une case : une embauche × une date de sa saison (vide = pas de ligne). */
+export interface CasePlanification {
+  embauche_id: string
+  date_id: string
+  code_id: string
+  note: string | null
+  updated_at?: string
+  updated_by_nom?: string | null
+}
+
+/** Lignes de pilotage saisies, une par date. */
+export interface Pilotage {
+  date_id: string
+  besoin: number | null
+  reel_an_passe: number | null
+}
+
+/** Fiche du référentiel Employés (core.employes), telle que le RH la lit. */
+export interface EmployeReferentiel {
+  id: string
+  surnom: string
+  nom_complet: string | null
+  prenom: string | null
+  nom_famille: string | null
+  courriel: string | null
+  actif: boolean
+  entreprise_ids: string[]
+  matricule_employeur_d: string | null
+}
+
+/** Document de conformité (sans le chemin du fichier). */
+export interface DocumentConformite {
+  personne_id: string
+  genre: GenreDocument
+  expire_le: string | null
 }

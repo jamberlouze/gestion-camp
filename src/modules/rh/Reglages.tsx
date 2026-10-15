@@ -21,8 +21,10 @@ import {
 } from './donnees'
 import { horodatage, plageDates } from './outils'
 import { ReglagesContrats } from './ReglagesContrats'
+import { ReglagesEmployeurD } from './ReglagesEmployeurD'
+import { ReglagesPlanification } from './ReglagesPlanification'
 import { TexteFormate } from './TexteFormate'
-import { GENRES_DATE, GENRES_SAISON, GENRES_TEXTE, type DateSaison, type GenreDate, type GenreSaison, type GenreTexte, type Poste, type Saison } from './types'
+import { CERTIFICATIONS, GENRES_DATE, GENRES_SAISON, GENRES_TEXTE, type DateSaison, type GenreDate, type GenreSaison, type GenreTexte, type Poste, type Saison } from './types'
 import { champPetit } from './styles'
 
 /** Saisons (et leurs dates), postes, textes et liens des pages publiques ; contrats (taux, modèles, tâches). */
@@ -43,6 +45,8 @@ export function Reglages() {
       </div>
       <Textes />
       <ReglagesContrats />
+      <ReglagesPlanification />
+      <ReglagesEmployeurD />
     </div>
   )
 }
@@ -386,7 +390,10 @@ function Postes() {
         </label>
       }
     >
-      <p className="mb-3 text-sm text-pierre-600">Les saisons cochées sont celles où le poste est offert dans le formulaire de candidature.</p>
+      <p className="mb-3 text-sm text-pierre-600">
+        Les saisons cochées sont celles où le poste est offert dans le formulaire de candidature. PS et SN : cartes exigées (premiers soins, carte SN ou Croix de bronze ;
+        « manquante » dans Employés). Dernière case : numéro du poste dans Employeur D (export de la paie).
+      </p>
       <div className="space-y-4">
         {[...groupes].map(([cid, ps]) => (
           <div key={cid}>
@@ -427,7 +434,7 @@ function LignePoste({ p, utilise }: { p: Poste; utilise: boolean }) {
   const changer = (champs: Partial<Poste>) => modifier.mutate({ id: p.id, champs })
   return (
     <li className={`flex flex-wrap items-center gap-2 py-1.5 ${p.actif ? '' : 'opacity-60'}`}>
-      <ChampTexte className="min-w-0 flex-1 rounded border border-transparent px-1.5 py-0.5 hover:border-pierre-200 focus:border-foret-600 focus:outline-none" valeur={p.nom} obligatoire disabled={!ecriture} enregistrer={(nom) => changer({ nom })} />
+      <ChampTexte className="min-w-44 flex-1 rounded border border-transparent px-1.5 py-0.5 hover:border-pierre-200 focus:border-foret-600 focus:outline-none" valeur={p.nom} obligatoire disabled={!ecriture} enregistrer={(nom) => changer({ nom })} />
       <span className="flex gap-1">
         {GENRES_SAISON.map((g) => {
           const coche = p.genres.includes(g.id)
@@ -444,6 +451,33 @@ function LignePoste({ p, utilise }: { p: Poste; utilise: boolean }) {
           )
         })}
       </span>
+      <span className="flex gap-1">
+        {CERTIFICATIONS.map((c) => {
+          const coche = p.certifications.includes(c.id)
+          return (
+            <button
+              key={c.id}
+              disabled={!ecriture}
+              title={`${c.nom} : ${coche ? 'exigée' : 'pas exigée'}`}
+              aria-pressed={coche}
+              onClick={() => changer({ certifications: coche ? p.certifications.filter((x) => x !== c.id) : [...p.certifications, c.id] })}
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${coche ? 'bg-sky-100 text-sky-800' : 'bg-pierre-50 text-pierre-400'}`}
+            >
+              {c.court}
+            </button>
+          )
+        })}
+      </span>
+      <ChampTexte
+        aria-label={`Poste Employeur D de ${p.nom}`}
+        title="Numéro du poste dans Employeur D (8 lettres ou chiffres)"
+        className="w-20 rounded border border-pierre-200 px-1.5 py-0.5 font-mono text-xs uppercase"
+        placeholder="No ED"
+        maxLength={8}
+        valeur={p.poste_employeur_d ?? ''}
+        disabled={!ecriture}
+        enregistrer={(v) => changer({ poste_employeur_d: v.replace(/\s/g, '').toUpperCase() || null })}
+      />
       {ecriture &&
         (p.actif ? (
           <button

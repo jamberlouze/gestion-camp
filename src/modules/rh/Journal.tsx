@@ -12,6 +12,7 @@ const ICONES: Record<string, string> = {
   document: '📄',
   fusion: '🔗',
   import: '🗄️',
+  referentiel: '🪪',
 }
 
 /** Journal d'une personne (ou d'une seule de ses candidatures), du plus récent au plus ancien. */

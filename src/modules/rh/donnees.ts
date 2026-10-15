@@ -69,7 +69,7 @@ export function useCompagnies() {
   return useQuery({
     queryKey: ['rh', 'compagnies'],
     queryFn: async () => {
-      const { data, error } = await supabase.schema('core').from('entreprises').select('id, nom, abreviation, couleur, ordre, actif').order('ordre')
+      const { data, error } = await supabase.schema('core').from('entreprises').select('id, nom, abreviation, couleur, ordre, actif, numero_employeur_d').order('ordre')
       if (error) throw error
       return data as Compagnie[]
     },
@@ -221,7 +221,8 @@ export const useRetirerSaison = () => useRetirer('saisons')
 export const useAjouterDate = () => useAjouter<DateSaison>('saisons_dates')
 export const useModifierDate = () => useModifier<DateSaison>('saisons_dates')
 export const useRetirerDate = () => useRetirer('saisons_dates')
-export const useAjouterPoste = () => useAjouter<Poste>('postes', (l) => ({ nom: '', entreprise_id: '', genres: [], description_url: null, actif: true, ordre: 0, taches: null, ...l }))
+export const useAjouterPoste = () =>
+  useAjouter<Poste>('postes', (l) => ({ nom: '', entreprise_id: '', genres: [], description_url: null, actif: true, ordre: 0, taches: null, certifications: [], poste_employeur_d: null, ...l }))
 export const useModifierPoste = () => useModifier<Poste>('postes')
 export const useRetirerPoste = () => useRetirer('postes')
 export const useAjouterPersonne = () =>
@@ -299,6 +300,7 @@ export const useAjouterEmbauche = () =>
     presentation: {},
     dossier_recu_le: null,
     jeton: null,
+    employeur_d_le: null,
     airtable_id: null,
     created_at: new Date().toISOString(),
     ...l,
@@ -421,7 +423,15 @@ export function useValiderEmbauche() {
       const { error } = await db().rpc('valider_embauche', { p_embauche: embauche })
       if (error) throw error
     },
-    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+    // La validation relie aussi la personne au référentiel Employés (fiche créée au besoin).
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }),
+        client.invalidateQueries({ queryKey: ['rh', 'journal'] }),
+        client.invalidateQueries({ queryKey: ['rh', 'personnes'], exact: true }),
+        client.invalidateQueries({ queryKey: ['rh', 'employes-referentiel'] }),
+        client.invalidateQueries({ queryKey: ['core', 'employes'] }),
+      ]),
   })
 }
 

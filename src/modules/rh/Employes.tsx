@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { MenuCompagnie, MenuSaison, PuceAncien, PuceStatutEmbauche } from './commun'
+import { FenetreVaj, PucesConformite } from './ConformiteEmployes'
 import { useRh } from './contexte'
+import { useConformite } from './donneesConformite'
+import { ExportEmployeurD } from './ExportEmployeurD'
+import { MenuExporter } from './Exports'
 import { FenetreRetour } from './IntentionRetour'
 import { correspond, estAncien, saisonParDefaut, texteRecherche } from './outils'
 import { STATUTS_EMBAUCHE, type StatutEmbauche } from './types'
@@ -11,14 +16,16 @@ import { champPetit } from './styles'
 
 /** Les embauches d'une saison : qui travaille, à quel poste, où en est son dossier. */
 export function Employes() {
-  const { saisons, embauches, personneParId, posteParId, compagnieParId, saisonParId, embauchesDe, compagnies, ecriture, auj } = useRh()
+  const { saisons, embauches, personneParId, posteParId, compagnieParId, saisonParId, embauchesDe, compagnies, ecriture, paie, auj } = useRh()
   const [params, setParams] = useSearchParams()
   const saison = params.get('saison') || saisonParDefaut(saisons, embauches, auj)
   const compagnie = params.get('compagnie')
   const statut = params.get('statut') as StatutEmbauche | 'actives' | null
   const genre = params.get('genre')
+  const regler = params.get('regler') === '1'
   const [recherche, setRecherche] = useState('')
   const [retour, setRetour] = useState(false)
+  const [fenetre, setFenetre] = useState<'vaj' | 'employeur_d' | null>(null)
 
   const changer = (cle: string, valeur: string | null) => {
     const p = new URLSearchParams(params)
@@ -41,10 +48,17 @@ export function Employes() {
     return !recherche.trim() || correspond(texteRecherche(p), recherche)
   })
   const garde = (s: StatutEmbauche) => (!statut || statut === 'actives' ? s !== 'annulee' : s === statut)
+  // Saison et compagnie choisies : conformité et exports (sans les autres filtres).
+  const deLaSaison = embauches.filter((e) => e.saison_id === saison && (!compagnie || e.entreprise_id === compagnie))
+  const conformite = useConformite(deLaSaison)
+  const nAregler = base.filter((e) => e.statut !== 'annulee' && conformite.parEmbauche.get(e.id)?.length).length
+  const s = saison ? saisonParId.get(saison) : undefined
+  const nomCompagnie = compagnie ? (compagnieParId.get(compagnie)?.nom ?? null) : null
+  const titre = [s?.nom, nomCompagnie].filter(Boolean).join(' · ')
 
   // Tri : compagnie (ordre du référentiel), poste, nom.
   const ordreCompagnie = new Map(compagnies.map((c) => [c.id, c.ordre]))
-  const lignes = base.filter((e) => garde(e.statut)).toSorted((a, b) => {
+  const lignes = base.filter((e) => garde(e.statut) && (!regler || !!conformite.parEmbauche.get(e.id)?.length)).toSorted((a, b) => {
     const pa = a.poste_id ? posteParId.get(a.poste_id) : undefined
     const pb = b.poste_id ? posteParId.get(b.poste_id) : undefined
     return (
@@ -71,6 +85,7 @@ export function Employes() {
             Intention de retour…
           </button>
         )}
+        {s && <MenuExporter embauches={deLaSaison} titre={titre} ouvrirVaj={() => setFenetre('vaj')} ouvrirEmployeurD={paie.lecture ? () => setFenetre('employeur_d') : null} />}
       </div>
 
       {recus.size > 0 && (
@@ -110,13 +125,22 @@ export function Employes() {
             </button>
           )
         })}
+        <button
+          onClick={() => changer('regler', regler ? null : '1')}
+          aria-pressed={regler}
+          title="Dossier, contrat, consentement parental, VAJ, premiers soins, carte SN"
+          className={`rounded-full border px-2.5 py-1 text-xs font-medium ${regler ? 'border-red-700 bg-red-700 text-white' : 'border-red-200 bg-white text-red-800 hover:bg-red-50'}`}
+        >
+          À régler <span className="opacity-70">{conformite.pret ? nAregler : '…'}</span>
+        </button>
       </div>
+      {conformite.erreur && <p className={ui.erreur}>{messageErreur(conformite.erreur)}</p>}
 
       {lignes.length === 0 ? (
         <p className="py-8 text-center text-sm text-pierre-500">Aucune embauche pour cette saison. Une embauche se crée en acceptant une candidature.</p>
       ) : (
         <div className={`${ui.carte} overflow-x-auto`}>
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-pierre-50 text-left text-xs uppercase tracking-wide text-pierre-500">
               <tr>
                 <th className="px-3 py-2 font-medium">Nom</th>
@@ -125,6 +149,7 @@ export function Employes() {
                 <th className="px-3 py-2 font-medium">Échelon</th>
                 <th className="px-3 py-2 font-medium">Paie</th>
                 <th className="px-3 py-2 font-medium">Dossier</th>
+                <th className="px-3 py-2 font-medium">À régler</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-pierre-100">
@@ -162,6 +187,9 @@ export function Employes() {
                     <td className="px-3 py-2">
                       <PuceStatutEmbauche statut={e.statut} />
                     </td>
+                    <td className="px-3 py-2">
+                      <PucesConformite pastilles={conformite.parEmbauche.get(e.id)} />
+                    </td>
                   </tr>
                 )
               })}
@@ -171,6 +199,10 @@ export function Employes() {
       )}
       <p className="text-xs text-pierre-500">{lignes.length} personne(s).</p>
       {retour && <FenetreRetour saisonSource={saison} fermer={() => setRetour(false)} />}
+      {fenetre === 'vaj' && <FenetreVaj embauches={deLaSaison} titre={titre} fermer={() => setFenetre(null)} />}
+      {fenetre === 'employeur_d' && s && (
+        <ExportEmployeurD embauches={deLaSaison} titre={titre} saisonNom={s.nom} compagnieNom={nomCompagnie} fermer={() => setFenetre(null)} />
+      )}
     </div>
   )
 }
