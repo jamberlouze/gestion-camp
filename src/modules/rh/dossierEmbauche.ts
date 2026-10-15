@@ -4,7 +4,9 @@
 // ou hors été selon la saison ; un bénévole n'a pas de section paie mais
 // une entente de bénévolat. Pré-rempli pour un ancien ; le NAS et le
 // numéro de compte déjà au dossier ne sont jamais réaffichés (3 derniers
-// chiffres seulement). Pas de contrat en phase 2 (signature en phase 3).
+// chiffres seulement). Le contrat (emploi) et, pour une personne mineure,
+// le consentement parental se signent sur la même page (phase 3 :
+// worker/rh/contrats.js), à part de l'envoi du dossier.
 //
 // Fichier pur : la page vérifie et prépare l'envoi ; le Worker
 // (worker/rh/api.js) revérifie avant de déposer les fichiers et d'appeler
@@ -70,6 +72,10 @@ export interface PageDossier {
   ethique_accepte_le: string | null
   entente: { id: string; version: number; texte: string } | null
   entente_acceptee_le: string | null
+  /** Contrat préparé par l'équipe (le plus récent qui n'est pas annulé) */
+  contrat?: { id: string; titre: string; statut: 'en_attente' | 'signe'; signe_le: string | null; nom_signataire: string | null } | null
+  /** Consentement parental déjà signé */
+  consentement?: { id: string; signe_le: string; nom_signataire: string; lien_signataire: string } | null
 }
 
 export interface DonneesDossier {
@@ -354,4 +360,45 @@ export function versDossier(d: DonneesDossier, page: PageDossier) {
       : {},
     commentaires: ete ? t(d.commentaires) : '',
   }
+}
+
+// ------------------------------------------------------------------
+// Signatures en ligne (contrat, consentement parental)
+// ------------------------------------------------------------------
+
+export const LIENS_PARENT = ['Mère', 'Père', 'Tuteur ou tutrice légale'] as const
+
+/** Signature tracée : image PNG en data URL, pas trop lourde. */
+export const imageSignatureValide = (v: unknown) =>
+  typeof v === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v) && v.length > 200 && v.length < 1_200_000
+
+export const MESSAGES_SIGNATURE = {
+  nom: 'Écris ton nom complet.',
+  nom_parent: 'Nom complet du parent ou tuteur.',
+  lien: 'Choisis le lien avec la personne mineure.',
+  image: 'Signe dans le cadre.',
+  accepte: 'Coche la case pour confirmer.',
+}
+
+type ChampSignature = 'nom' | 'image' | 'accepte' | 'lien'
+
+/** Signature du contrat (page et Worker). */
+export function erreursSignature(c: { jeton?: unknown; contrat?: unknown; nom?: unknown; image?: unknown; accepte?: unknown }) {
+  const e: Partial<Record<ChampSignature, string>> = {}
+  if (typeof c.nom !== 'string' || c.nom.trim().length < 3 || c.nom.length > 200) e.nom = MESSAGES_SIGNATURE.nom
+  if (!imageSignatureValide(c.image)) e.image = MESSAGES_SIGNATURE.image
+  if (c.accepte !== true) e.accepte = MESSAGES_SIGNATURE.accepte
+  if (typeof c.jeton !== 'string' || !/^[0-9a-f]{48}$/.test(c.jeton) || typeof c.contrat !== 'string' || !/^[0-9a-f-]{36}$/i.test(c.contrat)) e.accepte = 'Lien invalide.'
+  return e
+}
+
+/** Signature du consentement parental (page et Worker). */
+export function erreursConsentement(c: { jeton?: unknown; nom?: unknown; lien?: unknown; image?: unknown; accepte?: unknown }) {
+  const e: Partial<Record<ChampSignature, string>> = {}
+  if (typeof c.nom !== 'string' || c.nom.trim().length < 3 || c.nom.length > 200) e.nom = MESSAGES_SIGNATURE.nom_parent
+  if (typeof c.lien !== 'string' || !(LIENS_PARENT as readonly string[]).includes(c.lien)) e.lien = MESSAGES_SIGNATURE.lien
+  if (!imageSignatureValide(c.image)) e.image = MESSAGES_SIGNATURE.image
+  if (c.accepte !== true) e.accepte = MESSAGES_SIGNATURE.accepte
+  if (typeof c.jeton !== 'string' || !/^[0-9a-f]{48}$/.test(c.jeton)) e.accepte = 'Lien invalide.'
+  return e
 }

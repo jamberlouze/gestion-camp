@@ -1,6 +1,9 @@
 // Module RH : recrutement, embauche et dossiers d'employés (plan :
 // docs/plan-rh.md). Mêmes noms que le schéma `rh`.
 
+import type { TermesContrat } from './termesContrat'
+import type { GenreCourriel } from './courriels'
+
 export type GenreSaison = 'hiver' | 'printemps' | 'ete' | 'automne'
 export const GENRES_SAISON: { id: GenreSaison; nom: string }[] = [
   { id: 'hiver', nom: 'Hiver' },
@@ -51,6 +54,8 @@ export interface Poste {
   description_url: string | null
   actif: boolean
   ordre: number
+  /** Tâches reprises dans le contrat (« Tâches ») */
+  taches: string | null
 }
 
 export interface Personne {
@@ -389,4 +394,75 @@ export interface Compagnie {
   couleur: string | null
   ordre: number
   actif: boolean
+}
+
+// ------------------------------------------------------------
+// Phase 3 : courriels et contrats
+// ------------------------------------------------------------
+
+/** Courriel préparé (app ou Worker), corrigé, puis envoyé par le Worker seulement. */
+export interface CourrielRh {
+  id: string
+  genre: GenreCourriel
+  cle: string | null
+  personne_id: string | null
+  candidature_id: string | null
+  embauche_id: string | null
+  invitation_id: string | null
+  /** Compagnie dont la boîte envoie */
+  entreprise_id: string | null
+  a: string[]
+  sujet: string
+  corps: string
+  langue: 'fr' | 'en'
+  statut: 'prepare' | 'envoye' | 'annule'
+  erreur: string | null
+  cree_le: string
+  cree_par_nom: string | null
+  envoye_le: string | null
+  envoye_par_nom: string | null
+  annule_le: string | null
+  raison: string | null
+}
+
+/** État de la boîte d'envoi d'une compagnie (rh.etat_boites ; jamais le jeton). */
+export interface EtatBoite {
+  entreprise_id: string
+  adresse_envoi: string | null
+  adresse_connectee: string | null
+  etat: 'non_connectee' | 'a_reconnecter' | 'erreur' | 'connectee'
+  connecte_le: string | null
+  connecte_par_nom: string | null
+  dernier_envoi_le: string | null
+  erreur: string | null
+  erreur_le: string | null
+}
+
+/** Grille des taux : saison × poste × échelon. */
+export interface Taux {
+  id: string
+  saison_id: string
+  poste_id: string
+  echelon: number
+  remuneration: 'heure' | 'semaine'
+  montant: number
+}
+
+/** Contrat (ou consentement parental) d'une embauche ; termes et texte figés à la préparation. */
+export interface Contrat {
+  id: string
+  embauche_id: string
+  personne_id: string
+  genre: 'contrat' | 'consentement'
+  statut: 'en_attente' | 'signe' | 'annule'
+  titre: string
+  contenu: string
+  termes: TermesContrat
+  cree_le: string
+  cree_par_nom: string | null
+  signe_le: string | null
+  nom_signataire: string | null
+  lien_signataire: string | null
+  document_id: string | null
+  annule_le: string | null
 }

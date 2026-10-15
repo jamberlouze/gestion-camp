@@ -6,10 +6,11 @@ import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Candidatures } from './Candidatures'
 import { ContexteRh, type DonneesRh } from './contexte'
-import { useCandidatures, useCompagnies, useDatesSaisons, useEmbauches, useInvitations, usePersonnes, usePostes, useSaisons, useTextes } from './donnees'
+import { useCandidatures, useCompagnies, useCourriels, useDatesSaisons, useEmbauches, useInvitations, usePersonnes, usePostes, useSaisons, useTextes } from './donnees'
 import { Employes } from './Employes'
 import { FicheCandidature } from './FicheCandidature'
 import { FichePersonne } from './FichePersonne'
+import { OngletCourriels } from './OngletCourriels'
 import { aujourdhui } from './outils'
 import { Personnes } from './Personnes'
 import { Reglages } from './Reglages'
@@ -68,9 +69,10 @@ export default function ModuleRh() {
 
   const erreur =
     saisons.error ?? dates.error ?? postes.error ?? compagnies.error ?? personnes.error ?? candidatures.error ?? embauches.error ?? invitations.error ?? textes.error
-  // Pastilles des onglets : nouveautés des pages publiques (pas de courriel en phase 2).
+  // Pastilles des onglets : nouveautés des pages publiques, courriels à envoyer.
   const aTraiter = candidatures.data?.filter((c) => c.statut === 'recue').length ?? 0
   const dossiersRecus = embauches.data?.filter((e) => e.statut === 'dossier_recu').length ?? 0
+  const aEnvoyer = useCourriels({ statut: 'prepare' }).data?.length ?? 0
 
   return (
     <div>
@@ -87,6 +89,10 @@ export default function ModuleRh() {
         </NavLink>
         <NavLink to="/rh/personnes" className={(p) => onglet({ isActive: p.isActive || chemin.startsWith('/rh/p/') })}>
           Personnes
+        </NavLink>
+        <NavLink to="/rh/courriels" className={onglet}>
+          Courriels
+          <Pastille n={aEnvoyer} titre="Courriels à envoyer" />
         </NavLink>
         <NavLink to="/rh/reglages" className={onglet}>
           Réglages
@@ -105,6 +111,7 @@ export default function ModuleRh() {
             <Route path="employes" element={<Employes />} />
             <Route path="personnes" element={<Personnes />} />
             <Route path="p/:id" element={<FichePersonne />} />
+            <Route path="courriels" element={<OngletCourriels />} />
             <Route path="reglages" element={<Reglages />} />
             <Route path="*" element={<Navigate to="/rh" replace />} />
           </Routes>

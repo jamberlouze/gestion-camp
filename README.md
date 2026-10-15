@@ -472,8 +472,38 @@ d'embauche). Elles parlent seulement au Worker (`/api/rh/*`, voir
    Airtable par `https://emplois.camptremblant.com/emplois` (`?lang=en` pour
    l'anglais) à la bascule.
 
-`SUPABASE_SECRET_KEY` (section 8) sert aussi à ces pages. Pas de courriel en
-phase 2 : les liens personnels se copient depuis l'app.
+`SUPABASE_SECRET_KEY` (section 8) sert aussi à ces pages. Variable du Worker
+`HOTE_EMPLOIS=emplois.camptremblant.com` (`vars` de `wrangler.jsonc`, en même
+temps que `VITE_HOTE_EMPLOIS`) : les liens des rappels préparés par le Worker
+y mènent (sinon `APP_URL`).
+
+### 16. RH : courriels des compagnies (une boîte Gmail par compagnie)
+
+Chaque compagnie écrit de sa boîte (RH › Courriels › Compagnies et boîtes) :
+le Worker envoie par l'API Gmail avec le jeton que la boîte a donné en se
+connectant (chiffré dans la base, jamais lisible par l'app). Une seule fois :
+
+1. **Client OAuth Google** : console.cloud.google.com → projet de l'app (celui
+   de l'agenda des Subventions convient) → APIs & Services → activer **Gmail
+   API** → OAuth consent screen : type **External** (les boîtes sont dans
+   plusieurs domaines ; **Internal** seulement si elles sont toutes dans le même
+   Google Workspace), portées `openid`, `email`, `gmail.send` → **Publish app**
+   (« In production » : en mode « Testing », Google coupe l'accès après 7
+   jours ; l'app non vérifiée affiche un avertissement à la connexion, qu'on
+   passe par « Paramètres avancés »).
+2. Credentials → **Create OAuth client ID** → Web application → URI de
+   redirection autorisée : `https://<adresse de l'app>/api/rh/retourgoogle`
+   (celle de `APP_URL`).
+3. Secrets Cloudflare : `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
+   (`npx wrangler secret put …`).
+4. Dans l'app (direction) : pour chaque compagnie, « Connecter la boîte » → se
+   connecter **avec la boîte de la compagnie** (une autre est refusée) →
+   retour « Boîte connectée ✓ » → « M'envoyer un essai ».
+
+Changer l'adresse d'envoi d'une compagnie la met « À reconnecter » ; un jeton
+refusé par Google (mot de passe changé, accès retiré) la met en « Erreur » :
+la reconnecter. En DEV, tout part dans Mailpit (`COURRIELS_MAILPIT` dans
+`.dev.vars`), jamais vers Gmail.
 
 ## Ajouter un module
 

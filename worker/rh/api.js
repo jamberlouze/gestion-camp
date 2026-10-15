@@ -15,9 +15,20 @@
 //        consentement_parental, photo). Mêmes vérifications que la page
 //        (dossierEmbauche.ts), fichiers déposés (spécimen dans rh-paie), puis
 //        rh.recevoir_dossier ; fichiers retirés si la base refuse.
+//   GET  /api/rh/contrat, POST /api/rh/signer, GET|POST /api/rh/consentement
+//        contrat et consentement parental signés en ligne : rh/contrats.js
+//
+// Routes de l'équipe (jeton de session + droit d'écrire dans RH, rh.peut_envoyer) :
+//   POST /api/rh/etat        {envoi} : où partent les courriels (Mailpit, Gmail…)
+//   POST /api/rh/envoyer     {courriels: [id]} : envoie des courriels préparés (rh/courriels.js)
+//   POST /api/rh/connexion   {compagnie} → adresse de Google pour connecter sa boîte d'envoi
+//   POST /api/rh/tester      {compagnie} : courriel d'essai de la boîte, à soi-même
+//   POST /api/rh/preparer    prépare tout de suite les rappels de dossier dus
+//   GET  /api/rh/retourgoogle retour de Google après la connexion (state signé)
 //
 // Secrets : SUPABASE_SECRET_KEY et TURNSTILE_SECRET (Cloudflare en PROD,
-// .dev.vars en DEV). Aucun courriel en phase 2.
+// .dev.vars en DEV) ; GMAIL_CLIENT_ID et GMAIL_CLIENT_SECRET pour les boîtes
+// d'envoi (COURRIELS_MAILPIT en DEV).
 
 import { aujourdhui, erreurs, lireReponses, nettoyer, TEXTES, versCandidature } from '../../src/modules/rh/candidature.ts'
 import { erreursDossier, estEte, GENRES_FICHIERS, lireDossier, MESSAGES_DOSSIER, versDossier } from '../../src/modules/rh/dossierEmbauche.ts'
@@ -25,6 +36,8 @@ import { extensionDe, TAILLE_MAX_ENVOI, typeMime } from '../../src/modules/rh/fi
 import { erreursRetour, lireRetour, nettoyerRetour } from '../../src/modules/rh/retour.ts'
 import { verifierTurnstile } from '../commun/turnstile.js'
 import { base } from '../subventions/base.js'
+import { ErreurSignature, signerConsentement, signerContrat, voirConsentement, voirContrat } from './contrats.js'
+import { accuserReception, envoyerLot, ErreurCourriel, essaiBoite, modeEnvoi, preparerAutomatiques, retourGoogle, urlConnexion } from './courriels.js'
 import { deposer, retirer, SEAU_DOCUMENTS, SEAU_PAIE } from './fichiers.js'
 
 const json = (corps, status = 200) =>
@@ -42,16 +55,19 @@ function codeErreur(e) {
   return m ? m[1] : null
 }
 
-export async function routeRh(request, env, chemin) {
+export async function routeRh(request, env, chemin, ctx) {
   if (!env.SUPABASE_SECRET_KEY) return json({ erreur: 'serveur' }, 503)
   const url = new URL(request.url)
   try {
     if (chemin === 'emplois' && request.method === 'GET') return json(await base(env, 'rh').rpc('formulaire_emplois'))
-    if (chemin === 'candidature' && request.method === 'POST') return await recevoirCandidature(request, env)
+    if (chemin === 'candidature' && request.method === 'POST') return await recevoirCandidature(request, env, ctx)
     if (chemin === 'retour' && request.method === 'GET') return await pageRetour(url.searchParams.get('jeton') ?? '', env)
     if (chemin === 'retour' && request.method === 'POST') return await repondreRetour(request, env)
     if (chemin === 'dossier' && request.method === 'GET') return await pageDossier(url.searchParams.get('jeton') ?? '', env)
     if (chemin === 'dossier' && request.method === 'POST') return await recevoirDossier(request, env)
+    if (['contrat', 'signer', 'consentement'].includes(chemin)) return await routeSignatures(request, env, url, chemin)
+    if (chemin === 'retourgoogle' && request.method === 'GET') return await retourGoogle(url, env)
+    if (['etat', 'envoyer', 'connexion', 'tester', 'preparer'].includes(chemin) && request.method === 'POST') return await routeEquipe(request, env, chemin)
   } catch (e) {
     console.error(`RH ${chemin} :`, e)
     return json({ erreur: 'serveur' }, 502)
@@ -60,9 +76,82 @@ export async function routeRh(request, env, chemin) {
 }
 
 // ------------------------------------------------------------------
+// Contrat et consentement parental (page du dossier)
+// ------------------------------------------------------------------
+async function routeSignatures(request, env, url, chemin) {
+  try {
+    if (request.method === 'GET') {
+      const jeton = url.searchParams.get('jeton') ?? ''
+      const id = url.searchParams.get('id') ?? ''
+      if (!JETON.test(jeton) || (id && !UUID.test(id))) return json({ erreur: 'introuvable' }, 404)
+      if (chemin === 'contrat' && id) return await voirContrat(env, jeton, id)
+      if (chemin === 'consentement') return await voirConsentement(env, jeton, id || null, url.searchParams.get('naissance'))
+      return json({ erreur: 'introuvable' }, 404)
+    }
+    if (request.method !== 'POST' || chemin === 'contrat') return json({ erreur: 'introuvable' }, 404)
+    let corps
+    try {
+      corps = await request.json()
+    } catch {
+      return json({ erreur: 'requete' }, 400)
+    }
+    if (!corps || typeof corps !== 'object') return json({ erreur: 'requete' }, 400)
+    const res = chemin === 'signer' ? await signerContrat(request, env, corps) : await signerConsentement(request, env, corps)
+    return json(res, res.erreur ? 422 : 200)
+  } catch (e) {
+    if (e instanceof ErreurSignature) return json({ erreur: e.code }, e.status)
+    throw e
+  }
+}
+
+// ------------------------------------------------------------------
+// Routes de l'équipe (session)
+// ------------------------------------------------------------------
+
+/** Personne connectée qui écrit dans RH : {ok, nom, courriel}, sinon null. */
+export async function session(request, env) {
+  const jeton = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!jeton) return null
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/peut_envoyer`, {
+    method: 'POST',
+    headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${jeton}`, 'Content-Profile': 'rh', 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  if (!res.ok) return null
+  const r = await res.json()
+  return r?.ok ? r : null
+}
+
+async function routeEquipe(request, env, chemin) {
+  const s = await session(request, env)
+  if (!s) return json({ erreur: 'Accès refusé.' }, 403)
+  let corps = {}
+  try {
+    corps = await request.json()
+  } catch {
+    // Corps vide : vérifié plus bas.
+  }
+  try {
+    if (chemin === 'etat') return json({ envoi: modeEnvoi(env) })
+    if (chemin === 'envoyer') {
+      const ids = Array.isArray(corps.courriels) ? corps.courriels.filter((x) => UUID.test(String(x))).slice(0, 200) : []
+      if (!ids.length) return json({ erreur: 'Aucun courriel à envoyer.' }, 400)
+      return json({ resultats: await envoyerLot(env, ids, s.nom), envoi: modeEnvoi(env) })
+    }
+    if (chemin === 'preparer') return json({ ...(await preparerAutomatiques(env)), envoi: modeEnvoi(env) })
+    if (!UUID.test(String(corps.compagnie ?? ''))) return json({ erreur: 'Compagnie inconnue.' }, 400)
+    if (chemin === 'connexion') return json({ url: await urlConnexion(env, corps.compagnie, s.nom) })
+    return json(await essaiBoite(env, corps.compagnie, s.courriel, s.nom))
+  } catch (e) {
+    if (e instanceof ErreurCourriel) return json({ erreur: e.message, code: e.code }, 409)
+    throw e
+  }
+}
+
+// ------------------------------------------------------------------
 // Candidature (/emplois)
 // ------------------------------------------------------------------
-async function recevoirCandidature(request, env) {
+async function recevoirCandidature(request, env, ctx) {
   let form
   let corps
   try {
@@ -97,6 +186,12 @@ async function recevoirCandidature(request, env) {
     })
     // Même clé déjà reçue (double envoi) : la première candidature reste, ce CV-ci part.
     if (res?.deja) await retirer(env, SEAU_DOCUMENTS, [chemin])
+    // Accusé de réception au candidat (après la réponse : une panne d'envoi ne bloque rien).
+    else if (res?.id) {
+      const accuse = accuserReception(env, res.id).catch((e) => console.error('Accusé de réception RH :', e))
+      if (ctx?.waitUntil) ctx.waitUntil(accuse)
+      else await accuse
+    }
     return json({ ok: true })
   } catch (e) {
     await retirer(env, SEAU_DOCUMENTS, [chemin]).catch(() => {})

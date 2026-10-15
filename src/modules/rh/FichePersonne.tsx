@@ -7,8 +7,10 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
+import { SectionCourriels } from './CartesCourriels'
 import { BoutonCopier, Champ, MenuCompagnie, MenuPoste, MenuSaison, PuceAncien, PuceStatut, PuceStatutEmbauche, Section, ZoneTexte } from './commun'
 import { useRh } from './contexte'
+import { BoutonBienvenue, ContratEmbauche } from './ContratEmbauche'
 import { ListeDocuments } from './Documents'
 import { PuceInvitation } from './IntentionRetour'
 import { lienDossier, lienRetour } from './liens'
@@ -162,6 +164,8 @@ function Contenu({ p }: { p: Personne }) {
               </div>
             )}
           </Section>
+
+          <SectionCourriels personneId={p.id} />
 
           <Section titre="Candidatures">
             {candidatures.length === 0 ? (
@@ -365,6 +369,7 @@ function CarteEmbauche({ e }: { e: Embauche }) {
           </div>
 
           <DossierEmbauche e={e} />
+          <ContratEmbauche e={e} />
 
           {e.genre === 'emploi' && (
             <div>
@@ -481,8 +486,8 @@ function CarteEmbauche({ e }: { e: Embauche }) {
 
 /**
  * Lien personnel du dossier d'embauche (/dossier/<jeton>) : créer, copier,
- * refaire ; « Marquer comme envoyé » ; « Valider » (→ complète, le lien se
- * ferme). Pas de courriel en phase 2 : on copie le lien.
+ * refaire ; courriel de bienvenue (qui le contient) ; « Marquer comme
+ * envoyé » ; « Valider » (→ complète, le lien se ferme).
  */
 function DossierEmbauche({ e }: { e: Embauche }) {
   const { ecriture } = useRh()
@@ -498,8 +503,8 @@ function DossierEmbauche({ e }: { e: Embauche }) {
       ? "Dossier reçu : vérifie-le, complète la paie, puis valide. D'ici là, la personne peut le corriger avec le même lien."
       : url
         ? e.statut === 'a_envoyer'
-          ? "Copie le lien et envoie-le à la personne (les courriels viendront plus tard), puis « Marquer comme envoyé »."
-          : 'En attente du dossier.'
+          ? 'Prépare le courriel de bienvenue (il contient le lien), ou copie le lien et envoie-le autrement, puis « Marquer comme envoyé ».'
+          : 'En attente du dossier (rappel préparé seul après quelques jours).'
         : 'La personne remplit son dossier (coordonnées, paie, santé, urgence, disponibilités, code d’éthique, documents) par un lien personnel, sans compte.'
 
   return (
@@ -536,6 +541,7 @@ function DossierEmbauche({ e }: { e: Embauche }) {
           </button>
         )
       )}
+      {ecriture && <BoutonBienvenue e={e} />}
       <p className="text-xs text-pierre-500">{aide}</p>
       {ecriture && (
         <div className="flex flex-wrap items-center gap-2 pt-1">

@@ -218,6 +218,8 @@ function simuler({ turnstile = true, rpc = {} } = {}) {
       }
     }
     if (u.includes('/storage/v1/object/')) return Response.json({ Key: 'ok' })
+    // Lectures de tables (accusé de réception) : rien, donc pas de courriel.
+    if (u.includes('/rest/v1/') && (init.method ?? 'GET') === 'GET') return Response.json([])
     throw new Error(`Appel inattendu : ${u}`)
   }
   return appels

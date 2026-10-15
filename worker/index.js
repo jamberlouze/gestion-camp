@@ -4,7 +4,8 @@
 // la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js),
 // les routes publiques des Réservations (formulaire de demande, documents et
 // factures de la page client : reservations/api.js), celles du module RH
-// (candidature, intention de retour, dossier d'embauche : rh/api.js) et QuickBooks Online
+// (candidature, intention de retour, dossier d'embauche, contrat signé en ligne,
+// courriels de chaque compagnie : rh/api.js) et QuickBooks Online
 // (connexion, devis, factures, synchro aux 15 minutes : qbo/).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
@@ -21,6 +22,7 @@ import { routeCalendrier } from "./calendrier/api.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
 import { routeRh } from "./rh/api.js";
+import { preparerAutomatiques } from "./rh/courriels.js";
 import { synchroniserAgenda } from "./reservations/agenda.js";
 import { airbnbConfigure, importerAirbnb } from "./reservations/airbnb.js";
 import { preparerCourriels } from "./reservations/courriels.js";
@@ -58,6 +60,8 @@ export default {
     if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
     // Courriels aux clients des Réservations : préparés (et envoyés, pour les types en mode automatique).
     ctx.waitUntil(preparerCourriels(env).catch((e) => console.error("Courriels non préparés :", e)));
+    // RH : rappels de dossier dus et résumé quotidien à la direction (rh/courriels.js).
+    ctx.waitUntil(preparerAutomatiques(env, new Date(event.scheduledTime)).catch((e) => console.error("Courriels RH :", e)));
     // Réservations Airbnb de la Vieille-France (iCal), puis Google Agenda (rien tant que le réglage « agenda » est inactif).
     ctx.waitUntil(
       (async () => {
@@ -76,7 +80,7 @@ export default {
     const res = url.pathname.match(/^\/api\/reservations\/([a-z]+)$/);
     if (res) return routeReservations(request, env, res[1]);
     const rh = url.pathname.match(/^\/api\/rh\/([a-z]+)$/);
-    if (rh) return routeRh(request, env, rh[1]);
+    if (rh) return routeRh(request, env, rh[1], ctx);
     const qbo = url.pathname.match(/^\/api\/qbo\/([a-z]+)$/);
     if (qbo) return routeQbo(request, env, qbo[1]);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping

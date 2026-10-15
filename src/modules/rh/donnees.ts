@@ -1,13 +1,18 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import type { CompagnieRh, ModeleCourriel } from './courriels'
+import type { ModeleContrat } from './termesContrat'
 import type {
   Candidature,
   Compagnie,
   Consultation,
+  Contrat,
+  CourrielRh,
   DateSaison,
   Document,
   Dossier,
   Embauche,
+  EtatBoite,
   GenreDocument,
   GenreTexte,
   Invitation,
@@ -18,6 +23,7 @@ import type {
   Personne,
   Poste,
   Saison,
+  Taux,
   Texte,
 } from './types'
 
@@ -215,7 +221,7 @@ export const useRetirerSaison = () => useRetirer('saisons')
 export const useAjouterDate = () => useAjouter<DateSaison>('saisons_dates')
 export const useModifierDate = () => useModifier<DateSaison>('saisons_dates')
 export const useRetirerDate = () => useRetirer('saisons_dates')
-export const useAjouterPoste = () => useAjouter<Poste>('postes')
+export const useAjouterPoste = () => useAjouter<Poste>('postes', (l) => ({ nom: '', entreprise_id: '', genres: [], description_url: null, actif: true, ordre: 0, taches: null, ...l }))
 export const useModifierPoste = () => useModifier<Poste>('postes')
 export const useRetirerPoste = () => useRetirer('postes')
 export const useAjouterPersonne = () =>
@@ -393,6 +399,8 @@ const CHAMPS_VALIDATION: Record<string, string> = {
   date_embauche: "la date d'embauche",
   nas: 'le NAS',
   compte: 'le compte bancaire',
+  contrat: 'le contrat signé',
+  consentement: 'le consentement parental signé',
 }
 
 /** Message lisible d'un refus de validation. */
@@ -635,4 +643,328 @@ export function useRetirerNote(personneId: string) {
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'notes', personneId] }),
   })
+}
+
+// ------------------------------------------------------------
+// Phase 3 : courriels (boîte de chaque compagnie) et contrats
+// ------------------------------------------------------------
+
+/** Route de l'équipe du Worker (jeton de session) ; lève une erreur lisible. */
+export async function appelerWorker<T = unknown>(adresse: string, corps?: unknown): Promise<T> {
+  const { data } = await supabase.auth.getSession()
+  const jeton = data.session?.access_token
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.')
+  let res: Response
+  try {
+    res = await fetch(adresse, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps ?? {}),
+    })
+  } catch {
+    throw new Error('Le serveur de l’app ne répond pas (Worker).')
+  }
+  if (!res.ok) {
+    let message = `Erreur ${res.status}.`
+    try {
+      const j = await res.json()
+      if (j?.erreur) message = String(j.erreur)
+    } catch {
+      if (res.status === 404) message = 'Le Worker ne répond pas à cette adresse (l’app est-elle à jour ?).'
+    }
+    throw new Error(message)
+  }
+  return res.json() as Promise<T>
+}
+
+/** Où partent les courriels (lu par le Worker à chaque appel). */
+export type ModeEnvoi = 'mailpit' | 'gmail' | 'bloque' | 'non_configure'
+
+/** Réglages RH des compagnies (boîte d'envoi, signature, coordonnées des contrats). */
+export function useCompagniesRh() {
+  return useQuery({
+    queryKey: ['rh', 'compagnies-rh'],
+    queryFn: async () => {
+      const { data, error } = await db().from('compagnies').select('*')
+      if (error) throw error
+      return data as CompagnieRh[]
+    },
+  })
+}
+
+export function useEnregistrerCompagnieRh() {
+  const client = useQueryClient()
+  const cle: QueryKey = ['rh', 'compagnies-rh']
+  return useMutation({
+    mutationKey: ['rh-local', 'compagnie-rh'],
+    networkMode: 'always',
+    mutationFn: async (c: Partial<CompagnieRh> & { entreprise_id: string }) => {
+      const { error } = await db().from('compagnies').upsert(c, { onConflict: 'entreprise_id' })
+      if (error) throw error
+    },
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: cle }), client.invalidateQueries({ queryKey: ['rh', 'boites'] })]),
+  })
+}
+
+/** État des boîtes d'envoi (jamais le jeton). */
+export function useEtatBoites() {
+  return useQuery({
+    queryKey: ['rh', 'boites'],
+    queryFn: async () => {
+      const { data, error } = await db().rpc('etat_boites')
+      if (error) throw error
+      return data as EtatBoite[]
+    },
+  })
+}
+
+export function useDeconnecterBoite() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'deconnecter'],
+    networkMode: 'always',
+    mutationFn: async (entreprise: string) => {
+      const { error } = await db().rpc('deconnecter_boite', { p_entreprise: entreprise })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'boites'] }),
+  })
+}
+
+/** Adresse de Google où autoriser l'envoi depuis la boîte de la compagnie. */
+export const urlConnexionBoite = (entreprise: string) => appelerWorker<{ url: string }>('/api/rh/connexion', { compagnie: entreprise }).then((r) => r.url)
+
+export function useTesterBoite() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'tester'],
+    networkMode: 'always',
+    mutationFn: (entreprise: string) => appelerWorker<{ ok: boolean; mode: ModeEnvoi }>('/api/rh/tester', { compagnie: entreprise }),
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'boites'] }), client.invalidateQueries({ queryKey: ['rh', 'courriels'] })]),
+  })
+}
+
+/** Réglages du module (clé → valeur JSON). */
+export function useReglagesRh() {
+  return useQuery({
+    queryKey: ['rh', 'reglages'],
+    queryFn: async () => {
+      const { data, error } = await db().from('reglages').select('cle, valeur, updated_at, updated_by_nom')
+      if (error) throw error
+      return Object.fromEntries((data ?? []).map((r) => [r.cle, r.valeur])) as Record<string, unknown>
+    },
+  })
+}
+
+export function useEnregistrerReglage() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'reglage'],
+    networkMode: 'always',
+    mutationFn: async ({ cle, valeur }: { cle: string; valeur: unknown }) => {
+      const { error } = await db().from('reglages').upsert({ cle, valeur }, { onConflict: 'cle' })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'reglages'] }),
+  })
+}
+
+export const useModelesCourriels = () => useTable<ModeleCourriel>('modeles_courriels', 'genre')
+
+export function useEnregistrerModeleCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'modele-courriel'],
+    networkMode: 'always',
+    mutationFn: async (m: Partial<ModeleCourriel> & { id: string }) => {
+      const { error } = await db().from('modeles_courriels').upsert(m)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'modeles_courriels'] }),
+  })
+}
+
+export function useRetirerModeleCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'modele-courriel-retirer'],
+    networkMode: 'always',
+    mutationFn: async (id: string) => {
+      const { error } = await db().from('modeles_courriels').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'modeles_courriels'] }),
+  })
+}
+
+/** Courriels : à envoyer (tous), envoyés ou annulés (les plus récents), ceux d'une personne. */
+export function useCourriels(filtre: { statut: 'prepare' } | { traites: number } | { personne: string }) {
+  return useQuery({
+    queryKey: ['rh', 'courriels', filtre],
+    queryFn: async () => {
+      let q = db().from('courriels').select('*')
+      if ('statut' in filtre) q = q.eq('statut', 'prepare').order('cree_le')
+      else if ('traites' in filtre) q = q.neq('statut', 'prepare').order('cree_le', { ascending: false }).limit(filtre.traites)
+      else q = q.eq('personne_id', filtre.personne).order('cree_le', { ascending: false })
+      const { data, error } = await q
+      if (error) throw error
+      return data as CourrielRh[]
+    },
+  })
+}
+
+/** Prépare des courriels (à relire puis envoyer) ; une même clé n'est jamais préparée deux fois. Rend le nombre de nouveaux. */
+export function usePreparerCourriels() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'preparer'],
+    networkMode: 'always',
+    mutationFn: async (courriels: (Partial<CourrielRh> & Pick<CourrielRh, 'genre' | 'a' | 'sujet' | 'corps'>)[]) => {
+      if (!courriels.length) return 0
+      const { data, error } = await db()
+        .from('courriels')
+        .upsert(
+          courriels.map((c) => ({ statut: 'prepare', ...c })),
+          { onConflict: 'cle', ignoreDuplicates: true },
+        )
+        .select('id')
+      if (error) throw error
+      return data?.length ?? 0
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'courriels'] }),
+  })
+}
+
+/** Corriger (destinataires, sujet, texte) ou annuler un courriel préparé. */
+export function useModifierCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'courriel'],
+    networkMode: 'always',
+    mutationFn: async ({ id, champs }: { id: string; champs: Partial<CourrielRh> }) => {
+      const { error } = await db().from('courriels').update(champs).eq('id', id)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'courriels'] }),
+  })
+}
+
+export interface ResultatEnvoi {
+  id: string
+  ok: boolean
+  erreur?: string
+}
+
+/** Envoie des courriels préparés (Worker) ; rend le résultat de chacun. */
+export function useEnvoyerCourriels() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'envoyer'],
+    networkMode: 'always',
+    mutationFn: (ids: string[]) => appelerWorker<{ resultats: ResultatEnvoi[]; envoi: ModeEnvoi }>('/api/rh/envoyer', { courriels: ids }),
+    // Un courriel de bienvenue fait passer l'embauche à « Lien envoyé » ; le journal suit.
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['rh', 'courriels'] }),
+        client.invalidateQueries({ queryKey: ['rh', 'embauches'], exact: true }),
+        client.invalidateQueries({ queryKey: ['rh', 'journal'] }),
+        client.invalidateQueries({ queryKey: ['rh', 'boites'] }),
+      ]),
+  })
+}
+
+/** Prépare tout de suite les rappels de dossier dus (sinon : aux 15 minutes). */
+export const preparerRappels = () => appelerWorker<{ prepares: number; envoyes: number; envoi: ModeEnvoi }>('/api/rh/preparer')
+
+// Contrats
+
+export const useTaux = () => useTable<Taux>('taux', 'echelon')
+
+export function useEnregistrerTaux() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'taux'],
+    networkMode: 'always',
+    mutationFn: async (t: Omit<Taux, 'id'> & { id?: string }) => {
+      const { error } = await db().from('taux').upsert(t, { onConflict: 'saison_id,poste_id,echelon' })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'taux'] }),
+  })
+}
+
+export function useRetirerTaux() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'taux-retirer'],
+    networkMode: 'always',
+    mutationFn: async (id: string) => {
+      const { error } = await db().from('taux').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'taux'] }),
+  })
+}
+
+export const useModelesContrats = () => useTable<ModeleContrat>('modeles_contrats', 'genre')
+
+export function useEnregistrerModeleContrat() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'modele-contrat'],
+    networkMode: 'always',
+    mutationFn: async (m: Partial<ModeleContrat> & { id: string }) => {
+      const { error } = await db().from('modeles_contrats').upsert(m)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'modeles_contrats'] }),
+  })
+}
+
+/** Contrats et consentements (tous : peu nombreux). */
+export const useContrats = () => useTable<Contrat>('contrats', 'cree_le')
+
+/** Prépare le contrat d'une embauche (termes et texte figés ; l'ancien en attente est annulé par la base). */
+export function usePreparerContrat() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'contrat'],
+    networkMode: 'always',
+    mutationFn: async (c: Pick<Contrat, 'embauche_id' | 'personne_id' | 'titre' | 'contenu' | 'termes'>) => {
+      const { error } = await db().from('contrats').insert({ ...c, genre: 'contrat', statut: 'en_attente' })
+      if (error) throw error
+    },
+    onSettled: () => Promise.all([client.invalidateQueries({ queryKey: ['rh', 'contrats'] }), client.invalidateQueries({ queryKey: ['rh', 'journal'] })]),
+  })
+}
+
+export function useAnnulerContrat() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['rh-local', 'contrat-annuler'],
+    networkMode: 'always',
+    mutationFn: async (id: string) => {
+      const { error } = await db().from('contrats').update({ statut: 'annule' }).eq('id', id)
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['rh', 'contrats'] }),
+  })
+}
+
+/** Où partent les courriels, d'après le Worker (Mailpit en DEV). */
+export function useModeEnvoi(actif = true) {
+  return useQuery({
+    queryKey: ['rh', 'mode-envoi'],
+    enabled: actif,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => appelerWorker<{ envoi: ModeEnvoi }>('/api/rh/etat').then((r) => r.envoi),
+  })
+}
+
+/** Invitations sans réponse d'une saison (lues à neuf, juste après « Inviter »). */
+export async function lireInvitationsEnAttente(saison: string) {
+  const { data, error } = await db().from('invitations').select('*').eq('saison_id', saison).is('reponse', null)
+  if (error) throw error
+  return data as Invitation[]
 }

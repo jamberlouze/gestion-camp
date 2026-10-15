@@ -3,9 +3,10 @@ import { Link } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
+import { useOutilsCourriels } from './CartesCourriels'
 import { BoutonCopier, MenuSaison, PuceAncien } from './commun'
 import { useRh } from './contexte'
-import { useInviterRetour, useRetirerInvitation } from './donnees'
+import { lireInvitationsEnAttente, useInviterRetour, useRetirerInvitation } from './donnees'
 import { lienRetour } from './liens'
 import { correspond, dateCourte, estAncien, nomAffiche, texteRecherche } from './outils'
 import { champPetit } from './styles'
@@ -15,7 +16,8 @@ import type { Invitation, Personne } from './types'
 // personne et saison visée, plus de rattachement par courriel. Décision de
 // Maxime du 2026-10-12 : les employés de la saison, cochés à la main (les
 // « ne pas réembaucher » décochés), plus au besoin des « A déjà travaillé » ;
-// pas de lien générique. Pas de courriel en phase 2 : on copie le lien.
+// pas de lien générique. Inviter prépare aussi le courriel de chacun (phase
+// 3), à envoyer en lot depuis Courriels › À envoyer ; le lien se copie encore.
 
 export function PuceInvitation({ i }: { i: Invitation }) {
   if (i.reponse === 'oui')
@@ -27,8 +29,9 @@ export function PuceInvitation({ i }: { i: Invitation }) {
 
 /** Inviter les employés d'une saison (et des anciens) ; liens à copier. */
 export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string | null; fermer: () => void }) {
-  const { saisons, saisonParId, embauches, embauchesDe, personnes, personneParId, posteParId, invitations, ecriture } = useRh()
+  const { saisons, saisonParId, embauches, embauchesDe, personnes, personneParId, posteParId, invitations, compagnies, ecriture } = useRh()
   const inviter = useInviterRetour()
+  const outils = useOutilsCourriels()
   const retirer = useRetirerInvitation()
   const source = saisonSource ? saisonParId.get(saisonSource) : undefined
   // Saison visée par défaut : la même saison l'an prochain, sinon la première
@@ -59,6 +62,42 @@ export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string |
   const [bilan, setBilan] = useState<string | null>(null)
   const aInviter = [...coches].filter((id) => !invitees.has(id))
   const basculer = (id: string) => setCoches((c) => (c.has(id) ? new Set([...c].filter((x) => x !== id)) : new Set([...c, id])))
+
+  /** Compagnie qui écrit : celle de sa dernière embauche, sinon la GBPA+. */
+  const entrepriseDe = (p: Personne) =>
+    [...(embauchesDe.get(p.id) ?? [])]
+      .filter((e) => e.statut !== 'annulee' && e.entreprise_id)
+      .sort((a, b) => (saisonParId.get(b.saison_id)?.rang ?? 0) - (saisonParId.get(a.saison_id)?.rang ?? 0))[0]?.entreprise_id ??
+    compagnies.find((c) => c.abreviation === 'GBPA+' || c.nom === 'GBPA+')?.id ??
+    null
+
+  /** Courriel de chaque invitation sans réponse de la saison visée (de ces personnes seulement, si on les donne) ; jamais deux fois le même. */
+  const preparerCourriels = async (seulement?: string[]) => {
+    if (!visee) return ''
+    const enAttente = (await lireInvitationsEnAttente(visee)).filter((i) => !seulement || seulement.includes(i.personne_id))
+    const raisons: string[] = []
+    const courriels = enAttente.flatMap((i) => {
+      const p = personneParId.get(i.personne_id)
+      if (!p) return []
+      const r = outils.rediger({
+        genre: 'retour',
+        personne: p,
+        entreprise: entrepriseDe(p),
+        cle: `retour:${i.id}`,
+        saison: saisonParId.get(i.saison_id)?.nom,
+        lienRetour: lienRetour(i),
+        invitation_id: i.id,
+      })
+      if ('raison' in r) {
+        raisons.push(r.raison)
+        return []
+      }
+      return [r.courriel]
+    })
+    const n = await outils.preparer.mutateAsync(courriels)
+    const sans = raisons.length ? ` ${raisons.length} sans courriel (${[...new Set(raisons)].slice(0, 2).join(' ; ')}).` : ''
+    return `${n} courriel${n > 1 ? 's' : ''} préparé${n > 1 ? 's' : ''} (Courriels › À envoyer).${sans}`
+  }
 
   const posteDe = (p: Personne) => {
     const e = (embauchesDe.get(p.id) ?? []).find((x) => x.saison_id === saisonSource && x.statut !== 'annulee')
@@ -102,7 +141,7 @@ export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string |
         </div>
         <p className="text-pierre-600">
           Chaque personne invitée reçoit un <strong>lien personnel</strong> : sa réponse devient une candidature « Intention de retour » (« Non » = « Ne revient pas »).
-          Pas encore de courriel : copie le lien et envoie-le toi-même.
+          Inviter prépare le courriel de chacun, à relire et envoyer en lot dans Courriels › À envoyer (on peut aussi copier le lien).
         </p>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -141,12 +180,23 @@ export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string |
                 <button
                   className={ui.bouton}
                   disabled={!visee || aInviter.length === 0 || inviter.isPending}
-                  onClick={() =>
+                  onClick={() => {
+                    const invites = [...aInviter]
                     inviter.mutate(
-                      { saison: visee!, personnes: aInviter },
-                      { onSuccess: (n) => setBilan(`${n} invitation${n > 1 ? 's' : ''} créée${n > 1 ? 's' : ''} : copie les liens ci-contre.`) },
+                      { saison: visee!, personnes: invites },
+                      {
+                        onSuccess: async (n) => {
+                          const texte = `${n} invitation${n > 1 ? 's' : ''} créée${n > 1 ? 's' : ''}.`
+                          setBilan(texte)
+                          try {
+                            setBilan(`${texte} ${await preparerCourriels(invites)}`)
+                          } catch (e) {
+                            setBilan(`${texte} Courriels non préparés : ${messageErreur(e)}`)
+                          }
+                        },
+                      },
                     )
-                  }
+                  }}
                 >
                   {inviter.isPending ? 'Création…' : `Inviter ${aInviter.length} personne${aInviter.length > 1 ? 's' : ''}`}
                 </button>
@@ -162,6 +212,20 @@ export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string |
             </h3>
             <p className="mb-2 text-xs text-pierre-500">
               Oui {compte('oui')} · Non {compte('non')} · En attente {compte(null)}
+              {ecriture && compte(null) > 0 && (
+                <button
+                  className="ml-2 text-foret-700 underline"
+                  disabled={outils.preparer.isPending || !outils.pret}
+                  onClick={() =>
+                    preparerCourriels(undefined)
+                      .then(setBilan)
+                      .catch((e) => setBilan(messageErreur(e)))
+                  }
+                  title="Prépare le courriel des invitations en attente qui n’en ont pas encore"
+                >
+                  Préparer les courriels manquants
+                </button>
+              )}
             </p>
             {listeInvitations.length === 0 ? (
               <p className="text-pierre-500">Personne n'est encore invité pour cette saison.</p>

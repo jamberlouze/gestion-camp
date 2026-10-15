@@ -90,6 +90,12 @@ Bâties en DEV le 2026-10-12 (phase 2). Adresse : **emplois.camptremblant.com** 
 
 ## 5. Courriels
 
+Bâtis en DEV le 2026-10-15 (phase 3) : onglet **Courriels** (À envoyer, Envoyés, Compagnies et boîtes, Modèles, Réglages), `worker/rh/courriels.js`, règles et rendu dans `src/modules/rh/courriels.ts` (pur, app et Worker), migration `rh_courriels`.
+
+- **Chaque compagnie écrit de sa boîte** (décision du 2026-10-15) : `rh.compagnies.adresse_envoi`, modifiable ; boîte autorisée par OAuth Google (envoi seulement), jeton chiffré dans `rh.connexions_gmail` ; état affiché (connectée, pas connectée, à reconnecter si l'adresse change, erreur, dernier envoi) et « M'envoyer un essai ». Compagnie qui écrit : celle qui traite la candidature, sinon celle du premier poste ; celle de l'embauche ; pour le retour, celle de la dernière embauche (sinon la GBPA+).
+- Préparé (app ou Worker), relu, corrigé, envoyé d'un clic **par le Worker seulement** (`rh.courriel_envoye`, journal) ; un champ vide devient « [champ ?] » et bloque l'envoi ; `cle` unique : jamais préparé deux fois. Un courriel de bienvenue envoyé fait passer l'embauche à « Lien envoyé ».
+- Automatiques : **accusé de réception** au candidat (envoyé seul, en anglais s'il a postulé en anglais) et **résumé quotidien** à la direction (heure et destinataires réglables, seulement s'il y a du nouveau) ; **rappel du dossier** préparé seul après 7 jours (réglable), à relire. Rien de préparé seul pour ce qui précède le réglage `courriels_depuis`.
+
 - Un **modèle par genre × compagnie**, modifiable dans l'onglet Modèles :
   - proposition d'entrevue ;
   - refus après entrevue ;
@@ -99,16 +105,19 @@ Bâties en DEV le 2026-10-12 (phase 2). Adresse : **emplois.camptremblant.com** 
   - bienvenue (embauche) ;
   - rappel de dossier incomplet ;
   - intention de retour.
-- Chaque compagnie a ses réglages : signature et lien de prise de rendez-vous.
+- Chaque compagnie a ses réglages : signature, lien de prise de rendez-vous, « ce qui attire » ; modèle propre à une compagnie possible (sinon le commun).
 - Plus de case « Envoi courriel ? » : choisir un statut **prépare** le courriel, qu'on relit, corrige au besoin, puis envoie d'un clic. Il part par l'API Gmail et s'inscrit au journal.
 - Si le modèle ou le contrat manque pour la compagnie, l'app le dit **avant** l'envoi.
 - Envoi en lot pour l'intention de retour (tous les employés d'une saison).
 
 ## 6. Contrat et signature
 
-- Contrat produit par l'app (moteur PDF des Réservations), à partir d'un modèle par genre de saison × compagnie. Champs : nom, poste, échelon, taux, dates, compagnie.
-- Signé en ligne dans le dossier d'embauche (même signature électronique que les contrats de groupes : PDF signé + certificat, gardés dans le dossier).
-- Mineur à la date de début : consentement parental signé dans la même page.
+Bâti en DEV le 2026-10-15 (phase 3) : migration `rh_contrats`, `src/modules/rh/termesContrat.ts` (pur) et `contrat.ts` (PDF), `worker/rh/contrats.js`, socle commun `src/lib/pdf/` (moteur, modèles, pose de la signature) avec les Réservations.
+
+- Contrat produit par l'app (même moteur et même syntaxe de modèles que les contrats de groupes), à partir d'un modèle par compagnie et genre de saison (le plus précis l'emporte). « Préparer le contrat » **fige les termes** (poste, saison, dates, rémunération, taux, échelon, compagnie, tâches du poste) et le texte dans `rh.contrats` ; **pré-signé au nom de la personne qui le prépare** (la base l'impose). Le PDF est produit à la demande avec les coordonnées à jour de l'employé.
+- Taux : **grille saison × poste × échelon** (`rh.taux`, Réglages) ; une embauche créée avec poste et échelon reçoit le taux de la grille.
+- Signé en ligne dans le dossier d'embauche, après l'envoi du dossier (coordonnées au contrat) : signature au doigt, case « J'ai lu… », PDF signé + certificat (empreinte SHA-256, IP, navigateur) gardé dans les documents ; la validation exige un contrat signé (emploi).
+- Mineur à la date de début : consentement parental signé dans la même page par un parent (nom, lien), même certificat ; la validation l'exige (le formulaire signé peut aussi être joint aux documents).
 
 ## 7. Employés, conformité et exports
 
@@ -146,7 +155,7 @@ Bâties en DEV le 2026-10-12 (phase 2). Adresse : **emplois.camptremblant.com** 
 |---|---|---|
 | 1 | Schéma, accès, chiffrement ; saisons et postes ; Candidatures (liste, fiche, journal) ; Employés et fiche d'une personne ; import Airtable à l'essai | — |
 | 2 | Pages publiques : candidature, intention de retour, dossier d'embauche ; dépôt de fichiers ; alertes | bâtie en DEV le 2026-10-12 |
-| 3 | Courriels (modèles, envoi Gmail, journal) ; contrat produit et signé en ligne | avant le pic de janvier (122 candidatures en janvier 2026) |
+| 3 | Courriels (modèles, envoi Gmail, journal) ; contrat produit et signé en ligne | bâtie en DEV le 2026-10-15 ; en ligne avant le pic de janvier (122 candidatures en janvier 2026) |
 | 4 | Planification, diètes par semaine, conformité, exports, lien avec le référentiel | avant les formations de mai |
 | Bascule | Import final, formulaires Airtable fermés et redirigés, automatisations coupées | après la phase 3 |
 
@@ -156,7 +165,7 @@ Airtable continue de tourner jusqu'à la bascule.
 
 Prises par Maxime le 2026-10-11 :
 
-1. **Expéditeur des courriels** : une seule adresse de camptremblant.com, avec le nom et la signature de la compagnie ; « Répondre à » = la boîte de la compagnie.
+1. ~~**Expéditeur des courriels** : une seule adresse de camptremblant.com, avec le nom et la signature de la compagnie ; « Répondre à » = la boîte de la compagnie.~~ Remplacée par la décision 14.
 2. **Contrat** : produit par l'app et signé en ligne dans le dossier d'embauche (consentement parental au même endroit).
 3. **Accès** : direction en écriture dès le départ ; `rh_paie` (NAS, banque) : direction et admins.
 4. **Conservation** des candidatures non retenues : **pas d'effacement automatique** (on efface à la main au besoin). Aucune durée n'est donc annoncée dans le formulaire.
@@ -176,6 +185,17 @@ Réponses de Maxime du 2026-10-12 (phase 2) :
 12. **Entente de bénévolat** : brouillon rédigé par Claude, marqué « à valider » dans Réglages.
 13. **Codes d'éthique** : ceux d'Airtable, mots inchangés, mise en forme corrigée ; modifiables dans Réglages.
 
+Réponses de Maxime du 2026-10-15 (phases 3 et 4) :
+
+14. **Expéditeur** : chaque compagnie écrit de **sa** boîte (GBPA+ inscriptions@camptremblant.com, Opikawa messages@opikawa.com, Rouge & Diable info@rougediable.ca, Aquabounga info@aquabounga.ca, Trembloc info@trembloc.ca), modifiable dans l'app **avec un état de connexion** qui confirme que le changement a fonctionné.
+15. **Alertes** : accusé de réception au candidat + résumé quotidien à la direction.
+16. **Contrats** : partir des PDF d'Airtable ; pré-signés par la personne qui envoie.
+17. **Taux** : grille poste × échelon (par saison), dans les réglages.
+18. **Référentiel Employés** : fiche créée ou mise à jour automatiquement à la validation (phase 4).
+19. **Rappel du dossier** : préparé après 7 jours, envoyé sur approbation.
+20. **Employeur D** : gabarit « Données d'emploi » (canevas de septembre 2026) pour l'export de la phase 4 ; les gabarits « Saisie simple » (heures) servent aux Feuilles de temps.
+21. **Sous-domaine** emplois.camptremblant.com : on attend avant de le brancher.
+
 ## 13. Choix de Claude (à confirmer si le sujet revient)
 
 - Les postes ouverts par saison sont tenus dans l'app ; les descriptions restent sur camptremblant.com/emploi (lien).
@@ -188,3 +208,9 @@ Réponses de Maxime du 2026-10-12 (phase 2) :
 - Une réponse « Oui » à l'intention de retour peut viser plusieurs saisons ouvertes ; pas de maximum de postes (comme Airtable).
 - Adresse à écrire pour les renseignements personnels : inscriptions@camptremblant.com en attendant (`COURRIEL_EMPLOIS`, à confirmer).
 - Photos de plus de 1,5 Mo réduites dans le navigateur avant l'envoi du dossier (1600 px).
+- Phase 3 : courriels de statut **préparés** (jamais envoyés seuls), sauf l'accusé, le rappel et le résumé, seuls genres qui peuvent passer en « Envoyé seul ».
+- Le contrat se signe **après** l'envoi du dossier (les coordonnées de l'employé y sont inscrites) ; il reste lisible par le même lien une fois signé.
+- Signature du contrat et du consentement : PDF produit et gardé par le Worker (jamais par le navigateur de l'employé) ; la base n'accepte un fichier que dans le dossier de la personne du jeton.
+- Le résumé quotidien part de la boîte de la GBPA+ ; un jour sans nouveauté, pas de résumé.
+- Intention de retour : inviter prépare le courriel des personnes qu'on vient d'inviter ; « Préparer les courriels manquants » pour les invitations faites avant.
+- Modèles de départ des courriels repris d'Airtable (`docs/rh-existant.md`), à relire ; contrat et consentement « à valider ».

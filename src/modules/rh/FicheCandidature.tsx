@@ -18,9 +18,11 @@ import {
   Section,
   ZoneTexte,
 } from './commun'
+import { SectionCourriels, useOutilsCourriels } from './CartesCourriels'
 import { useRh } from './contexte'
+import { COURRIEL_DU_STATUT, compagnieDeCandidature, nomGenre } from './courriels'
 import { ListeDocuments } from './Documents'
-import { useAccepter, useEffacerCandidature, useModifierCandidature, useRetirerCandidature } from './donnees'
+import { useAccepter, useCourriels, useEffacerCandidature, useModifierCandidature, useRetirerCandidature } from './donnees'
 import { Journal } from './Journal'
 import { dateCourte, estAncien, nomAffiche } from './outils'
 import { PRE_DECISIONS, REPONSES, SOURCES, STATUTS, type Candidature, type Statut } from './types'
@@ -44,15 +46,44 @@ export function FicheCandidature() {
 }
 
 function Contenu({ c }: { c: Candidature }) {
-  const { personneParId, embauchesDe, candidaturesDe, saisonParId, ecriture, auj } = useRh()
+  const { personneParId, embauchesDe, candidaturesDe, saisonParId, posteParId, ecriture, auj } = useRh()
   const p = personneParId.get(c.personne_id)!
   const modifier = useModifierCandidature()
+  const outils = useOutilsCourriels()
+  const courriels = useCourriels({ personne: p.id })
+  const [avis, setAvis] = useState<string | null>(null)
   const retirer = useRetirerCandidature()
   const effacer = useEffacerCandidature()
   const naviguer = useNavigate()
   const [accepter, setAccepter] = useState(false)
   const [modifierDemande, setModifierDemande] = useState(false)
   const changer = (champs: Partial<Candidature>) => modifier.mutate({ id: c.id, champs })
+  /** Statut choisi ; celui qui a son courriel (entrevue, refus, ASPI, permis) le prépare, à relire avant l'envoi. */
+  const changerStatut = (s: Statut) => {
+    setAvis(null)
+    changer({ statut: s })
+    const genre = COURRIEL_DU_STATUT[s]
+    if (!genre || genre === 'autre') return
+    const existants = (courriels.data ?? []).filter((x) => x.genre === genre && x.candidature_id === c.id)
+    if (existants.some((x) => x.statut !== 'annule')) return setAvis(`Le courriel « ${nomGenre(genre)} » de cette candidature existe déjà (Courriels, plus bas).`)
+    const postes = c.poste_ids.map((id) => posteParId.get(id)).filter((x) => !!x)
+    const r = outils.rediger({
+      genre,
+      personne: p,
+      entreprise: compagnieDeCandidature(c, postes),
+      langue: c.reponses.langue === 'Anglais' ? 'en' : 'fr',
+      // Un courriel annulé ne se prépare pas deux fois sous la même clé.
+      cle: existants.length ? `${genre}:${c.id}:${crypto.randomUUID().slice(0, 8)}` : `${genre}:${c.id}`,
+      saisons: c.saison_ids.map((id) => saisonParId.get(id)?.nom ?? '').filter(Boolean),
+      postes: postes.map((x) => x.nom),
+      candidature_id: c.id,
+    })
+    if ('raison' in r) return setAvis(r.raison)
+    outils.preparer.mutate([r.courriel], {
+      onSuccess: () => setAvis(`Courriel « ${nomGenre(genre)} » préparé : relisez-le dans « Courriels », plus bas, puis envoyez.`),
+      onError: (e) => setAvis(messageErreur(e)),
+    })
+  }
   const embauches = embauchesDe.get(p.id) ?? []
   const ancien = c.source === 'retour' || estAncien(p, embauches, saisonParId)
   const autres = (candidaturesDe.get(p.id) ?? []).filter((x) => x.id !== c.id).sort((a, b) => b.recue_le.localeCompare(a.recue_le))
@@ -115,7 +146,7 @@ function Contenu({ c }: { c: Candidature }) {
                     onChange={(e) => {
                       const s = e.target.value as Statut
                       if (s === 'acceptee') setAccepter(true)
-                      else changer({ statut: s })
+                      else changerStatut(s)
                     }}
                   >
                     {STATUTS.map((s) => (
@@ -136,7 +167,7 @@ function Contenu({ c }: { c: Candidature }) {
                     {sesEmbauches.length ? 'Accepter pour une autre saison…' : 'Accepter…'}
                   </button>
                   {c.statut === 'recue' && (
-                    <button className={ui.boutonSecondaire} onClick={() => changer({ statut: 'entrevue_proposee' })}>
+                    <button className={ui.boutonSecondaire} onClick={() => changerStatut('entrevue_proposee')}>
                       Proposer une entrevue
                     </button>
                   )}
@@ -160,8 +191,11 @@ function Contenu({ c }: { c: Candidature }) {
                   </ul>
                 </div>
               )}
+              {avis && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sky-900">{avis}</p>}
             </div>
           </Section>
+
+          <SectionCourriels personneId={p.id} />
 
           <Section titre="Entrevue">
             <div className="space-y-3 text-sm">

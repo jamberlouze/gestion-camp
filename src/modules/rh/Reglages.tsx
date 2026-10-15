@@ -20,11 +20,12 @@ import {
   useRetirerSaison,
 } from './donnees'
 import { horodatage, plageDates } from './outils'
+import { ReglagesContrats } from './ReglagesContrats'
 import { TexteFormate } from './TexteFormate'
 import { GENRES_DATE, GENRES_SAISON, GENRES_TEXTE, type DateSaison, type GenreDate, type GenreSaison, type GenreTexte, type Poste, type Saison } from './types'
 import { champPetit } from './styles'
 
-/** Saisons (et leurs dates), postes, textes et liens des pages publiques. */
+/** Saisons (et leurs dates), postes, textes et liens des pages publiques ; contrats (taux, modèles, tâches). */
 export function Reglages() {
   const { saisons } = useRh()
   const [choix, setChoisie] = useState<string | null>(saisons.find((s) => s.ouverte && s.genre === 'ete')?.id ?? saisons.at(-1)?.id ?? null)
@@ -41,6 +42,7 @@ export function Reglages() {
         <PagesPubliques />
       </div>
       <Textes />
+      <ReglagesContrats />
     </div>
   )
 }

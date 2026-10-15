@@ -24,6 +24,7 @@ import { extensionDe } from '../fichiersPublics'
 import { TexteFormate } from '../TexteFormate'
 import { envoyer, lire, logoDe } from './api'
 import { ChampFichier, Message, PiedEmplois } from './commun'
+import { SectionConsentement, SectionContrat } from './Signatures'
 
 // Dossier d'embauche (/dossier/<jeton>) : remplace les deux formulaires
 // « Confirmation d'embauche » d'Airtable. Une page par embauche, version été
@@ -31,7 +32,8 @@ import { ChampFichier, Message, PiedEmplois } from './commun'
 // sont jamais renvoyés au navigateur (3 derniers chiffres seulement). Le
 // Worker revérifie tout, dépose les fichiers et enregistre
 // (rh.recevoir_dossier) ; on peut renvoyer pour corriger tant que la
-// direction n'a pas validé l'embauche.
+// direction n'a pas validé l'embauche. Le contrat et le consentement
+// parental se signent sur la même page (Signatures.tsx), à part de l'envoi.
 
 const dateLongue = (iso: string) =>
   new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Montreal' }).format(new Date(iso))
@@ -82,6 +84,13 @@ export default function Dossier({ jeton }: { jeton: string }) {
       if (!r.donnees.ferme) setD(depuisPage(r.donnees))
       setFichiers({})
       setFini(false)
+    })
+  }, [jeton])
+
+  /** Relit la page (une signature vient d'être posée) sans toucher au formulaire en cours. */
+  const rafraichir = useCallback(() => {
+    lire<PageDossier>(`/api/rh/dossier?jeton=${encodeURIComponent(jeton)}`).then((r) => {
+      if (r.ok) setPage(r.donnees)
     })
   }, [jeton])
 
@@ -170,6 +179,7 @@ export default function Dossier({ jeton }: { jeton: string }) {
     setEnvoi(false)
     if (r.statut === 200) {
       setFini(true)
+      rafraichir()
       window.scrollTo(0, 0)
       return
     }
@@ -201,6 +211,9 @@ export default function Dossier({ jeton }: { jeton: string }) {
             Revoir mon dossier
           </button>
         </div>
+        {page.contrat?.statut === 'en_attente' && page.dossier_recu_le && <p className="text-center text-sm font-medium text-pierre-800">Il te reste à signer ton contrat :</p>}
+        <SectionContrat jeton={jeton} page={page} rafraichir={rafraichir} />
+        {mineur && <SectionConsentement jeton={jeton} page={page} naissance={d.date_naissance} rafraichir={rafraichir} />}
         <PiedEmplois />
       </Page>
     )
@@ -220,6 +233,8 @@ export default function Dossier({ jeton }: { jeton: string }) {
           </p>
         )}
       </div>
+
+      <SectionContrat jeton={jeton} page={page} rafraichir={rafraichir} />
 
       <form
         noValidate
@@ -419,12 +434,18 @@ export default function Dossier({ jeton }: { jeton: string }) {
           <Question libelle="Permis de conduire (ou autre pièce d'identité)" {...q('piece_identite')}>
             {fichier('piece_identite')}
           </Question>
-          {mineur && (
-            <Question libelle="Consentement parental (Mineur·es seulement)" aide="Tu auras moins de 18 ans au début de ton embauche : joins le consentement signé par un parent." {...q('consentement_parental')}>
+          {mineur && !page.consentement && (
+            <Question
+              libelle="Consentement parental signé (Mineur·es seulement)"
+              aide="Seulement si ton parent ne peut pas le signer en ligne (section « Consentement parental » plus bas) : joins le formulaire signé."
+              {...q('consentement_parental')}
+            >
               {fichier('consentement_parental')}
             </Question>
           )}
         </Bloc>
+
+        {mineur && <SectionConsentement jeton={jeton} page={page} naissance={d.date_naissance} rafraichir={rafraichir} />}
 
         {ete && (
           <>

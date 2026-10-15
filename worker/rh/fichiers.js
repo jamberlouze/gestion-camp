@@ -31,3 +31,11 @@ export async function retirer(env, seau, chemins) {
     body: JSON.stringify({ prefixes: chemins }),
   })
 }
+
+/** Contenu d'un fichier d'un seau privé (null s'il n'y est plus). */
+export async function telecharger(env, seau, chemin) {
+  const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/authenticated/${seau}/${encoder(chemin)}`, { headers: entetes(env) })
+  if (res.status === 404 || res.status === 400) return null
+  if (!res.ok) throw new Error(`Fichier non lu (${res.status}) : ${(await res.text()).slice(0, 300)}`)
+  return new Uint8Array(await res.arrayBuffer())
+}
