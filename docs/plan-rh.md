@@ -271,3 +271,19 @@ Pastilles par ligne et filtre « À régler » : **dossier** (lien pas envoyé /
 ### 14.6 Vérification
 
 `docs/verification-rh-phase4.md` (même forme que les phases 2 et 3), passée en DEV : tests SQL des droits (codes, cases, pilotage : RLS `rh` ; export Employeur D refusé sans `rh_paie` et noté dans les consultations ; relier : direction), tests Node des fichiers purs (planification, diètes, conformité, Employeur D), navigateur sur ordinateur et téléphone avec des fiches fictives (`@camp.test`) retirées à la fin.
+
+## 15. Phase 5 : préparer la bascule (DEV seulement, 2026-10-15)
+
+La bascule elle-même (plan §11 : import final, formulaires Airtable fermés et redirigés, automatisations coupées) touche la PROD et attend deux choses de Maxime : le sous-domaine (« on attend ») et son « oui » à `/mise-en-ligne`. La phase 5 prépare tout ce qui peut l'être sans toucher la PROD ni Airtable :
+
+1. **Marche à suivre du jour J** : `docs/bascule-rh.md`, dans l'ordre, avec qui fait quoi et le retour arrière :
+   - avant : ce qui reste à Maxime (sous-domaine et DNS, Turnstile, client OAuth Google, titre d'emploi et numéros Employeur D, relecture du contrat et du consentement, adresses des compagnies) ;
+   - publication par `/mise-en-ligne` : quels commits de `dev` partent avec RH (`git log origin/main..dev` : modules qui ne sont pas encore en PROD, socle commun e3eaeef), migrations RH dans l'ordre, schéma `rh` à exposer, clé Vault `rh_cle_paie` créée par la migration, secrets et variables (`TURNSTILE_SECRET`, `GMAIL_CLIENT_ID`/`SECRET`, `HOTE_EMPLOIS`, `VITE_HOTE_EMPLOIS`) ; si RH ne peut pas partir seul, les options possibles, sans trancher ;
+   - import final avec la paie (`rh-airtable.mjs --avec-paie`, puis `rh-fichiers.mjs` : les adresses d'Airtable expirent en quelques heures) et contrôle des comptes ;
+   - réglages du jour J : `courriels_depuis` = le jour même, boîtes connectées, essai par boîte ;
+   - Airtable : les 4 formulaires à fermer et par quoi les remplacer (nouvelles adresses), les automatisations déployées à couper (identifiants, `docs/rh-existant.md` §3), bases « RH - Été 2026 (Charlotte) » et « RH - ACQ » et feuille « Suivi RH 2026 » à mettre en lecture seule ; lien de la page Emploi de camptremblant.com ;
+   - vérifications du lendemain et retour arrière (rouvrir les formulaires Airtable, recouper ce qui est arrivé entre-temps).
+2. **Répétition de l'import en DEV (sans la paie)** : relancer `rh-airtable.mjs` (extraits du connecteur Airtable, en lecture seulement) pour ramener ce qui a été ajouté dans Airtable depuis le 2026-10-12 ; confirmer qu'aucun doublon n'apparaît, que les tables des phases 3 et 4 n'ont pas besoin d'être remplies par l'import, et qu'après l'import **aucun courriel n'est préparé seul** pour les données importées (accusé, rappel, résumé ; `courriels_depuis`). Adapter les scripts au besoin.
+3. **Liste de vérification** `docs/verification-rh-phase5.md` (répétition passée en DEV).
+
+Interdits pour cette phase : toute écriture dans Airtable (connecteur en lecture seulement), toute action PROD (`--linked`, API Management, `main`, `wrangler deploy`), tout envoi de courriel ailleurs que dans Mailpit.
