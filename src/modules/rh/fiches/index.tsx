@@ -165,9 +165,7 @@ function Liste() {
                     </div>
                     <div className="hidden min-w-0 text-sm md:block">
                       {f.courriel ? (
-                        <a href={`mailto:${f.courriel}`} title={f.courriel} className="block truncate text-foret-800 hover:underline">
-                          {f.courriel}
-                        </a>
+                        <CourrielCopiable courriel={f.courriel} className="block max-w-full truncate text-left text-foret-800 hover:underline" />
                       ) : (
                         <span className="text-pierre-400">—</span>
                       )}
@@ -189,6 +187,36 @@ function Liste() {
 /** Colonnes de la liste : photo, nom et poste, santé, téléphone, courriel, urgence (une seule colonne de texte au téléphone). */
 const GRILLE =
   'grid-cols-[auto_1fr] gap-x-4 md:gap-x-3 md:grid-cols-[7rem_minmax(8rem,1.3fr)_minmax(7rem,1fr)_8rem_minmax(8rem,1fr)_minmax(9rem,1.1fr)]'
+
+/** Courriel copié au clic (demande de Maxime : pas de lien « mailto: »). */
+function CourrielCopiable({ courriel, className, icone = false }: { courriel: string; className: string; icone?: boolean }) {
+  const [etat, setEtat] = useState<'' | 'copie' | 'echec'>('')
+  const copier = async () => {
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(courriel)
+      ok = true
+    } catch {
+      // Navigateur qui refuse le presse-papiers moderne : l'ancienne méthode.
+      const zone = document.createElement('textarea')
+      zone.value = courriel
+      zone.style.position = 'fixed'
+      zone.style.opacity = '0'
+      document.body.appendChild(zone)
+      zone.select()
+      ok = document.execCommand('copy')
+      zone.remove()
+    }
+    setEtat(ok ? 'copie' : 'echec')
+    setTimeout(() => setEtat(''), 2000)
+  }
+  return (
+    <button type="button" className={className} title={`${courriel} — cliquer pour copier`} onClick={copier}>
+      {icone && '✉️ '}
+      {etat === 'copie' ? 'Courriel copié ✓' : etat === 'echec' ? 'Copie impossible' : courriel}
+    </button>
+  )
+}
 
 /** Les deux contacts d'urgence : nom · lien, puis le numéro cliquable. */
 function ContactsUrgence({ d }: { d: DossierFiche | null }) {
@@ -349,9 +377,7 @@ function FicheDetaillee() {
               </a>
             )}
             {f.courriel && (
-              <a href={`mailto:${f.courriel}`} className={ui.boutonSecondaire}>
-                ✉️ {f.courriel}
-              </a>
+              <CourrielCopiable courriel={f.courriel} className={ui.boutonSecondaire} icone />
             )}
           </div>
         </div>
