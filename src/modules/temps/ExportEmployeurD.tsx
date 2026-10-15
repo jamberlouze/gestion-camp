@@ -3,12 +3,16 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeTableur } from '@/lib/icones'
 import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
 import { menu } from './outils'
-import { useEmployesFeuille, useEntreprises, useFeuillesEmployes, useFeuillesPropres, useHeuresEmployes } from './donneesEmployes'
+import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres } from './donnees'
+import { useEmployesFeuille, useEntreprises, useFeuillesEmployes, useFeuillesPropres, useHeuresEmployes, type Entreprise } from './donneesEmployes'
 import {
   useEnregistrerMatricule,
   useEnregistrerNumeroCompagnie,
+  useEnregistrerPaieDirection,
   useEnregistrerReglagesEmployeurD,
+  usePaieDirection,
   useReglagesEmployeurD,
   type ChangementReglages,
 } from './donneesEmployeurD'
@@ -16,11 +20,11 @@ import {
   cellulesEmployeurD,
   largeurs,
   NOM_FEUILLE,
-  nomExport,
   nomFichier,
   preparerExport,
   TYPES_EXPORTES,
   type DatePeriode,
+  type Personne,
   type ResultatExport,
 } from './employeurD'
 import { datePaie, dateCourte, depuisIso, finPeriode, formatHeures, JOURS_COURTS, libellePeriode, numeroPeriodePaie, versIso } from './periodes'
@@ -32,11 +36,13 @@ const jourLong = (iso: string) => `${JOURS_COURTS[depuisIso(iso).getDay()]} ${da
 
 /**
  * Export des heures de la période vers Employeur D (gabarit « Saisie
- * simple ») : une ligne par employé et compagnie, une colonne par code de
- * gain. Ce qui manque (numéro de compagnie, matricule) se règle ici et
- * bloque le téléchargement ; les heures sans code et les feuilles pas
+ * simple ») : une ligne par employé et compagnie, plus (admins seulement,
+ * qui préparent la paie) une ligne par personne de la direction à sa
+ * compagnie de paie ; une colonne par code de gain. Ce qui manque (numéro de
+ * compagnie, matricule, compagnie de paie, matricule en double) se règle ici
+ * et bloque le téléchargement ; les heures sans code et les feuilles pas
  * approuvées sont signalées. Réglages : codes de gains, date de la colonne
- * Période, numéros des compagnies.
+ * Période, numéros des compagnies, paie de la direction (admins).
  */
 export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: string; compagnieDepart: string; fermer: () => void }) {
   const employes = useEmployesFeuille()
@@ -45,6 +51,12 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
   const feuilles = useFeuillesEmployes(debut)
   const propres = useFeuillesPropres()
   const reglages = useReglagesEmployeurD()
+  // La direction : admins seulement (une personne de la direction ne lit que sa feuille).
+  const { estAdmin } = useAuth()
+  const membres = useMembres(estAdmin)
+  const heuresDirection = useHeuresPlage(debut, finPeriode(debut), estAdmin)
+  const feuillesDirection = useFeuillesPlage(debut, debut, estAdmin)
+  const paieDirection = usePaieDirection(estAdmin)
   const [compagnie, setCompagnie] = useState(compagnieDepart)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState(false)
@@ -53,6 +65,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
 
   const resultat = useMemo(() => {
     if (!employes.data || !entreprises.data || !heures.data || !feuilles.data || !propres.data || !reglages.data) return null
+    if (estAdmin && (!membres.data || !heuresDirection.data || !feuillesDirection.data || !paieDirection.data)) return null
     return preparerExport({
       employes: employes.data,
       compagnies: entreprises.data,
@@ -61,11 +74,37 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
       compagnie: compagnie || null,
       propres: propres.data.keys(),
       statuts: feuilles.data,
+      direction: estAdmin
+        ? {
+            membres: membres.data!.map((m) => ({ id: m.id, nom: m.nom, courriel: m.courriel, admin: m.role === 'admin' })),
+            paie: paieDirection.data!,
+            heures: heuresDirection.data!,
+            statuts: feuillesDirection.data!.map((f) => ({ user_id: f.user_id, statut: f.statut })),
+          }
+        : undefined,
     })
-  }, [employes.data, entreprises.data, heures.data, feuilles.data, propres.data, reglages.data, compagnie])
+  }, [
+    employes.data,
+    entreprises.data,
+    heures.data,
+    feuilles.data,
+    propres.data,
+    reglages.data,
+    compagnie,
+    estAdmin,
+    membres.data,
+    heuresDirection.data,
+    feuillesDirection.data,
+    paieDirection.data,
+  ])
 
-  // Compagnies qui ont des heures payées dans la période (choix du haut).
-  const compagniesAvecHeures = (entreprises.data ?? []).filter((x) => heures.data?.some((h) => h.entreprise_id === x.id && h.heures))
+  // Compagnies qui ont des heures payées dans la période (choix du haut), direction comprise.
+  const compagniesDirection = new Set(
+    (heuresDirection.data ?? []).map((h) => paieDirection.data?.find((x) => x.user_id === h.user_id)?.entreprise_id).filter(Boolean),
+  )
+  const compagniesAvecHeures = (entreprises.data ?? []).filter(
+    (x) => heures.data?.some((h) => h.entreprise_id === x.id && h.heures) || (estAdmin && compagniesDirection.has(x.id)),
+  )
   const nomCompagnie = entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null
 
   async function telecharger(r: ResultatExport) {
@@ -89,7 +128,14 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
     }
   }
 
-  const chargeErreur = employes.error ?? entreprises.error ?? heures.error ?? feuilles.error ?? propres.error ?? reglages.error
+  const chargeErreur =
+    employes.error ??
+    entreprises.error ??
+    heures.error ??
+    feuilles.error ??
+    propres.error ??
+    reglages.error ??
+    (estAdmin ? (membres.error ?? heuresDirection.error ?? feuillesDirection.error ?? paieDirection.error) : null)
   const r = resultat
   const total = (code: number) => (r?.lignes ?? []).reduce((s, l) => s + (l.quantites[code] ?? 0), 0)
 
@@ -115,8 +161,16 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
               <b>{jourLong(datePeriode)}</b>
             </span>
           </div>
+          {!estAdmin && (
+            <p className="text-xs text-pierre-500">
+              Sans les heures de la direction : seuls les admins, qui préparent la paie, les voient et les exportent.
+            </p>
+          )}
 
-          {(r.compagniesSansNumero.length > 0 || r.employesSansMatricule.length > 0) && (
+          {(r.compagniesSansNumero.length > 0 ||
+            r.sansMatricule.length > 0 ||
+            r.directionSansCompagnie.length > 0 ||
+            r.matriculesEnDouble.length > 0) && (
             <section className="space-y-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
               <h3 className="text-sm font-semibold text-red-900">À régler avant de télécharger</h3>
               {r.compagniesSansNumero.length > 0 && (
@@ -127,14 +181,29 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
                   genre="compagnie"
                 />
               )}
-              {r.employesSansMatricule.length > 0 && (
+              {r.directionSansCompagnie.length > 0 && (
                 <ListeACompleter
-                  titre="Matricule Employeur D manquant"
-                  aide="9 chiffres au plus ; aussi dans Référentiel › Employés."
-                  elements={r.employesSansMatricule.map((e) => ({ id: e.id, nom: nomExport(e) }))}
-                  genre="employe"
+                  titre="Compagnie de paie de la direction à choisir"
+                  aide="La compagnie qui la paie dans Employeur D (ses heures n'ont pas de compagnie)."
+                  elements={r.directionSansCompagnie}
+                  genre="compagnie-direction"
+                  compagnies={entreprises.data.filter((x) => x.actif)}
                 />
               )}
+              {r.sansMatricule.length > 0 && (
+                <ListeACompleter
+                  titre="Matricule Employeur D manquant"
+                  aide="9 chiffres au plus ; un employé : aussi dans Référentiel › Employés."
+                  elements={r.sansMatricule}
+                  genre="matricule"
+                />
+              )}
+              {r.matriculesEnDouble.map((d) => (
+                <p key={d.matricule} className="text-sm text-red-900">
+                  Le matricule <b>{d.matricule}</b> est celui de {d.noms.join(' et de ')} : corrigez-en un (Référentiel › Employés, ou paie
+                  de la direction dans les réglages).
+                </p>
+              ))}
             </section>
           )}
 
@@ -143,7 +212,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
               <h3 className="font-semibold">À vérifier</h3>
               {r.sansCode.map((s) => (
                 <p key={s.type}>
-                  {formatHeures(s.heures)} h de « {s.libelle} » ({s.employes} employé{s.employes > 1 ? 's' : ''}) ne sont pas dans le fichier :
+                  {formatHeures(s.heures)} h de « {s.libelle} » ({s.personnes} personne{s.personnes > 1 ? 's' : ''}) ne sont pas dans le fichier :
                   aucun code de gain (réglages plus bas).
                 </p>
               ))}
@@ -156,7 +225,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
                       {l.nom} ({l.compagnie.nom}, {LIBELLES_ETAT[l.statut!]})
                     </span>
                   ))}
-                  . Ses heures sont dans le fichier telles quelles.
+                  . {r.nonApprouvees.length > 1 ? 'Leurs' : 'Ses'} heures sont dans le fichier telles quelles.
                 </p>
               )}
             </section>
@@ -189,8 +258,11 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
                         {l.compagnie.numero_employeur_d ?? <span className="text-red-700">—</span>}{' '}
                         <span className="text-xs text-pierre-500">{l.compagnie.nom}</span>
                       </td>
-                      <td className="px-3 py-1.5 tabular-nums">{l.employe.matricule_employeur_d ?? <span className="text-red-700">—</span>}</td>
-                      <td className="px-3 py-1.5">{l.nom}</td>
+                      <td className="px-3 py-1.5 tabular-nums">{l.matricule ?? <span className="text-red-700">—</span>}</td>
+                      <td className="px-3 py-1.5">
+                        {l.nom}
+                        {l.genre === 'direction' && <span className="ml-1.5 text-xs text-pierre-500">direction</span>}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">{datePeriode.replaceAll('-', '/')}</td>
                       {r.codes.map((c) => (
                         <td key={c} className="px-3 py-1.5 text-right tabular-nums">
@@ -214,7 +286,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
             </div>
           )}
 
-          <Reglages debut={debut} />
+          <Reglages debut={debut} estAdmin={estAdmin} />
 
           {erreur && <p className={ui.erreur}>{erreur}</p>}
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -233,17 +305,19 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
   )
 }
 
-/** Numéros manquants, saisis sur place (enregistrés en quittant la case ou par Entrée). */
+/** Ce qui manque, saisi sur place (case enregistrée en la quittant ou par Entrée ; menu dès le choix). */
 function ListeACompleter({
   titre,
   aide,
   elements,
   genre,
+  compagnies = [],
 }: {
   titre: string
   aide: string
-  elements: { id: string; nom: string }[]
-  genre: 'compagnie' | 'employe'
+  elements: (Pick<Personne, 'id' | 'nom'> & { genre?: Personne['genre'] })[]
+  genre: 'compagnie' | 'matricule' | 'compagnie-direction'
+  compagnies?: Entreprise[]
 }) {
   return (
     <div>
@@ -251,11 +325,19 @@ function ListeACompleter({
       <p className="mb-1.5 text-xs text-red-800">{aide}</p>
       <ul className="grid gap-1.5 sm:grid-cols-2">
         {elements.map((x) => (
-          <li key={x.id} className="flex items-center gap-2">
+          <li key={`${x.genre ?? ''}${x.id}`} className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-sm text-pierre-800" title={x.nom}>
               {x.nom}
             </span>
-            {genre === 'compagnie' ? <NumeroCompagnie id={x.id} valeur={null} libelle={`Numéro Employeur D de ${x.nom}`} /> : <Matricule id={x.id} libelle={`Matricule de ${x.nom}`} />}
+            {genre === 'compagnie' ? (
+              <NumeroCompagnie id={x.id} valeur={null} libelle={`Numéro Employeur D de ${x.nom}`} />
+            ) : genre === 'compagnie-direction' ? (
+              <CompagnieDirection userId={x.id} valeur={null} compagnies={compagnies} libelle={`Compagnie de paie de ${x.nom}`} />
+            ) : x.genre === 'direction' ? (
+              <MatriculeDirection userId={x.id} valeur={null} libelle={`Matricule de ${x.nom}`} />
+            ) : (
+              <Matricule id={x.id} libelle={`Matricule de ${x.nom}`} />
+            )}
           </li>
         ))}
       </ul>
@@ -274,6 +356,56 @@ function Matricule({ id, libelle }: { id: string; libelle: string }) {
       verifier={(t) => (/^\d{1,9}$/.test(t.replace(/\s/g, '')) ? null : '1 à 9 chiffres.')}
       enregistrer={(t) => enregistrer.mutateAsync({ employeId: id, matricule: t })}
     />
+  )
+}
+
+/** Matricule d'un compte de la direction (temps.paie_direction, admins). */
+function MatriculeDirection({ userId, valeur, libelle }: { userId: string; valeur: string | null; libelle: string }) {
+  const enregistrer = useEnregistrerPaieDirection()
+  return (
+    <ChampEnregistre
+      libelle={libelle}
+      valeur={valeur}
+      placeholder="Matricule"
+      inputMode="numeric"
+      verifier={(t) => (/^\d{1,9}$/.test(t.replace(/\s/g, '')) ? null : '1 à 9 chiffres.')}
+      enregistrer={(t) => enregistrer.mutateAsync({ userId, matricule: t })}
+      effacable={valeur != null}
+    />
+  )
+}
+
+/** Compagnie de paie d'un compte de la direction (enregistrée dès le choix). */
+function CompagnieDirection({
+  userId,
+  valeur,
+  compagnies,
+  libelle,
+}: {
+  userId: string
+  valeur: string | null
+  compagnies: Entreprise[]
+  libelle: string
+}) {
+  const enregistrer = useEnregistrerPaieDirection()
+  return (
+    <span className="flex flex-col items-end">
+      <select
+        aria-label={libelle}
+        className={`${menu} w-40 py-1!`}
+        value={valeur ?? ''}
+        disabled={enregistrer.isPending}
+        onChange={(e) => enregistrer.mutate({ userId, entrepriseId: e.target.value || null })}
+      >
+        <option value="">Compagnie…</option>
+        {compagnies.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.nom}
+          </option>
+        ))}
+      </select>
+      {enregistrer.error && <span className="mt-0.5 max-w-56 text-right text-xs text-red-700">{messageErreur(enregistrer.error)}</span>}
+    </span>
   )
 }
 
@@ -380,15 +512,15 @@ function CodeGain({ reglage, libelle, valeur }: { reglage: keyof ChangementRegla
   )
 }
 
-/** Réglages de l'export : codes de gains, date de la colonne Période, numéros des compagnies. */
-function Reglages({ debut }: { debut: string }) {
+/** Réglages de l'export : codes de gains, date de la colonne Période, numéros des compagnies, paie de la direction (admins). */
+function Reglages({ debut, estAdmin }: { debut: string; estAdmin: boolean }) {
   const reglages = useReglagesEmployeurD()
   const entreprises = useEntreprises()
   const enregistrer = useEnregistrerReglagesEmployeurD()
   const r = reglages.data
   if (!r) return null
   const compagnies = (entreprises.data ?? []).filter((x) => x.actif || x.numero_employeur_d)
-  const sansCode = r.code_regulieres == null && r.code_maladie == null && r.code_banque == null
+  const sansCode = TYPES_EXPORTES.every((t) => r[t.reglage] == null)
 
   return (
     <details className="rounded-lg border border-pierre-200 px-4 py-3" open={sansCode || undefined}>
@@ -439,6 +571,7 @@ function Reglages({ debut }: { debut: string }) {
           </ul>
         </div>
       </div>
+      {estAdmin && <PaieDirection compagnies={compagnies.filter((x) => x.actif)} />}
       {enregistrer.error && <p className={`${ui.erreur} mt-3`}>{messageErreur(enregistrer.error)}</p>}
       {r.modifie_par && r.modifie_le && (
         <p className="mt-3 text-xs text-pierre-500">
@@ -446,5 +579,38 @@ function Reglages({ debut }: { debut: string }) {
         </p>
       )}
     </details>
+  )
+}
+
+/**
+ * Admins : compagnie de paie et matricule de chaque compte de la direction
+ * (actifs, admins compris, plus ceux qui ont déjà une ligne de paie).
+ */
+function PaieDirection({ compagnies }: { compagnies: Entreprise[] }) {
+  const membres = useMembres()
+  const paie = usePaieDirection()
+  if (!membres.data || !paie.data) return null
+  const paieDe = new Map(paie.data.map((x) => [x.user_id, x]))
+  const liste = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || paieDe.has(m.id))
+  return (
+    <div className="mt-5">
+      <p className={ui.etiquette}>Paie de la direction (admins)</p>
+      <p className="mb-2 text-xs text-pierre-500">Ses heures n'ont pas de compagnie : choisissez celle qui la paie dans Employeur D, et son matricule.</p>
+      <ul className="grid gap-x-6 gap-y-1.5 lg:grid-cols-2">
+        {liste.map((m) => {
+          const ligne = paieDe.get(m.id)
+          return (
+            <li key={m.id} className="flex flex-wrap items-center justify-end gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate" title={nomDe(m)}>
+                {nomDe(m)}
+                {m.role === 'admin' && <span className="ml-1.5 text-xs text-pierre-500">admin</span>}
+              </span>
+              <CompagnieDirection userId={m.id} valeur={ligne?.entreprise_id ?? null} compagnies={compagnies} libelle={`Compagnie de paie de ${nomDe(m)}`} />
+              <MatriculeDirection userId={m.id} valeur={ligne?.matricule_employeur_d ?? null} libelle={`Matricule de ${nomDe(m)}`} />
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { DatePeriode, ReglagesEmployeurD } from './employeurD'
+import type { DatePeriode, PaieDirectionExport, ReglagesEmployeurD } from './employeurD'
 
 // Export Employeur D : réglages (temps.reglages_employeur_d, une ligne) et
 // numéros Employeur D du référentiel (core.entreprises.numero_employeur_d,
@@ -18,15 +18,17 @@ export function useReglagesEmployeurD() {
       const { data, error } = await supabase
         .schema(S)
         .from('reglages_employeur_d')
-        .select('code_regulieres, code_maladie, code_banque, periode, modifie_le, modifie_par')
+        .select('code_regulieres, code_vacances, code_maladie, code_banque, periode, modifie_le, modifie_par')
         .maybeSingle()
       if (error) throw error
-      return (data ?? { code_regulieres: null, code_maladie: null, code_banque: null, periode: 'date_paie' }) as ReglagesEmployeurD
+      return (data ?? { code_regulieres: null, code_vacances: null, code_maladie: null, code_banque: null, periode: 'date_paie' }) as ReglagesEmployeurD
     },
   })
 }
 
-export type ChangementReglages = Partial<Record<'code_regulieres' | 'code_maladie' | 'code_banque', number | null>> & { periode?: DatePeriode }
+export type ChangementReglages = Partial<Record<'code_regulieres' | 'code_vacances' | 'code_maladie' | 'code_banque', number | null>> & {
+  periode?: DatePeriode
+}
 
 export function useEnregistrerReglagesEmployeurD() {
   const client = useQueryClient()
@@ -75,5 +77,38 @@ export function useEnregistrerNumeroCompagnie() {
       if (error) throw error
     },
     onSettled: () => client.invalidateQueries({ queryKey: ['core', 'entreprises'] }),
+  })
+}
+
+/**
+ * Paie de la direction (temps.paie_direction) : compagnie et matricule de
+ * chaque compte. Lue par un admin (toutes) ; `actif` = false : rien n'est lu.
+ */
+export function usePaieDirection(actif = true) {
+  return useQuery({
+    queryKey: [S, 'paie-direction'],
+    enabled: actif,
+    queryFn: async () => {
+      const { data, error } = await supabase.schema(S).from('paie_direction').select('user_id, entreprise_id, matricule_employeur_d')
+      if (error) throw error
+      return data as PaieDirectionExport[]
+    },
+  })
+}
+
+/** Compagnie de paie ou matricule d'un compte de la direction (admins) ; seul le champ donné change. */
+export function useEnregistrerPaieDirection() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: [`${S}-local`, 'paie-direction'],
+    networkMode: 'always',
+    mutationFn: async (p: { userId: string; entrepriseId?: string | null; matricule?: string | null }) => {
+      const ligne: Record<string, unknown> = { user_id: p.userId }
+      if (p.entrepriseId !== undefined) ligne.entreprise_id = p.entrepriseId || null
+      if (p.matricule !== undefined) ligne.matricule_employeur_d = p.matricule?.trim() || null
+      const { error } = await supabase.schema(S).from('paie_direction').upsert(ligne, { onConflict: 'user_id' })
+      if (error) throw error
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: [S, 'paie-direction'] }),
   })
 }

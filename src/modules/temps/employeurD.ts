@@ -2,20 +2,28 @@
 // gabarit « Saisie simple » (feuille « Sans distribution coût (simple) »).
 // Fonctions pures, sans import : testées sous Node (npm run test:temps).
 //
-// Une ligne = un employé du référentiel pour une compagnie :
-//   Compagnie (numéro Employeur D, texte), Matricule (nombre), « Nom, prénom »,
-//   No relevé (vide : Employeur D le pose), Période (date aaaa/mm/jj),
-//   puis une colonne « G<code>(Quantité) » par code de gain réglé.
+// Une ligne = une personne pour une compagnie :
+//   - un employé du référentiel (heures de l'onglet Employés), une ligne par
+//     compagnie où il a des heures ; matricule sur sa fiche ;
+//   - un compte de la direction (feuilles temps.heures, admins seulement),
+//     une ligne pour sa compagnie de paie (temps.paie_direction, qui porte
+//     aussi son matricule).
+// Colonnes : Compagnie (numéro Employeur D, texte), Matricule (nombre),
+// « Nom, prénom », No relevé (vide : Employeur D le pose), Période (date
+// aaaa/mm/jj), puis une colonne « G<code>(Quantité) » par code de gain réglé.
 // Codes de gains réglés dans l'app (temps.reglages_employeur_d) : un type
 // sans code n'est pas exporté (ses heures sont signalées). Le woofing n'est
 // jamais payé. Formats du canevas Desjardins : compagnie = 8 lettres ou
 // chiffres au plus, matricule = 9 chiffres au plus, gain = 1 à 999.
 
-export type TypeExporte = 'regulieres' | 'maladie' | 'banque'
+export type TypeExporte = 'regulieres' | 'vacances' | 'maladie' | 'banque'
 
-/** Types d'heures payées des employés, dans l'ordre des colonnes. */
-export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: 'code_regulieres' | 'code_maladie' | 'code_banque' }[] = [
+type Reglage = 'code_regulieres' | 'code_vacances' | 'code_maladie' | 'code_banque'
+
+/** Types d'heures payées, dans l'ordre des colonnes (vacances : la direction seulement). */
+export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Reglage }[] = [
   { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres' },
+  { type: 'vacances', libelle: 'Vacances (direction)', reglage: 'code_vacances' },
   { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie' },
   { type: 'banque', libelle: 'Prises en banque', reglage: 'code_banque' },
 ]
@@ -24,6 +32,7 @@ export type DatePeriode = 'date_paie' | 'fin_periode'
 
 export interface ReglagesEmployeurD {
   code_regulieres: number | null
+  code_vacances: number | null
   code_maladie: number | null
   code_banque: number | null
   periode: DatePeriode
@@ -54,14 +63,46 @@ export interface HeureExport {
 
 export type StatutFeuille = 'ouverte' | 'soumise' | 'approuvee'
 
+/** Compte de la direction (admin : pas d'approbation de sa feuille). */
+export interface MembreDirectionExport {
+  id: string
+  nom: string | null
+  courriel: string
+  admin: boolean
+}
+
+export interface PaieDirectionExport {
+  user_id: string
+  entreprise_id: string | null
+  matricule_employeur_d: string | null
+}
+
+export interface HeureDirectionExport {
+  user_id: string
+  type: string
+  heures: number
+}
+
+export type Genre = 'employe' | 'direction'
+
+/** Une personne à compléter (matricule, compagnie de paie). */
+export interface Personne {
+  genre: Genre
+  id: string
+  nom: string
+}
+
 export interface LigneExport {
   cle: string
-  employe: EmployeExport
-  compagnie: CompagnieExport
+  genre: Genre
+  /** Fiche du référentiel (employé) ou compte (direction). */
+  personneId: string
   nom: string
+  compagnie: CompagnieExport
+  matricule: string | null
   /** Quantité par code de gain (heures, arrondies au centième). */
   quantites: Record<number, number>
-  /** État de sa feuille s'il remplit la sienne ; null sinon. */
+  /** État de la feuille à approuver (employé qui remplit la sienne, direction) ; null sinon. */
   statut: StatutFeuille | null
 }
 
@@ -70,12 +111,16 @@ export interface ResultatExport {
   codes: number[]
   lignes: LigneExport[]
   /** Heures payées laissées de côté faute de code de gain, par type. */
-  sansCode: { type: TypeExporte; libelle: string; heures: number; employes: number }[]
+  sansCode: { type: TypeExporte; libelle: string; heures: number; personnes: number }[]
   /** Bloquant : compagnies du fichier sans numéro Employeur D. */
   compagniesSansNumero: CompagnieExport[]
-  /** Bloquant : employés du fichier sans matricule. */
-  employesSansMatricule: EmployeExport[]
-  /** À vérifier : lignes d'un employé qui remplit sa feuille, pas encore approuvée. */
+  /** Bloquant : personnes du fichier sans matricule. */
+  sansMatricule: Personne[]
+  /** Bloquant : direction avec des heures à exporter mais sans compagnie de paie (dans aucune ligne). */
+  directionSansCompagnie: Personne[]
+  /** Bloquant : un même matricule pour deux personnes. */
+  matriculesEnDouble: { matricule: string; noms: string[] }[]
+  /** À vérifier : feuilles pas encore approuvées (leurs heures sont exportées telles quelles). */
   nonApprouvees: LigneExport[]
   /** Fichier possible : au moins une ligne et rien de bloquant. */
   pret: boolean
@@ -86,9 +131,21 @@ const arrondi = (n: number) => Math.round(n * 100) / 100
 /** « Chamberland, Maxime » si le nom complet est connu, sinon le nom de camp. */
 export const nomExport = (e: Pick<EmployeExport, 'surnom' | 'nom_complet'>) => e.nom_complet || e.surnom
 
+/**
+ * « Nom, prénom » d'un compte de la direction, tiré de son nom affiché
+ * (« Julie Tremblay » → « Tremblay, Julie » ; le prénom = le premier mot,
+ * les prénoms composés ont un trait d'union). Sans nom : le courriel.
+ */
+export function nomDirection(m: Pick<MembreDirectionExport, 'nom' | 'courriel'>): string {
+  const nom = m.nom?.trim().replace(/\s+/g, ' ')
+  if (!nom) return m.courriel
+  const i = nom.indexOf(' ')
+  return i < 0 ? nom : `${nom.slice(i + 1)}, ${nom.slice(0, i)}`
+}
+
 /** Code de gain de chaque type (null = pas exporté). */
 export function codesParType(r: ReglagesEmployeurD): Record<TypeExporte, number | null> {
-  return { regulieres: r.code_regulieres, maladie: r.code_maladie, banque: r.code_banque }
+  return { regulieres: r.code_regulieres, vacances: r.code_vacances, maladie: r.code_maladie, banque: r.code_banque }
 }
 
 /** Colonnes de codes : celles des types qui ont un code, dans l'ordre, sans doublon (deux types au même code s'additionnent). */
@@ -101,11 +158,18 @@ export function colonnesCodes(r: ReglagesEmployeurD): number[] {
   return codes
 }
 
+const estExporte = (t: string): t is TypeExporte => TYPES_EXPORTES.some((x) => x.type === t)
+
 /**
- * Lignes du fichier pour une période. `heures` = les heures de la période
- * (tous types ; le woofing et tout autre type sont ignorés). `compagnie` :
- * une seule compagnie, ou null pour toutes. `statuts` : feuilles des
- * employés qui remplissent la leur (`propres`), sans ligne = ouverte.
+ * Lignes du fichier pour une période. `heures` = les heures des employés de
+ * la période (tous types ; le woofing et tout autre type sont ignorés).
+ * `compagnie` : une seule compagnie, ou null pour toutes. `statuts` :
+ * feuilles des employés qui remplissent la leur (`propres`), sans ligne =
+ * ouverte. `direction` : heures de la période des comptes de la direction
+ * (admins seulement), leur paie et l'état de leur feuille (un admin n'a pas
+ * d'approbation). Une personne de la direction sans compagnie de paie
+ * bloque le fichier, même filtré sur une compagnie : ses heures ne seraient
+ * dans aucun fichier.
  */
 export function preparerExport(p: {
   employes: EmployeExport[]
@@ -115,6 +179,12 @@ export function preparerExport(p: {
   compagnie?: string | null
   propres?: Iterable<string>
   statuts?: { employe_id: string; entreprise_id: string; statut: StatutFeuille }[]
+  direction?: {
+    membres: MembreDirectionExport[]
+    paie: PaieDirectionExport[]
+    heures: HeureDirectionExport[]
+    statuts?: { user_id: string; statut: StatutFeuille }[]
+  }
 }): ResultatExport {
   const codes = colonnesCodes(p.reglages)
   const codeDe = codesParType(p.reglages)
@@ -122,34 +192,82 @@ export function preparerExport(p: {
   const parCompagnie = new Map(p.compagnies.map((c) => [c.id, c]))
   const propres = new Set(p.propres ?? [])
   const statutDe = new Map((p.statuts ?? []).map((s) => [`${s.employe_id}|${s.entreprise_id}`, s.statut]))
-  const estExporte = (t: string): t is TypeExporte => TYPES_EXPORTES.some((x) => x.type === t)
 
   const lignes = new Map<string, LigneExport>()
-  const sansCode = new Map<TypeExporte, { heures: number; employes: Set<string> }>()
+  const sansCode = new Map<TypeExporte, { heures: number; personnes: Set<string> }>()
+  const directionSansCompagnie = new Map<string, Personne>()
+
+  /** Type sans code : heures seulement comptées (signalées), rend true. */
+  const sansCodeCompte = (type: TypeExporte, heures: number, personne: string) => {
+    if (codeDe[type] != null) return false
+    const s = sansCode.get(type) ?? { heures: 0, personnes: new Set<string>() }
+    s.heures += heures
+    s.personnes.add(personne)
+    sansCode.set(type, s)
+    return true
+  }
+  /** Ajoute des heures à une ligne (créée au besoin) ; un type sans code est seulement compté. */
+  const ajouter = (type: TypeExporte, heures: number, cle: string, personne: string, creer: () => LigneExport) => {
+    const code = codeDe[type]
+    if (code == null) {
+      sansCodeCompte(type, heures, personne)
+      return
+    }
+    let l = lignes.get(cle)
+    if (!l) lignes.set(cle, (l = creer()))
+    l.quantites[code] = (l.quantites[code] ?? 0) + heures
+  }
+
   for (const h of p.heures) {
-    if (!estExporte(h.type) || !h.heures) continue
+    if (!estExporte(h.type) || h.type === 'vacances' || !h.heures) continue
     if (p.compagnie && h.entreprise_id !== p.compagnie) continue
     const employe = parEmploye.get(h.employe_id)
     const compagnie = parCompagnie.get(h.entreprise_id)
     if (!employe || !compagnie) continue
-    const code = codeDe[h.type]
-    if (code == null) {
-      const s = sansCode.get(h.type) ?? { heures: 0, employes: new Set<string>() }
-      s.heures += h.heures
-      s.employes.add(h.employe_id)
-      sansCode.set(h.type, s)
-      continue
-    }
-    const cle = `${h.employe_id}|${h.entreprise_id}`
-    let l = lignes.get(cle)
-    if (!l) {
-      const statut = statutDe.get(cle) ?? (propres.has(h.employe_id) ? 'ouverte' : null)
-      l = { cle, employe, compagnie, nom: nomExport(employe), quantites: {}, statut }
-      lignes.set(cle, l)
-    }
-    l.quantites[code] = (l.quantites[code] ?? 0) + h.heures
+    const cle = `employe|${h.employe_id}|${h.entreprise_id}`
+    ajouter(h.type, h.heures, cle, `employe|${h.employe_id}`, () => ({
+      cle,
+      genre: 'employe',
+      personneId: employe.id,
+      nom: nomExport(employe),
+      compagnie,
+      matricule: employe.matricule_employeur_d,
+      quantites: {},
+      statut: statutDe.get(`${h.employe_id}|${h.entreprise_id}`) ?? (propres.has(h.employe_id) ? 'ouverte' : null),
+    }))
   }
 
+  if (p.direction) {
+    const parMembre = new Map(p.direction.membres.map((m) => [m.id, m]))
+    const paieDe = new Map(p.direction.paie.map((x) => [x.user_id, x]))
+    const statutMembre = new Map((p.direction.statuts ?? []).map((s) => [s.user_id, s.statut]))
+    for (const h of p.direction.heures) {
+      if (!estExporte(h.type) || !h.heures) continue
+      const membre = parMembre.get(h.user_id)
+      if (!membre) continue
+      const paie = paieDe.get(h.user_id)
+      const compagnie = paie?.entreprise_id ? parCompagnie.get(paie.entreprise_id) : undefined
+      const cle = `direction|${h.user_id}`
+      if (p.compagnie && compagnie && compagnie.id !== p.compagnie) continue
+      if (sansCodeCompte(h.type, h.heures, cle)) continue
+      if (!compagnie) {
+        directionSansCompagnie.set(membre.id, { genre: 'direction', id: membre.id, nom: nomDirection(membre) })
+        continue
+      }
+      ajouter(h.type, h.heures, cle, cle, () => ({
+        cle,
+        genre: 'direction',
+        personneId: membre.id,
+        nom: nomDirection(membre),
+        compagnie,
+        matricule: paie?.matricule_employeur_d ?? null,
+        quantites: {},
+        statut: membre.admin ? null : (statutMembre.get(membre.id) ?? 'ouverte'),
+      }))
+    }
+  }
+
+  const parNom = (a: { nom: string }, b: { nom: string }) => a.nom.localeCompare(b.nom, 'fr')
   const liste = [...lignes.values()]
     .map((l) => ({ ...l, quantites: Object.fromEntries(Object.entries(l.quantites).map(([c, q]) => [c, arrondi(q)])) }))
     .filter((l) => Object.values(l.quantites).some((q) => q > 0))
@@ -157,14 +275,23 @@ export function preparerExport(p: {
       (a, b) =>
         a.compagnie.ordre - b.compagnie.ordre ||
         a.compagnie.nom.localeCompare(b.compagnie.nom, 'fr') ||
-        a.nom.localeCompare(b.nom, 'fr') ||
-        a.employe.id.localeCompare(b.employe.id),
+        parNom(a, b) ||
+        a.personneId.localeCompare(b.personneId),
     )
 
   const compagniesSansNumero = [...new Map(liste.filter((l) => !l.compagnie.numero_employeur_d).map((l) => [l.compagnie.id, l.compagnie])).values()]
-  const employesSansMatricule = [...new Map(liste.filter((l) => !l.employe.matricule_employeur_d).map((l) => [l.employe.id, l.employe])).values()].sort(
-    (a, b) => nomExport(a).localeCompare(nomExport(b), 'fr'),
-  )
+  const personne = (l: LigneExport): Personne => ({ genre: l.genre, id: l.personneId, nom: l.nom })
+  const sansMatricule = [...new Map(liste.filter((l) => !l.matricule).map((l) => [`${l.genre}|${l.personneId}`, personne(l)])).values()].sort(parNom)
+  // Un matricule = une personne (un employé a le même sur ses lignes de chaque compagnie).
+  const porteurs = new Map<string, Map<string, string>>()
+  for (const l of liste) {
+    if (!l.matricule) continue
+    const m = porteurs.get(l.matricule) ?? new Map<string, string>()
+    m.set(`${l.genre}|${l.personneId}`, l.nom)
+    porteurs.set(l.matricule, m)
+  }
+  const matriculesEnDouble = [...porteurs].filter(([, m]) => m.size > 1).map(([matricule, m]) => ({ matricule, noms: [...m.values()] }))
+  const sansCompagnie = [...directionSansCompagnie.values()].sort(parNom)
 
   return {
     codes,
@@ -173,12 +300,14 @@ export function preparerExport(p: {
       type: t.type,
       libelle: t.libelle,
       heures: arrondi(sansCode.get(t.type)!.heures),
-      employes: sansCode.get(t.type)!.employes.size,
+      personnes: sansCode.get(t.type)!.personnes.size,
     })),
     compagniesSansNumero,
-    employesSansMatricule,
+    sansMatricule,
+    directionSansCompagnie: sansCompagnie,
+    matriculesEnDouble,
     nonApprouvees: liste.filter((l) => l.statut != null && l.statut !== 'approuvee'),
-    pret: liste.length > 0 && !compagniesSansNumero.length && !employesSansMatricule.length,
+    pret: liste.length > 0 && !compagniesSansNumero.length && !sansMatricule.length && !sansCompagnie.length && !matriculesEnDouble.length,
   }
 }
 
@@ -217,7 +346,7 @@ export function cellulesEmployeurD(r: Pick<ResultatExport, 'codes' | 'lignes'>, 
     entetes(r.codes).map((v) => ({ t: 's', v })),
     ...r.lignes.map((l) => [
       { t: 's', v: l.compagnie.numero_employeur_d ?? '', z: '@' } as Cellule,
-      l.employe.matricule_employeur_d ? ({ t: 'n', v: Number(l.employe.matricule_employeur_d) } as Cellule) : null,
+      l.matricule ? ({ t: 'n', v: Number(l.matricule) } as Cellule) : null,
       { t: 's', v: l.nom } as Cellule,
       null,
       periode,

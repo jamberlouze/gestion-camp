@@ -391,6 +391,11 @@ update core.entreprises c set numero_employeur_d = v.numero
 update core.employes e set matricule_employeur_d = v.matricule
   from (values ('Pinson', '101'), ('Manitou', '102'), ('Marteau', '103')) as v (surnom, matricule)
  where e.surnom = v.surnom and e.matricule_employeur_d is null;
+-- Direction : Julie payée par GBPA+ (matricule fictif 201) ; Olivier sans
+-- compagnie de paie ni matricule (bloque l'export d'un admin).
+insert into temps.paie_direction (user_id, entreprise_id, matricule_employeur_d)
+select '00000000-0000-0000-0000-000000000002', c.id, '201' from core.entreprises c where c.nom = 'GBPA+'
+on conflict do nothing;
 
 -- ------------------------------------------------------------
 -- Petite caisse : l'historique vient de la migration (import du Sheets) ;

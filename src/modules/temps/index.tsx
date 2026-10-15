@@ -112,7 +112,12 @@ function FeuillePersonne() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
-        <Retour depuisApprouver={params.get('retour') === 'approuver'} debut={debut} vers="/temps/tableau" libelle="Tableau de bord" />
+        {/* Ouverte de la section Direction de l'onglet Employés : retour vers lui. */}
+        {params.get('retour') === 'employes' ? (
+          <Retour depuisApprouver={false} debut={debut} vers="/temps/employes" libelle="Employés" />
+        ) : (
+          <Retour depuisApprouver={params.get('retour') === 'approuver'} debut={debut} vers="/temps/tableau" libelle="Tableau de bord" />
+        )}
         <h2 className="text-lg font-semibold">{membres.data ? nomDe(personne) : '…'}</h2>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">

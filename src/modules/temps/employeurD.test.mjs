@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import * as XLSX from 'xlsx'
-import { cellulesEmployeurD, colonnesCodes, entetes, largeurs, NOM_FEUILLE, nomFichier, preparerExport, serieExcel } from './employeurD.ts'
+import { cellulesEmployeurD, colonnesCodes, entetes, largeurs, NOM_FEUILLE, nomDirection, nomFichier, preparerExport, serieExcel } from './employeurD.ts'
 
 const GBPA = { id: 'c1', nom: 'GBPA+', ordre: 1, numero_employeur_d: '0001234' }
 const OPI = { id: 'c2', nom: 'Opikawa', ordre: 2, numero_employeur_d: 'OPI42' }
@@ -10,7 +10,7 @@ const RD = { id: 'c3', nom: 'Rouge & Diable', ordre: 3, numero_employeur_d: null
 const pinson = { id: 'e1', surnom: 'Pinson', nom_complet: 'Morin, Léa', matricule_employeur_d: '1001' }
 const castor = { id: 'e2', surnom: 'Castor', nom_complet: null, matricule_employeur_d: '1002' }
 const loutre = { id: 'e3', surnom: 'Loutre', nom_complet: 'Côté, Noah', matricule_employeur_d: null }
-const REGLAGES = { code_regulieres: 1, code_maladie: null, code_banque: null, periode: 'date_paie' }
+const REGLAGES = { code_regulieres: 1, code_vacances: null, code_maladie: null, code_banque: null, periode: 'date_paie' }
 const h = (employe_id, entreprise_id, type, heures) => ({ employe_id, entreprise_id, type, heures })
 
 test('une ligne par employé et compagnie, régulières additionnées au code G1', () => {
@@ -41,7 +41,7 @@ test('woofing jamais exporté ; type sans code signalé, pas dans le fichier', (
   })
   assert.deepEqual(r.lignes[0].quantites, { 1: 8 })
   assert.deepEqual(
-    r.sansCode.map((s) => [s.type, s.heures, s.employes]),
+    r.sansCode.map((s) => [s.type, s.heures, s.personnes]),
     [
       ['maladie', 8, 1],
       ['banque', 2.5, 1],
@@ -50,7 +50,7 @@ test('woofing jamais exporté ; type sans code signalé, pas dans le fichier', (
 })
 
 test('codes réglés : une colonne par code, deux types au même code s’additionnent', () => {
-  const reglages = { code_regulieres: 1, code_maladie: 101, code_banque: 1, periode: 'date_paie' }
+  const reglages = { code_regulieres: 1, code_vacances: null, code_maladie: 101, code_banque: 1, periode: 'date_paie' }
   assert.deepEqual(colonnesCodes(reglages), [1, 101])
   const r = preparerExport({
     employes: [pinson],
@@ -75,7 +75,7 @@ test('bloquant : compagnie sans numéro, employé sans matricule', () => {
     reglages: REGLAGES,
   })
   assert.deepEqual(r.compagniesSansNumero.map((c) => c.nom), ['Rouge & Diable'])
-  assert.deepEqual(r.employesSansMatricule.map((e) => e.surnom), ['Loutre'])
+  assert.deepEqual(r.sansMatricule.map((e) => e.nom), ['Côté, Noah'])
   assert.equal(r.pret, false)
 })
 
@@ -101,7 +101,7 @@ test('feuille propre pas approuvée : signalée, pas bloquante', () => {
     statuts: [{ employe_id: 'e1', entreprise_id: 'c2', statut: 'approuvee' }],
   })
   assert.deepEqual(r.nonApprouvees.map((l) => [l.compagnie.nom, l.statut]), [['GBPA+', 'ouverte']])
-  assert.equal(r.lignes.find((l) => l.employe.id === 'e2').statut, null)
+  assert.equal(r.lignes.find((l) => l.personneId === 'e2').statut, null)
   assert.equal(r.pret, true)
 })
 
@@ -134,7 +134,7 @@ test('fichier .xls relu par SheetJS : en-têtes, types et formats du gabarit', (
     employes: [pinson, castor],
     compagnies: [GBPA, OPI],
     heures: [h('e1', 'c1', 'regulieres', 15.5), h('e1', 'c1', 'maladie', 8), h('e2', 'c2', 'regulieres', 6)],
-    reglages: { code_regulieres: 1, code_maladie: 101, code_banque: null, periode: 'date_paie' },
+    reglages: { code_regulieres: 1, code_vacances: null, code_maladie: 101, code_banque: null, periode: 'date_paie' },
   })
   const cellules = cellulesEmployeurD(r, '2026-10-22')
   // Même assemblage que l'écran (ExportEmployeurD.tsx).
@@ -160,4 +160,93 @@ test('fichier .xls relu par SheetJS : en-têtes, types et formats du gabarit', (
   assert.equal(f.E2.z, 'yyyy/mm/dd')
   assert.equal(f.E2.w, '2026/10/22')
   assert.equal(XLSX.SSF.format('yyyy-mm-dd', 46317), '2026-10-22')
+})
+
+// ---------- Direction (comptes, feuilles temps.heures) ----------
+const julie = { id: 'u2', nom: 'Julie Tremblay', courriel: 'julie@camp.test', admin: false }
+const maxime = { id: 'u1', nom: 'Maxime  Chamberland', courriel: 'maxime@camp.test', admin: true }
+const olivier = { id: 'u3', nom: null, courriel: 'olivier@camp.test', admin: false }
+const hd = (user_id, type, heures) => ({ user_id, type, heures })
+const TOUS = { code_regulieres: 1, code_vacances: 305, code_maladie: 101, code_banque: 43, periode: 'date_paie' }
+
+test('direction : une ligne à sa compagnie de paie, vacances au code des vacances', () => {
+  const r = preparerExport({
+    employes: [pinson],
+    compagnies: [GBPA, OPI],
+    heures: [h('e1', 'c1', 'regulieres', 10)],
+    reglages: TOUS,
+    direction: {
+      membres: [julie, maxime],
+      paie: [
+        { user_id: 'u2', entreprise_id: 'c2', matricule_employeur_d: '2001' },
+        { user_id: 'u1', entreprise_id: 'c1', matricule_employeur_d: '2002' },
+      ],
+      heures: [hd('u2', 'regulieres', 42.5), hd('u2', 'vacances', 8), hd('u2', 'maladie', 4), hd('u2', 'banque', 2), hd('u1', 'regulieres', 40)],
+      statuts: [{ user_id: 'u2', statut: 'soumise' }],
+    },
+  })
+  assert.deepEqual(r.codes, [1, 305, 101, 43])
+  assert.deepEqual(
+    r.lignes.map((l) => [l.genre, l.compagnie.nom, l.nom, l.matricule, l.quantites]),
+    [
+      ['direction', 'GBPA+', 'Chamberland, Maxime', '2002', { 1: 40 }],
+      ['employe', 'GBPA+', 'Morin, Léa', '1001', { 1: 10 }],
+      ['direction', 'Opikawa', 'Tremblay, Julie', '2001', { 1: 42.5, 305: 8, 101: 4, 43: 2 }],
+    ],
+  )
+  // Julie : feuille soumise, signalée ; l'admin n'a pas d'approbation.
+  assert.deepEqual(r.nonApprouvees.map((l) => [l.nom, l.statut]), [['Tremblay, Julie', 'soumise']])
+  assert.equal(r.pret, true)
+})
+
+test('direction : sans compagnie de paie ou sans matricule = bloquant, même filtré', () => {
+  const r = preparerExport({
+    employes: [],
+    compagnies: [GBPA],
+    heures: [],
+    reglages: TOUS,
+    compagnie: 'c1',
+    direction: {
+      membres: [julie, olivier],
+      paie: [{ user_id: 'u2', entreprise_id: 'c1', matricule_employeur_d: null }],
+      heures: [hd('u2', 'regulieres', 8), hd('u3', 'regulieres', 5)],
+    },
+  })
+  assert.deepEqual(r.sansMatricule, [{ genre: 'direction', id: 'u2', nom: 'Tremblay, Julie' }])
+  assert.deepEqual(r.directionSansCompagnie, [{ genre: 'direction', id: 'u3', nom: 'olivier@camp.test' }])
+  assert.equal(r.lignes.length, 1)
+  assert.equal(r.pret, false)
+})
+
+test('direction : vacances sans code signalées ; heures d’un type sans code ne bloquent pas', () => {
+  const r = preparerExport({
+    employes: [],
+    compagnies: [GBPA],
+    heures: [],
+    reglages: REGLAGES,
+    direction: { membres: [olivier], paie: [], heures: [hd('u3', 'vacances', 8)] },
+  })
+  assert.deepEqual(r.sansCode.map((s) => [s.type, s.heures, s.personnes]), [['vacances', 8, 1]])
+  assert.deepEqual(r.directionSansCompagnie, [])
+})
+
+test('même matricule pour deux personnes = bloquant ; un employé à deux compagnies, non', () => {
+  const r = preparerExport({
+    employes: [pinson],
+    compagnies: [GBPA, OPI],
+    heures: [h('e1', 'c1', 'regulieres', 5), h('e1', 'c2', 'regulieres', 5)],
+    reglages: REGLAGES,
+    direction: { membres: [julie], paie: [{ user_id: 'u2', entreprise_id: 'c1', matricule_employeur_d: '1001' }], heures: [hd('u2', 'regulieres', 8)] },
+  })
+  assert.deepEqual(r.matriculesEnDouble, [{ matricule: '1001', noms: ['Morin, Léa', 'Tremblay, Julie'] }])
+  assert.equal(r.pret, false)
+  const seul = preparerExport({ employes: [pinson], compagnies: [GBPA, OPI], heures: [h('e1', 'c1', 'regulieres', 5), h('e1', 'c2', 'regulieres', 5)], reglages: REGLAGES })
+  assert.deepEqual(seul.matriculesEnDouble, [])
+})
+
+test('nom d’un compte de la direction en « Nom, prénom »', () => {
+  assert.equal(nomDirection({ nom: 'Julie Tremblay', courriel: 'x' }), 'Tremblay, Julie')
+  assert.equal(nomDirection({ nom: 'Marie-Ève De La Fontaine', courriel: 'x' }), 'De La Fontaine, Marie-Ève')
+  assert.equal(nomDirection({ nom: ' Cliff ', courriel: 'x' }), 'Cliff')
+  assert.equal(nomDirection({ nom: '', courriel: 'a@b.c' }), 'a@b.c')
 })
