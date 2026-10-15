@@ -297,3 +297,12 @@ La bascule elle-même (plan §11 : import final, formulaires Airtable fermés et
 3. **Liste de vérification** `docs/verification-rh-phase5.md` (répétition passée en DEV).
 
 Interdits pour cette phase : toute écriture dans Airtable (connecteur en lecture seulement), toute action PROD (`--linked`, API Management, `main`, `wrangler deploy`), tout envoi de courriel ailleurs que dans Mailpit.
+
+## 16. Fiches du staff (2026-10-15)
+
+Demande de Maxime : « une fiche pour chaque employé/bénévole embauché (photo, coordonnées, diète, allergie, fiche médicale, contacts d'urgence, etc.) facilement accessible ». Réponses de Maxime : **direction + coordonnateurs** ; **questions médicales ajoutées au dossier d'embauche** ; **en ligne seulement** (rien de santé gardé sur l'appareil).
+
+- Page `/staff` (« Fiches du staff », 🪪, menu Équipe), accès propre `rh_fiches` en lecture (direction, coordos, développeur). Saison par défaut = celle de l'onglet Employés.
+- Données par `rh.fiches(saison)` seulement (un coordo ne lit aucune table de `rh`) ; photos lisibles avec l'accès (`rh.est_photo`), aucun autre fichier.
+- Dossier : `sante_conditions`, `medicaments`, `auto_injecteur`, `sante_notes` (facultatifs, section « Santé » du dossier d'embauche, été et hors été ; pré-remplis l'année suivante). Photo demandée aussi hors été (« pour ta fiche d'employé »).
+- Migration `20261015164321_rh_fiches`. Vérification : `docs/verification-rh-fiches.md`.

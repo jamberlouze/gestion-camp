@@ -132,7 +132,7 @@ export default function Dossier({ jeton }: { jeton: string }) {
       {...extra}
     />
   )
-  const ouiNon = (cle: 'etudiant_temps_plein' | 'allergies_oui') => (
+  const ouiNon = (cle: 'etudiant_temps_plein' | 'allergies_oui' | 'auto_injecteur') => (
     <Choix
       nom={cle}
       valeur={d[cle]}
@@ -352,6 +352,19 @@ export default function Dossier({ jeton }: { jeton: string }) {
           )}
         </Bloc>
 
+        <Bloc titre="Santé" note="Facultatif. Seules la direction et les personnes qui coordonnent ton équipe y ont accès, pour ta sécurité au camp.">
+          <Question libelle="Problèmes de santé ou limitations physiques à connaître" aide="Ex. asthme, diabète, épilepsie, blessure récente.">
+            <textarea rows={2} className={ui.champ} value={d.sante_conditions} onChange={(e) => changer('sante_conditions', e.target.value)} />
+          </Question>
+          <Question libelle="Médicaments" aide="Ceux que tu prends ou apportes au camp, et quand.">
+            <textarea rows={2} className={ui.champ} value={d.medicaments} onChange={(e) => changer('medicaments', e.target.value)} />
+          </Question>
+          <Question libelle="As-tu un auto-injecteur d'épinéphrine (EpiPen)?">{ouiNon('auto_injecteur')}</Question>
+          <Question libelle="Autre chose à savoir en cas d'urgence">
+            <textarea rows={2} className={ui.champ} value={d.sante_notes} onChange={(e) => changer('sante_notes', e.target.value)} />
+          </Question>
+        </Bloc>
+
         <Bloc titre="Contacts d'urgence">
           {([1, 2] as const).map((n) => (
             <div key={n} className="grid gap-3 sm:grid-cols-3">
@@ -434,6 +447,11 @@ export default function Dossier({ jeton }: { jeton: string }) {
           <Question libelle="Permis de conduire (ou autre pièce d'identité)" {...q('piece_identite')}>
             {fichier('piece_identite')}
           </Question>
+          {!ete && (
+            <Question libelle="Photo" aide="Pour ta fiche d'employé : ton visage, bien visible." {...q('photo')}>
+              {fichier('photo')}
+            </Question>
+          )}
           {mineur && !page.consentement && (
             <Question
               libelle="Consentement parental signé (Mineur·es seulement)"
@@ -450,7 +468,7 @@ export default function Dossier({ jeton }: { jeton: string }) {
         {ete && (
           <>
             <Bloc titre="Présentation de l'équipe sur les médias sociaux" note="Facultatif.">
-              <Question libelle="Photo" {...q('photo')}>
+              <Question libelle="Photo" aide="Sert aussi à ta fiche d'employé : ton visage, bien visible." {...q('photo')}>
                 {fichier('photo')}
               </Question>
               <Question libelle="As-tu été campeur.se ou anim avant à la BPA (Si oui, combien d'années?)">{texte('campeur')}</Question>

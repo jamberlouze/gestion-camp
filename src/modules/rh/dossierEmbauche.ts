@@ -103,6 +103,10 @@ export interface DonneesDossier {
   allergies_oui: OuiNon
   allergies: string
   diete: string
+  sante_conditions: string
+  medicaments: string
+  auto_injecteur: OuiNon
+  sante_notes: string
   taille_tshirt: string
   taille_hoodie: string
   urgence1_nom: string
@@ -262,6 +266,10 @@ export function depuisPage(page: PageDossier): DonneesDossier {
     allergies_oui: page.dossier ? (texte(d.allergies) ? 'oui' : 'non') : '',
     allergies: texte(d.allergies),
     diete: texte(d.diete),
+    sante_conditions: texte(d.sante_conditions),
+    medicaments: texte(d.medicaments),
+    auto_injecteur: ouiNon(d.auto_injecteur),
+    sante_notes: texte(d.sante_notes),
     taille_tshirt: texte(d.taille_tshirt),
     taille_hoodie: texte(d.taille_hoodie),
     urgence1_nom: texte(d.urgence1_nom),
@@ -335,6 +343,10 @@ export function versDossier(d: DonneesDossier, page: PageDossier) {
       etudes: t(d.etudes),
       allergies: d.allergies_oui === 'oui' ? t(d.allergies) : '',
       diete: d.diete,
+      sante_conditions: t(d.sante_conditions),
+      medicaments: t(d.medicaments),
+      auto_injecteur: d.auto_injecteur === 'oui' ? true : d.auto_injecteur === 'non' ? false : null,
+      sante_notes: t(d.sante_notes),
       taille_tshirt: ete ? d.taille_tshirt : '',
       taille_hoodie: ete ? d.taille_hoodie : '',
       urgence1_nom: t(d.urgence1_nom),

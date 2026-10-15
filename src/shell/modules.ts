@@ -248,6 +248,20 @@ export const MODULES: DefinitionModule[] = [
     parent: 'rh',
   },
   {
+    // Fiche courte par personne embauchée : photo, coordonnées, santé,
+    // contacts d'urgence (demande de Maxime du 2026-10-15). Direction et
+    // coordonnateurs en lecture ; rien de la paie, des notes ni des
+    // candidatures (tout passe par rh.fiches).
+    id: 'rh_fiches',
+    nom: 'Fiches du staff',
+    description: 'Photo, coordonnées, santé et contacts d’urgence des employés et bénévoles',
+    icone: '🪪',
+    chemin: '/staff',
+    famille: 'equipe',
+    // Comme RH : vide en PROD jusqu'à l'import final d'Airtable.
+    cacheSaufAdmins: "jusqu'à la bascule d'Airtable",
+  },
+  {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
     // base : temps.role_autorise, temps.mon_employe et les politiques du
     // schéma temps). Un employé coché « Remplit sa feuille » dans le

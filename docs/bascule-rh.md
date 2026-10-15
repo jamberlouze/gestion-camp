@@ -196,7 +196,8 @@ Tout le SQL et les fichiers restent dans un dossier temporaire **hors du dépôt
 1. RH › Courriels › Réglages : **`courriels_depuis` = le jour J** (la migration l'a posé au jour de la publication ; le corriger si la publication a eu lieu avant). Rien de ce qui précède n'est préparé seul : ni rappel (seulement pour un lien de dossier envoyé par l'app) ni résumé (les lignes importées n'y sont jamais, migration 8).
 2. Courriels › Compagnies et boîtes : vérifier les 5 adresses d'envoi, **connecter les 5 boîtes** (avec la boîte de chaque compagnie), « M'envoyer un essai » pour chacune. Toutes « Connectée » **avant le §3.6** : l'accusé de réception part seul de la boîte de la compagnie dès la première candidature.
 3. Destinataires du résumé quotidien (charlotte@ au départ) et heure ; mode de chaque modèle (accusé et résumé « Envoyé seul » au départ, les autres « À relire puis envoyer »).
-4. Réglages : **saisons de recrutement ouvertes** (le formulaire n'offre que les saisons ouvertes), postes offerts par saison, dates des saisons, taux, coordonnées des compagnies (§2).
+4. Fiches du staff (`/staff`, ajouté le 2026-10-15) : retirer `cacheSaufAdmins` des entrées `rh` **et** `rh_fiches` de `src/shell/modules.ts` (Claude), puis vérifier dans Utilisateurs que les coordonnateurs ont « Fiches du staff » en lecture.
+5. Réglages : **saisons de recrutement ouvertes** (le formulaire n'offre que les saisons ouvertes), postes offerts par saison, dates des saisons, taux, coordonnées des compagnies (§2).
 
 Vérifier : `https://emplois.camptremblant.com/emplois` montre les bonnes saisons et les bons postes, en français et en anglais.
 
