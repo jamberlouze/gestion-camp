@@ -116,74 +116,105 @@ function Liste() {
       ) : lignes.length === 0 ? (
         <p className="py-8 text-center text-sm text-pierre-500">Personne ne correspond.</p>
       ) : (
-        <div className={`${ui.carte} overflow-hidden`}>
-          <div className={`${GRILLE} hidden border-b border-pierre-200 bg-pierre-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-pierre-500 md:grid`}>
-            <span />
-            <span>Nom et poste</span>
-            <span>Santé et diète</span>
-            <span>Joindre</span>
-          </div>
-          <ul className="divide-y divide-pierre-100">
-            {lignes.map((f) => {
-              const d = f.dossier
-              const ans = age(f.date_naissance, auj)
-              return (
-                <li key={f.personne_id} className={`${GRILLE} grid items-center px-3 py-3 sm:px-4 ${classeLigneCliquable}`} onClick={clicLigne(() => naviguer(lien(f)))}>
-                  <Photo fiche={f} url={f.photo ? photos.data?.get(f.photo) : undefined} className="h-20 w-20 rounded-lg sm:h-28 sm:w-28" />
-                  <div className="min-w-0 space-y-1">
-                    <div>
-                      <Link to={lien(f)} className="block truncate text-lg font-semibold text-pierre-900 hover:text-foret-800">
-                        {nomDeCamp(f)}
-                      </Link>
-                      <p className="truncate text-sm text-pierre-600">
-                        {`${f.prenom} ${f.nom_famille}`}
-                        {ans !== null && <span className="text-pierre-400"> · {ans} ans</span>}
-                      </p>
-                    </div>
-                    <Postes fiche={f} parCompagnie={parCompagnie} />
-                    {/* Téléphone : les pastilles sous le nom */}
-                    <div className="md:hidden">
-                      <PucesSante d={d} />
-                    </div>
-                  </div>
-                  <div className="hidden min-w-0 space-y-1 md:block">
-                    <PucesSante d={d} />
-                    {d?.allergies && <p className="line-clamp-2 text-sm text-amber-900">{d.allergies}</p>}
-                  </div>
-                  <div className="hidden min-w-0 space-y-2 text-sm md:block">
-                    {f.telephone && (
-                      <a href={lienTel(f.telephone)} className="block whitespace-nowrap text-foret-800 hover:underline">
-                        📞 {f.telephone}
-                      </a>
-                    )}
-                    {d?.urgence1_nom || d?.urgence1_telephone ? (
-                      <div className="min-w-0">
-                        <p className="truncate text-xs text-pierre-500">
-                          🚨 {d.urgence1_nom}
-                          {d.urgence1_lien && ` · ${d.urgence1_lien}`}
+        // Écran étroit avec le menu ouvert : la liste défile de côté plutôt que d'écraser les colonnes.
+        <div className={`${ui.carte} overflow-x-auto`}>
+          <div className="md:min-w-[52rem]">
+            <div className={`${GRILLE} hidden border-b border-pierre-200 bg-pierre-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-pierre-500 md:grid`}>
+              <span />
+              <span>Nom et poste</span>
+              <span>Santé et diète</span>
+              <span>Téléphone</span>
+              <span>Courriel</span>
+              <span>En cas d'urgence</span>
+            </div>
+            <ul className="divide-y divide-pierre-100">
+              {lignes.map((f) => {
+                const d = f.dossier
+                const ans = age(f.date_naissance, auj)
+                return (
+                  <li key={f.personne_id} className={`${GRILLE} grid items-center px-3 py-3 sm:px-4 ${classeLigneCliquable}`} onClick={clicLigne(() => naviguer(lien(f)))}>
+                    <Photo fiche={f} url={f.photo ? photos.data?.get(f.photo) : undefined} className="h-20 w-20 rounded-lg sm:h-28 sm:w-28" />
+                    <div className="min-w-0 space-y-1">
+                      <div>
+                        <Link to={lien(f)} className="block truncate text-lg font-semibold text-pierre-900 hover:text-foret-800">
+                          {nomDeCamp(f)}
+                        </Link>
+                        <p className="truncate text-sm text-pierre-600">
+                          {`${f.prenom} ${f.nom_famille}`}
+                          {ans !== null && <span className="text-pierre-400"> · {ans} ans</span>}
                         </p>
-                        {d.urgence1_telephone && (
-                          <a href={lienTel(d.urgence1_telephone)} className="whitespace-nowrap text-foret-800 hover:underline">
-                            {d.urgence1_telephone}
-                          </a>
-                        )}
                       </div>
-                    ) : (
-                      d && <p className="text-xs text-pierre-400">Aucun contact d'urgence</p>
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+                      <Postes fiche={f} parCompagnie={parCompagnie} />
+                      {/* Téléphone : les pastilles sous le nom */}
+                      <div className="md:hidden">
+                        <PucesSante d={d} />
+                      </div>
+                    </div>
+                    <div className="hidden min-w-0 space-y-1 md:block">
+                      <PucesSante d={d} />
+                      {d?.allergies && <p className="line-clamp-2 text-sm text-amber-900">{d.allergies}</p>}
+                    </div>
+                    <div className="hidden text-sm md:block">
+                      {f.telephone ? (
+                        <a href={lienTel(f.telephone)} className="whitespace-nowrap text-foret-800 hover:underline">
+                          {f.telephone}
+                        </a>
+                      ) : (
+                        <span className="text-pierre-400">—</span>
+                      )}
+                    </div>
+                    <div className="hidden min-w-0 text-sm md:block">
+                      {f.courriel ? (
+                        <a href={`mailto:${f.courriel}`} title={f.courriel} className="block truncate text-foret-800 hover:underline">
+                          {f.courriel}
+                        </a>
+                      ) : (
+                        <span className="text-pierre-400">—</span>
+                      )}
+                    </div>
+                    <div className="hidden min-w-0 space-y-1.5 text-sm md:block">
+                      <ContactsUrgence d={d} />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-/** Colonnes de la liste : photo, nom et poste, santé, joindre (une seule colonne de texte au téléphone). */
-const GRILLE = 'grid-cols-[auto_1fr] gap-x-4 md:grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(10rem,1fr)]'
+/** Colonnes de la liste : photo, nom et poste, santé, téléphone, courriel, urgence (une seule colonne de texte au téléphone). */
+const GRILLE =
+  'grid-cols-[auto_1fr] gap-x-4 md:gap-x-3 md:grid-cols-[7rem_minmax(8rem,1.3fr)_minmax(7rem,1fr)_8rem_minmax(8rem,1fr)_minmax(9rem,1.1fr)]'
+
+/** Les deux contacts d'urgence : nom · lien, puis le numéro cliquable. */
+function ContactsUrgence({ d }: { d: DossierFiche | null }) {
+  if (!d) return <span className="text-pierre-400">—</span>
+  const contacts = ([1, 2] as const)
+    .map((n) => ({ n, nom: d[`urgence${n}_nom`], lien: d[`urgence${n}_lien`], tel: d[`urgence${n}_telephone`] }))
+    .filter((c) => c.nom || c.tel)
+  if (!contacts.length) return <span className="text-xs text-pierre-400">Aucun contact</span>
+  return (
+    <>
+      {contacts.map((c) => (
+        <div key={c.n} className="min-w-0">
+          <p className="truncate text-xs text-pierre-600" title={[c.nom, c.lien].filter(Boolean).join(' · ')}>
+            {c.nom}
+            {c.lien && <span className="text-pierre-400"> · {c.lien}</span>}
+          </p>
+          {c.tel && (
+            <a href={lienTel(c.tel)} className="whitespace-nowrap text-foret-800 hover:underline">
+              {c.tel}
+            </a>
+          )}
+        </div>
+      ))}
+    </>
+  )
+}
 
 const champ = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-900 focus:border-foret-600 focus:outline-none'
 

@@ -1,6 +1,6 @@
 # Vérification — onglet Fiches (RH)
 
-> **Passée par Claude en DEV le 2026-10-15** (navigateur sur ordinateur et en format téléphone, comptes Admin Test et Sarah (coordo), tests SQL des droits, tests du Worker). Corrigés en chemin : l'adresse `/fiches/…` est déjà une page publique des Réservations (fiches participants) — la page était à `/staff`, puis **intégrée à RH** (onglet Fiches, `/rh/fiches`, demande de Maxime) ; les cartes remplacées par des lignes hautes à grande photo (demande de Maxime) ; à 784 px de contenu, six colonnes débordaient — quatre colonnes (photo, nom et poste, santé, joindre) ; une fiche ouverte depuis la liste se rechargeait (la saison par défaut est maintenant gardée sous son id). **Reste pour Maxime** : les cases non cochées et les décisions en bas.
+> **Passée par Claude en DEV le 2026-10-15** (navigateur sur ordinateur et en format téléphone, comptes Admin Test et Sarah (coordo), tests SQL des droits, tests du Worker). Corrigés en chemin : l'adresse `/fiches/…` est déjà une page publique des Réservations (fiches participants) — la page était à `/staff`, puis **intégrée à RH** (onglet Fiches, `/rh/fiches`, demande de Maxime) ; les cartes remplacées par des lignes hautes à grande photo (demande de Maxime) ; colonnes : photo, nom et poste, santé et diète, téléphone, courriel, contacts d'urgence ; une fiche ouverte depuis la liste se rechargeait (la saison par défaut est maintenant gardée sous son id). **Reste pour Maxime** : les cases non cochées et les décisions en bas.
 
 En DEV seulement (base locale ; vraies données d'Airtable). Aucune donnée modifiée : les tests SQL tournent dans une transaction annulée ; le dossier public a été ouvert sans être envoyé.
 
@@ -19,7 +19,7 @@ En DEV seulement (base locale ; vraies données d'Airtable). Aucune donnée modi
 ## 2. Liste (`/rh/fiches`)
 
 - [x] Saison par défaut = celle de l'onglet Employés (Automne 2026 en DEV), menu des saisons qui ont des embauches ; une carte par personne (embauches non annulées, bénévoles compris).
-- [x] Une ligne haute par personne : photo de 112 px (ou initiales), nom de camp, prénom, nom et âge, compagnie + poste ; santé et diète (pastilles 💉 EpiPen / ⚠️ Allergie / 🩺 Santé / diète, allergies en clair ; « Rien à signaler » ou « Dossier pas encore reçu ») ; joindre (📞 téléphone, 🚨 premier contact d'urgence). Toute la ligne ouvre la fiche ; les numéros restent cliquables.
+- [x] Une ligne haute par personne : photo de 112 px (ou initiales), nom de camp, prénom, nom et âge, compagnie + poste ; santé et diète (pastilles 💉 EpiPen / ⚠️ Allergie / 🩺 Santé / diète, allergies en clair ; « Rien à signaler » ou « Dossier pas encore reçu ») ; puis, en colonnes distinctes (demande de Maxime), téléphone, courriel et les deux contacts d'urgence (nom · lien, numéro). Toute la ligne ouvre la fiche ; numéros et courriel restent cliquables. À 1440 px tout tient ; à 1024 px (menu ouvert), la liste défile de côté.
 - [x] Recherche (nom, nom de camp, poste), filtre de compagnie (s'il y en a plusieurs), « 🩺 Santé à connaître (n) » ; filtres gardés dans l'adresse.
 - [x] Téléphone : photo de 80 px, nom, poste et pastilles ; rien ne déborde (les numéros sont dans la fiche).
 - [ ] Une saison chargée (Été 2026, 89 personnes) : vitesse d'affichage des photos importées d'Airtable (certaines font plusieurs Mo). — à Maxime
@@ -44,7 +44,7 @@ En DEV seulement (base locale ; vraies données d'Airtable). Aucune donnée modi
 
 ## 5. Décisions prises par Claude, à confirmer
 
-- Onglet **Fiches** placé après Employés ; colonnes de la liste (photo, nom et poste, santé et diète, joindre).
+- Onglet **Fiches** placé après Employés ; colonnes de la liste (photo, nom et poste, santé et diète, téléphone, courriel, contacts d'urgence) ; sous ~52rem de large, la liste défile de côté plutôt que d'écraser les colonnes.
 - **Lecture seulement** pour tout le monde dans la grille (les corrections se font dans le dossier RH) ; le **développeur** a aussi la lecture (comme les fiches participants des Réservations).
 - **Caché sauf aux admins jusqu'à la bascule** avec le reste de RH (vide en PROD avant l'import final).
 - Une fiche montre aussi le **numéro d'assurance maladie** (utile à l'hôpital).
