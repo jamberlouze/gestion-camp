@@ -31,7 +31,7 @@
 // d'envoi (COURRIELS_MAILPIT en DEV).
 
 import { aujourdhui, erreurs, lireReponses, nettoyer, TEXTES, versCandidature } from '../../src/modules/rh/candidature.ts'
-import { erreursDossier, estEte, GENRES_FICHIERS, lireDossier, MESSAGES_DOSSIER, versDossier } from '../../src/modules/rh/dossierEmbauche.ts'
+import { erreursDossier, GENRES_FICHIERS, lireDossier, MESSAGES_DOSSIER, versDossier } from '../../src/modules/rh/dossierEmbauche.ts'
 import { extensionDe, TAILLE_MAX_ENVOI, typeMime } from '../../src/modules/rh/fichiersPublics.ts'
 import { erreursRetour, lireRetour, nettoyerRetour } from '../../src/modules/rh/retour.ts'
 import { verifierTurnstile } from '../commun/turnstile.js'
@@ -285,7 +285,6 @@ async function recevoirDossier(request, env) {
     const f = form.get(genre)
     if (!estFichier(f)) continue
     if (genre === 'specimen' && page.genre !== 'emploi') continue
-    if (genre === 'photo' && !estEte(page)) continue
     fichiers[genre] = f
   }
   const total = Object.values(fichiers).reduce((s, f) => s + f.size, 0)

@@ -46,6 +46,11 @@ export interface DefinitionModule {
    * ni de l'accueil) qui a son propre accès dans la grille.
    */
   parent?: ModuleId
+  /**
+   * Le module s'ouvre aussi avec l'accès à l'une de ces parties (ex. RH pour
+   * un coordo qui n'a que les fiches : il n'y voit que cet onglet).
+   */
+  ouvertAussiPar?: ModuleId[]
 }
 
 /** Modules du menu et de l'accueil (sans les parties d'un autre module). */
@@ -215,6 +220,7 @@ export const MODULES: DefinitionModule[] = [
     famille: 'equipe',
     // Décision de Maxime du 2026-10-15 : vide jusqu'à l'import final d'Airtable.
     cacheSaufAdmins: "jusqu'à la bascule d'Airtable",
+    ouvertAussiPar: ['rh_fiches'],
   },
   {
     // NAS, numéro de compte et spécimen de chèque : accès propre (direction
@@ -224,6 +230,19 @@ export const MODULES: DefinitionModule[] = [
     description: 'NAS, compte bancaire et spécimen de chèque',
     icone: '🔒',
     chemin: '/rh',
+    famille: 'equipe',
+    parent: 'rh',
+  },
+  {
+    // Onglet Fiches de RH : photo, coordonnées, santé, contacts d'urgence
+    // (demande de Maxime du 2026-10-15). Direction et coordonnateurs en
+    // lecture ; un coordo n'a que cet onglet de RH, rien de la paie, des
+    // notes ni des candidatures (tout passe par rh.fiches).
+    id: 'rh_fiches',
+    nom: 'RH › Fiches',
+    description: 'Photo, coordonnées, santé et contacts d’urgence des employés et bénévoles',
+    icone: '🪪',
+    chemin: '/rh/fiches',
     famille: 'equipe',
     parent: 'rh',
   },

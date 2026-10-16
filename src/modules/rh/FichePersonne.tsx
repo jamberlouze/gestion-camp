@@ -717,6 +717,9 @@ const CHAMPS_DOSSIER: { cle: keyof Dossier; nom: string; large?: boolean }[] = [
   { cle: 'assurance_maladie', nom: "Numéro d'assurance maladie", large: true },
   { cle: 'etudes', nom: 'Études (programme et établissement)', large: true },
   { cle: 'allergies', nom: 'Allergies ou intolérances', large: true },
+  { cle: 'sante_conditions', nom: 'Problèmes de santé ou limitations physiques', large: true },
+  { cle: 'medicaments', nom: 'Médicaments', large: true },
+  { cle: 'sante_notes', nom: "Autre chose à savoir en cas d'urgence", large: true },
 ]
 const CHAMPS_URGENCE: { cle: keyof Dossier; nom: string }[] = [
   { cle: 'urgence1_nom', nom: 'Contact 1' },
@@ -753,6 +756,17 @@ function SectionDossier({ personneId }: { personneId: string }) {
                 className={ui.champ}
                 value={d?.etudiant_temps_plein === null || d?.etudiant_temps_plein === undefined ? '' : d.etudiant_temps_plein ? 'oui' : 'non'}
                 onChange={(e) => changer({ etudiant_temps_plein: e.target.value === '' ? null : e.target.value === 'oui' })}
+              >
+                <option value="">—</option>
+                <option value="oui">Oui</option>
+                <option value="non">Non</option>
+              </select>
+            </Champ>
+            <Champ etiquette="Auto-injecteur (EpiPen)">
+              <select
+                className={ui.champ}
+                value={d?.auto_injecteur === null || d?.auto_injecteur === undefined ? '' : d.auto_injecteur ? 'oui' : 'non'}
+                onChange={(e) => changer({ auto_injecteur: e.target.value === '' ? null : e.target.value === 'oui' })}
               >
                 <option value="">—</option>
                 <option value="oui">Oui</option>
@@ -824,6 +838,10 @@ function DossierLecture({ d }: { d: Dossier }) {
       {ligne("Assurance maladie", d.assurance_maladie)}
       {ligne('Études', [d.etudiant_temps_plein === true ? 'Temps plein' : d.etudiant_temps_plein === false ? 'Pas aux études à temps plein' : null, d.etudes].filter(Boolean).join(' · '))}
       {ligne('Allergies', d.allergies)}
+      {ligne('Auto-injecteur (EpiPen)', d.auto_injecteur === true ? 'Oui' : d.auto_injecteur === false ? 'Non' : null)}
+      {ligne('Santé', d.sante_conditions)}
+      {ligne('Médicaments', d.medicaments)}
+      {ligne("Autre, en cas d'urgence", d.sante_notes)}
       {ligne('Diète', DIETES.find((x) => x.id === d.diete)?.nom)}
       {ligne('Tailles', [d.taille_tshirt && `T-shirt ${d.taille_tshirt}`, d.taille_hoodie && `hoodie ${d.taille_hoodie}`].filter(Boolean).join(', '))}
       {ligne("En cas d'urgence", [urgence(d.urgence1_nom, d.urgence1_lien, d.urgence1_telephone), urgence(d.urgence2_nom, d.urgence2_lien, d.urgence2_telephone)].filter(Boolean).join(' · '))}

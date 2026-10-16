@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
+import { CourrielCopiable } from '@/lib/CourrielCopiable'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
@@ -514,9 +515,7 @@ function Contacts({ id }: { id: string }) {
                 {x.fonction && <p className="text-pierre-500">{x.fonction}</p>}
                 <p className="text-pierre-700">
                   {x.courriel && (
-                    <a href={`mailto:${x.courriel}`} className="text-foret-700 hover:underline">
-                      {x.courriel}
-                    </a>
+                    <CourrielCopiable courriel={x.courriel} className="align-bottom text-foret-700 hover:underline" />
                   )}
                   {x.courriel && x.telephone && ' · '}
                   {x.telephone && (

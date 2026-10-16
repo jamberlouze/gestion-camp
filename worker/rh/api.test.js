@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { erreurs, nettoyer, REPONSES_VIDES, versCandidature } from '../../src/modules/rh/candidature.ts'
-import { depuisPage, erreursDossier, nasValide, versDossier } from '../../src/modules/rh/dossierEmbauche.ts'
+import { depuisPage, erreursDossier, lireDossier, nasValide, versDossier } from '../../src/modules/rh/dossierEmbauche.ts'
 import { erreurFichier } from '../../src/modules/rh/fichiersPublics.ts'
 import { erreursRetour, nettoyerRetour, RETOUR_VIDE } from '../../src/modules/rh/retour.ts'
 import { routeRh } from './api.js'
@@ -157,6 +157,23 @@ test('dossier : premier dossier d’un emploi (NAS, compte, spécimen et CV exig
   assert.equal(envoi.dossier.code_postal, 'J8E 1A1')
   assert.equal(envoi.ethique_texte, page.ethique.id)
   assert.deepEqual(envoi.disponibilites, [D1])
+})
+
+test('dossier : fiche médicale facultative, pré-remplie l’année suivante', () => {
+  const page = pageDossier()
+  const d = dossierRempli(page)
+  assert.equal(d.auto_injecteur, '')
+  assert.equal(versDossier(d, page).dossier.auto_injecteur, null)
+  const envoi = versDossier({ ...d, sante_conditions: ' Asthme ', medicaments: 'Ventolin', auto_injecteur: 'oui', sante_notes: '' }, page)
+  assert.equal(envoi.dossier.sante_conditions, 'Asthme')
+  assert.equal(envoi.dossier.medicaments, 'Ventolin')
+  assert.equal(envoi.dossier.auto_injecteur, true)
+  assert.equal(versDossier({ ...d, auto_injecteur: 'non' }, page).dossier.auto_injecteur, false)
+  const ancien = depuisPage(pageDossier({ dossier: { sante_conditions: 'Asthme', auto_injecteur: false } }))
+  assert.equal(ancien.sante_conditions, 'Asthme')
+  assert.equal(ancien.auto_injecteur, 'non')
+  // Une réponse inconnue ne passe pas pour un oui.
+  assert.equal(versDossier(lireDossier({ ...d, auto_injecteur: 'peut-être' }), page).dossier.auto_injecteur, null)
 })
 
 test('dossier : un ancien garde son NAS et son compte (jamais réaffichés) sauf s’il les change', () => {

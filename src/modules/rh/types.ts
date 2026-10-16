@@ -123,6 +123,12 @@ export interface Dossier {
   urgence2_nom: string | null
   urgence2_lien: string | null
   urgence2_telephone: string | null
+  /** Fiche médicale (facultative) */
+  sante_conditions: string | null
+  medicaments: string | null
+  /** Porte un auto-injecteur d'épinéphrine (EpiPen) ; null = pas répondu */
+  auto_injecteur: boolean | null
+  sante_notes: string | null
   updated_at: string
 }
 
