@@ -90,7 +90,7 @@ export function Journal() {
   const noms = useMemo(() => new Map((personnel.data ?? []).map((p) => [p.id, p.nom])), [personnel.data])
   const groupes = useMemo(() => new Map((sejours.data ?? []).map((s) => [s.id, s.nom_groupe])), [sejours.data])
 
-  /** Ce que la ligne désigne : « Livraison Colabor », « Charlotte, 4 oct. »… */
+  /** Ce que la ligne désigne : « Livraison Colabor », « Julie, 4 oct. »… */
   function sujet(e: EntreeJournal): string {
     const l = (e.nouveau ?? e.ancien ?? {}) as Record<string, unknown>
     if (e.table_name === 'evenements') return String(l.titre ?? '')

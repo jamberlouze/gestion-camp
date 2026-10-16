@@ -10,6 +10,7 @@ import { usePeriode } from './outils'
 import { nomDe, useChangerFeuille, useFeuillesAApprouver, useMembres, type Action, type FeuilleAApprouver } from './donnees'
 import { nomEmploye, useChangerFeuilleEmploye, useEmployesFeuille, useEntreprises, useFeuillesPropres, type Entreprise } from './donneesEmployes'
 import { FeuilleEmployes } from './Employes'
+import { nomCompagnie } from './employeurD'
 import { Feuille } from './Feuille'
 import { FeuilleEmploye } from './FeuilleEmploye'
 import { OngletBanques } from './OngletBanques'
@@ -178,7 +179,7 @@ function EspaceEmploye({ employeId }: { employeId: string }) {
                   x.id === choisie?.id ? 'bg-foret-700 text-white' : 'border border-pierre-300 bg-white text-pierre-700 hover:bg-pierre-50'
                 }`}
               >
-                {x.nom}
+                {nomCompagnie(x)}
               </button>
             ))}
           </div>
@@ -223,7 +224,7 @@ function FeuilleDUnEmploye() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
         <Retour depuisApprouver={params.get('retour') === 'approuver'} debut={debut} vers="/temps/employes" libelle="Employés" />
         <h2 className="text-lg font-semibold">{employe ? nomEmploye(employe) : '…'}</h2>
-        {entreprise && <PuceCompagnie compagnie={entreprise} />}
+        {entreprise && <PuceCompagnie compagnie={entreprise} court />}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <ChoixPeriode debut={debut} onChange={setDebut} />

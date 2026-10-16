@@ -10,22 +10,28 @@
 //     aussi son matricule).
 // Colonnes : Compagnie (numéro Employeur D, texte), Matricule (nombre),
 // « Nom, prénom », No relevé (vide : Employeur D le pose), Période (date
-// aaaa/mm/jj), puis une colonne « G<code>(Quantité) » par code de gain réglé.
-// Codes de gains réglés dans l'app (temps.reglages_employeur_d) : un type
-// sans code n'est pas exporté (ses heures sont signalées). Le woofing n'est
-// jamais payé. Formats du canevas Desjardins : compagnie = 8 lettres ou
-// chiffres au plus, matricule = 9 chiffres au plus, gain = 1 à 999.
+// aaaa/mm/jj), puis une colonne « G<code>(Quantité) » par code réglé.
+// Codes réglés dans l'app (temps.reglages_employeur_d) : codes de gains
+// (heures payées) et codes d'utilisation (heures prises dans une banque
+// d'Employeur D : les vacances, dont Employeur D calcule lui-même la paie,
+// et la maladie, dont Employeur D tient le solde) ;
+// un type sans code n'est pas exporté (ses heures sont signalées). Le
+// woofing n'est jamais payé. Formats du canevas Desjardins : compagnie = 8
+// lettres ou chiffres au plus, matricule = 9 chiffres au plus, code = 1 à 999.
 
 export type TypeExporte = 'regulieres' | 'vacances' | 'maladie' | 'banque'
 
 type Reglage = 'code_regulieres' | 'code_vacances' | 'code_maladie' | 'code_banque'
 
-/** Types d'heures payées, dans l'ordre des colonnes (vacances : la direction seulement). */
-export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Reglage }[] = [
-  { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres' },
-  { type: 'vacances', libelle: 'Vacances (direction)', reglage: 'code_vacances' },
-  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie' },
-  { type: 'banque', libelle: 'Prises en banque', reglage: 'code_banque' },
+/** Code de gain (heures payées) ou code d'utilisation (heures prises dans une banque d'Employeur D). */
+export type GenreCode = 'gain' | 'utilisation'
+
+/** Types d'heures exportés, dans l'ordre des colonnes (vacances : la direction seulement). */
+export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Reglage; genre: GenreCode; detail: string }[] = [
+  { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres', genre: 'gain', detail: 'Employés et direction' },
+  { type: 'vacances', libelle: 'Vacances', reglage: 'code_vacances', genre: 'utilisation', detail: 'Direction seulement' },
+  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'utilisation', detail: 'Heures de maladie des feuilles' },
+  { type: 'banque', libelle: 'Prises en banque', reglage: 'code_banque', genre: 'gain', detail: 'Heures accumulées prises (banque de l’app)' },
 ]
 
 export type DatePeriode = 'date_paie' | 'fin_periode'
@@ -50,9 +56,13 @@ export interface EmployeExport {
 export interface CompagnieExport {
   id: string
   nom: string
+  abreviation?: string | null
   ordre: number
   numero_employeur_d: string | null
 }
+
+/** Nom affiché d'une compagnie dans le module : son acronyme (« GBPA+ »), sinon son nom. */
+export const nomCompagnie = (c: { nom: string; abreviation?: string | null }) => c.abreviation || c.nom
 
 export interface HeureExport {
   employe_id: string
@@ -110,8 +120,8 @@ export interface ResultatExport {
   /** Codes de gains = colonnes du fichier, dans l'ordre des types (sans doublon). */
   codes: number[]
   lignes: LigneExport[]
-  /** Heures payées laissées de côté faute de code de gain, par type. */
-  sansCode: { type: TypeExporte; libelle: string; heures: number; personnes: number }[]
+  /** Heures laissées de côté faute de code, par type. */
+  sansCode: { type: TypeExporte; libelle: string; genre: GenreCode; heures: number; personnes: number }[]
   /** Bloquant : compagnies du fichier sans numéro Employeur D. */
   compagniesSansNumero: CompagnieExport[]
   /** Bloquant : personnes du fichier sans matricule. */
@@ -274,7 +284,7 @@ export function preparerExport(p: {
     .sort(
       (a, b) =>
         a.compagnie.ordre - b.compagnie.ordre ||
-        a.compagnie.nom.localeCompare(b.compagnie.nom, 'fr') ||
+        nomCompagnie(a.compagnie).localeCompare(nomCompagnie(b.compagnie), 'fr') ||
         parNom(a, b) ||
         a.personneId.localeCompare(b.personneId),
     )
@@ -299,6 +309,7 @@ export function preparerExport(p: {
     sansCode: TYPES_EXPORTES.filter((t) => sansCode.has(t.type)).map((t) => ({
       type: t.type,
       libelle: t.libelle,
+      genre: t.genre,
       heures: arrondi(sansCode.get(t.type)!.heures),
       personnes: sansCode.get(t.type)!.personnes.size,
     })),

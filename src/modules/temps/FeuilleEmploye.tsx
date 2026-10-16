@@ -16,6 +16,7 @@ import {
   type TypeHeuresEmploye,
 } from './donneesEmployes'
 import { BanquesFeuille } from './BanquesFeuille'
+import { nomCompagnie } from './employeurD'
 import { Note, Semaine } from './Feuille'
 import { formatHeures, joursPeriode, libellePaie, libellePeriode } from './periodes'
 import { BarreStatut, Journal } from './Statut'
@@ -31,8 +32,8 @@ const BANQUE = { id: 'banque', libelle: 'Prises en banque' }
  * approuve ou renvoie ; un admin peut annuler une approbation. Ses heures
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
  * base) ; le woofing (non payé) reste ici ; maladie et prises en banque
- * paraissent à part dans l'onglet Employés. En bas : ses banques (toutes
- * compagnies confondues), réglées par la direction.
+ * paraissent à part dans l'onglet Employés. En bas : sa banque d'heures
+ * (toutes compagnies confondues), réglée par la direction.
  */
 export function FeuilleEmploye({
   employe,
@@ -54,7 +55,7 @@ export function FeuilleEmploye({
   const journal = useJournal('feuille_employe_id', donnees.data?.feuille?.id)
   const [erreur, setErreur] = useState<string | null>(null)
 
-  useTitreImpression(`Feuille de temps - ${nomEmploye(employe)} - ${entreprise.nom} - ${libellePeriode(debut)}`)
+  useTitreImpression(`Feuille de temps - ${nomEmploye(employe)} - ${nomCompagnie(entreprise)} - ${libellePeriode(debut)}`)
 
   if (donnees.error) return <p className={ui.erreur}>{messageErreur(donnees.error)}</p>
   if (!donnees.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
@@ -75,7 +76,7 @@ export function FeuilleEmploye({
     <div className="space-y-4">
       <div className="hidden print:block">
         <h2 className="text-lg font-semibold">
-          {nomEmploye(employe)} · {entreprise.nom}
+          {nomEmploye(employe)} · {nomCompagnie(entreprise)}
         </h2>
         <p className="text-sm">
           {libellePeriode(debut)} · {libellePaie(debut)}
@@ -112,7 +113,7 @@ export function FeuilleEmploye({
 
       <div className={`${ui.carte} flex flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3 text-sm`}>
         <span className="font-semibold">Total de la période</span>
-        <PuceCompagnie compagnie={entreprise} />
+        <PuceCompagnie compagnie={entreprise} court />
         <span>
           Heures : <b className="tabular-nums">{formatHeures(total('regulieres'))} h</b>
         </span>

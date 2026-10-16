@@ -2,7 +2,19 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import * as XLSX from 'xlsx'
-import { cellulesEmployeurD, colonnesCodes, entetes, largeurs, NOM_FEUILLE, nomDirection, nomFichier, preparerExport, serieExcel } from './employeurD.ts'
+import {
+  cellulesEmployeurD,
+  colonnesCodes,
+  entetes,
+  largeurs,
+  NOM_FEUILLE,
+  nomCompagnie,
+  nomDirection,
+  nomFichier,
+  preparerExport,
+  serieExcel,
+  TYPES_EXPORTES,
+} from './employeurD.ts'
 
 const GBPA = { id: 'c1', nom: 'GBPA+', ordre: 1, numero_employeur_d: '0001234' }
 const OPI = { id: 'c2', nom: 'Opikawa', ordre: 2, numero_employeur_d: 'OPI42' }
@@ -226,8 +238,34 @@ test('direction : vacances sans code signalées ; heures d’un type sans code n
     reglages: REGLAGES,
     direction: { membres: [olivier], paie: [], heures: [hd('u3', 'vacances', 8)] },
   })
-  assert.deepEqual(r.sansCode.map((s) => [s.type, s.heures, s.personnes]), [['vacances', 8, 1]])
+  assert.deepEqual(r.sansCode.map((s) => [s.type, s.genre, s.heures, s.personnes]), [['vacances', 'utilisation', 8, 1]])
   assert.deepEqual(r.directionSansCompagnie, [])
+})
+
+test('vacances et maladie = codes d’utilisation (banques d’Employeur D), régulières et prises en banque = codes de gains', () => {
+  assert.deepEqual(
+    TYPES_EXPORTES.map((t) => [t.type, t.genre]),
+    [
+      ['regulieres', 'gain'],
+      ['vacances', 'utilisation'],
+      ['maladie', 'utilisation'],
+      ['banque', 'gain'],
+    ],
+  )
+})
+
+test('compagnies désignées par leur acronyme, triées par ordre puis acronyme', () => {
+  assert.equal(nomCompagnie({ nom: 'Gestion BPA+', abreviation: 'GBPA+' }), 'GBPA+')
+  assert.equal(nomCompagnie({ nom: 'Opikawa', abreviation: null }), 'Opikawa')
+  const AQB = { id: 'c4', nom: 'Aquabounga', abreviation: 'ZZ', ordre: 2, numero_employeur_d: '1' }
+  const OPI2 = { ...OPI, nom: 'Plein air Opikawa', abreviation: 'OPI' }
+  const r = preparerExport({
+    employes: [pinson],
+    compagnies: [AQB, OPI2],
+    heures: [h('e1', 'c4', 'regulieres', 1), h('e1', 'c2', 'regulieres', 1)],
+    reglages: REGLAGES,
+  })
+  assert.deepEqual(r.lignes.map((l) => nomCompagnie(l.compagnie)), ['OPI', 'ZZ'])
 })
 
 test('même matricule pour deux personnes = bloquant ; un employé à deux compagnies, non', () => {

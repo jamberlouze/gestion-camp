@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeTableur } from '@/lib/icones'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { menu } from './outils'
@@ -20,16 +21,20 @@ import {
   cellulesEmployeurD,
   largeurs,
   NOM_FEUILLE,
+  nomCompagnie,
   nomFichier,
   preparerExport,
   TYPES_EXPORTES,
   type DatePeriode,
+  type GenreCode,
   type Personne,
+  type ReglagesEmployeurD,
   type ResultatExport,
 } from './employeurD'
 import { datePaie, dateCourte, depuisIso, finPeriode, formatHeures, JOURS_COURTS, libellePeriode, numeroPeriodePaie, versIso } from './periodes'
 
 const LIBELLES_ETAT = { ouverte: 'en cours', soumise: 'soumise', approuvee: 'approuvée' } as const
+const LIBELLES_GENRE: Record<GenreCode, string> = { gain: 'code de gain', utilisation: "code d'utilisation" }
 
 /** « jeu. 22 oct. 2026 » */
 const jourLong = (iso: string) => `${JOURS_COURTS[depuisIso(iso).getDay()]} ${dateCourte(iso)}`
@@ -41,8 +46,9 @@ const jourLong = (iso: string) => `${JOURS_COURTS[depuisIso(iso).getDay()]} ${da
  * compagnie de paie ; une colonne par code de gain. Ce qui manque (numéro de
  * compagnie, matricule, compagnie de paie, matricule en double) se règle ici
  * et bloque le téléchargement ; les heures sans code et les feuilles pas
- * approuvées sont signalées. Réglages : codes de gains, date de la colonne
- * Période, numéros des compagnies, paie de la direction (admins).
+ * approuvées sont signalées. Réglages : codes de gains et d'utilisation,
+ * date de la colonne Période, numéros des compagnies, paie de la direction
+ * (admins). Compagnies désignées par leur acronyme partout dans le module.
  */
 export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: string; compagnieDepart: string; fermer: () => void }) {
   const employes = useEmployesFeuille()
@@ -105,7 +111,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
   const compagniesAvecHeures = (entreprises.data ?? []).filter(
     (x) => heures.data?.some((h) => h.entreprise_id === x.id && h.heures) || (estAdmin && compagniesDirection.has(x.id)),
   )
-  const nomCompagnie = entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null
+  const compagnieChoisie = entreprises.data?.find((x) => x.id === compagnie)
 
   async function telecharger(r: ResultatExport) {
     setErreur(null)
@@ -120,7 +126,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, NOM_FEUILLE)
       const { numero, annee } = numeroPeriodePaie(debut)
-      XLSX.writeFile(wb, nomFichier({ numero, annee, debut, fin: finPeriode(debut), compagnie: nomCompagnie }), { bookType: 'biff8' })
+      XLSX.writeFile(wb, nomFichier({ numero, annee, debut, fin: finPeriode(debut), compagnie: compagnieChoisie ? nomCompagnie(compagnieChoisie) : null }), { bookType: 'biff8' })
     } catch (e) {
       setErreur(messageErreur(e))
     } finally {
@@ -152,7 +158,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
               <option value="">Toutes les compagnies</option>
               {compagniesAvecHeures.map((x) => (
                 <option key={x.id} value={x.id}>
-                  {x.nom}
+                  {nomCompagnie(x)}
                 </option>
               ))}
             </select>
@@ -177,7 +183,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
                 <ListeACompleter
                   titre="Numéro de compagnie Employeur D manquant"
                   aide="8 lettres ou chiffres au plus."
-                  elements={r.compagniesSansNumero.map((x) => ({ id: x.id, nom: x.nom }))}
+                  elements={r.compagniesSansNumero.map((x) => ({ id: x.id, nom: nomCompagnie(x) }))}
                   genre="compagnie"
                 />
               )}
@@ -208,32 +214,35 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
           )}
 
           {(r.sansCode.length > 0 || r.nonApprouvees.length > 0) && (
-            <section className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <h3 className="font-semibold">À vérifier</h3>
               {r.sansCode.map((s) => (
                 <p key={s.type}>
                   {formatHeures(s.heures)} h de « {s.libelle} » ({s.personnes} personne{s.personnes > 1 ? 's' : ''}) ne sont pas dans le fichier :
-                  aucun code de gain (réglages plus bas).
+                  aucun {LIBELLES_GENRE[s.genre]} (réglages plus bas).
                 </p>
               ))}
               {r.nonApprouvees.length > 0 && (
-                <p>
-                  Feuille pas encore approuvée :{' '}
-                  {r.nonApprouvees.map((l, i) => (
-                    <span key={l.cle}>
-                      {i > 0 && ', '}
-                      {l.nom} ({l.compagnie.nom}, {LIBELLES_ETAT[l.statut!]})
-                    </span>
-                  ))}
-                  . {r.nonApprouvees.length > 1 ? 'Leurs' : 'Ses'} heures sont dans le fichier telles quelles.
-                </p>
+                <div>
+                  <p>
+                    {r.nonApprouvees.length > 1 ? 'Feuilles pas encore approuvées' : 'Feuille pas encore approuvée'} (
+                    {r.nonApprouvees.length > 1 ? 'leurs' : 'ses'} heures sont dans le fichier telles quelles) :
+                  </p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {r.nonApprouvees.map((l) => (
+                      <li key={l.cle}>
+                        {l.nom} · {nomCompagnie(l.compagnie)} · <span className="font-medium">{LIBELLES_ETAT[l.statut!]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </section>
           )}
 
           {r.lignes.length === 0 ? (
             <p className={`${ui.carte} px-4 py-8 text-center text-sm text-pierre-500`}>
-              {r.codes.length ? 'Aucune heure à exporter pour cette période.' : 'Aucun code de gain réglé : rien à exporter (réglages plus bas).'}
+              {r.codes.length ? 'Aucune heure à exporter pour cette période.' : 'Aucun code réglé : rien à exporter (réglages plus bas).'}
             </p>
           ) : (
             <div className={`${ui.carte} overflow-x-auto`}>
@@ -256,7 +265,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
                     <tr key={l.cle}>
                       <td className="whitespace-nowrap px-3 py-1.5">
                         {l.compagnie.numero_employeur_d ?? <span className="text-red-700">—</span>}{' '}
-                        <span className="text-xs text-pierre-500">{l.compagnie.nom}</span>
+                        <span className="text-xs text-pierre-500">{nomCompagnie(l.compagnie)}</span>
                       </td>
                       <td className="px-3 py-1.5 tabular-nums">{l.matricule ?? <span className="text-red-700">—</span>}</td>
                       <td className="px-3 py-1.5">
@@ -400,7 +409,7 @@ function CompagnieDirection({
         <option value="">Compagnie…</option>
         {compagnies.map((x) => (
           <option key={x.id} value={x.id}>
-            {x.nom}
+            {nomCompagnie(x)}
           </option>
         ))}
       </select>
@@ -496,11 +505,21 @@ function ChampEnregistre({
   )
 }
 
-function CodeGain({ reglage, libelle, valeur }: { reglage: keyof ChangementReglages & `code_${string}`; libelle: string; valeur: number | null }) {
+function CodeEmployeurD({
+  reglage,
+  libelle,
+  genre,
+  valeur,
+}: {
+  reglage: keyof ChangementReglages & `code_${string}`
+  libelle: string
+  genre: GenreCode
+  valeur: number | null
+}) {
   const enregistrer = useEnregistrerReglagesEmployeurD()
   return (
     <ChampEnregistre
-      libelle={`Code de gain : ${libelle}`}
+      libelle={`${genre === 'gain' ? 'Code de gain' : "Code d'utilisation"} : ${libelle}`}
       valeur={valeur == null ? null : String(valeur)}
       placeholder="—"
       inputMode="numeric"
@@ -512,7 +531,45 @@ function CodeGain({ reglage, libelle, valeur }: { reglage: keyof ChangementRegla
   )
 }
 
-/** Réglages de l'export : codes de gains, date de la colonne Période, numéros des compagnies, paie de la direction (admins). */
+/** Liste encadrée des réglages, une rangée par élément. */
+const liste = 'divide-y divide-pierre-100 rounded-lg border border-pierre-200 bg-white'
+const rangee = 'flex items-center justify-between gap-3 px-3 py-2'
+
+/** Un bloc des réglages : titre, explication, contenu. */
+function BlocReglage({ titre, aide, children }: { titre: string; aide: string; children: ReactNode }) {
+  return (
+    <section>
+      <h4 className="text-sm font-semibold text-pierre-900">{titre}</h4>
+      <p className="mt-0.5 text-xs leading-relaxed text-pierre-500">{aide}</p>
+      <div className="mt-2.5">{children}</div>
+    </section>
+  )
+}
+
+/** Codes d'un genre (gain ou utilisation), un par type d'heures. */
+function ListeCodes({ genre, reglages }: { genre: GenreCode; reglages: ReglagesEmployeurD }) {
+  return (
+    <ul className={liste}>
+      {TYPES_EXPORTES.filter((t) => t.genre === genre).map((t) => (
+        <li key={t.type} className={rangee}>
+          <span className="min-w-0">
+            <span className="block text-sm text-pierre-900">{t.libelle}</span>
+            <span className="block text-xs text-pierre-500">{t.detail}</span>
+          </span>
+          <span className="flex items-baseline gap-1">
+            <span className="text-sm text-pierre-500">G</span>
+            <CodeEmployeurD reglage={t.reglage} libelle={t.libelle} genre={t.genre} valeur={reglages[t.reglage]} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Réglages de l'export : codes de gains et d'utilisation, date de la
+ * colonne Période, numéros des compagnies, paie de la direction (admins).
+ */
 function Reglages({ debut, estAdmin }: { debut: string; estAdmin: boolean }) {
   const reglages = useReglagesEmployeurD()
   const entreprises = useEntreprises()
@@ -523,61 +580,68 @@ function Reglages({ debut, estAdmin }: { debut: string; estAdmin: boolean }) {
   const sansCode = TYPES_EXPORTES.every((t) => r[t.reglage] == null)
 
   return (
-    <details className="rounded-lg border border-pierre-200 px-4 py-3" open={sansCode || undefined}>
-      <summary className="cursor-pointer text-sm font-semibold text-pierre-800">Réglages Employeur D</summary>
-      <div className="mt-3 grid gap-5 md:grid-cols-3">
-        <div>
-          <p className={ui.etiquette}>Codes de gains</p>
-          <p className="mb-2 text-xs text-pierre-500">Numéro du gain dans Employeur D (1 à 999), à confirmer avec Charlotte. Vide = pas dans le fichier.</p>
-          <ul className="space-y-1.5">
-            {TYPES_EXPORTES.map((t) => (
-              <li key={t.type} className="flex items-center justify-between gap-2 text-sm">
-                <span>{t.libelle}</span>
-                <span className="flex items-center gap-1">
-                  <span className="text-pierre-500">G</span>
-                  <CodeGain reglage={t.reglage} libelle={t.libelle} valeur={r[t.reglage]} />
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-pierre-500">Le woofing n’est jamais payé : il n’est pas exporté.</p>
+    <details className="overflow-hidden rounded-lg border border-pierre-200" open={sansCode || undefined}>
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-pierre-800">Réglages Employeur D</summary>
+      <div className="space-y-6 border-t border-pierre-200 bg-pierre-50 px-4 py-5">
+        <div className="grid gap-x-8 gap-y-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <BlocReglage
+              titre="Codes de gains"
+              aide="Numéro du gain dans Employeur D (1 à 999). Vide = pas dans le fichier. Le woofing n’est jamais payé : il n’est pas exporté."
+            >
+              <ListeCodes genre="gain" reglages={r} />
+            </BlocReglage>
+            <BlocReglage
+              titre="Codes d’utilisation"
+              aide="Heures prises dans une banque d’Employeur D, qui en tient les soldes. Les vacances n’ont pas de code de gain : Employeur D calcule lui-même la paie de vacances."
+            >
+              <ListeCodes genre="utilisation" reglages={r} />
+            </BlocReglage>
+          </div>
+          <div className="space-y-6">
+            <BlocReglage titre="Colonne « Période »" aide="Date inscrite sur chaque ligne du fichier. À confirmer au premier import.">
+              <div className={liste}>
+                {(
+                  [
+                    ['date_paie', 'Date de paie', datePaie(debut)],
+                    ['fin_periode', 'Fin de la période', finPeriode(debut)],
+                  ] as [DatePeriode, string, string][]
+                ).map(([valeur, libelle, jour]) => (
+                  <label key={valeur} className={`${rangee} cursor-pointer hover:bg-pierre-50`}>
+                    <span className="flex items-center gap-2.5 text-sm text-pierre-900">
+                      <input
+                        type="radio"
+                        name="periode-employeur-d"
+                        checked={r.periode === valeur}
+                        onChange={() => enregistrer.mutate({ periode: valeur })}
+                      />
+                      {libelle}
+                    </span>
+                    <span className="text-xs text-pierre-500">{jourLong(jour)}</span>
+                  </label>
+                ))}
+              </div>
+            </BlocReglage>
+            <BlocReglage titre="Numéros des compagnies" aide="Numéro de la compagnie dans Employeur D (8 lettres ou chiffres au plus).">
+              <ul className={liste}>
+                {compagnies.map((x) => (
+                  <li key={x.id} className={rangee}>
+                    <PuceCompagnie compagnie={x} court />
+                    <NumeroCompagnie id={x.id} valeur={x.numero_employeur_d} libelle={`Numéro Employeur D de ${nomCompagnie(x)}`} />
+                  </li>
+                ))}
+              </ul>
+            </BlocReglage>
+          </div>
         </div>
-        <div>
-          <p className={ui.etiquette}>Colonne « Période »</p>
-          {(
-            [
-              ['date_paie', 'Date de paie', datePaie(debut)],
-              ['fin_periode', 'Fin de la période', finPeriode(debut)],
-            ] as [DatePeriode, string, string][]
-          ).map(([valeur, libelle, jour]) => (
-            <label key={valeur} className="flex items-center gap-2 py-0.5 text-sm">
-              <input type="radio" name="periode-employeur-d" checked={r.periode === valeur} onChange={() => enregistrer.mutate({ periode: valeur })} />
-              {libelle} <span className="text-pierre-500">({jourLong(jour)})</span>
-            </label>
-          ))}
-          <p className="mt-1 text-xs text-pierre-500">À confirmer avec Charlotte au premier import.</p>
-        </div>
-        <div>
-          <p className={ui.etiquette}>Numéros des compagnies</p>
-          <ul className="space-y-1.5">
-            {compagnies.map((x) => (
-              <li key={x.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate" title={x.nom}>
-                  {x.nom}
-                </span>
-                <NumeroCompagnie id={x.id} valeur={x.numero_employeur_d} libelle={`Numéro Employeur D de ${x.nom}`} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        {estAdmin && <PaieDirection compagnies={compagnies.filter((x) => x.actif)} />}
+        {enregistrer.error && <p className={ui.erreur}>{messageErreur(enregistrer.error)}</p>}
+        {r.modifie_par && r.modifie_le && (
+          <p className="text-xs text-pierre-500">
+            Réglages modifiés par {r.modifie_par}, le {dateCourte(versIso(new Date(r.modifie_le)))}.
+          </p>
+        )}
       </div>
-      {estAdmin && <PaieDirection compagnies={compagnies.filter((x) => x.actif)} />}
-      {enregistrer.error && <p className={`${ui.erreur} mt-3`}>{messageErreur(enregistrer.error)}</p>}
-      {r.modifie_par && r.modifie_le && (
-        <p className="mt-3 text-xs text-pierre-500">
-          Réglages modifiés par {r.modifie_par}, le {dateCourte(versIso(new Date(r.modifie_le)))}.
-        </p>
-      )}
     </details>
   )
 }
@@ -591,26 +655,33 @@ function PaieDirection({ compagnies }: { compagnies: Entreprise[] }) {
   const paie = usePaieDirection()
   if (!membres.data || !paie.data) return null
   const paieDe = new Map(paie.data.map((x) => [x.user_id, x]))
-  const liste = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || paieDe.has(m.id))
+  const personnes = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || paieDe.has(m.id))
+  const colonnes = 'sm:grid sm:grid-cols-[minmax(0,1fr)_10rem_7rem] sm:gap-x-4'
   return (
-    <div className="mt-5">
-      <p className={ui.etiquette}>Paie de la direction (admins)</p>
-      <p className="mb-2 text-xs text-pierre-500">Ses heures n'ont pas de compagnie : choisissez celle qui la paie dans Employeur D, et son matricule.</p>
-      <ul className="grid gap-x-6 gap-y-1.5 lg:grid-cols-2">
-        {liste.map((m) => {
+    <BlocReglage
+      titre="Paie de la direction (admins)"
+      aide="Les heures de la direction n’ont pas de compagnie : choisissez celle qui paie chaque personne dans Employeur D, et son matricule."
+    >
+      <div className={liste}>
+        <div className={`hidden px-3 py-1.5 text-xs font-medium text-pierre-500 ${colonnes}`}>
+          <span>Personne</span>
+          <span>Compagnie de paie</span>
+          <span>Matricule</span>
+        </div>
+        {personnes.map((m) => {
           const ligne = paieDe.get(m.id)
           return (
-            <li key={m.id} className="flex flex-wrap items-center justify-end gap-2 text-sm">
-              <span className="min-w-0 flex-1 truncate" title={nomDe(m)}>
+            <div key={m.id} className={`flex flex-wrap items-center justify-end gap-2 px-3 py-2 sm:items-start ${colonnes}`}>
+              <span className="min-w-0 flex-1 truncate py-1 text-sm text-pierre-900" title={nomDe(m)}>
                 {nomDe(m)}
                 {m.role === 'admin' && <span className="ml-1.5 text-xs text-pierre-500">admin</span>}
               </span>
               <CompagnieDirection userId={m.id} valeur={ligne?.entreprise_id ?? null} compagnies={compagnies} libelle={`Compagnie de paie de ${nomDe(m)}`} />
               <MatriculeDirection userId={m.id} valeur={ligne?.matricule_employeur_d ?? null} libelle={`Matricule de ${nomDe(m)}`} />
-            </li>
+            </div>
           )
         })}
-      </ul>
-    </div>
+      </div>
+    </BlocReglage>
   )
 }

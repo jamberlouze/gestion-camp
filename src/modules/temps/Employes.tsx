@@ -10,6 +10,7 @@ import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { etatBanqueHeures } from './banques'
 import { lignesDirection, type LigneDirection } from './direction'
+import { nomCompagnie } from './employeurD'
 import {
   nomDe,
   useDossiersAFermer,
@@ -142,11 +143,11 @@ export function FeuilleEmployes() {
   const feuillesDirection = useFeuillesPlage(debut, debut, estAdmin)
   const paieDirection = usePaieDirection(estAdmin)
 
-  const nomCompagnie =
-    compagnie === SANS ? 'Sans compagnie' : (entreprises.data?.find((x) => x.id === compagnie)?.nom ?? null)
+  const compagnieChoisie = entreprises.data?.find((x) => x.id === compagnie)
+  const nomChoisie = compagnie === SANS ? 'Sans compagnie' : compagnieChoisie ? nomCompagnie(compagnieChoisie) : null
   const sousTitre = [
     secteur ? (secteur === SANS ? 'Sans secteur' : secteur === DIRECTION ? 'Direction' : secteur) : null,
-    compagnie ? nomCompagnie : null,
+    compagnie ? nomChoisie : null,
   ]
     .filter(Boolean)
     .map((t) => ` - ${t}`)
@@ -256,7 +257,7 @@ export function FeuilleEmployes() {
         nomEmploye(a.employe).localeCompare(nomEmploye(b.employe), 'fr') ||
         a.employe.id.localeCompare(b.employe.id) ||
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
-        (a.entreprise?.nom ?? '').localeCompare(b.entreprise?.nom ?? '', 'fr'),
+        (a.entreprise ? nomCompagnie(a.entreprise) : '').localeCompare(b.entreprise ? nomCompagnie(b.entreprise) : '', 'fr'),
     )
   }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, masques.data, etatsBanque.data, milieu, debut])
 
@@ -330,7 +331,7 @@ export function FeuilleEmployes() {
   // Total par compagnie (pour la paie), quand plusieurs compagnies sont affichées ; la direction à sa compagnie de paie.
   const parCompagnie = (entreprises.data ?? [])
     .map((x) => ({
-      nom: x.nom,
+      nom: nomCompagnie(x),
       total:
         lignes.filter((l) => l.entreprise?.id === x.id).reduce((s, l) => s + l.total, 0) +
         directionVisibles.filter((d) => d.compagnie?.id === x.id).reduce((s, d) => s + d.total, 0),
@@ -384,12 +385,12 @@ export function FeuilleEmployes() {
           <option value="">Toutes les compagnies</option>
           {compagnies.map((x) => (
             <option key={x.id} value={x.id}>
-              {x.nom}
+              {nomCompagnie(x)}
             </option>
           ))}
           {aSansCompagnie && <option value={SANS}>Sans compagnie</option>}
           {compagnie && compagnie !== SANS && !compagnies.some((x) => x.id === compagnie) && (
-            <option value={compagnie}>{nomCompagnie ?? 'Compagnie retirée'}</option>
+            <option value={compagnie}>{nomChoisie ?? 'Compagnie retirée'}</option>
           )}
         </select>
         <input
@@ -530,7 +531,7 @@ export function FeuilleEmployes() {
                               ligne={n}
                               colonne={i}
                               valeur={l.parJour.get(j) ?? 0}
-                              libelle={`${nomEmploye(e)}${l.entreprise ? `, ${l.entreprise.nom}` : ''}, ${jourCourt(j)}`}
+                              libelle={`${nomEmploye(e)}${l.entreprise ? `, ${nomCompagnie(l.entreprise)}` : ''}, ${jourCourt(j)}`}
                               onSaisir={(h) => l.entreprise && saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise.id, jour: j, heures: h })}
                             />
                           </td>
@@ -544,7 +545,7 @@ export function FeuilleEmployes() {
                           {l.entreprise && (
                             <CaseNote
                               valeur={l.note}
-                              libelle={`Note de paie, ${nomEmploye(e)}, ${l.entreprise.nom}`}
+                              libelle={`Note de paie, ${nomEmploye(e)}, ${nomCompagnie(l.entreprise)}`}
                               onEnregistrer={(note) =>
                                 noter.mutate(
                                   { employeId: e.id, entrepriseId: l.entreprise!.id, note },
@@ -569,7 +570,7 @@ export function FeuilleEmployes() {
                                 ligne={nb}
                                 colonne={i}
                                 valeur={l.banqueParJour.get(j) ?? 0}
-                                libelle={`Prises en banque, ${nomEmploye(e)}, ${l.entreprise!.nom}, ${jourCourt(j)}`}
+                                libelle={`Prises en banque, ${nomEmploye(e)}, ${nomCompagnie(l.entreprise!)}, ${jourCourt(j)}`}
                                 onSaisir={(h) =>
                                   saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise!.id, jour: j, heures: h, type: 'banque' })
                                 }
@@ -704,7 +705,7 @@ function exporter(debut: string, jours: string[], lignes: Ligne[], direction: Li
     datePaie(debut),
     champ(l.employe.nom_complet ?? l.employe.surnom),
     champ(l.employe.surnom),
-    champ(l.entreprise?.nom ?? null),
+    champ(l.entreprise ? nomCompagnie(l.entreprise) : null),
     champ(l.employe.secteur),
     champ(l.employe.poste),
     ...jours.map((j) => nombre(l.parJour.get(j) ?? 0)),
@@ -723,7 +724,7 @@ function exporter(debut: string, jours: string[], lignes: Ligne[], direction: Li
       datePaie(debut),
       champ(nomDe(d.membre)),
       '',
-      champ(d.compagnie?.nom ?? null),
+      champ(d.compagnie ? nomCompagnie(d.compagnie) : null),
       'Direction',
       d.membre.role === 'admin' ? 'Admin' : 'Direction',
       ...jours.map((j) => nombre(d.parJour.get(j) ?? 0)),

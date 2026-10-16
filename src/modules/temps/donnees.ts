@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Role } from '@/lib/types'
-import type { AjustementBanque, Banque, EtatBanqueHeures, ReglageMaladie } from './banques'
+import type { AjustementBanque, EtatBanqueHeures } from './banques'
 import { finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
 
 // Module en ligne seulement : mutations networkMode « always », erreurs dans
@@ -325,7 +325,8 @@ export function useFeuillesAApprouver() {
 }
 
 // ------------------------------------------------------------------
-// Banques (maladie, heures accumulées) : calculées par banques.ts
+// Banque d'heures (heures accumulées) : calculée par banques.ts ; la
+// maladie et les vacances sont des banques d'Employeur D
 // ------------------------------------------------------------------
 
 /** À qui sont les banques : un compte (direction, admin) ou un employé du référentiel. */
@@ -333,12 +334,6 @@ export type Titulaire = { userId: string; employeId?: undefined } | { employeId:
 
 const cleTitulaire = (t: Titulaire) => (t.userId ? `u:${t.userId}` : `e:${t.employeId}`)
 const colonne = (t: Titulaire) => (t.userId ? (['user_id', t.userId] as const) : (['employe_id', t.employeId!] as const))
-
-export interface ReglageMaladieLigne extends ReglageMaladie {
-  id: string
-  auteur_nom: string
-  updated_at: string
-}
 
 /** Un changement de l'interrupteur « Heures en banque » (temps.banque_heures_etats). */
 export interface EtatBanqueHeuresLigne extends EtatBanqueHeures {
@@ -361,9 +356,9 @@ export interface HeureBanqueLigne {
 }
 
 /**
- * Tout ce qu'il faut pour les banques d'une personne jusqu'au jour `au` :
- * ses heures depuis la première période (toutes compagnies pour un employé),
- * ses ajustements et ses jours de maladie par année. La base ne renvoie que
+ * Tout ce qu'il faut pour la banque d'heures d'une personne jusqu'au jour
+ * `au` : ses heures depuis la première période (toutes compagnies pour un
+ * employé), ses ajustements et l'interrupteur. La base ne renvoie que
  * ce qu'on peut voir (temps.peut_voir_banque, mêmes règles que la feuille).
  */
 export function useDonneesBanques(t: Titulaire, au: string) {
@@ -386,19 +381,22 @@ export function useDonneesBanques(t: Titulaire, au: string) {
               .order('id')
               .range(a, b),
           )
-      const [h, ajustements, maladie, etats] = await Promise.all([
+      const [h, ajustements, etats] = await Promise.all([
         heures,
-        db().from('ajustements_banques').select('id, banque, jour, heures, note, auteur_nom, created_at').eq(col, id).order('jour').order('created_at'),
-        db().from('jours_maladie').select('id, annee, jours, auteur_nom, updated_at').eq(col, id).order('annee'),
+        db()
+          .from('ajustements_banques')
+          .select('id, banque, jour, heures, note, auteur_nom, created_at')
+          .eq(col, id)
+          .eq('banque', 'heures')
+          .order('jour')
+          .order('created_at'),
         db().from('banque_heures_etats').select('*').eq(col, id).order('depuis'),
       ])
       if (ajustements.error) throw ajustements.error
-      if (maladie.error) throw maladie.error
       if (etats.error) throw etats.error
       return {
         heures: h.map((x) => ({ ...x, heures: Number(x.heures), entreprise_id: x.entreprise_id ?? null })),
         ajustements: (ajustements.data as AjustementBanque[]).map((a) => ({ ...a, heures: Number(a.heures) })),
-        reglagesMaladie: (maladie.data as ReglageMaladieLigne[]).map((r) => ({ ...r, jours: Number(r.jours) })),
         etatsHeures: etats.data as EtatBanqueHeuresLigne[],
       }
     },
@@ -411,34 +409,35 @@ export interface SemaineBanque {
   employe_id: string | null
   semaine: string
   regulieres: number
-  maladie: number
   banque: number
 }
 
 /**
  * Onglet Banques : tout ce que la personne connectée peut voir, jusqu'au
- * jour `au` — heures par personne et par semaine, ajustements, jours de
- * maladie et interrupteurs. La base filtre (admin : tout ; direction : les
+ * jour `au` — heures par personne et par semaine, ajustements et
+ * interrupteurs. La base filtre (admin : tout ; direction : les
  * employés et elle-même, jamais un autre membre de la direction).
  */
 export function useBanquesTous(au: string) {
   return useQuery({
     queryKey: [S, 'banques', 'tous', au],
     queryFn: async () => {
-      const [semaines, ajustements, maladie, etats] = await Promise.all([
+      const [semaines, ajustements, etats] = await Promise.all([
         toutLire<SemaineBanque>((a, b) => db().rpc('semaines_banques', { p_au: au }).order('semaine').order('user_id').order('employe_id').range(a, b)),
         toutLire<AjustementBanque & { user_id: string | null; employe_id: string | null }>((a, b) =>
-          db().from('ajustements_banques').select('id, user_id, employe_id, banque, jour, heures, note, auteur_nom, created_at').order('jour').order('id').range(a, b),
-        ),
-        toutLire<ReglageMaladieLigne & { user_id: string | null; employe_id: string | null }>((a, b) =>
-          db().from('jours_maladie').select('id, user_id, employe_id, annee, jours, auteur_nom, updated_at').order('annee').order('id').range(a, b),
+          db()
+            .from('ajustements_banques')
+            .select('id, user_id, employe_id, banque, jour, heures, note, auteur_nom, created_at')
+            .eq('banque', 'heures')
+            .order('jour')
+            .order('id')
+            .range(a, b),
         ),
         toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
       ])
       return {
-        semaines: semaines.map((x) => ({ ...x, regulieres: Number(x.regulieres), maladie: Number(x.maladie), banque: Number(x.banque) })),
+        semaines: semaines.map((x) => ({ ...x, regulieres: Number(x.regulieres), banque: Number(x.banque) })),
         ajustements: ajustements.map((x) => ({ ...x, heures: Number(x.heures) })),
-        reglagesMaladie: maladie.map((x) => ({ ...x, jours: Number(x.jours) })),
         etatsHeures: etats,
       }
     },
@@ -474,34 +473,20 @@ export function useReglerBanqueHeures() {
   })
 }
 
-/** Ajustement manuel d'une banque (+ ou − des heures), avec une note. Jamais effacé. */
+/** Ajustement manuel de la banque d'heures (+ ou − des heures), avec une note. Jamais effacé. */
 export function useAjusterBanque() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: [`${S}-local`, 'banque'],
     networkMode: 'always',
-    mutationFn: async (p: { titulaire: Titulaire; banque: Banque; jour: string; heures: number; note: string }) => {
+    mutationFn: async (p: { titulaire: Titulaire; jour: string; heures: number; note: string }) => {
       const { error } = await db().rpc('ajuster_banque', {
         ...titulaireRpc(p.titulaire),
-        p_banque: p.banque,
+        p_banque: 'heures',
         p_jour: p.jour,
         p_heures: p.heures,
         p_note: p.note,
       })
-      if (error) throw error
-    },
-    onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
-  })
-}
-
-/** Jours de maladie par année, à partir d'une année (les années d'avant ne changent pas). */
-export function useReglerJoursMaladie() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationKey: [`${S}-local`, 'jours-maladie'],
-    networkMode: 'always',
-    mutationFn: async (p: { titulaire: Titulaire; annee: number; jours: number }) => {
-      const { error } = await db().rpc('regler_jours_maladie', { ...titulaireRpc(p.titulaire), p_annee: p.annee, p_jours: p.jours })
       if (error) throw error
     },
     onSettled: () => client.invalidateQueries({ queryKey: [S, 'banques'] }),
