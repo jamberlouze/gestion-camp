@@ -32,7 +32,7 @@ const CHAMPS: { cle: keyof Valeurs; nom: string; aide: string }[] = [
 
 /**
  * Réglages › Employeur D et VAJ : valeurs par défaut de l'export « Données
- * d'emploi » (à confirmer avec Charlotte), numéros de compagnie (partagés
+ * d'emploi » (à confirmer au premier import), numéros de compagnie (partagés
  * avec les Feuilles de temps) et validité d'une VAJ.
  */
 export function ReglagesEmployeurD() {
@@ -60,7 +60,7 @@ export function ReglagesEmployeurD() {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div>
             <p className="mb-3 text-sm text-pierre-600">
-              Valeurs par défaut de l'export « Données d'emploi » (onglet Employés › Exporter › Employeur D), à confirmer avec Charlotte. La lettre est la colonne du canevas
+              Valeurs par défaut de l'export « Données d'emploi » (onglet Employés › Exporter › Employeur D), à confirmer au premier import. La lettre est la colonne du canevas
               Desjardins. Le numéro de poste se règle dans Postes (plus haut), le matricule sur la fiche du référentiel.
             </p>
             <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">

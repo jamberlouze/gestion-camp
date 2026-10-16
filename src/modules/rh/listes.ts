@@ -1,6 +1,6 @@
 // Exports de l'onglet Employés (plan-rh.md §14.4) : liste de la saison et
 // ACQ (reprend la table « ACQ » de la base Airtable « RH - ACQ », à
-// confirmer avec Charlotte). Jamais de NAS ni de compte. Fonctions pures,
+// confirmer). Jamais de NAS ni de compte. Fonctions pures,
 // testées sous Node : node --test src/modules/rh/listes.test.mjs
 
 import { DIETES, STATUTS_EMBAUCHE } from './types.ts'

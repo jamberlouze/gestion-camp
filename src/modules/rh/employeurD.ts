@@ -19,7 +19,7 @@ export const NOM_FEUILLE = 'Données à importer'
 export const COLONNES_PERSONNEL = 46
 export const COLONNES_EMPLOI = 112
 
-/** Valeurs par défaut (rh.reglages, clé employeur_d ; à confirmer avec Charlotte). */
+/** Valeurs par défaut (rh.reglages, clé employeur_d ; à confirmer au premier import). */
 export interface ReglagesEmployeurD {
   /** D : taux d'assurance emploi (1 régulier, 2 réduit) */
   taux_ae: string

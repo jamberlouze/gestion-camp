@@ -113,3 +113,16 @@ feuille), `sarah@camp.test` (coordo). Période d'essai : PP21 (4 au 17 oct. 2026
 - [x] Tests automatiques : ligne de la direction à sa compagnie de paie, vacances à leur code, admin sans approbation, sans compagnie ou sans matricule = bloquant même filtré, vacances sans code signalées, même matricule pour deux personnes = bloquant (pas pour un employé à deux compagnies), « Nom, prénom » d'un compte.
 - [x] Téléphone (375 px) : la section se lit comme les autres (la grille défile de côté, pas la page).
 - [ ] Coup d'œil sur les vraies feuilles de la direction, et choix de la compagnie de paie de chacun. — à Maxime
+
+## 12. Révision du 2026-10-16 (demandes de Maxime)
+
+> **Passée par Claude en DEV le 2026-10-16** (admin, ordinateur 1280 px et téléphone 375 px ; compagnies renommées le temps de l'essai en noms longs avec acronymes, comme en PROD, puis remises). Rien n'a eu à être corrigé en chemin.
+
+- [x] Réglages Employeur D aérés : blocs titrés avec une explication (Codes de gains, Codes d'utilisation, Colonne « Période », Numéros des compagnies, Paie de la direction), une rangée encadrée par élément, paie de la direction en tableau (Personne, Compagnie de paie, Matricule) ; au téléphone, une colonne, pas de défilement de côté.
+- [x] **Codes d'utilisation** : Vacances (direction seulement) déplacées des codes de gains ; G305 posé par la migration `20261016173328_temps_code_vacances` (un code déjà réglé est gardé ; « modifié par » inchangé) ; code vidé → « 8 h de « Vacances » … : aucun code d'utilisation » ; 305 remis → colonne G305 (8 h de Julie).
+- [x] Feuilles pas encore approuvées en liste à puces (« Tremblay, Julie · GBPA+ · soumise », « Morin, Léa · AQB · en cours »).
+- [x] Acronymes partout dans le module : menu Compagnie et « Total par compagnie » de l'onglet Employés, colonne Compagnie de l'export, numéros des compagnies, compagnie de paie, feuilles par compagnie, titre d'impression, export CSV, nom du fichier.
+- [x] Plus aucune mention de Charlotte dans `src/` ni `worker/` (Feuilles de temps, RH, Réservations, Calendrier, test des courriels RH).
+- [x] `npm run test:temps` (26), `node --test worker/rh/courriels.test.js` (22), `tsc -b`, `npm run lint` (aucun avertissement dans les fichiers touchés) ; console sans erreur.
+- [ ] À confirmer au premier import : Employeur D accepte des **heures** dans « G305(Quantité) » (le gabarit « Avec banques » montre G305 en montant, avec dates d'absence). — à Maxime
+

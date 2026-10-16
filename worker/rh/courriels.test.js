@@ -150,7 +150,7 @@ const entreprises = [
 const reglages = [
   { cle: 'courriels_depuis', valeur: '2026-10-15' },
   { cle: 'rappel_jours', valeur: 7 },
-  { cle: 'resume_destinataires', valeur: ['charlotte@camptremblant.com'] },
+  { cle: 'resume_destinataires', valeur: ['direction@camp.test'] },
   { cle: 'resume_heure', valeur: 7 },
 ]
 const contexte = (x = {}) => ({ reglages, modeles_courriels: modeles, compagnies, entreprises, ...x })
@@ -263,7 +263,7 @@ test('cron : rappel préparé (à approuver, pas envoyé) ; résumé seulement p
   assert.match(rappel.corps, new RegExp(`Bonjour Pivoine, ton dossier : http://localhost:5173/dossier/${JETON}`))
   const resume = p_courriels.find((c) => c.genre === 'resume')
   assert.equal(resume.cle, 'resume:2026-10-16')
-  assert.deepEqual(resume.a, ['charlotte@camptremblant.com'])
+  assert.deepEqual(resume.a, ['direction@camp.test'])
   assert.equal(resume.entreprise_id, GBPA)
   assert.match(resume.corps, /- Max Essai/)
   assert.deepEqual(rpcs(appels, 'rappels_dus'), [{ p_jours: 7, p_depuis: '2026-10-15' }])

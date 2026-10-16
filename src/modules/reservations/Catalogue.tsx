@@ -11,7 +11,7 @@ import { useAjouterProduit, useEnregistrerPrix, useEnregistrerPrixLot, useModifi
 import { CATEGORIES, FORFAITS, UNITES, type Categorie, type Prix, type Produit, type Unite } from './types'
 
 // Liste de prix (remplace l'onglet « Liste de prix » du chiffrier ; révision
-// du 2026-10-14 avec Charlotte) : un prix par produit et par exercice, avec
+// du 2026-10-14) : un prix par produit et par exercice, avec
 // sa dernière modification et son statut « à valider » / « validé » ; prix
 // des fournisseurs = coût + marge ; historique d'une année à l'autre ;
 // préparation de l'exercice suivant. Règle des prix provisoires : `resoudrePrix`.
