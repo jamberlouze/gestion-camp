@@ -5,8 +5,9 @@
 // les routes publiques des Réservations (formulaire de demande, documents et
 // factures de la page client : reservations/api.js), celles du module RH
 // (candidature, intention de retour, dossier d'embauche, contrat signé en ligne,
-// courriels de chaque compagnie : rh/api.js) et QuickBooks Online
-// (connexion, devis, factures, synchro aux 15 minutes : qbo/).
+// courriels de chaque compagnie : rh/api.js), QuickBooks Online
+// (connexion, devis, factures, synchro aux 15 minutes : qbo/) et la copie des
+// documents vers les Drive partagés (drive/copie.js).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -19,6 +20,7 @@
 // chose depuis GitHub Actions, au cas où le cron Cloudflare ne tournerait pas.
 
 import { routeCalendrier } from "./calendrier/api.js";
+import { copierVersDrive } from "./drive/copie.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
 import { routeRh } from "./rh/api.js";
@@ -62,6 +64,12 @@ export default {
     ctx.waitUntil(preparerCourriels(env).catch((e) => console.error("Courriels non préparés :", e)));
     // RH : rappels de dossier dus et résumé quotidien à la direction (rh/courriels.js).
     ctx.waitUntil(preparerAutomatiques(env, new Date(event.scheduledTime)).catch((e) => console.error("Courriels RH :", e)));
+    // Copie des documents vers les Drive partagés (rien tant que les secrets DRIVE_* manquent).
+    ctx.waitUntil(
+      copierVersDrive(env)
+        .then((r) => (r.faites || r.erreurs) && console.log(`Copie Drive : ${r.faites} copiés, ${r.erreurs} en erreur`))
+        .catch((e) => console.error("Copie Drive :", e)),
+    );
     // Réservations Airbnb de la Vieille-France (iCal), puis Google Agenda (rien tant que le réglage « agenda » est inactif).
     ctx.waitUntil(
       (async () => {

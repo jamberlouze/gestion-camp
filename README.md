@@ -505,6 +505,36 @@ refusé par Google (mot de passe changé, accès retiré) la met en « Erreur »
 la reconnecter. En DEV, tout part dans Mailpit (`COURRIELS_MAILPIT` dans
 `.dev.vars`), jamais vers Gmail.
 
+### 17. Copie des documents vers les Drive partagés
+
+Le Worker copie aux 15 minutes les documents des Véhicules, des Bâtiments, de
+RH et (à leur bascule) des Réservations dans les Drive partagés
+(`worker/drive/copie.js`, réglages et emplacements dans `core.drive_reglages`).
+Rien tant que les trois secrets manquent ; en DEV, tout est simulé. Fait le
+2026-10-16 (projet Google `copie-drive-511814`), sauf les secrets Cloudflare :
+
+1. console.cloud.google.com, avec un compte membre des Drive partagés : projet
+   **à part** « Copie Drive » (pas celui de l'agenda : la bascule RH passe ce
+   client en External) → APIs & Services → Library → **Google Drive API** →
+   Enable.
+2. **Google Auth Platform** (ex-« OAuth consent screen ») → Get started : nom
+   « Gestion du camp — copie Drive », Audience **Internal** (la portée `drive`
+   complète n'est permise sans examen de Google que pour un client Internal).
+3. Clients → Create client → **Web application**, redirection
+   `https://developers.google.com/oauthplayground` → télécharger le JSON.
+4. [OAuth Playground](https://developers.google.com/oauthplayground) → ⚙️ →
+   « Use your own OAuth credentials » (identifiant et secret du JSON) → portée
+   `https://www.googleapis.com/auth/drive` → Authorize APIs (le compte qui
+   écrira les copies) → Exchange authorization code for tokens → **Refresh token**.
+5. Vérifier : `node scripts/essai-drive.mjs --client <fichier JSON>` (colle le
+   jeton ; dépose un PDF d'essai avec le client du Worker).
+6. Secrets Cloudflare : `DRIVE_CLIENT_ID`, `DRIVE_CLIENT_SECRET`,
+   `DRIVE_REFRESH_TOKEN` (`npx wrangler secret put …`), puis supprimer le JSON.
+
+Ce qui a été copié, les erreurs et les essais : `core.drive_copies` (une erreur
+est réessayée de plus en plus tard). Un dossier supprimé dans le Drive est
+retrouvé ou recréé au passage suivant.
+
 ## Ajouter un module
 
 1. Migration SQL : `npx supabase migration new <nom>`, avec un schéma `<nom>`,

@@ -30,7 +30,7 @@
   // Valeurs publiques (les mêmes que dans .env.production). Les secrets
   // (ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, GMAIL_*, AIRTABLE_TOKEN,
   // CALENDRIER_JETON_SYNCHRO, TURNSTILE_SECRET, QBO_CLIENT_ID,
-  // QBO_CLIENT_SECRET, QBO_CLE) se mettent dans
+  // QBO_CLIENT_SECRET, QBO_CLE, DRIVE_*) se mettent dans
   // Cloudflare (Worker → Settings → Variables and Secrets), jamais ici.
   "vars": {
     "SUPABASE_URL": "https://nurjzafcogzgekquzuwh.supabase.co",
