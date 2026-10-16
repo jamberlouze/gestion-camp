@@ -35,9 +35,9 @@ Corrigé en chemin :
 
 ## Avant la mise en ligne
 
-- [ ] Secrets Cloudflare `DRIVE_CLIENT_ID`, `DRIVE_CLIENT_SECRET`, `DRIVE_REFRESH_TOKEN` (README §17) — à Maxime.
+- [x] Secrets Cloudflare `DRIVE_CLIENT_ID`, `DRIVE_CLIENT_SECRET`, `DRIVE_REFRESH_TOKEN`, et `SUPABASE_SECRET_KEY` (le Worker n'en avait aucun) — mis par Maxime le 2026-10-16.
 - [ ] (Recommandé) Relancer `node scripts/essai-drive.mjs --client …` : même essai, cette fois avec le client du Worker (liste et création de dossiers) — à Maxime.
 - [ ] Supprimer « Essai copie de l'app (à supprimer) » dans Opérations › Véhicules, puis le fichier JSON du client dans Téléchargements — à Maxime.
-- [ ] Publier seul : migration `20261016151529` seulement (pas `…151530`, qui part avec les Réservations), `worker/commun/drive.js`, `worker/drive/`, l'appel dans `worker/index.js`.
-- [ ] Après le premier passage en PROD : regarder `core.drive_copies` (copiés, erreurs) et les dossiers créés dans le Drive.
+- [x] Publié seul le 2026-10-16 (78a44e0) : migration `20261016151529` seulement (pas `…151530`, qui part avec les Réservations), `worker/commun/drive.js`, `worker/drive/`, l'appel dans `worker/index.js`.
+- [x] En PROD, 16 h 45 UTC : PDF test ajouté à l'Étobus → copié au premier passage dans le dossier Étobus existant › Immatriculation (créé), taille complète, aucune erreur.
 - [ ] À la bascule des Réservations : `update core.drive_reglages set actif = true where module = 'reservations'`, puis classer les anciens documents de 2026-27 sous « Ancien système » de chaque réservation (liste proposée d'abord).
