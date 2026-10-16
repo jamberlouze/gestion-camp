@@ -126,3 +126,15 @@ feuille), `sarah@camp.test` (coordo). Période d'essai : PP21 (4 au 17 oct. 2026
 - [x] `npm run test:temps` (26), `node --test worker/rh/courriels.test.js` (22), `tsc -b`, `npm run lint` (aucun avertissement dans les fichiers touchés) ; console sans erreur.
 - [ ] À confirmer au premier import : Employeur D accepte des **heures** dans « G305(Quantité) » (le gabarit « Avec banques » montre G305 en montant, avec dates d'absence). — à Maxime
 
+## 13. Banque maladie retirée de l'app (décision de Maxime, 2026-10-16)
+
+> **Passée par Claude en DEV le 2026-10-16** (admin, ordinateur). Rien n'a eu à être corrigé en chemin.
+
+- [x] Bas de feuille (Julie) : une seule carte « Heures accumulées » (solde au début, mouvements, solde à la fin, historique), « Ajuster la banque… », mention « Vacances et maladie : les soldes sont dans Employeur D » ; la ligne Maladie reste dans la grille de la feuille (4 h).
+- [x] Onglet Banques : plus de colonne Maladie ni de bouton « Jours de maladie… » ; « Ajuster… » ouvre « Ajuster la banque d'heures · Morin, Léa » sans choix de banque ; historique d'une seule banque.
+- [x] Export : Maladie dans les **codes d'utilisation** (avec Vacances) ; sans code : « 16 h de « Maladie » (3 personnes) … : aucun code d'utilisation ».
+- [x] Migration `20261016174632_temps_sans_banque_maladie` (tests SQL, transaction annulée) : `ajuster_banque` refuse « maladie » (« Seule la banque d'heures est dans l'app… ») et accepte « heures » ; `regler_jours_maladie` n'existe plus ; un ajout direct « maladie » est refusé par la contrainte `ajustements_banque_heures` ; les lignes d'avant (jours de maladie, ajustements « maladie ») restent en base comme archive.
+- [x] `npm run test:temps` (25), `npm run test:periodes`, `tsc -b`, `npm run lint` (rien dans les fichiers touchés) ; tous les fichiers du module se chargent sans erreur.
+- [ ] **Avant la mise en ligne** : noter les soldes Maladie de chacun dans Temps › Banques (PROD), puis les entrer dans Employeur D (ils disparaissent de l'écran à la publication ; les données restent en base). — à Maxime
+- [ ] Code d'utilisation de la maladie dans Employeur D (G101 ? le gabarit « Avec banques » le montre à côté de G305) à confirmer, puis à régler dans l'export. — à Maxime
+

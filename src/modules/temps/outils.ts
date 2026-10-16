@@ -1,5 +1,4 @@
 import { useSearchParams } from 'react-router'
-import type { Banque } from './banques'
 import { aujourdhui, codePeriodePaie, debutPeriode, estDebutPeriode, formatHeures, PREMIERE_PERIODE } from './periodes'
 
 export const menu =
@@ -28,8 +27,6 @@ export function usePeriode(): [string, (debut: string) => void] {
 // ------------------------------------------------------------------
 // Banques (affichage)
 // ------------------------------------------------------------------
-
-export const NOMS_BANQUES: Record<Banque, string> = { maladie: 'Maladie', heures: 'Heures accumulées' }
 
 /** « +4 h », « −2,5 h » */
 export const signe = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatHeures(Math.abs(n))} h`

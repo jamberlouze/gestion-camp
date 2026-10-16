@@ -2,19 +2,11 @@ import { useMemo, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { etatBanqueHeures, enJours, HEURES_PAR_JOUR_MALADIE, mouvementsBanques, SEUIL_SEMAINE, type HeureBanque, type Mouvement } from './banques'
-import { FenetreAjustement, FenetreJoursMaladie, TableHistorique } from './BanquesFeuille'
-import {
-  nomDe,
-  useBanquesTous,
-  useMembres,
-  useReglerBanqueHeures,
-  type EtatBanqueHeuresLigne,
-  type ReglageMaladieLigne,
-  type Titulaire,
-} from './donnees'
+import { etatBanqueHeures, mouvementsBanqueHeures, SEUIL_SEMAINE, type HeureBanque, type Mouvement } from './banques'
+import { FenetreAjustement, TableHistorique } from './BanquesFeuille'
+import { nomDe, useBanquesTous, useMembres, useReglerBanqueHeures, type EtatBanqueHeuresLigne, type Titulaire } from './donnees'
 import { nomEmploye, useEmployesFeuille, useFeuillesPropres } from './donneesEmployes'
-import { libelleEtatHeures, menu, NOMS_BANQUES, periodeCourante } from './outils'
+import { libelleEtatHeures, menu, periodeCourante } from './outils'
 import { aujourdhui, dateCourte, formatHeures, libellePeriode } from './periodes'
 
 type Groupe = 'direction' | 'compte' | 'sans-compte'
@@ -31,24 +23,18 @@ interface LigneBanque {
   nom: string
   detail: string
   groupe: Groupe
-  /** Employé sans compte : pas de banque maladie. */
-  avecMaladie: boolean
   actif: boolean
   mouvements: Mouvement[]
-  maladie: number
   heures: number
   etat: { active: boolean; depuis: string | null }
-  reglagesMaladie: ReglageMaladieLigne[]
 }
 
 const bouton = `${ui.boutonSecondaire} whitespace-nowrap px-2.5! py-1.5!`
 
-const solde = (mouvements: Mouvement[], banque: 'maladie' | 'heures') => mouvements.filter((m) => m.banque === banque).at(-1)?.solde ?? 0
-
 /**
- * Onglet Banques : une ligne par personne qui a ou peut avoir une banque,
- * avec ses soldes à ce jour, l'interrupteur « Heures en banque », les
- * ajustements, les jours de maladie et l'historique. Admins : tout le monde ;
+ * Onglet Banques : une ligne par personne qui a ou peut avoir une banque
+ * d'heures, avec son solde à ce jour, l'interrupteur « Heures en banque »,
+ * les ajustements et l'historique (vacances et maladie : Employeur D). Admins : tout le monde ;
  * direction : seulement les employés (jamais un autre membre de la
  * direction — la base ne lui renvoie rien d'eux). L'interrupteur ne se
  * change que par un admin (temps.regler_banque_heures).
@@ -62,38 +48,28 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
   const [recherche, setRecherche] = useState('')
   const [avecBanque, setAvecBanque] = useState(false)
   const [ouverte, setOuverte] = useState<string | null>(null)
-  const [fenetre, setFenetre] = useState<{ genre: 'ajuster' | 'maladie'; ligne: LigneBanque } | null>(null)
+  const [fenetre, setFenetre] = useState<LigneBanque | null>(null)
 
   const lignes = useMemo(() => {
     if (!donnees.data || !membres.data || !employes.data || !propres.data) return null
     const d = donnees.data
     const de = (t: Titulaire) => (x: { user_id: string | null; employe_id: string | null }) =>
       t.userId ? x.user_id === t.userId : x.employe_id === t.employeId
-    const calculer = (t: Titulaire, avecMaladie: boolean, parDefaut: boolean) => {
+    const calculer = (t: Titulaire, parDefaut: boolean) => {
       const siennes = de(t)
       const heures: HeureBanque[] = d.semaines.filter(siennes).flatMap((w) => [
         { jour: w.semaine, type: 'regulieres', heures: w.regulieres },
-        { jour: w.semaine, type: 'maladie', heures: w.maladie },
         { jour: w.semaine, type: 'banque', heures: w.banque },
       ])
       const etats: EtatBanqueHeuresLigne[] = d.etatsHeures.filter(siennes)
-      const reglagesMaladie = d.reglagesMaladie.filter(siennes)
-      const mouvements = mouvementsBanques({
+      const mouvements = mouvementsBanqueHeures({
         heures,
         ajustements: d.ajustements.filter(siennes),
-        reglagesMaladie,
         etatsHeures: etats,
         heuresActivesParDefaut: parDefaut,
-        avecMaladie,
         au,
       })
-      return {
-        mouvements,
-        maladie: avecMaladie ? solde(mouvements, 'maladie') : 0,
-        heures: solde(mouvements, 'heures'),
-        etat: etatBanqueHeures(etats, parDefaut, au),
-        reglagesMaladie,
-      }
+      return { mouvements, heures: mouvements.at(-1)?.solde ?? 0, etat: etatBanqueHeures(etats, parDefaut, au) }
     }
 
     const resultat: LigneBanque[] = []
@@ -102,15 +78,14 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
       for (const m of membres.data) {
         if (m.role !== 'admin' && m.role !== 'direction') continue
         const t: Titulaire = { userId: m.id }
-        const c = calculer(t, true, true)
-        if (!m.actif && !c.mouvements.some((x) => x.genre !== 'octroi')) continue
+        const c = calculer(t, true)
+        if (!m.actif && !c.mouvements.length) continue
         resultat.push({
           cle: `u:${m.id}`,
           titulaire: t,
           nom: nomDe(m),
           detail: m.role === 'admin' ? 'Admin' : 'Direction',
           groupe: 'direction',
-          avecMaladie: true,
           actif: m.actif,
           ...c,
         })
@@ -118,16 +93,15 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
     for (const e of employes.data) {
       const compte = propres.data.has(e.id)
       const t: Titulaire = { employeId: e.id }
-      const c = calculer(t, compte, false)
+      const c = calculer(t, false)
       // Inactif : seulement s'il lui reste quelque chose en banque.
-      if (!e.actif && !c.heures && !c.maladie) continue
+      if (!e.actif && !c.heures) continue
       resultat.push({
         cle: `e:${e.id}`,
         titulaire: t,
         nom: nomEmploye(e),
         detail: [e.nom_complet ? e.surnom : null, e.poste].filter(Boolean).join(' · '),
         groupe: compte ? 'compte' : 'sans-compte',
-        avecMaladie: compte,
         actif: e.actif,
         ...c,
       })
@@ -142,7 +116,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
   const mots = recherche.trim().toLocaleLowerCase('fr')
   const visibles = lignes.filter((l) => {
     if (mots && ![l.nom, l.detail].some((t) => t.toLocaleLowerCase('fr').includes(mots))) return false
-    if (avecBanque && !l.etat.active && !l.heures && !l.maladie) return false
+    if (avecBanque && !l.etat.active && !l.heures) return false
     return true
   })
   const groupes = (['direction', 'compte', 'sans-compte'] as Groupe[])
@@ -153,10 +127,9 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
     <div className="space-y-4">
       <div className={`${ui.carte} space-y-1 px-4 py-3 text-sm text-pierre-700`}>
         <p>
-          Soldes au <b>{dateCourte(au)}</b>. <b>Maladie</b> : jours accordés le 1er janvier, 1 jour = {HEURES_PAR_JOUR_MALADIE} h,
-          heures de maladie déduites (pas de banque maladie pour un employé sans compte). <b>Heures accumulées</b> : heures
-          régulières au-delà de {SEUIL_SEMAINE} h par semaine, heure pour heure, quand la mise en banque est activée ; heures
-          prises en banque déduites.
+          Soldes au <b>{dateCourte(au)}</b>. <b>Heures accumulées</b> : heures régulières au-delà de {SEUIL_SEMAINE} h par
+          semaine, heure pour heure, quand la mise en banque est activée ; heures prises en banque déduites. Vacances et
+          maladie : les soldes sont dans Employeur D.
         </p>
         <p className="text-pierre-600">
           Mise en banque : activée par défaut pour la direction et les admins, désactivée pour les employés.
@@ -192,7 +165,6 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
             </h2>
             <div className="hidden gap-x-5 border-b border-pierre-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-pierre-500 xl:flex">
               <span className="flex-1">Personne</span>
-              <span className="w-28 text-right">Maladie</span>
               <span className="w-28 text-right">Heures accumulées</span>
               <span className="w-56">Heures en banque</span>
               <span className="w-[20rem]" />
@@ -205,7 +177,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
                   estAdmin={estAdmin}
                   historique={ouverte === l.cle}
                   basculer={() => setOuverte(ouverte === l.cle ? null : l.cle)}
-                  ouvrir={(genre) => setFenetre({ genre, ligne: l })}
+                  ouvrir={() => setFenetre(l)}
                 />
               ))}
             </ul>
@@ -213,22 +185,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
         ))
       )}
 
-      {fenetre?.genre === 'ajuster' && (
-        <FenetreAjustement
-          titulaire={fenetre.ligne.titulaire}
-          nom={fenetre.ligne.nom}
-          banques={fenetre.ligne.avecMaladie ? ['heures', 'maladie'] : ['heures']}
-          fermer={() => setFenetre(null)}
-        />
-      )}
-      {fenetre?.genre === 'maladie' && (
-        <FenetreJoursMaladie
-          titulaire={fenetre.ligne.titulaire}
-          nom={fenetre.ligne.nom}
-          reglages={fenetre.ligne.reglagesMaladie}
-          fermer={() => setFenetre(null)}
-        />
-      )}
+      {fenetre && <FenetreAjustement titulaire={fenetre.titulaire} nom={fenetre.nom} fermer={() => setFenetre(null)} />}
     </div>
   )
 }
@@ -244,15 +201,11 @@ function Rangee({
   estAdmin: boolean
   historique: boolean
   basculer: () => void
-  ouvrir: (genre: 'ajuster' | 'maladie') => void
+  ouvrir: () => void
 }) {
   const regler = useReglerBanqueHeures()
   const [erreur, setErreur] = useState<string | null>(null)
-  const montant = (n: number, jours = false) => (
-    <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>
-      {formatHeures(n)} h{jours && n ? <span className="text-xs text-pierre-500"> ({formatHeures(enJours(n))} j)</span> : null}
-    </span>
-  )
+  const montant = (n: number) => <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>{formatHeures(n)} h</span>
 
   const changer = async () => {
     const active = !l.etat.active
@@ -279,10 +232,6 @@ function Rangee({
           <span className="font-medium text-pierre-900">{l.nom}</span>
           {!l.actif && <span className="ml-1 text-xs text-pierre-400">(inactif)</span>}
           {l.detail && <span className="block text-xs text-pierre-500">{l.detail}</span>}
-        </div>
-        <div className="w-28 text-sm xl:text-right" title={l.avecMaladie ? undefined : 'Pas de banque maladie pour un employé sans compte'}>
-          <span className="text-xs text-pierre-500 xl:hidden">Maladie </span>
-          {l.avecMaladie ? montant(l.maladie, true) : <span className="text-pierre-300">—</span>}
         </div>
         <div className="w-28 text-sm xl:text-right">
           <span className="text-xs text-pierre-500 xl:hidden">Accumulées </span>
@@ -316,14 +265,9 @@ function Rangee({
           )}
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto xl:w-[20rem] xl:flex-nowrap xl:justify-end">
-          <button className={bouton} onClick={() => ouvrir('ajuster')}>
+          <button className={bouton} onClick={ouvrir}>
             Ajuster…
           </button>
-          {l.avecMaladie && (
-            <button className={bouton} onClick={() => ouvrir('maladie')}>
-              Jours de maladie…
-            </button>
-          )}
           <button className="text-sm whitespace-nowrap text-foret-700 underline" onClick={basculer}>
             {historique ? 'Masquer' : 'Historique'}
           </button>
@@ -331,13 +275,8 @@ function Rangee({
       </div>
       {erreur && <p className={ui.erreur}>{erreur}</p>}
       {historique && (
-        <div className={`grid gap-4 ${l.avecMaladie ? 'lg:grid-cols-2' : ''}`}>
-          {(l.avecMaladie ? (['maladie', 'heures'] as const) : (['heures'] as const)).map((b) => (
-            <div key={b} className="max-h-80 overflow-y-auto rounded-lg border border-pierre-100 px-3 py-2">
-              <h3 className="mb-1 text-xs font-semibold text-pierre-700">{NOMS_BANQUES[b]}</h3>
-              <TableHistorique mouvements={l.mouvements.filter((m) => m.banque === b)} />
-            </div>
-          ))}
+        <div className="max-h-80 max-w-3xl overflow-y-auto rounded-lg border border-pierre-100 px-3 py-2">
+          <TableHistorique mouvements={l.mouvements} />
         </div>
       )}
     </li>

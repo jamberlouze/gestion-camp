@@ -34,8 +34,8 @@ import {
  * semaines de dimanche à samedi, une rangée par type d'heures. La personne
  * saisit puis soumet sa feuille aux admins (gelée pour elle, sauf les notes
  * ajoutées) ; un admin corrige, approuve ou renvoie. La feuille d'un admin
- * ne passe pas par l'approbation. En bas : ses banques (maladie, heures
- * accumulées), réglées par les admins.
+ * ne passe pas par l'approbation. En bas : sa banque d'heures, réglée par
+ * les admins (vacances et maladie : Employeur D).
  */
 export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const { profil, estAdmin } = useAuth()

@@ -13,7 +13,8 @@
 // aaaa/mm/jj), puis une colonne « G<code>(Quantité) » par code réglé.
 // Codes réglés dans l'app (temps.reglages_employeur_d) : codes de gains
 // (heures payées) et codes d'utilisation (heures prises dans une banque
-// d'Employeur D : les vacances, dont Employeur D calcule lui-même la paie) ;
+// d'Employeur D : les vacances, dont Employeur D calcule lui-même la paie,
+// et la maladie, dont Employeur D tient le solde) ;
 // un type sans code n'est pas exporté (ses heures sont signalées). Le
 // woofing n'est jamais payé. Formats du canevas Desjardins : compagnie = 8
 // lettres ou chiffres au plus, matricule = 9 chiffres au plus, code = 1 à 999.
@@ -29,7 +30,7 @@ export type GenreCode = 'gain' | 'utilisation'
 export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Reglage; genre: GenreCode; detail: string }[] = [
   { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres', genre: 'gain', detail: 'Employés et direction' },
   { type: 'vacances', libelle: 'Vacances', reglage: 'code_vacances', genre: 'utilisation', detail: 'Direction seulement' },
-  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'gain', detail: 'Heures de maladie des feuilles' },
+  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'utilisation', detail: 'Heures de maladie des feuilles' },
   { type: 'banque', libelle: 'Prises en banque', reglage: 'code_banque', genre: 'gain', detail: 'Heures accumulées prises (banque de l’app)' },
 ]
 

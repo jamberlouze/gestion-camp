@@ -593,7 +593,7 @@ function Reglages({ debut, estAdmin }: { debut: string; estAdmin: boolean }) {
             </BlocReglage>
             <BlocReglage
               titre="Codes d’utilisation"
-              aide="Heures prises dans une banque d’Employeur D. Les vacances n’ont pas de code de gain : Employeur D calcule lui-même la paie de vacances."
+              aide="Heures prises dans une banque d’Employeur D, qui en tient les soldes. Les vacances n’ont pas de code de gain : Employeur D calcule lui-même la paie de vacances."
             >
               <ListeCodes genre="utilisation" reglages={r} />
             </BlocReglage>

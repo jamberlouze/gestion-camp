@@ -32,8 +32,8 @@ const BANQUE = { id: 'banque', libelle: 'Prises en banque' }
  * approuve ou renvoie ; un admin peut annuler une approbation. Ses heures
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
  * base) ; le woofing (non payé) reste ici ; maladie et prises en banque
- * paraissent à part dans l'onglet Employés. En bas : ses banques (toutes
- * compagnies confondues), réglées par la direction.
+ * paraissent à part dans l'onglet Employés. En bas : sa banque d'heures
+ * (toutes compagnies confondues), réglée par la direction.
  */
 export function FeuilleEmploye({
   employe,

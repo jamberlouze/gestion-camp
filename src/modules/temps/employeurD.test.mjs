@@ -242,13 +242,13 @@ test('direction : vacances sans code signalées ; heures d’un type sans code n
   assert.deepEqual(r.directionSansCompagnie, [])
 })
 
-test('vacances = code d’utilisation, les autres types = codes de gains', () => {
+test('vacances et maladie = codes d’utilisation (banques d’Employeur D), régulières et prises en banque = codes de gains', () => {
   assert.deepEqual(
     TYPES_EXPORTES.map((t) => [t.type, t.genre]),
     [
       ['regulieres', 'gain'],
       ['vacances', 'utilisation'],
-      ['maladie', 'gain'],
+      ['maladie', 'utilisation'],
       ['banque', 'gain'],
     ],
   )
