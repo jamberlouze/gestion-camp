@@ -3,7 +3,8 @@
 // trimestrielle de la Vigie de subventions (voir subventions/pipeline.js),
 // la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js)
 // et les routes du module RH (candidature, intention de retour, dossier
-// d'embauche, contrat signé en ligne, courriels de chaque compagnie : rh/api.js).
+// d'embauche, contrat signé en ligne, courriels de chaque compagnie : rh/api.js),
+// puis copie les documents vers les Drive partagés (drive/copie.js).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -16,6 +17,7 @@
 // chose depuis GitHub Actions, au cas où le cron Cloudflare ne tournerait pas.
 
 import { routeCalendrier } from "./calendrier/api.js";
+import { copierVersDrive } from "./drive/copie.js";
 import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeRh } from "./rh/api.js";
 import { preparerAutomatiques } from "./rh/courriels.js";
@@ -48,6 +50,12 @@ export default {
     if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
     // RH : rappels de dossier dus et résumé quotidien à la direction (rh/courriels.js).
     ctx.waitUntil(preparerAutomatiques(env, new Date(event.scheduledTime)).catch((e) => console.error("Courriels RH :", e)));
+    // Copie des documents vers les Drive partagés (rien tant que les secrets DRIVE_* manquent).
+    ctx.waitUntil(
+      copierVersDrive(env)
+        .then((r) => (r.faites || r.erreurs) && console.log(`Copie Drive : ${r.faites} copiés, ${r.erreurs} en erreur`))
+        .catch((e) => console.error("Copie Drive :", e)),
+    );
   },
 
   async fetch(request, env, ctx) {
