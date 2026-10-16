@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CourrielCopiable } from '@/lib/CourrielCopiable'
 import { ChampPiege, Cases, Choix, Entete, fusionnerErreurs, Page, Question } from '@/lib/public/habillage'
 import { useLangue } from '@/lib/public/langue'
 import { Turnstile } from '@/lib/public/Turnstile'
@@ -293,9 +294,7 @@ export default function Emplois() {
             <div className="rounded-lg bg-pierre-50 p-3 text-xs leading-relaxed text-pierre-600">
               <p className="mb-1 font-semibold text-pierre-700">🔒 {t.confidentialite_titre}</p>
               {t.confidentialite.split('{courriel}')[0]}
-              <a className="underline" href={`mailto:${COURRIEL_EMPLOIS}`}>
-                {COURRIEL_EMPLOIS}
-              </a>
+              <CourrielCopiable courriel={COURRIEL_EMPLOIS} className="align-bottom underline" />
               {t.confidentialite.split('{courriel}')[1]}
             </div>
             <ChampPiege valeur={piege} changer={setPiege} />

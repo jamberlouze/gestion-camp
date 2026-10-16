@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CourrielCopiable } from '@/lib/CourrielCopiable'
 
 // Habillage commun des pages publiques (sans compte) : Réservations
 // (formulaire de demande, page client, fiches) et RH (candidature,
@@ -76,7 +77,7 @@ export function Pied({ compagnie }: { compagnie?: { nom: string | null; courriel
   const courriel = compagnie?.courriel ?? 'inscriptions@camptremblant.com'
   return (
     <footer className="pb-4 text-center text-xs text-pierre-500">
-      {nom} · <a className="underline" href={`mailto:${courriel}`}>{courriel}</a>
+      {nom} · <CourrielCopiable courriel={courriel} className="underline" />
       {compagnie?.telephone && ` · ${compagnie.telephone}`}
     </footer>
   )
