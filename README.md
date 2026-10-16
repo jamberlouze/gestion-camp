@@ -18,7 +18,7 @@ connexion, menu, référentiel partagé.
 **Stack** : React + TypeScript (Vite), Supabase (base de données, connexion,
 temps réel), et un Cloudflare Worker qui sert le site et garde Supabase éveillé.
 
-**Adresse** : https://gestion-camp.maxime-0f5.workers.dev
+**Adresse** : https://admin.camptremblant.com (l'ancienne, https://gestion-camp.maxime-0f5.workers.dev, marche encore)
 
 ## Architecture
 
@@ -172,7 +172,7 @@ Chaque `git push` sur `main` construit et redéploie le site et le cron du waker
 Les valeurs publiques sont dans `wrangler.jsonc` et `.env.production` ; seuls
 les secrets de la Vigie de subventions s'ajoutent dans Cloudflare (section 8).
 
-Vérification du waker : https://gestion-camp.maxime-0f5.workers.dev/_ping.
+Vérification du waker : https://admin.camptremblant.com/_ping.
 Le waker de secours (GitHub Actions) lit lui aussi `.env.production` : rien à
 configurer.
 
@@ -333,9 +333,9 @@ seront servies sur un sous-domaine de camptremblant.com (le site principal est
 chez Squarespace) :
 
 1. **Sous-domaine** (ex. `groupes.camptremblant.com`) : Cloudflare → Workers →
-   `gestion-camp` → Settings → Domains & Routes → **Add custom domain**. Si le
-   DNS de camptremblant.com n'est pas chez Cloudflare, ajouter dans le DNS du
-   domaine (Squarespace) l'enregistrement CNAME indiqué par Cloudflare.
+   `gestion-camp` → Settings → Domains & Routes → **Add custom domain**. Le DNS de
+   camptremblant.com est chez Cloudflare depuis le 2026-10-16 : Cloudflare crée
+   l'enregistrement tout seul.
 2. **Turnstile** (anti-robot, gratuit) : Cloudflare → Turnstile → **Add
    widget**, domaine = le sous-domaine (et celui du Worker), mode « Managed ».
    - clé du site → `VITE_TURNSTILE_SITE_KEY` dans `.env.production` (publique) ;
@@ -460,8 +460,7 @@ d'embauche). Elles parlent seulement au Worker (`/api/rh/*`, voir
 
 1. **Sous-domaine** `emplois.camptremblant.com` : Cloudflare → Workers →
    `gestion-camp` → Settings → Domains & Routes → **Add custom domain** (même
-   démarche que la section 11 ; CNAME chez Squarespace si le DNS n'est pas chez
-   Cloudflare).
+   démarche que la section 11).
 2. **Turnstile** : ajouter `emplois.camptremblant.com` aux domaines du widget
    de la section 11 (même clé du site, même secret `TURNSTILE_SECRET`).
 3. `.env.production` : `VITE_HOTE_EMPLOIS=emplois.camptremblant.com` (sur cet

@@ -108,7 +108,7 @@ async function lireReglages(): Promise<Reglages> {
     modele: v.modele || 'claude-sonnet-5-5',
     effort: v.effort || 'medium',
     destinataires: Array.isArray(v.destinataires) ? v.destinataires.filter((x: unknown) => typeof x === 'string' && x.includes('@')) : [],
-    url_app: v.url_app || 'https://gestion-camp.maxime-0f5.workers.dev/vigie',
+    url_app: v.url_app || 'https://admin.camptremblant.com/vigie',
     consignes: v.consignes ?? '',
   }
 }
