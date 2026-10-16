@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
+import { CourrielCopiable } from '@/lib/CourrielCopiable'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
@@ -300,9 +301,7 @@ function ClientLecture({ r, demandeAValider, relier }: { r: Reservation; demande
           <>
             <dt className="text-pierre-500">Direction</dt>
             <dd className="truncate">
-              <a className="text-foret-700 hover:underline" href={`mailto:${r.courriel_direction}`}>
-                {r.courriel_direction}
-              </a>
+              <CourrielCopiable courriel={r.courriel_direction} className="text-foret-700 hover:underline" />
             </dd>
           </>
         )}
@@ -340,9 +339,7 @@ function Personne({
             {contact.fonction && <span className="font-normal text-pierre-500"> · {contact.fonction}</span>}
           </p>
           {contact.courriel && (
-            <a className="block truncate text-foret-700 hover:underline" href={`mailto:${contact.courriel}`}>
-              {contact.courriel}
-            </a>
+            <CourrielCopiable courriel={contact.courriel} className="text-foret-700 hover:underline" />
           )}
           {contact.telephone && (
             <a className="block text-foret-700 hover:underline" href={`tel:${contact.telephone.replace(/[^\d+]/g, '')}`}>
