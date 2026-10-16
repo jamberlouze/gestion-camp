@@ -288,6 +288,7 @@ select 'vehicules:' || v.id, m.dossier, m.nom
 from vehicules.vehicules v
 join (values
   ('spécial', '1F5O19903uSfwbHRRYx2xLUQ3Q5v9h5OV', 'Minotour SPÉCIAL'),
-  ('teryx noir', '1J8NzlwzUn71W12eWummGPNDoze4DIgbK', 'Tyrex Noir')
+  ('teryx noir', '1J8NzlwzUn71W12eWummGPNDoze4DIgbK', 'Tyrex Noir'),
+  ('fisher price', '1WGhaJb4p5KqJUyr11jZIt5QXk3AnpfFe', '4 roues')
 ) as m (surnom, dossier, nom) on lower(btrim(v.surnom)) = m.surnom
 on conflict (cle) do nothing;

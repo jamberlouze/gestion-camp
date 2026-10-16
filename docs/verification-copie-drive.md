@@ -15,7 +15,7 @@ Corrigé en chemin :
 - [x] `anon` et `authenticated` ne peuvent pas appeler `drive_a_copier` ni `drive_noter` (« permission denied ») ; tables lisibles par les admins seulement.
 - [x] Noms : PDF = son nom d'origine ; photo sans nom = « Assurance 2026-10-16.jpg », « Photo 2026-10-16.jpg » ; Réservations = « Contrat 27-G-055 signé.pdf ».
 - [x] Dossiers : véhicule › rubrique (Immatriculation, Assurance, Inspections, Autres documents) ; remorque sous « Remorques » ; Bâtiments › bâtiment › « Panneau B » / « Valve – … » ; RH › « Dossiers d'employés (copies de l'app) » › « Nom, Prénom » ; Réservations › « 2026-27 » › « 27-G-045 – Dominique Cottereau ».
-- [x] Pré-reliés : Spécial → « Minotour SPÉCIAL », Teryx Noir → « Tyrex Noir ».
+- [x] Pré-reliés : Spécial → « Minotour SPÉCIAL », Teryx Noir → « Tyrex Noir », Fisher price → « 4 roues » (confirmé par Maxime).
 - [x] Portrait RH (genre « photo ») pas copié.
 
 ## Worker
@@ -32,7 +32,6 @@ Corrigé en chemin :
 - 3 documents par passage (forfait gratuit de Cloudflare : 50 appels par passage, partagés avec le reste du cron) : 12 par heure.
 - Fichiers des Bâtiments copiés même quand ce sont des photos (ce sont les pièces jointes des panneaux et valves, pas une photo décorative).
 - Les documents déjà dans l'app sont copiés aussi (au rythme ci-dessus).
-- **Fisher price** : pas relié au dossier « 4 roues » (pas sûr que ce soit lui) → un dossier « Fisher price » sera créé. À Maxime de dire si « 4 roues » est Fisher price.
 
 ## Avant la mise en ligne
 
