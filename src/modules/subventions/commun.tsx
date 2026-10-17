@@ -201,6 +201,23 @@ export function Section({ titre, action, children }: { titre: string; action?: R
  * Notes internes d'une subvention : visibles par tous les utilisateurs du
  * module ; chacun modifie ou supprime seulement les siennes.
  */
+/** Notes d'une subvention en lecture seule (carte en attente, fenêtre « Mettre en attente »). */
+export function NotesLues({ notes }: { notes: Note[] }) {
+  const profils = useProfils().data
+  return (
+    <ul className="space-y-1.5">
+      {notes.map((n) => (
+        <li key={n.id} className="text-sm">
+          <span className="text-xs text-pierre-500">
+            <b className="font-medium text-pierre-700">{nomPersonne(profils, n.author_id)}</b> · {moment(n.created_at)}
+          </span>
+          <p className="whitespace-pre-wrap">{n.body}</p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function FilNotes({ grantId }: { grantId: string }) {
   const { session } = useAuth()
   const moi = session?.user.id ?? null
