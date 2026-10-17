@@ -137,8 +137,8 @@ describe('mise à jour ciblée : lecture de la réponse', () => {
 
 describe('prompts', () => {
   const groupe = [
-    { name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL' },
-    { name: 'Trembloc', legal_status: null },
+    { id: 'b', name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL' },
+    { id: 't', name: 'Trembloc', legal_status: null },
   ]
 
   it('recherche : groupe, priorité salariale, critères, règles, programmes connus', () => {
@@ -147,7 +147,10 @@ describe('prompts', () => {
       groupe,
       consignes: '',
       regles: null,
-      connus: [{ program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'rejete', program_key: 'eec', discovered_fy: 2027 }],
+      connus: [
+        { program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'rejete', program_key: 'eec', discovered_fy: 2027, company_ids: ['b', 't'] },
+        { program_name: 'PADAT', source_url: null, status: 'nouveau', program_key: 'padat', discovered_fy: 2027, company_ids: ['b'] },
+      ],
       aujourdhui: 'samedi 3 octobre 2026',
     })
     assert.match(p, /pour Trembloc \(statut juridique non précisé/)
@@ -157,7 +160,11 @@ describe('prompts', () => {
     assert.doesNotMatch(p, /Consignes de la direction/)
     assert.match(p, /Bloc extérieur/)
     assert.match(p, /Aucune règle apprise/)
-    assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| rejetée \| eec \| 2026-27/)
+    assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| rejetée \| eec \| 2026-27 \| Base de Plein Air Mont-Tremblant, Trembloc\n/)
+    assert.match(p, /- PADAT \| sans adresse \| nouvelle \| padat \| 2026-27 \| Base de Plein Air Mont-Tremblant\n/)
+    // Un programme connu pour une autre entreprise : reproposé avec la même clé, ajouté à sa fiche.
+    assert.match(p, /Ne repropose pas un programme déjà connu pour Trembloc\./)
+    assert.match(p, /même program_key et la même adresse/)
     assert.match(p, /Réponds uniquement avec un tableau JSON/)
   })
 
@@ -220,7 +227,7 @@ describe('courriel', () => {
   it('rappel avec nouveautés, erreur et lien', () => {
     const r = construireRappel({
       entreprises,
-      nouvelles: [{ program_name: 'EÉC <2027>', grant_type: 'salarial', target_company_id: 'b', potential_amount_max: 50000, deadline_date: '2027-01-10' }],
+      nouvelles: [{ program_name: 'EÉC <2027>', grant_type: 'salarial', company_ids: ['b'], potential_amount_max: 50000, deadline_date: '2027-01-10' }],
       erreurs: [{ company_id: 't', error: 'Claude a refusé' }],
       lien: 'https://app.test/subventions',
     })
@@ -354,6 +361,7 @@ function fauxReseau(scenario = {}) {
       if (chemin === 'grant_reporting_steps') return reponseJson(scenario.etapes ?? [])
       if (chemin === 'grant_calendar_events') return reponseJson(scenario.evenements ?? [])
       if (chemin === 'grants') return reponseJson(scenario.grants ?? [])
+      if (chemin === 'grant_applications') return reponseJson(scenario.suivis ?? [])
       if (chemin === 'grant_search_runs') return reponseJson(scenario.runs ?? [])
       if (chemin === 'grant_digests') return reponseJson(scenario.digests ?? [])
     }
@@ -567,40 +575,44 @@ describe('agenda Google « Subventions »', () => {
     open_date: '2026-11-01',
     deadline_date: '2027-02-01',
     source_url: 'https://x.ca',
-    target_company_id: 'c1',
-    applicant_company_id: null,
     potential_amount_min: null,
     potential_amount_max: 12000,
-    amount_granted: null,
     ...modif,
   })
+  const suivi = (modif = {}) => ({ id: 'a1', grant_id: 'g1', company_id: 'c1', status: 'en_cours', amount_granted: null, ...modif })
   const options = { entreprise: (id) => ({ c1: 'GBPA+', c2: 'Opikawa' })[id], lien: (id) => `https://app.test/subventions/fiche/${id}`, depuis: '2026-10-01' }
 
   it('retenue : ouverture et date limite, journée entière, sans bloquer le temps ; rien d’avant la mise en service', () => {
-    const v = evenementsVoulus([g()], [], options)
+    const v = evenementsVoulus([g()], [suivi()], [], options)
     assert.deepEqual(v.map((e) => [e.cle, e.date]), [['ouverture:g1', '2026-11-01'], ['fermeture:g1', '2027-02-01']])
     assert.equal(v[1].evenement.summary, 'Date limite · JCTDLO (GBPA+)')
     assert.deepEqual([v[1].evenement.start.date, v[1].evenement.end.date, v[1].evenement.transparency], ['2027-02-01', '2027-02-02', 'transparent'])
     assert.match(v[1].evenement.description, /jusqu'à 12\s000 \$\nPage officielle : https:\/\/x.ca\nFiche : https:\/\/app.test\/subventions\/fiche\/g1/)
-    assert.deepEqual(evenementsVoulus([g({ open_date: '2026-09-15' })], [], options).map((e) => e.genre), ['fermeture'])
+    assert.deepEqual(evenementsVoulus([g({ open_date: '2026-09-15' })], [suivi()], [], options).map((e) => e.genre), ['fermeture'])
+    // Plusieurs compagnies déposent : toutes dans le titre, sauf celle refusée par l'organisme.
+    const plusieurs = [suivi(), suivi({ id: 'a2', company_id: 'c2' }), suivi({ id: 'a3', company_id: 'c3', status: 'refuse' })]
+    assert.equal(evenementsVoulus([g()], plusieurs, [], options)[1].evenement.summary, 'Date limite · JCTDLO (GBPA+, Opikawa)')
   })
 
   it('obtenue : aussi les échéances de reddition pas encore faites ; autres statuts : rien', () => {
     const etapes = [
-      { id: 'e1', grant_id: 'g1', description: 'Rapport final', due_date: '2027-10-15', status: 'a_faire' },
-      { id: 'e2', grant_id: 'g1', description: 'Talons de paie', due_date: '2027-09-01', status: 'complete' },
-      { id: 'e3', grant_id: 'g1', description: 'Sans date', due_date: null, status: 'a_faire' },
+      { id: 'e1', application_id: 'a2', description: 'Rapport final', due_date: '2027-10-15', status: 'a_faire' },
+      { id: 'e2', application_id: 'a2', description: 'Talons de paie', due_date: '2027-09-01', status: 'complete' },
+      { id: 'e3', application_id: 'a2', description: 'Sans date', due_date: null, status: 'a_faire' },
+      { id: 'e4', application_id: 'a1', description: 'Rapport de GBPA+', due_date: '2027-10-15', status: 'a_faire' },
     ]
-    const v = evenementsVoulus([g({ status: 'obtenu', applicant_company_id: 'c2', amount_granted: 9000 })], etapes, options)
+    // Opikawa a obtenu, GBPA+ attend encore : seules les étapes de la ligne obtenue vont dans l'agenda.
+    const suivis = [suivi(), suivi({ id: 'a2', company_id: 'c2', status: 'obtenu', amount_granted: 9000 })]
+    const v = evenementsVoulus([g()], suivis, etapes, options)
     assert.deepEqual(v.map((e) => e.cle), ['ouverture:g1', 'fermeture:g1', 'reddition:e1'])
     assert.equal(v[2].evenement.summary, 'Reddition · Rapport final — JCTDLO (Opikawa)')
     assert.match(v[2].evenement.description, /Accordé : 9\s000 \$/)
-    assert.deepEqual(evenementsVoulus([g()], etapes, options).map((e) => e.genre), ['ouverture', 'fermeture'])
-    for (const status of ['nouveau', 'a_valider', 'rejete', 'refuse', 'expire']) assert.equal(evenementsVoulus([g({ status })], etapes, options).length, 0)
+    assert.deepEqual(evenementsVoulus([g()], [suivi()], etapes, options).map((e) => e.genre), ['ouverture', 'fermeture'])
+    for (const status of ['nouveau', 'a_valider', 'rejete', 'refuse', 'expire']) assert.equal(evenementsVoulus([g({ status })], suivis, etapes, options).length, 0)
   })
 
   it('actions : créer, modifier si le contenu change, déplacer d’agenda, retirer ce qui n’est plus voulu', () => {
-    const [ouverture, fermeture] = evenementsVoulus([g()], [], options)
+    const [ouverture, fermeture] = evenementsVoulus([g()], [suivi()], [], options)
     const lignes = [
       { event_key: 'ouverture:g1', grant_id: 'g1', calendar_id: 'cal', google_id: 'go', content: JSON.stringify(ouverture.evenement) },
       { event_key: 'fermeture:g1', grant_id: 'g1', calendar_id: 'cal', google_id: 'gf', content: 'ancien' },
@@ -621,7 +633,7 @@ describe('agenda Google « Subventions »', () => {
     assert.deepEqual(await synchroniserAgenda(ENV), { actif: false, mode: 'non_configure', faites: 0, restantes: 0 })
     assert.equal(appels.inserts.length, 0)
 
-    appels = fauxReseau({ agenda: { actif: true, calendrier: 'essai-subventions', depuis: '2026-10-01' }, grants: [g()] })
+    appels = fauxReseau({ agenda: { actif: true, calendrier: 'essai-subventions', depuis: '2026-10-01' }, grants: [g()], suivis: [suivi()] })
     const local = { ...ENV, SUPABASE_URL: 'http://127.0.0.1:54321' }
     globalThis.fetch = ((f) => (entree, init) => f(String(entree).replace('http://127.0.0.1:54321', 'https://base.test'), init))(globalThis.fetch)
     const r = await synchroniserAgenda(local, { grantId: 'g1' })
@@ -636,11 +648,13 @@ describe('agenda Google « Subventions »', () => {
 
   it('synchro Google : crée, remplace, retire dans l’agenda réglé ; erreur gardée sur la ligne', async () => {
     const env = { ...ENV, SUBVENTIONS_AGENDA_REFRESH_TOKEN: 'refresh-agenda' }
-    const subvention = g({ target_company_id: ENTREPRISE.id })
-    const [ouverture] = evenementsVoulus([subvention], [], { ...options, entreprise: () => ENTREPRISE.name })
+    const subvention = g()
+    const ligne = suivi({ company_id: ENTREPRISE.id })
+    const [ouverture] = evenementsVoulus([subvention], [ligne], [], { ...options, entreprise: () => ENTREPRISE.name })
     const appels = fauxReseau({
       agenda: { actif: true, calendrier: 'sub@group.calendar.google.com' },
       grants: [subvention],
+      suivis: [ligne],
       evenements: [
         { event_key: 'ouverture:g1', grant_id: 'g1', calendar_id: 'sub@group.calendar.google.com', google_id: 'go', content: JSON.stringify(ouverture.evenement) },
         { event_key: 'fermeture:g1', grant_id: 'g1', calendar_id: 'sub@group.calendar.google.com', google_id: 'gf', content: 'ancien' },

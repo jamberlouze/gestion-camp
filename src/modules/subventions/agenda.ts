@@ -3,14 +3,16 @@
 // créer, changer, déplacer ou retirer. Fichier pur : le Worker s'en sert
 // (worker/subventions/agenda.js) et la fiche pour afficher l'état.
 //
-// - Retenue (en cours) ou obtenue : sa date d'ouverture et sa date limite.
-// - Obtenue : aussi les échéances de reddition de compte pas encore faites.
-// - Autre statut (rejetée, refusée, expirée, remise en nouvelle…) : rien,
+// - Retenue (en cours) ou obtenue : sa date d'ouverture et sa date limite,
+//   avec les compagnies qui déposent (lignes de suivi pas refusées).
+// - Ligne de suivi obtenue : aussi ses échéances de reddition de compte pas
+//   encore faites.
+// - Autre statut (rejetée, refusée, expirée, remise à valider…) : rien,
 //   ses événements sont retirés.
 // Journée entière, sans bloquer le temps ; rien avant `depuis` (mise en
 // service), pour ne pas remplir l'agenda de dates passées.
 
-import type { Etape, Statut, Subvention } from './types'
+import type { Etape, Statut, Subvention, Suivi } from './types'
 
 export const STATUTS_AGENDA: Statut[] = ['en_cours', 'obtenu']
 
@@ -59,25 +61,17 @@ export type ActionAgenda =
 
 type S = Pick<
   Subvention,
-  | 'id'
-  | 'program_name'
-  | 'status'
-  | 'open_date'
-  | 'deadline_date'
-  | 'source_url'
-  | 'target_company_id'
-  | 'applicant_company_id'
-  | 'potential_amount_min'
-  | 'potential_amount_max'
-  | 'amount_granted'
+  'id' | 'program_name' | 'status' | 'open_date' | 'deadline_date' | 'source_url' | 'potential_amount_min' | 'potential_amount_max'
 >
-type E = Pick<Etape, 'id' | 'grant_id' | 'description' | 'due_date' | 'status'>
+type L = Pick<Suivi, 'id' | 'grant_id' | 'company_id' | 'status' | 'amount_granted'>
+type E = Pick<Etape, 'id' | 'application_id' | 'description' | 'due_date' | 'status'>
 
 const lendemain = (jour: string) => new Date(Date.parse(`${jour}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
 
 const argent = (n: number) => `${Math.round(n).toLocaleString('fr-CA')} $`
-function montants(g: S) {
-  if (g.amount_granted != null) return `Accordé : ${argent(Number(g.amount_granted))}`
+function montants(g: S, lignes: L[]) {
+  const accordes = lignes.filter((l) => l.amount_granted != null)
+  if (accordes.length) return `Accordé : ${argent(accordes.reduce((t, l) => t + Number(l.amount_granted), 0))}`
   const { potential_amount_min: min, potential_amount_max: max } = g
   if (min != null && max != null && Number(min) !== Number(max)) return `Montant potentiel : ${argent(Number(min))} à ${argent(Number(max))}`
   if (max != null) return `Montant potentiel : jusqu'à ${argent(Number(max))}`
@@ -96,32 +90,39 @@ function evenement(titre: string, jour: string, lignes: (string | null)[]): Even
 }
 
 /**
- * Événements voulus pour ces subventions et leurs étapes. `entreprise` donne
- * le nom de l'entreprise (celle qui dépose, sinon celle pour qui elle a été
- * trouvée) ; `lien` l'adresse de la fiche dans l'app.
+ * Événements voulus pour ces subventions, leurs lignes de suivi et leurs
+ * étapes. `entreprise` donne le nom d'une compagnie ; `lien` l'adresse de la
+ * fiche dans l'app.
  */
 export function evenementsVoulus(
   subventions: S[],
+  suivis: L[],
   etapes: E[],
   { entreprise, lien, depuis }: { entreprise: (id: string) => string | undefined; lien: (id: string) => string; depuis: string },
 ): EvenementVoulu[] {
   const voulus: EvenementVoulu[] = []
   for (const g of subventions) {
     if (!STATUTS_AGENDA.includes(g.status)) continue
-    const nom = entreprise(g.applicant_company_id ?? g.target_company_id)
-    const suffixe = nom ? ` (${nom})` : ''
-    const pied = [montants(g), g.source_url ? `Page officielle : ${g.source_url}` : null, `Fiche : ${lien(g.id)}`]
-    const ajouter = (genre: GenreEvenement, cle: string, jour: string | null, titre: string, lignes: (string | null)[]) => {
-      if (jour && jour >= depuis) voulus.push({ cle, genre, grant_id: g.id, date: jour, evenement: evenement(titre, jour, lignes) })
+    const lignes = suivis.filter((l) => l.grant_id === g.id && l.status !== 'refuse')
+    const noms = lignes.map((l) => entreprise(l.company_id)).filter(Boolean)
+    const suffixe = noms.length ? ` (${noms.join(', ')})` : ''
+    const pied = (avec: L[]) => [montants(g, avec), g.source_url ? `Page officielle : ${g.source_url}` : null, `Fiche : ${lien(g.id)}`]
+    const ajouter = (genre: GenreEvenement, cle: string, jour: string | null, titre: string, texte: (string | null)[]) => {
+      if (jour && jour >= depuis) voulus.push({ cle, genre, grant_id: g.id, date: jour, evenement: evenement(titre, jour, texte) })
     }
-    ajouter('ouverture', `ouverture:${g.id}`, g.open_date, `Ouverture · ${g.program_name}${suffixe}`, ['Ouverture des demandes.', ...pied])
-    ajouter('fermeture', `fermeture:${g.id}`, g.deadline_date, `Date limite · ${g.program_name}${suffixe}`, ['Date limite pour déposer la demande.', ...pied])
-    if (g.status === 'obtenu') {
+    ajouter('ouverture', `ouverture:${g.id}`, g.open_date, `Ouverture · ${g.program_name}${suffixe}`, ['Ouverture des demandes.', ...pied(lignes)])
+    ajouter('fermeture', `fermeture:${g.id}`, g.deadline_date, `Date limite · ${g.program_name}${suffixe}`, [
+      'Date limite pour déposer la demande.',
+      ...pied(lignes),
+    ])
+    for (const l of lignes) {
+      if (l.status !== 'obtenu') continue
+      const nom = entreprise(l.company_id)
       for (const e of etapes) {
-        if (e.grant_id !== g.id || e.status === 'complete') continue
-        ajouter('reddition', `reddition:${e.id}`, e.due_date, `Reddition · ${e.description} — ${g.program_name}${suffixe}`, [
+        if (e.application_id !== l.id || e.status === 'complete') continue
+        ajouter('reddition', `reddition:${e.id}`, e.due_date, `Reddition · ${e.description} — ${g.program_name}${nom ? ` (${nom})` : ''}`, [
           'Échéance de reddition de compte.',
-          ...pied,
+          ...pied([l]),
         ])
       }
     }

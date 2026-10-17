@@ -6,13 +6,15 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { etatEvenement, evenementsVoulus, REGLAGE_AGENDA_DEFAUT, type ReglageAgenda } from './agenda'
-import { ChampDate, ChampMontant, FilNotes, LienOfficiel, PastilleStatut, Section, ZoneTexte } from './commun'
+import { ChampDate, ChampMontant, ChoixCompagnies, FilNotes, LienOfficiel, PastilleStatut, PucesCompagnies, Section, ZoneTexte } from './commun'
 import {
-  copierEtapes,
   ecrireAgendaPlusTard,
+  reprendreEtapes,
+  useCompagnies,
   useDeciderProposition,
   useEnregistrer,
   useEntreprises,
@@ -24,9 +26,11 @@ import {
   usePropositions,
   useReglages,
   useSubventions,
+  useSuivis,
   useSupprimer,
 } from './donnees'
 import {
+  aDecider,
   anneeFiscaleCourante,
   anneeFiscaleProposee,
   argent,
@@ -41,25 +45,26 @@ import {
   montantsPotentiels,
   moment,
   nomPersonne,
-  ORDRE_STATUTS,
   periode,
   STATUTS,
   STATUTS_ETAPE,
+  STATUTS_SUIVI,
   TYPES,
   valeurChamp,
 } from './outils'
-import type { Entreprise, Etape, Heures, Proposition, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
+import type { Entreprise, Etape, Heures, Proposition, StatutEtape, StatutSuivi, Subvention, Suivi, TypeSubvention } from './types'
 import { DialogueRejeter, DialogueValider } from './Validation'
 
 export function Fiche() {
   const { id } = useParams()
   const subventions = useSubventions()
   const entreprises = useEntreprises()
+  const suivis = useSuivis()
   const g = subventions.data?.find((x) => x.id === id)
 
-  const erreur = subventions.error ?? entreprises.error
+  const erreur = subventions.error ?? entreprises.error ?? suivis.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
-  if (!subventions.data || !entreprises.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  if (!subventions.data || !entreprises.data || !suivis.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
   if (!g)
     return (
       <p className="py-8 text-center text-sm text-pierre-500">
@@ -69,23 +74,28 @@ export function Fiche() {
         </Link>
       </p>
     )
-  return <ContenuFiche key={g.id} g={g} toutes={subventions.data} entreprises={entreprises.data} />
+  return <ContenuFiche key={g.id} g={g} toutes={subventions.data} suivisTous={suivis.data} entreprises={entreprises.data} />
 }
 
-function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subvention[]; entreprises: Entreprise[] }) {
+function ContenuFiche({
+  g,
+  toutes,
+  suivisTous,
+  entreprises,
+}: {
+  g: Subvention
+  toutes: Subvention[]
+  suivisTous: Suivi[]
+  entreprises: Entreprise[]
+}) {
   const navigate = useNavigate()
   const enregistrer = useEnregistrer<Subvention>('grants')
   const supprimer = useSupprimer('grants')
   const maj = (champs: Partial<Subvention>) => enregistrer.mutate({ id: g.id, ...champs })
   const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
   const [modifier, setModifier] = useState(false)
-  const aDecider = g.status === 'nouveau' || g.status === 'a_valider'
-  useEcrireAgenda(g)
-
-  const changerStatut = (status: Statut) => {
-    // Obtenue sans date d'octroi : aujourd'hui (rattache la subvention à l'année fiscale).
-    maj(status === 'obtenu' && !g.granted_at ? { status, granted_at: aujourdhui() } : { status })
-  }
+  const suivis = useMemo(() => suivisTous.filter((l) => l.grant_id === g.id), [suivisTous, g.id])
+  useEcrireAgenda(g, suivis)
 
   const precedente = g.previous_grant_id ? toutes.find((x) => x.id === g.previous_grant_id) : null
   const suivantes = toutes.filter((x) => x.previous_grant_id === g.id)
@@ -107,15 +117,16 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
           />
           <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-sm text-pierre-500">
             <PastilleStatut statut={g.status} />
+            <PucesCompagnies ids={g.company_ids} />
             <span>
               {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)} ·
             </span>
-            <ChoixAnneeFiscale g={g} maj={maj} />
+            <ChoixAnneeFiscale g={g} suivis={suivis} maj={maj} />
             <LienOfficiel url={g.source_url} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {aDecider ? (
+          {aDecider(g) ? (
             <>
               <button className={ui.bouton} onClick={() => setDialogue('valider')}>
                 Retenir…
@@ -125,18 +136,16 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
               </button>
             </>
           ) : (
-            <select
-              aria-label="Statut"
-              className={`${champ} w-auto`}
-              value={g.status}
-              onChange={(e) => changerStatut(e.target.value as Statut)}
-            >
-              {ORDRE_STATUTS.filter((s) => s !== 'rejete' || g.status === 'rejete').map((s) => (
-                <option key={s} value={s}>
-                  {s === 'nouveau' ? 'Nouvelle (à revalider)' : STATUTS[s].libelle}
-                </option>
-              ))}
-            </select>
+            !suivis.length && (
+              <>
+                <button className={ui.boutonSecondaire} onClick={() => maj({ status: 'nouveau' })}>
+                  Remettre à valider
+                </button>
+                <button className={ui.bouton} onClick={() => setDialogue('valider')}>
+                  Retenir…
+                </button>
+              </>
+            )
           )}
           <BoutonSupprimer
             onClick={async () => {
@@ -144,7 +153,7 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
                 await confirmer({
                   titre: 'Supprimer cette subvention ?',
                   message:
-                    'Ses notes, heures, décisions, étapes de reddition de compte et attributions salariales seront supprimées, et ses dates retirées de l’agenda. Pour l’écarter seulement, rejetez-la : Claude ne la reproposera pas.',
+                    'Ses notes, heures, décisions et lignes de suivi (montants, étapes de reddition de compte, attributions salariales) seront supprimées, et ses dates retirées de l’agenda. Pour l’écarter seulement, rejetez-la : Claude ne la reproposera pas.',
                 })
               ) {
                 supprimer.mutate(g.id, { onSuccess: () => navigate('/subventions', { replace: true }) })
@@ -167,53 +176,52 @@ function ContenuFiche({ g, toutes, entreprises }: { g: Subvention; toutes: Subve
         }
       >
         <Propositions g={g} />
-        {modifier ? <InfosProgramme g={g} entreprises={entreprises} maj={maj} /> : <ApercuProgramme g={g} entreprises={entreprises} />}
-        <EtatAgenda g={g} entreprises={entreprises} />
+        {modifier ? (
+          <InfosProgramme g={g} suivis={suivis} entreprises={entreprises} maj={maj} />
+        ) : (
+          <ApercuProgramme g={g} />
+        )}
+        <EtatAgenda g={g} suivis={suivis} entreprises={entreprises} />
       </Section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section titre="Suivi financier">
-          <SuiviFinancier g={g} maj={maj} />
-        </Section>
-        <Section titre="Heures investies">
-          <HeuresInvesties g={g} />
-        </Section>
-      </div>
-
-      <Section titre="Reddition de compte">
-        <Reddition g={g} toutes={toutes} entreprises={entreprises} />
+      <Section titre="Suivi par compagnie">
+        <SuiviParCompagnie g={g} suivis={suivis} toutes={toutes} suivisTous={suivisTous} entreprises={entreprises} retenir={() => setDialogue('valider')} />
       </Section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Section titre="Notes internes">
           <FilNotes grantId={g.id} />
         </Section>
-        <Section titre="Décisions et récurrence">
-          <Decisions g={g} />
-          {(precedente || suivantes.length > 0) && (
-            <ul className="mt-3 space-y-1 border-t border-pierre-100 pt-3 text-sm">
-              {precedente && (
-                <li>
-                  Édition précédente :{' '}
-                  <Link className="text-foret-700 underline" to={`/subventions/fiche/${precedente.id}`}>
-                    {precedente.program_name}
-                  </Link>{' '}
-                  ({STATUTS[precedente.status].libelle.toLowerCase()}, {libelleAnneeFiscale(precedente.fiscal_year)})
-                </li>
-              )}
-              {suivantes.map((s) => (
-                <li key={s.id}>
-                  Édition suivante :{' '}
-                  <Link className="text-foret-700 underline" to={`/subventions/fiche/${s.id}`}>
-                    {s.program_name}
-                  </Link>{' '}
-                  ({libelleAnneeFiscale(s.fiscal_year)})
-                </li>
-              ))}
-            </ul>
-          )}
+        <Section titre="Heures investies">
+          <HeuresInvesties g={g} suivis={suivis} />
         </Section>
       </div>
+
+      <Section titre="Décisions et récurrence">
+        <Decisions g={g} />
+        {(precedente || suivantes.length > 0) && (
+          <ul className="mt-3 space-y-1 border-t border-pierre-100 pt-3 text-sm">
+            {precedente && (
+              <li>
+                Édition précédente :{' '}
+                <Link className="text-foret-700 underline" to={`/subventions/fiche/${precedente.id}`}>
+                  {precedente.program_name}
+                </Link>{' '}
+                ({STATUTS[precedente.status].libelle.toLowerCase()}, {libelleAnneeFiscale(precedente.fiscal_year)})
+              </li>
+            )}
+            {suivantes.map((x) => (
+              <li key={x.id}>
+                Édition suivante :{' '}
+                <Link className="text-foret-700 underline" to={`/subventions/fiche/${x.id}`}>
+                  {x.program_name}
+                </Link>{' '}
+                ({libelleAnneeFiscale(x.fiscal_year)})
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       {dialogue === 'valider' && <DialogueValider g={g} entreprises={entreprises} fermer={() => setDialogue(null)} />}
       {dialogue === 'rejeter' && <DialogueRejeter g={g} fermer={() => setDialogue(null)} />}
@@ -231,13 +239,10 @@ function Champ({ etiquette, children, large }: { etiquette: string; children: Re
 }
 
 /** Aperçu en lecture seule ; « Modifier » ouvre les champs (InfosProgramme). */
-function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entreprise[] }) {
-  const nom = (id: string | null) => entreprises.find((e) => e.id === id)?.name
+function ApercuProgramme({ g }: { g: Subvention }) {
   const infos: [string, string | null | undefined][] = [
     ['Organisme', g.organisme],
     ['Type', TYPES[g.grant_type]],
-    ['Trouvée pour', nom(g.target_company_id)],
-    ['Entreprise qui dépose', nom(g.applicant_company_id) ?? 'Pas encore décidé'],
     ['Montant potentiel', montantsPotentiels(g)],
     ['Ouverture de la demande', g.open_date && dateCourte(g.open_date)],
     ['Date limite', g.deadline_date && dateCourte(g.deadline_date)],
@@ -275,9 +280,28 @@ function ApercuProgramme({ g, entreprises }: { g: Subvention; entreprises: Entre
   )
 }
 
-function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: Entreprise[]; maj: (c: Partial<Subvention>) => void }) {
+function InfosProgramme({
+  g,
+  suivis,
+  entreprises,
+  maj,
+}: {
+  g: Subvention
+  suivis: Suivi[]
+  entreprises: Entreprise[]
+  maj: (c: Partial<Subvention>) => void
+}) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="sm:col-span-2 lg:col-span-4">
+        <span className={ui.etiquette}>Compagnies</span>
+        <ChoixCompagnies
+          ids={entreprises.map((e) => e.id)}
+          choisies={g.company_ids}
+          verrouillees={suivis.map((l) => l.company_id)}
+          changer={(company_ids) => company_ids.length > 0 && maj({ company_ids })}
+        />
+      </div>
       <Champ etiquette="Organisme">
         <ChampTexte className={ui.champ} valeur={g.organisme ?? ''} enregistrer={(v) => maj({ organisme: v || null })} />
       </Champ>
@@ -286,29 +310,6 @@ function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: E
           {Object.entries(TYPES).map(([id, libelle]) => (
             <option key={id} value={id}>
               {libelle}
-            </option>
-          ))}
-        </select>
-      </Champ>
-      <Champ etiquette="Trouvée pour">
-        <select className={ui.champ} value={g.target_company_id} onChange={(e) => maj({ target_company_id: e.target.value })}>
-          {entreprises.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </select>
-      </Champ>
-      <Champ etiquette="Entreprise qui dépose">
-        <select
-          className={ui.champ}
-          value={g.applicant_company_id ?? ''}
-          onChange={(e) => maj({ applicant_company_id: e.target.value || null })}
-        >
-          <option value="">Pas encore décidé</option>
-          {entreprises.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
             </option>
           ))}
         </select>
@@ -370,8 +371,8 @@ function InfosProgramme({ g, entreprises, maj }: { g: Subvention; entreprises: E
  * Année fiscale de la subvention : proposée (période financée, sinon date
  * limite…), ou choisie à la main.
  */
-function ChoixAnneeFiscale({ g, maj }: { g: Subvention; maj: (c: Partial<Subvention>) => void }) {
-  const proposee = anneeFiscaleProposee(g)
+function ChoixAnneeFiscale({ g, suivis, maj }: { g: Subvention; suivis: Suivi[]; maj: (c: Partial<Subvention>) => void }) {
+  const proposee = anneeFiscaleProposee(g, suivis)
   const courante = anneeFiscaleCourante()
   const debut = Math.min(courante - 3, g.fiscal_year, proposee.annee)
   const fin = Math.max(courante + 2, g.fiscal_year, proposee.annee)
@@ -410,7 +411,7 @@ function useReglageAgenda(): ReglageAgenda {
  * dates, étapes), 1,5 s après le dernier changement ; le cron (15 min)
  * rattrape une panne.
  */
-function useEcrireAgenda(g: Subvention) {
+function useEcrireAgenda(g: Subvention, suivis: Suivi[]) {
   const client = useQueryClient()
   const { actif } = useReglageAgenda()
   const etapes = useEtapes().data
@@ -420,12 +421,10 @@ function useEcrireAgenda(g: Subvention) {
     g.open_date,
     g.deadline_date,
     g.source_url,
-    g.target_company_id,
-    g.applicant_company_id,
     g.potential_amount_min,
     g.potential_amount_max,
-    g.amount_granted,
-    (etapes ?? []).filter((e) => e.grant_id === g.id).map((e) => [e.id, e.description, e.due_date, e.status]),
+    suivis.map((l) => [l.id, l.company_id, l.status, l.amount_granted]),
+    (etapes ?? []).filter((e) => e.grant_id === g.id).map((e) => [e.id, e.application_id, e.description, e.due_date, e.status]),
   ])
   useEffect(() => {
     if (!actif) return
@@ -435,12 +434,12 @@ function useEcrireAgenda(g: Subvention) {
 }
 
 /** Les dates de la subvention dans l'agenda Google « Subventions ». */
-function EtatAgenda({ g, entreprises }: { g: Subvention; entreprises: Entreprise[] }) {
+function EtatAgenda({ g, suivis, entreprises }: { g: Subvention; suivis: Suivi[]; entreprises: Entreprise[] }) {
   const config = useReglageAgenda()
   const lignes = (useEvenementsAgenda().data ?? []).filter((l) => l.grant_id === g.id)
   const etapes = useEtapes().data ?? []
   if (!config.actif || !estRetenue(g)) return null
-  const voulus = evenementsVoulus([g], etapes, {
+  const voulus = evenementsVoulus([g], suivis, etapes, {
     entreprise: (id) => entreprises.find((e) => e.id === id)?.name,
     lien: () => '',
     depuis: config.depuis,
@@ -563,33 +562,196 @@ function Propositions({ g }: { g: Subvention }) {
   )
 }
 
-function SuiviFinancier({ g, maj }: { g: Subvention; maj: (c: Partial<Subvention>) => void }) {
-  const etapes: { titre: string; montant: keyof Subvention; date: keyof Subvention; libelleDate: string }[] = [
-    { titre: 'Demandé', montant: 'amount_requested', date: 'requested_at', libelleDate: 'Date du dépôt' },
-    { titre: 'Accordé', montant: 'amount_granted', date: 'granted_at', libelleDate: "Date de l'octroi" },
-    { titre: 'Reçu', montant: 'amount_received', date: 'received_at', libelleDate: 'Date de réception' },
-  ]
+/**
+ * Une ligne de suivi par compagnie qui dépose (créées en retenant la carte) :
+ * statut, demandé / accordé / reçu, et sa reddition de compte. Le statut de
+ * la carte en est tiré par la base.
+ */
+function SuiviParCompagnie({
+  g,
+  suivis,
+  toutes,
+  suivisTous,
+  entreprises,
+  retenir,
+}: {
+  g: Subvention
+  suivis: Suivi[]
+  toutes: Subvention[]
+  suivisTous: Suivi[]
+  entreprises: Entreprise[]
+  retenir: () => void
+}) {
+  const { de } = useCompagnies()
+  const enregistrer = useEnregistrer<Suivi>('grant_applications')
+  const [ajout, setAjout] = useState('')
+  const lignes = [...suivis].sort((a, b) => de(a.company_id).ordre - de(b.company_id).ordre)
+  const libres = entreprises.filter((e) => !suivis.some((l) => l.company_id === e.id))
+
+  if (!suivis.length)
+    return (
+      <p className="text-sm text-pierre-500">
+        {aDecider(g) ? 'Pas encore retenue' : g.status === 'rejete' ? 'Rejetée' : 'Expirée'} : «{' '}
+        <button className="text-foret-700 underline" onClick={retenir}>
+          Retenir…
+        </button>{' '}
+        » pour cocher les compagnies qui déposent une demande ; chacune a ici son suivi (demandé, accordé, reçu) et sa reddition de
+        compte.
+      </p>
+    )
+
+  const ajouter = async () => {
+    if (!ajout) return
+    try {
+      await enregistrer.mutateAsync({ grant_id: g.id, company_id: ajout })
+      setAjout('')
+    } catch {
+      /* erreur dans le bandeau du module */
+    }
+  }
+
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {etapes.map((e) => (
-        <div key={e.titre} className="space-y-1.5">
-          <p className="text-sm font-medium">{e.titre}</p>
-          <ChampMontant
-            className={ui.champ}
-            aria-label={`Montant ${e.titre.toLowerCase()}`}
-            placeholder="0 $"
-            valeur={g[e.montant] as number | null}
-            enregistrer={(v) => maj({ [e.montant]: v })}
-          />
-          <ChampDate aria-label={e.libelleDate} valeur={g[e.date] as string | null} enregistrer={(v) => maj({ [e.date]: v })} />
-          <p className="text-xs text-pierre-500">{e.libelleDate}</p>
-        </div>
+    <div className="space-y-3">
+      {lignes.map((l) => (
+        <LigneSuivi key={l.id} l={l} g={g} derniere={suivis.length === 1} toutes={toutes} suivisTous={suivisTous} />
       ))}
+      {libres.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Compagnie à ajouter" className={`${champ} w-auto`} value={ajout} onChange={(e) => setAjout(e.target.value)}>
+            <option value="">Ajouter une compagnie qui dépose…</option>
+            {libres.map((e) => (
+              <option key={e.id} value={e.id}>
+                {de(e.id).nom}
+              </option>
+            ))}
+          </select>
+          <button className={ui.boutonSecondaire} disabled={!ajout || enregistrer.isPending} onClick={ajouter}>
+            <IconePlus /> Ajouter
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-function HeuresInvesties({ g }: { g: Subvention }) {
+const CLASSES_SUIVI: Record<StatutSuivi, string> = {
+  en_cours: 'border-violet-300 bg-violet-50 text-violet-800',
+  obtenu: 'border-foret-600 bg-foret-50 text-foret-800',
+  refuse: 'border-red-300 bg-red-50 text-red-800',
+}
+
+function LigneSuivi({
+  l,
+  g,
+  derniere,
+  toutes,
+  suivisTous,
+}: {
+  l: Suivi
+  g: Subvention
+  derniere: boolean
+  toutes: Subvention[]
+  suivisTous: Suivi[]
+}) {
+  const { de } = useCompagnies()
+  const enregistrer = useEnregistrer<Suivi>('grant_applications')
+  const supprimer = useSupprimer('grant_applications')
+  const etapes = (useEtapes().data ?? []).filter((e) => e.application_id === l.id)
+  const [reddition, setReddition] = useState(l.status === 'obtenu' || etapes.length > 0)
+  const majLigne = (champs: Partial<Suivi>) => enregistrer.mutate({ id: l.id, ...champs })
+  const compagnie = de(l.company_id)
+  const faites = etapes.filter((e) => e.status === 'complete').length
+
+  const montants: { titre: string; montant: 'amount_requested' | 'amount_granted' | 'amount_received'; date: 'requested_at' | 'granted_at' | 'received_at'; libelleDate: string }[] = [
+    { titre: 'Demandé', montant: 'amount_requested', date: 'requested_at', libelleDate: 'Date du dépôt' },
+    { titre: 'Accordé', montant: 'amount_granted', date: 'granted_at', libelleDate: "Date de l'octroi" },
+    { titre: 'Reçu', montant: 'amount_received', date: 'received_at', libelleDate: 'Date de réception' },
+  ]
+
+  return (
+    <div className="rounded-lg border border-pierre-200 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <PuceCompagnie compagnie={compagnie} className="text-sm" />
+        <select
+          aria-label={`Statut de la demande de ${compagnie.nom}`}
+          className={`fleche-serree rounded-lg border px-2 py-1 text-xs font-medium ${CLASSES_SUIVI[l.status]}`}
+          value={l.status}
+          onChange={(e) => {
+            const status = e.target.value as StatutSuivi
+            // Obtenue sans date d'octroi : aujourd'hui (rattache la subvention à l'année fiscale).
+            majLigne(status === 'obtenu' && !l.granted_at ? { status, granted_at: aujourdhui() } : { status })
+          }}
+        >
+          {STATUTS_SUIVI.map((s) => (
+            <option key={s} value={s}>
+              {STATUTS[s].libelle}
+            </option>
+          ))}
+        </select>
+        <button
+          className="ml-auto text-pierre-400 hover:text-red-700"
+          aria-label={`Retirer ${compagnie.nom} du suivi`}
+          title={`Retirer ${compagnie.nom} du suivi`}
+          onClick={async () => {
+            if (
+              await confirmer({
+                titre: `Retirer ${compagnie.nom} du suivi ?`,
+                message: `Ses montants, ses étapes de reddition de compte et ses attributions salariales pour cette subvention seront supprimés.${
+                  derniere ? ' C’était la seule compagnie : la subvention retourne à valider.' : ''
+                }`,
+                libelleOk: 'Retirer',
+                danger: true,
+              })
+            )
+              supprimer.mutate(l.id)
+          }}
+        >
+          <IconeCorbeille />
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        {montants.map((m) => (
+          <div key={m.titre} className="space-y-1.5">
+            <p className="text-sm font-medium">{m.titre}</p>
+            <ChampMontant
+              className={ui.champ}
+              aria-label={`Montant ${m.titre.toLowerCase()} (${compagnie.nom})`}
+              placeholder="0 $"
+              valeur={l[m.montant]}
+              enregistrer={(v) => majLigne({ [m.montant]: v })}
+            />
+            <ChampDate aria-label={`${m.libelleDate} (${compagnie.nom})`} valeur={l[m.date]} enregistrer={(v) => majLigne({ [m.date]: v })} />
+            <p className="text-xs text-pierre-500">{m.libelleDate}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 border-t border-pierre-100 pt-2">
+        <button
+          className="inline-flex items-center gap-1 text-sm font-medium text-pierre-700 hover:text-pierre-900"
+          aria-expanded={reddition}
+          onClick={() => setReddition((o) => !o)}
+        >
+          <IconeChevron className={`size-4 transition-transform ${reddition ? 'rotate-90' : ''}`} />
+          Reddition de compte
+          {etapes.length > 0 && (
+            <span className="font-normal text-pierre-500">
+              ({faites} sur {etapes.length} complétée{faites > 1 ? 's' : ''})
+            </span>
+          )}
+        </button>
+        {reddition && (
+          <div className="mt-2">
+            <Reddition l={l} g={g} etapes={etapes} toutes={toutes} suivisTous={suivisTous} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function HeuresInvesties({ g, suivis }: { g: Subvention; suivis: Suivi[] }) {
   const { session } = useAuth()
   const moi = session?.user.id ?? null
   const profils = useProfils().data
@@ -621,11 +783,16 @@ function HeuresInvesties({ g }: { g: Subvention }) {
     }
   }
 
+  // Toutes les compagnies de la carte : les heures sont notées pour la subvention.
+  const somme = (f: (l: Suivi) => number | null) =>
+    suivis.some((l) => f(l) != null) ? suivis.reduce((t, l) => t + Number(f(l) ?? 0), 0) : null
+  const recu = somme((l) => l.amount_received)
+  const accorde = somme((l) => l.amount_granted)
   const retour =
-    total > 0 && g.amount_received != null
-      ? `${argent(g.amount_received / total)} reçus par heure investie`
-      : total > 0 && g.amount_granted != null
-        ? `${argent(g.amount_granted / total)} accordés par heure (rien de reçu pour l’instant)`
+    total > 0 && recu != null
+      ? `${argent(recu / total)} reçus par heure investie`
+      : total > 0 && accorde != null
+        ? `${argent(accorde / total)} accordés par heure (rien de reçu pour l’instant)`
         : null
 
   return (
@@ -693,8 +860,21 @@ function HeuresInvesties({ g }: { g: Subvention }) {
   )
 }
 
-function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subvention[]; entreprises: Entreprise[] }) {
+function Reddition({
+  l,
+  g,
+  etapes: nonTriees,
+  toutes,
+  suivisTous,
+}: {
+  l: Suivi
+  g: Subvention
+  etapes: Etape[]
+  toutes: Subvention[]
+  suivisTous: Suivi[]
+}) {
   const { session } = useAuth()
+  const { de } = useCompagnies()
   const etapesToutes = useEtapes().data
   const enregistrer = useEnregistrer<Etape>('grant_reporting_steps')
   const supprimer = useSupprimer('grant_reporting_steps')
@@ -704,26 +884,28 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
   const [copie, setCopie] = useState<{ etat: 'en_cours' | 'fait' | 'erreur'; message?: string } | null>(null)
 
   const etapes = useMemo(
-    () => (etapesToutes ?? []).filter((e) => e.grant_id === g.id).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
-    [etapesToutes, g.id],
+    () => [...nonTriees].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
+    [nonTriees],
   )
-  // Subventions dont on peut reprendre les étapes : même programme d'abord.
+  // Lignes de suivi dont on peut reprendre les étapes : la même subvention
+  // pour une autre compagnie, puis le même programme, puis les autres.
   const sources = useMemo(() => {
-    const avecEtapes = new Set((etapesToutes ?? []).map((e) => e.grant_id))
-    const memeProgramme = (x: Subvention) =>
-      x.id === g.previous_grant_id || (!!g.program_key && x.program_key === g.program_key)
-    return toutes
-      .filter((x) => x.id !== g.id && avecEtapes.has(x.id))
-      .sort((a, b) => Number(memeProgramme(b)) - Number(memeProgramme(a)) || b.fiscal_year - a.fiscal_year)
-      .map((x) => ({ g: x, suggeree: memeProgramme(x) }))
-  }, [etapesToutes, toutes, g])
-  const nomEntreprise = new Map(entreprises.map((e) => [e.id, e.name]))
+    const avecEtapes = new Set((etapesToutes ?? []).map((e) => e.application_id))
+    const carte = new Map(toutes.map((x) => [x.id, x]))
+    const rang = (x: Subvention) =>
+      x.id === g.id ? 0 : x.id === g.previous_grant_id || (!!g.program_key && x.program_key === g.program_key) ? 1 : 2
+    return suivisTous
+      .filter((x) => x.id !== l.id && avecEtapes.has(x.id) && carte.has(x.grant_id))
+      .map((x) => ({ l: x, g: carte.get(x.grant_id)! }))
+      .sort((a, b) => rang(a.g) - rang(b.g) || b.g.fiscal_year - a.g.fiscal_year)
+      .map((x) => ({ ...x, suggeree: rang(x.g) < 2 }))
+  }, [etapesToutes, toutes, suivisTous, g, l.id])
 
   const ajouter = async () => {
     if (!description.trim()) return
     try {
       await enregistrer.mutateAsync({
-        grant_id: g.id,
+        application_id: l.id,
         description: description.trim(),
         due_date: echeance || null,
         sort_order: (etapes.at(-1)?.sort_order ?? -1) + 1,
@@ -758,7 +940,7 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
     if (!source) return
     setCopie({ etat: 'en_cours' })
     try {
-      const n = await copierEtapes(source, g.id)
+      const n = await reprendreEtapes(source, l.id)
       setCopie({ etat: 'fait', message: `${n} étape${n > 1 ? 's' : ''} reprise${n > 1 ? 's' : ''}.` })
       setSource('')
     } catch (e) {
@@ -766,20 +948,15 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
     }
   }
 
-  const faites = etapes.filter((e) => e.status === 'complete').length
-
   return (
     <div className="space-y-3">
       {etapes.length === 0 ? (
         <p className="text-sm text-pierre-500">
           Aucune étape. Ajoutez ce que l’organisme demande (talons de paie, rapport final, déclaration…), ou reprenez les étapes
-          d’une année précédente.
+          d’une autre compagnie ou d’une année précédente.
         </p>
       ) : (
         <>
-          <p className="text-sm text-pierre-500">
-            {faites} sur {etapes.length} complétée{faites > 1 ? 's' : ''}
-          </p>
           <ul className="divide-y divide-pierre-100">
             {etapes.map((e, i) => {
               const retard = e.status !== 'complete' && e.due_date && e.due_date < aujourdhui()
@@ -865,13 +1042,12 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
       {sources.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-pierre-100 pt-3">
           <span className="text-sm text-pierre-600">Reprendre les étapes de</span>
-          <select aria-label="Subvention source" className={`${champ} w-auto max-w-full`} value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">Choisir une subvention…</option>
-            {sources.map(({ g: x, suggeree }) => (
+          <select aria-label="Étapes à reprendre" className={`${champ} w-auto max-w-full`} value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">Choisir…</option>
+            {sources.map(({ l: x, g: carte, suggeree }) => (
               <option key={x.id} value={x.id}>
                 {suggeree ? '★ ' : ''}
-                {x.program_name} — {nomEntreprise.get(x.applicant_company_id ?? x.target_company_id)} —{' '}
-                {libelleAnneeFiscale(x.fiscal_year)}
+                {carte.program_name} — {de(x.company_id).nom} — {libelleAnneeFiscale(carte.fiscal_year)}
               </option>
             ))}
           </select>
@@ -880,7 +1056,7 @@ function Reddition({ g, toutes, entreprises }: { g: Subvention; toutes: Subventi
           </button>
           {copie?.message && <span className={`text-sm ${copie.etat === 'erreur' ? 'text-red-700' : 'text-foret-700'}`}>{copie.message}</span>}
           {sources.some((s) => s.suggeree) && (
-            <p className="w-full text-xs text-pierre-500">★ même programme (édition précédente ou même clé de programme).</p>
+            <p className="w-full text-xs text-pierre-500">★ même programme (autre compagnie, édition précédente ou même clé de programme).</p>
           )}
         </div>
       )}

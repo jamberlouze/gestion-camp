@@ -123,9 +123,13 @@ restent plausibles pour elle, et concentre-toi sur ce qui correspond à ses acti
  * Prompt de recherche pour une entreprise. Le contexte du groupe vient de
  * la liste des entreprises (rien à tenir à jour à la main) ; la priorité
  * salariale ne vaut que pour une entreprise qui embauche (hires_staff).
+ * Une carte par programme pour tout le groupe : les programmes connus
+ * viennent avec les entreprises de leur carte (`company_ids`, noms tirés du
+ * groupe) ; un programme connu pour une autre entreprise peut être reproposé
+ * avec la même clé, et l'app ajoute l'entreprise à sa carte.
  * @param {{ entreprise: {name: string, legal_status: string|null, specific_criteria: string|null, hires_staff?: boolean},
- *           groupe: {name: string, legal_status: string|null}[], consignes: string, regles: string|null,
- *           connus: {program_name: string, source_url: string|null, status: string, program_key: string|null, discovered_fy: number}[],
+ *           groupe: {id?: string, name: string, legal_status: string|null}[], consignes: string, regles: string|null,
+ *           connus: {program_name: string, source_url: string|null, status: string, program_key: string|null, discovered_fy: number, company_ids?: string[]}[],
  *           aujourdhui: string }} p
  */
 export function invitationRecherche({ entreprise, groupe, consignes, regles, connus, aujourdhui }) {
@@ -133,11 +137,13 @@ export function invitationRecherche({ entreprise, groupe, consignes, regles, con
     entreprise.legal_status?.trim() ||
     'statut juridique non précisé : considère autant les programmes pour OBNL que pour entreprises'
   const membres = groupe.map((e) => `- ${e.name}${e.legal_status?.trim() ? ` (${e.legal_status.trim()})` : ''}`).join('\n')
+  const noms = new Map(groupe.filter((e) => e.id).map((e) => [e.id, e.name]))
+  const pour = (g) => (g.company_ids ?? []).map((id) => noms.get(id)).filter(Boolean).join(', ') || '-'
   const liste = connus.length
     ? connus
         .map(
           (g) =>
-            `- ${g.program_name} | ${g.source_url ?? 'sans adresse'} | ${STATUTS[g.status] ?? g.status} | ${g.program_key ?? '-'} | ${libelleAnneeFiscale(g.discovered_fy)}`,
+            `- ${g.program_name} | ${g.source_url ?? 'sans adresse'} | ${STATUTS[g.status] ?? g.status} | ${g.program_key ?? '-'} | ${libelleAnneeFiscale(g.discovered_fy)} | ${pour(g)}`,
         )
         .join('\n')
     : '(aucun pour l’instant)'
@@ -160,8 +166,13 @@ ${entreprise.specific_criteria?.trim() || '(aucun pour l’instant)'}
 Règles apprises des validations et rejets précédents :
 ${regles?.trim() || 'Aucune règle apprise pour l’instant : la direction n’a encore validé ou rejeté aucune proposition.'}
 
-Programmes déjà connus (ne pas reproposer) — nom | adresse | statut | program_key | année fiscale :
+Programmes déjà connus du groupe (une seule fiche par programme, pour une ou plusieurs entreprises) —
+nom | adresse | statut | program_key | année fiscale | pour :
 ${liste}
+Ne repropose pas un programme déjà connu pour ${entreprise.name}. Un programme connu seulement pour d'autres
+entreprises du groupe (et pas « rejetée ») : repropose-le s'il s'applique aussi à ${entreprise.name}, avec
+exactement le même program_key et la même adresse, et une justification propre à ${entreprise.name} (l'app
+l'ajoute à la fiche existante).
 Seule exception : un programme récurrent « obtenue », « refusée » ou « expirée » une année fiscale
 précédente peut être reproposé si une nouvelle édition (nouvel appel, nouvelle année) est ouverte ou
 annoncée ; garde alors le même program_key.

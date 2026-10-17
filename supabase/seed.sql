@@ -521,10 +521,12 @@ on conflict do nothing;
 
 -- ------------------------------------------------------------
 -- Subventions : agenda Google simulé (« essai-… », jamais Google depuis
--- une base locale), deux subventions de l'année fiscale 2026-27 (une
--- retenue avec une proposition de Claude, une obtenue avec sa reddition),
--- et leur attribution salariale (employés fictifs ci-dessus + un poste à
--- pourvoir).
+-- une base locale), deux subventions de l'année fiscale 2026-27 retenues
+-- pour GBPA+ (une en cours avec une proposition de Claude, une obtenue avec
+-- sa reddition), leur attribution salariale (employés fictifs ci-dessus + un
+-- poste à pourvoir), et une carte à valider trouvée pour trois compagnies.
+-- Une subvention retenue = une ligne de suivi par compagnie qui dépose
+-- (grant_applications) ; son statut en est tiré par la base.
 -- ------------------------------------------------------------
 update subventions.grant_settings
    set value = jsonb_build_object('actif', true, 'calendrier', 'essai-subventions', 'depuis', '2026-10-01')
@@ -532,30 +534,52 @@ update subventions.grant_settings
 
 insert into subventions.grants (id, program_name, organisme, description, source_url, grant_type, status,
   potential_amount_max, open_date, deadline_date, funded_start, funded_end, eligibility_criteria,
-  target_company_id, applicant_company_id, program_key, origin, discovered_fy,
-  amount_requested, requested_at, amount_granted, granted_at)
-select v.id::uuid, v.nom, v.organisme, v.description, v.url, 'salarial', v.statut::subventions.grant_status,
+  company_ids, program_key, origin, discovered_fy)
+select v.id::uuid, v.nom, v.organisme, v.description, v.url, 'salarial', 'nouveau',
        v.max, v.ouverture::date, v.limite::date, v.debut::date, v.fin::date, v.criteres,
-       c.id, c.id, v.cle, 'manuel', 2027,
-       v.demande, v.demande_le::date, v.accorde, v.accorde_le::date
+       array[c.id], v.cle, 'manuel', 2027
   from (values
     ('5b000000-0000-0000-0000-000000000001', 'Jeunesse Canada au travail (essai)', 'Patrimoine canadien',
      'Emplois d''été pour les jeunes dans les organismes du patrimoine et des langues officielles.',
-     'https://www.canada.ca/fr/patrimoine-canadien/services/financement/jeunesse-canada-travail.html', 'en_cours',
+     'https://www.canada.ca/fr/patrimoine-canadien/services/financement/jeunesse-canada-travail.html',
      15000, null, '2027-02-01', '2027-05-03', '2027-08-27', 'Jeunes de 16 à 30 ans, citoyens canadiens ou résidents permanents.',
-     'jeunesse-canada-au-travail', null, null, null, null),
+     'jeunesse-canada-au-travail'),
     ('5b000000-0000-0000-0000-000000000002', 'Emplois d''été Canada 2027 (essai)', 'Emploi et Développement social Canada',
      'Subvention salariale pour des emplois d''été de 6 à 16 semaines.',
-     'https://www.canada.ca/fr/emploi-developpement-social/services/financement/emplois-ete-canada.html', 'obtenu',
+     'https://www.canada.ca/fr/emploi-developpement-social/services/financement/emplois-ete-canada.html',
      50000, '2026-11-15', '2027-01-12', '2027-06-21', '2027-08-27', null,
-     'emplois-ete-canada', 30000, '2027-01-10', 24600, '2027-04-20')
-  ) as v(id, nom, organisme, description, url, statut, max, ouverture, limite, debut, fin, criteres, cle, demande, demande_le, accorde, accorde_le)
+     'emplois-ete-canada')
+  ) as v(id, nom, organisme, description, url, max, ouverture, limite, debut, fin, criteres, cle)
   join subventions.grant_companies c on c.name = 'GBPA+'
 on conflict (id) do nothing;
 
-insert into subventions.grant_reporting_steps (id, grant_id, description, due_date, sort_order) values
-  ('5b000000-0000-0000-0000-000000000011', '5b000000-0000-0000-0000-000000000002', 'Rapport de fin d''emploi de chaque étudiant', '2027-09-30', 0),
-  ('5b000000-0000-0000-0000-000000000012', '5b000000-0000-0000-0000-000000000002', 'Demande de paiement finale', '2027-10-15', 1)
+insert into subventions.grant_applications (id, grant_id, company_id, status, amount_requested, requested_at, amount_granted, granted_at)
+select v.id::uuid, v.grant_id::uuid, c.id, v.statut, v.demande, v.demande_le::date, v.accorde, v.accorde_le::date
+  from (values
+    ('5b000000-0000-0000-0000-000000000041', '5b000000-0000-0000-0000-000000000001', 'en_cours', null, null, null, null),
+    ('5b000000-0000-0000-0000-000000000042', '5b000000-0000-0000-0000-000000000002', 'obtenu', 30000, '2027-01-10', 24600, '2027-04-20')
+  ) as v(id, grant_id, statut, demande, demande_le, accorde, accorde_le)
+  join subventions.grant_companies c on c.name = 'GBPA+'
+on conflict (id) do nothing;
+
+-- Même programme trouvé par Claude pour trois compagnies : une seule carte.
+insert into subventions.grants (id, program_name, organisme, description, source_url, grant_type, status,
+  potential_amount_max, deadline_date, company_ids, program_key, origin, discovered_fy, relevance_justification)
+select '5b000000-0000-0000-0000-000000000003', 'Programme d''appui au développement des attraits touristiques (essai)',
+       'Ministère du Tourisme / Investissement Québec', 'Aide financière aux projets d''attraits touristiques structurants.',
+       'https://www.quebec.ca/tourisme-loisirs-sport/services-industrie-touristique/aide-financiere', 'immobilisation', 'nouveau',
+       5000000, '2026-12-31', array_agg(c.id order by c.sort_order), 'padat', 'claude', 2027,
+       E'GBPA+ : Financement d''infrastructures touristiques pour la base de plein air.\n\n'
+       || E'Opikawa : Marginal, mais pertinent pour un projet d''hébergement.\n\n'
+       || 'Trembloc : Aménagement du site de bloc (sentiers, signalisation).'
+  from subventions.grant_companies c
+ where c.name in ('GBPA+', 'Opikawa', 'Trembloc')
+having count(*) > 0
+on conflict (id) do nothing;
+
+insert into subventions.grant_reporting_steps (id, application_id, description, due_date, sort_order) values
+  ('5b000000-0000-0000-0000-000000000011', '5b000000-0000-0000-0000-000000000042', 'Rapport de fin d''emploi de chaque étudiant', '2027-09-30', 0),
+  ('5b000000-0000-0000-0000-000000000012', '5b000000-0000-0000-0000-000000000042', 'Demande de paiement finale', '2027-10-15', 1)
 on conflict (id) do nothing;
 
 -- Mise à jour ciblée de Claude : une date d'ouverture remplie (champ vide),
@@ -569,15 +593,15 @@ on conflict (id) do nothing;
 update subventions.grants set open_date = '2026-11-02'
  where id = '5b000000-0000-0000-0000-000000000001' and open_date is null;
 
-insert into subventions.grant_salary_lines (id, grant_id, employee_id, free_name, hourly_rate, hours, salary_amount,
+insert into subventions.grant_salary_lines (id, application_id, employee_id, free_name, hourly_rate, hours, salary_amount,
   start_date, end_date, grant_contribution, employer_contribution, note)
-select v.id::uuid, v.grant_id::uuid, e.id, v.libre, v.taux, v.heures, v.montant, v.debut::date, v.fin::date, v.subv, v.empl, v.note
+select v.id::uuid, v.suivi::uuid, e.id, v.libre, v.taux, v.heures, v.montant, v.debut::date, v.fin::date, v.subv, v.empl, v.note
   from (values
-    ('5b000000-0000-0000-0000-000000000031', '5b000000-0000-0000-0000-000000000002', 'Koda', null, 17.50, 280, null, '2027-06-21', '2027-08-27', 4900, null, null),
-    ('5b000000-0000-0000-0000-000000000032', '5b000000-0000-0000-0000-000000000002', 'Moutic', null, null, null, 5600, '2027-06-21', '2027-08-20', 4200, 1400, 'Avec les vacances et les charges.'),
-    ('5b000000-0000-0000-0000-000000000033', '5b000000-0000-0000-0000-000000000002', null, 'Sauveteur no 2 (à pourvoir)', 18.00, 300, null, '2027-06-28', '2027-08-27', 2700, null, null),
-    ('5b000000-0000-0000-0000-000000000034', '5b000000-0000-0000-0000-000000000001', 'Cliff', null, null, null, 12000, '2027-05-03', '2027-08-27', 7000, null, null)
-  ) as v(id, grant_id, surnom, libre, taux, heures, montant, debut, fin, subv, empl, note)
+    ('5b000000-0000-0000-0000-000000000031', '5b000000-0000-0000-0000-000000000042', 'Koda', null, 17.50, 280, null, '2027-06-21', '2027-08-27', 4900, null, null),
+    ('5b000000-0000-0000-0000-000000000032', '5b000000-0000-0000-0000-000000000042', 'Moutic', null, null, null, 5600, '2027-06-21', '2027-08-20', 4200, 1400, 'Avec les vacances et les charges.'),
+    ('5b000000-0000-0000-0000-000000000033', '5b000000-0000-0000-0000-000000000042', null, 'Sauveteur no 2 (à pourvoir)', 18.00, 300, null, '2027-06-28', '2027-08-27', 2700, null, null),
+    ('5b000000-0000-0000-0000-000000000034', '5b000000-0000-0000-0000-000000000041', 'Cliff', null, null, null, 12000, '2027-05-03', '2027-08-27', 7000, null, null)
+  ) as v(id, suivi, surnom, libre, taux, heures, montant, debut, fin, subv, empl, note)
   left join core.employes e on e.surnom = v.surnom
 on conflict (id) do nothing;
 

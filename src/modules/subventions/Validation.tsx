@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
-import { messageErreur, useListe } from '@/lib/donnees'
-import { PuceCompagnie } from '@/lib/PuceCompagnie'
-import type { Entreprise as Compagnie } from '@/lib/types'
+import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType } from './commun'
+import { ChoixCompagnies, FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType, PucesCompagnies } from './commun'
 import { useDecider, useEnregistrer, useEntreprises, useNotes, useSubventions } from './donnees'
 import {
   CATEGORIES,
@@ -23,7 +21,11 @@ import type { CategorieRejet, Entreprise, Subvention, TypeSubvention } from './t
 
 type FiltreStatut = 'tous' | 'nouveau' | 'a_valider'
 
-/** Vue de validation : les subventions nouvelles ou en attente. */
+/**
+ * Vue de validation : les subventions nouvelles ou en attente, une carte par
+ * programme avec ses compagnies ; on la retient (en cochant les compagnies
+ * qui déposent) ou on la rejette une seule fois.
+ */
 export function Validation() {
   const subventions = useSubventions()
   const entreprises = useEntreprises()
@@ -37,7 +39,7 @@ export function Validation() {
   const filtrees = useMemo(
     () =>
       (subventions.data ?? [])
-        .filter((g) => !entreprise || g.target_company_id === entreprise)
+        .filter((g) => !entreprise || g.company_ids.includes(entreprise))
         .filter((g) => !type || g.grant_type === type)
         .filter((g) => correspond(g, recherche)),
     [subventions.data, entreprise, type, recherche],
@@ -52,15 +54,10 @@ export function Validation() {
         .sort((a, b) => b.discovered_at.localeCompare(a.discovered_at))
     : []
 
-  const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre')
   const erreur = subventions.error ?? entreprises.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!subventions.data || !entreprises.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  // Compagnie du référentiel de chaque recherche (pour la couleur de son étiquette).
-  const compagnieDe = new Map(
-    entreprises.data.map((e) => [e.id, (compagnies.data ?? []).find((c) => c.id === e.entreprise_id) ?? { nom: e.name, couleur: null }]),
-  )
   const nbNotes = (id: string) => (notes.data ?? []).filter((n) => n.grant_id === id).length
 
   return (
@@ -114,13 +111,7 @@ export function Validation() {
 
       <div className="space-y-3">
         {liste.map((g) => (
-          <CarteValidation
-            key={g.id}
-            g={g}
-            entreprises={entreprises.data}
-            compagnie={compagnieDe.get(g.target_company_id)}
-            nbNotes={nbNotes(g.id)}
-          />
+          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} nbNotes={nbNotes(g.id)} />
         ))}
       </div>
 
@@ -133,24 +124,21 @@ export function Validation() {
             <p className="text-sm text-pierre-500">Aucune subvention retenue, rejetée ou terminée ne correspond.</p>
           ) : (
             <ul className={`${ui.carte} divide-y divide-pierre-100`}>
-              {dejaDecidees.map((g) => {
-                const compagnie = compagnieDe.get(g.target_company_id)
-                return (
-                  <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
-                    <Link to={`/subventions/fiche/${g.id}`} className="font-medium hover:underline">
-                      {g.program_name}
-                    </Link>
-                    {g.organisme && <span className="text-pierre-500">{g.organisme}</span>}
-                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
-                      {compagnie && <PuceCompagnie compagnie={compagnie} />}
-                      <PastilleStatut statut={g.status} />
-                      <span className="text-xs text-pierre-500">
-                        {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)}
-                      </span>
+              {dejaDecidees.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                  <Link to={`/subventions/fiche/${g.id}`} className="font-medium hover:underline">
+                    {g.program_name}
+                  </Link>
+                  {g.organisme && <span className="text-pierre-500">{g.organisme}</span>}
+                  <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                    <PucesCompagnies ids={g.company_ids} court />
+                    <PastilleStatut statut={g.status} />
+                    <span className="text-xs text-pierre-500">
+                      {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)}
                     </span>
-                  </li>
-                )
-              })}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
         </section>
@@ -161,17 +149,7 @@ export function Validation() {
   )
 }
 
-function CarteValidation({
-  g,
-  entreprises,
-  compagnie,
-  nbNotes,
-}: {
-  g: Subvention
-  entreprises: Entreprise[]
-  compagnie: { nom: string; couleur: string | null } | undefined
-  nbNotes: number
-}) {
+function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entreprises: Entreprise[]; nbNotes: number }) {
   const enregistrer = useEnregistrer<Subvention>('grants')
   const [notesOuvertes, setNotesOuvertes] = useState(false)
   const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
@@ -182,7 +160,7 @@ function CarteValidation({
     <article className={`${ui.carte} p-4`}>
       <div className="flex flex-wrap items-center gap-1.5">
         <PastilleType type={g.grant_type} />
-        {compagnie ? <PuceCompagnie compagnie={compagnie} /> : <Pastille>—</Pastille>}
+        <PucesCompagnies ids={g.company_ids} />
         {g.status === 'a_valider' && <PastilleStatut statut="a_valider" />}
         {g.previous_grant_id && <Pastille classe="bg-sky-50 text-sky-800">Programme récurrent</Pastille>}
         <span className="ml-auto text-xs text-pierre-500">
@@ -222,7 +200,7 @@ function CarteValidation({
           <p className="text-xs font-medium uppercase tracking-wide text-pierre-500">
             {g.origin === 'claude' ? 'Pourquoi Claude la propose' : 'Pertinence'}
           </p>
-          <p className="mt-0.5">{g.relevance_justification}</p>
+          <p className="mt-0.5 whitespace-pre-line">{g.relevance_justification}</p>
         </div>
       )}
 
@@ -270,14 +248,19 @@ function CarteValidation({
 
 export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; entreprises: Entreprise[]; fermer: () => void }) {
   const decider = useDecider()
-  const [demandeur, setDemandeur] = useState(g.applicant_company_id ?? g.target_company_id)
+  // Compagnies de la carte d'abord ; une seule : déjà cochée.
+  const ids = [
+    ...entreprises.filter((e) => g.company_ids.includes(e.id)),
+    ...entreprises.filter((e) => !g.company_ids.includes(e.id)),
+  ].map((e) => e.id)
+  const [compagnies, setCompagnies] = useState<string[]>(g.company_ids.length === 1 ? g.company_ids : [])
   const [commentaire, setCommentaire] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
 
   const valider = async () => {
     setErreur(null)
     try {
-      await decider.mutateAsync({ grant: g.id, decision: 'valide', demandeur, commentaire })
+      await decider.mutateAsync({ grant: g.id, decision: 'valide', compagnies, commentaire })
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))
@@ -287,19 +270,15 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
   return (
     <Dialogue titre="Retenir cette subvention" fermer={fermer}>
       <p className="mb-4 text-sm text-pierre-600">
-        « {g.program_name} » passe <b>en cours</b> : la demande est à préparer, et ses dates d’ouverture et de fermeture vont dans
-        l’agenda « Subventions ». Cette décision aide aussi Claude à mieux cibler les prochaines recherches.
+        « {g.program_name} » passe <b>en cours</b>, avec une ligne de suivi par compagnie cochée (demandé, accordé, reçu, reddition de
+        compte). Ses dates d’ouverture et de fermeture vont dans l’agenda « Subventions », et cette décision aide Claude à mieux cibler
+        les prochaines recherches.
       </p>
-      <label className={ui.etiquette} htmlFor="demandeur">
-        Entreprise qui dépose la demande
-      </label>
-      <select id="demandeur" className={ui.champ} value={demandeur} onChange={(e) => setDemandeur(e.target.value)}>
-        {entreprises.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
+      <p className={ui.etiquette}>Compagnies qui déposent une demande</p>
+      <ChoixCompagnies ids={ids} choisies={compagnies} changer={setCompagnies} />
+      {g.company_ids.length > 1 && g.company_ids.length < ids.length && (
+        <p className="mt-1.5 text-xs text-pierre-500">Les premières sont celles pour qui la subvention a été trouvée.</p>
+      )}
       <label className={`${ui.etiquette} mt-3`} htmlFor="commentaire-valider">
         Commentaire (facultatif)
       </label>
@@ -316,8 +295,8 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
         <button className={ui.boutonSecondaire} onClick={fermer}>
           Annuler
         </button>
-        <button className={ui.bouton} disabled={decider.isPending} onClick={valider}>
-          Retenir
+        <button className={ui.bouton} disabled={!compagnies.length || decider.isPending} onClick={valider}>
+          Retenir{compagnies.length > 1 ? ` pour ${compagnies.length} compagnies` : ''}
         </button>
       </div>
     </Dialogue>
@@ -344,7 +323,8 @@ export function DialogueRejeter({ g, fermer }: { g: Subvention; fermer: () => vo
   return (
     <Dialogue titre="Rejeter la subvention" fermer={fermer}>
       <p className="mb-3 text-sm text-pierre-600">
-        « {g.program_name} » ne sera plus proposée. La raison sert à affiner les prochaines recherches.
+        « {g.program_name} » ne sera plus proposée{g.company_ids.length > 1 ? ', pour aucune compagnie' : ''}. La raison sert à affiner
+        les prochaines recherches.
       </p>
       <fieldset>
         <legend className={ui.etiquette}>Raison (obligatoire)</legend>
@@ -392,7 +372,7 @@ function DialogueNouvelle({ entreprises, fermer }: { entreprises: Entreprise[]; 
   const enregistrer = useEnregistrer<Subvention>('grants', { erreurSurPlace: true })
   const navigate = useNavigate()
   const [nom, setNom] = useState('')
-  const [entreprise, setEntreprise] = useState(entreprises[0]?.id ?? '')
+  const [compagnies, setCompagnies] = useState<string[]>([])
   const [organisme, setOrganisme] = useState('')
   const [type, setType] = useState<TypeSubvention>('salarial')
   const [url, setUrl] = useState('')
@@ -404,7 +384,7 @@ function DialogueNouvelle({ entreprises, fermer }: { entreprises: Entreprise[]; 
     try {
       const g = await enregistrer.mutateAsync({
         program_name: nom.trim(),
-        target_company_id: entreprise,
+        company_ids: compagnies,
         organisme: organisme.trim() || null,
         grant_type: type,
         source_url: url.trim() || null,
@@ -428,31 +408,21 @@ function DialogueNouvelle({ entreprises, fermer }: { entreprises: Entreprise[]; 
           </label>
           <input id="nv-nom" className={ui.champ} autoFocus value={nom} onChange={(e) => setNom(e.target.value)} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={ui.etiquette} htmlFor="nv-entreprise">
-              Pour
-            </label>
-            <select id="nv-entreprise" className={ui.champ} value={entreprise} onChange={(e) => setEntreprise(e.target.value)}>
-              {entreprises.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={ui.etiquette} htmlFor="nv-type">
-              Type
-            </label>
-            <select id="nv-type" className={ui.champ} value={type} onChange={(e) => setType(e.target.value as TypeSubvention)}>
-              {Object.entries(TYPES).map(([id, libelle]) => (
-                <option key={id} value={id}>
-                  {libelle}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <p className={ui.etiquette}>Pour</p>
+          <ChoixCompagnies ids={entreprises.map((e) => e.id)} choisies={compagnies} changer={setCompagnies} />
+        </div>
+        <div>
+          <label className={ui.etiquette} htmlFor="nv-type">
+            Type
+          </label>
+          <select id="nv-type" className={ui.champ} value={type} onChange={(e) => setType(e.target.value as TypeSubvention)}>
+            {Object.entries(TYPES).map(([id, libelle]) => (
+              <option key={id} value={id}>
+                {libelle}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={ui.etiquette} htmlFor="nv-organisme">
@@ -472,14 +442,16 @@ function DialogueNouvelle({ entreprises, fermer }: { entreprises: Entreprise[]; 
           </label>
           <input id="nv-limite" type="date" className={ui.champ} value={limite} onChange={(e) => setLimite(e.target.value)} />
         </div>
-        <p className="text-xs text-pierre-500">Les montants, la description et le suivi se remplissent ensuite dans la fiche.</p>
+        <p className="text-xs text-pierre-500">
+          Les montants et la description se remplissent ensuite dans la fiche ; « Retenir… » crée le suivi des compagnies qui déposent.
+        </p>
       </div>
       {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
       <div className="mt-4 flex justify-end gap-2">
         <button className={ui.boutonSecondaire} onClick={fermer}>
           Annuler
         </button>
-        <button className={ui.bouton} disabled={!nom.trim() || !entreprise || enregistrer.isPending} onClick={creer}>
+        <button className={ui.bouton} disabled={!nom.trim() || !compagnies.length || enregistrer.isPending} onClick={creer}>
           Ajouter
         </button>
       </div>
