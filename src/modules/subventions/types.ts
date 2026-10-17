@@ -54,18 +54,49 @@ export interface Subvention {
   discovered_fy: number
   origin: 'claude' | 'manuel'
   search_run_id: string | null
-  target_company_id: string
-  applicant_company_id: string | null
+  /**
+   * Compagnies de la carte (entreprises de recherche) : celles pour qui Claude
+   * l'a trouvée ou choisies à la main, et toujours celles qui ont une ligne de
+   * suivi (la base les ajoute).
+   */
+  company_ids: string[]
+  program_key: string | null
+  previous_grant_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StatutSuivi = 'en_cours' | 'obtenu' | 'refuse'
+
+/**
+ * Ligne de suivi (subventions.grant_applications) : une compagnie qui dépose
+ * une demande pour une subvention retenue. Le statut de la carte en est tiré
+ * par la base (en cours s'il en reste une en cours, sinon obtenue, sinon
+ * refusée).
+ */
+export interface Suivi {
+  id: string
+  grant_id: string
+  company_id: string
+  status: StatutSuivi
   amount_requested: number | null
   amount_granted: number | null
   amount_received: number | null
   requested_at: string | null
   granted_at: string | null
   received_at: string | null
-  program_key: string | null
-  previous_grant_id: string | null
+  /** Responsable de la demande (compte) ; null = pas encore assignée. */
+  responsible_id: string | null
   created_at: string
   updated_at: string
+}
+
+/** Personne qu'on peut nommer responsable (subventions.responsables()). */
+export interface Responsable {
+  id: string
+  nom: string
+  /** Faux : responsable d'une demande, mais plus accès au module (gardée pour son nom). */
+  choisissable: boolean
 }
 
 export interface Feedback {
@@ -98,6 +129,8 @@ export interface Heures {
 
 export interface Etape {
   id: string
+  /** Ligne de suivi (compagnie) ; grant_id est posé par la base. */
+  application_id: string
   grant_id: string
   description: string
   due_date: string | null
@@ -183,6 +216,8 @@ export interface Proposition {
 /** Attribution salariale (subventions.grant_salary_lines) : un employé sur une subvention. */
 export interface LigneSalaire {
   id: string
+  /** Ligne de suivi (subvention × compagnie) ; grant_id est posé par la base. */
+  application_id: string
   grant_id: string
   /** Fiche du référentiel (core.employes), ou null avec un nom libre. */
   employee_id: string | null

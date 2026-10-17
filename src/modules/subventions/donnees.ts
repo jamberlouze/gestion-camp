@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { Employe, Profil } from '@/lib/types'
+import type { Entreprise as Compagnie, Employe, Profil } from '@/lib/types'
 import type { LigneAgenda } from './agenda'
 import type {
   CategorieRejet,
@@ -15,7 +16,9 @@ import type {
   Recherche,
   Reglage,
   Regles,
+  Responsable,
   Subvention,
+  Suivi,
 } from './types'
 
 // Module en ligne seulement (comme Mastertimeline) : sans réseau, une
@@ -30,6 +33,8 @@ const db = () => supabase.schema(S)
 
 export const useEntreprises = () => useListe<Entreprise>(S, 'grant_companies', 'sort_order')
 export const useSubventions = () => useListe<Subvention>(S, 'grants', 'discovered_at')
+/** Lignes de suivi : une par compagnie qui dépose une demande. */
+export const useSuivis = () => useListe<Suivi>(S, 'grant_applications', 'created_at')
 export const useFeedback = () => useListe<Feedback>(S, 'grant_feedback', 'decided_at')
 export const useNotes = () => useListe<Note>(S, 'grant_notes', 'created_at')
 export const useHeures = () => useListe<Heures>(S, 'grant_time_entries', 'entry_date')
@@ -40,12 +45,51 @@ export const useReglages = () => useListe<Reglage>(S, 'grant_settings', 'key')
 export const usePropositions = () => useListe<Proposition>(S, 'grant_proposals', 'created_at')
 /** Ce que le Worker a écrit dans l'agenda Google « Subventions ». */
 export const useEvenementsAgenda = () => useListe<LigneAgenda>(S, 'grant_calendar_events', 'event_key')
+/** Personnes qu'on peut nommer responsables d'une demande (comptes qui écrivent dans Subventions). */
+export function useResponsables() {
+  return useQuery({
+    queryKey: [S, 'responsables'],
+    queryFn: async () => {
+      const { data, error } = await db().rpc('responsables')
+      if (error) throw error
+      return data as Responsable[]
+    },
+  })
+}
 /** Référentiel Employés (attribution salariale). */
 export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom')
 /** Noms des personnes (notes, heures, décisions) : la direction voit tous les profils. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 
-type Table = 'grants' | 'grant_companies' | 'grant_notes' | 'grant_time_entries' | 'grant_reporting_steps'
+type Table = 'grants' | 'grant_applications' | 'grant_companies' | 'grant_notes' | 'grant_time_entries' | 'grant_reporting_steps'
+
+export interface CompagnieCarte {
+  id: string
+  nom: string
+  couleur: string | null
+  abreviation: string | null
+  ordre: number
+}
+
+/**
+ * Compagnie du référentiel de chaque entreprise de recherche (nom, couleur
+ * et abréviation de son étiquette), et tri dans l'ordre des Réglages.
+ */
+export function useCompagnies() {
+  const entreprises = useEntreprises().data
+  const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre').data
+  return useMemo(() => {
+    const parId = new Map<string, CompagnieCarte>(
+      (entreprises ?? []).map((e) => {
+        const c = compagnies?.find((x) => x.id === e.entreprise_id)
+        return [e.id, { id: e.id, nom: c?.nom ?? e.name, couleur: c?.couleur ?? null, abreviation: c?.abreviation ?? null, ordre: e.sort_order }]
+      }),
+    )
+    const de = (id: string): CompagnieCarte => parId.get(id) ?? { id, nom: '—', couleur: null, abreviation: null, ordre: 999 }
+    const trier = (ids: string[]) => [...ids].sort((a, b) => de(a).ordre - de(b).ordre || de(a).nom.localeCompare(de(b).nom, 'fr'))
+    return { de, trier }
+  }, [entreprises, compagnies])
+}
 
 /** Ajoute (sans id) ou modifie (avec id) une ligne ; renvoie la ligne enregistrée. */
 export function useEnregistrer<T extends { id: string }>(table: Table, { erreurSurPlace = false } = {}) {
@@ -78,7 +122,10 @@ export function useSupprimer(table: Table) {
   })
 }
 
-/** Retenir (en cours, avec l'entreprise qui dépose) ou rejeter (catégorie obligatoire). */
+/**
+ * Retenir (une ligne de suivi par compagnie cochée) ou rejeter la carte
+ * entière (catégorie obligatoire).
+ */
 export function useDecider() {
   const client = useQueryClient()
   return useMutation({
@@ -89,19 +136,20 @@ export function useDecider() {
       decision: 'valide' | 'rejete'
       categorie?: CategorieRejet
       commentaire?: string
-      demandeur?: string
+      compagnies?: string[]
     }) => {
       const { error } = await db().rpc('decider', {
         p_grant: p.grant,
         p_decision: p.decision,
         p_categorie: p.categorie ?? null,
         p_commentaire: p.commentaire ?? null,
-        p_demandeur: p.demandeur ?? null,
+        p_compagnies: p.compagnies ?? null,
       })
       if (error) throw error
     },
     onSuccess: (_r, p) => {
       client.invalidateQueries({ queryKey: [S, 'grants'] })
+      client.invalidateQueries({ queryKey: [S, 'grant_applications'] })
       client.invalidateQueries({ queryKey: [S, 'grant_feedback'] })
       // Retenue : ses dates partent tout de suite dans l'agenda (sinon au prochain passage du cron).
       if (p.decision === 'valide') ecrireAgendaPlusTard(client, p.grant)
@@ -196,9 +244,9 @@ export function useSupprimerLigneSalaire() {
   })
 }
 
-/** Reprend les étapes de reddition de compte d'une autre subvention ; renvoie le nombre copié. */
-export async function copierEtapes(source: string, cible: string) {
-  const { data, error } = await db().rpc('copier_etapes', { p_source: source, p_cible: cible })
+/** Reprend les étapes de reddition de compte d'une autre ligne de suivi ; renvoie le nombre copié. */
+export async function reprendreEtapes(source: string, cible: string) {
+  const { data, error } = await db().rpc('reprendre_etapes', { p_source: source, p_cible: cible })
   if (error) throw error
   return data as number
 }

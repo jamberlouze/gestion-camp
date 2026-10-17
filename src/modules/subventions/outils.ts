@@ -1,7 +1,7 @@
 import type { Profil } from '@/lib/types'
 import { ui } from '@/lib/ui'
 import type { Employe } from '@/lib/types'
-import type { CategorieRejet, ChampPropose, LigneSalaire, Statut, StatutEtape, Subvention, TypeSubvention } from './types'
+import type { CategorieRejet, ChampPropose, LigneSalaire, Statut, StatutEtape, StatutSuivi, Subvention, Suivi, TypeSubvention } from './types'
 
 export const STATUTS: Record<Statut, { libelle: string; classe: string }> = {
   nouveau: { libelle: 'Nouvelle', classe: 'bg-sky-100 text-sky-800' },
@@ -13,6 +13,8 @@ export const STATUTS: Record<Statut, { libelle: string; classe: string }> = {
   expire: { libelle: 'Expirée', classe: 'bg-pierre-100 text-pierre-500' },
 }
 export const ORDRE_STATUTS: Statut[] = ['nouveau', 'a_valider', 'en_cours', 'obtenu', 'refuse', 'rejete', 'expire']
+/** Statuts d'une ligne de suivi (une compagnie qui dépose). */
+export const STATUTS_SUIVI: StatutSuivi[] = ['en_cours', 'obtenu', 'refuse']
 
 export const TYPES: Record<TypeSubvention, string> = {
   salarial: 'Salariale',
@@ -55,18 +57,25 @@ export const libelleAnneeFiscale = (fy: number) => `${fy - 1}-${String(fy).slice
 
 /**
  * Année fiscale proposée (même règle que subventions.poser_annee_fiscale) :
- * période financée, sinon date limite, sinon octroi, sinon année de la
- * découverte ; avec ce qui l'a décidée.
+ * période financée, sinon date limite, sinon la première date d'octroi de ses
+ * lignes de suivi, sinon année de la découverte ; avec ce qui l'a décidée.
  */
-export function anneeFiscaleProposee(g: Pick<Subvention, 'funded_start' | 'deadline_date' | 'granted_at' | 'discovered_fy'>) {
+export function anneeFiscaleProposee(
+  g: Pick<Subvention, 'funded_start' | 'deadline_date' | 'discovered_fy'>,
+  suivis: Pick<Suivi, 'granted_at'>[] = [],
+) {
   if (g.funded_start) return { annee: anneeFiscale(g.funded_start), selon: 'la période financée' }
   if (g.deadline_date) return { annee: anneeFiscale(g.deadline_date), selon: 'la date limite' }
-  if (g.granted_at) return { annee: anneeFiscale(g.granted_at), selon: "la date d'octroi" }
+  const octroi = suivis.map((l) => l.granted_at).filter((d): d is string => !!d).sort()[0]
+  if (octroi) return { annee: anneeFiscale(octroi), selon: "la date d'octroi" }
   return { annee: g.discovered_fy, selon: "l'année de la découverte" }
 }
 
 /** Retenue (en cours) ou obtenue : dans l'agenda, à mettre à jour, à l'attribution salariale. */
 export const estRetenue = (g: Pick<Subvention, 'status'>) => g.status === 'en_cours' || g.status === 'obtenu'
+
+/** Pas encore décidée : nouvelle ou en attente (onglet À valider). */
+export const aDecider = (g: Pick<Subvention, 'status'>) => g.status === 'nouveau' || g.status === 'a_valider'
 
 /** Date du jour (heure locale) au format AAAA-MM-JJ. */
 export function aujourdhui() {
@@ -188,9 +197,6 @@ export function correspond(g: Subvention, recherche: string) {
   )
   return mots.every((m) => texte.includes(m))
 }
-
-/** Entreprise qui porte la subvention : celle qui dépose, sinon celle pour qui elle a été trouvée. */
-export const entrepriseDe = (g: Subvention) => g.applicant_company_id ?? g.target_company_id
 
 /** Champ du module sans largeur imposée (ui.champ est en w-full, qui l'emporterait sur w-auto / w-24). */
 export const champ = ui.champ.replace('w-full ', '')

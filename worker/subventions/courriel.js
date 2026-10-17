@@ -65,14 +65,14 @@ export function construireRappel({ entreprises, nouvelles, erreurs, lien, essai 
   const nom = new Map(entreprises.map((e) => [e.id, e.name]))
   const parEntreprise = entreprises.map((e) => ({
     nom: e.name,
-    n: nouvelles.filter((g) => g.target_company_id === e.id).length,
+    n: nouvelles.filter((g) => (g.company_ids ?? []).includes(e.id)).length,
     erreur: erreurs.find((r) => r.company_id === e.id)?.error ?? null,
   }))
   const meilleures = trierPrometteuses(nouvelles).slice(0, 5)
   const ligneSubvention = (g) =>
     [
       `[${LIBELLES_TYPES[g.grant_type] ?? g.grant_type}] ${g.program_name}`,
-      nom.get(g.target_company_id),
+      (g.company_ids ?? []).map((id) => nom.get(id)).filter(Boolean).join(', ') || null,
       montants(g),
       g.deadline_date ? `date limite le ${dateCourte(g.deadline_date)}` : null,
     ]

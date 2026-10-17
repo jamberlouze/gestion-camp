@@ -2,11 +2,12 @@ import { useState, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { IconeCorbeille } from '@/lib/icones'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { useEnregistrer, useNotes, useProfils, useSupprimer } from './donnees'
+import { useCompagnies, useEnregistrer, useNotes, useProfils, useResponsables, useSupprimer } from './donnees'
 import { moment, nomPersonne, STATUTS, TYPES } from './outils'
-import type { Note, Statut, TypeSubvention } from './types'
+import type { Note, Statut, Suivi, TypeSubvention } from './types'
 
 export const menu = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800'
 
@@ -21,6 +22,94 @@ export const PastilleStatut = ({ statut }: { statut: Statut }) => (
 export const PastilleType = ({ type }: { type: TypeSubvention }) => (
   <Pastille classe={type === 'salarial' ? 'bg-foret-700 text-white' : undefined}>{TYPES[type]}</Pastille>
 )
+
+/** Étiquettes des compagnies d'une carte, dans l'ordre des Réglages. */
+export function PucesCompagnies({ ids, court = false }: { ids: string[]; court?: boolean }) {
+  const { de, trier } = useCompagnies()
+  if (!ids.length) return <Pastille>—</Pastille>
+  return (
+    <>
+      {trier(ids).map((id) => (
+        <PuceCompagnie key={id} compagnie={de(id)} court={court} />
+      ))}
+    </>
+  )
+}
+
+/**
+ * Cases à cocher des compagnies (entreprises de recherche), en pastilles de
+ * leur couleur ; `verrouillees` : cochées et pas décochables.
+ */
+export function ChoixCompagnies({
+  choisies,
+  changer,
+  verrouillees = [],
+  ids,
+}: {
+  choisies: string[]
+  changer: (ids: string[]) => void
+  verrouillees?: string[]
+  /** Compagnies offertes (toutes par défaut), dans cet ordre. */
+  ids: string[]
+}) {
+  const { de } = useCompagnies()
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {ids.map((id) => {
+        const coche = choisies.includes(id)
+        const fixe = verrouillees.includes(id)
+        const c = de(id)
+        return (
+          <label
+            key={id}
+            title={fixe ? 'A une ligne de suivi : retirez-la d’abord.' : undefined}
+            className={`inline-flex select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
+              coche ? 'border-foret-600 bg-foret-50 font-medium text-pierre-900' : 'border-pierre-300 bg-white text-pierre-600 hover:border-pierre-400'
+            } ${fixe ? 'cursor-default' : 'cursor-pointer'}`}
+          >
+            {/* Verrouillée : reste cochée (pas « disabled », qui la grise comme si elle ne l'était pas). */}
+            <input
+              type="checkbox"
+              className="accent-foret-700"
+              checked={coche}
+              aria-disabled={fixe || undefined}
+              onChange={() => !fixe && changer(coche ? choisies.filter((x) => x !== id) : [...choisies, id])}
+            />
+            <span className="size-2 rounded-full" style={{ background: c.couleur ?? 'var(--color-pierre-400)' }} aria-hidden />
+            {c.nom}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Responsable d'une demande (ligne de suivi), enregistré dès qu'il change.
+ * Les personnes qui écrivent dans Subventions, plus la responsable actuelle
+ * si elle n'y a plus accès.
+ */
+export function ChoixResponsable({ l, className = 'text-sm' }: { l: Pick<Suivi, 'id' | 'responsible_id'>; className?: string }) {
+  const responsables = useResponsables().data ?? []
+  const enregistrer = useEnregistrer<Suivi>('grant_applications')
+  const choix = responsables.filter((r) => r.choisissable || r.id === l.responsible_id)
+  return (
+    <select
+      aria-label="Responsable"
+      className={`rounded-lg border border-pierre-300 bg-white px-2 py-1 ${l.responsible_id ? 'text-pierre-800' : 'text-pierre-400'} ${className}`}
+      value={l.responsible_id ?? ''}
+      onChange={(e) => enregistrer.mutate({ id: l.id, responsible_id: e.target.value || null })}
+    >
+      <option value="">À assigner</option>
+      {choix.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.nom}
+          {r.choisissable ? '' : ' (plus accès)'}
+        </option>
+      ))}
+    </select>
+  )
+}
 
 /** Lien vers la page officielle, toujours dans un nouvel onglet. */
 export function LienOfficiel({ url, children = 'Page officielle' }: { url: string | null; children?: ReactNode }) {

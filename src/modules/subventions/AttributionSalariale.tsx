@@ -3,20 +3,27 @@ import { Link } from 'react-router'
 import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
-import { messageErreur, useListe } from '@/lib/donnees'
+import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
-import type { Entreprise as Compagnie, Employe } from '@/lib/types'
+import type { Employe } from '@/lib/types'
 import { ui } from '@/lib/ui'
 import { menu, Pastille, PastilleStatut } from './commun'
-import { useEmployes, useEnregistrerLigneSalaire, useEntreprises, useLignesSalaire, useSubventions, useSupprimerLigneSalaire } from './donnees'
+import {
+  useCompagnies,
+  useEmployes,
+  useEnregistrerLigneSalaire,
+  useEntreprises,
+  useLignesSalaire,
+  useSubventions,
+  useSuivis,
+  useSupprimerLigneSalaire,
+} from './donnees'
 import {
   anneeFiscaleCourante,
   argentCents,
   calculLigne,
   dateCourte,
-  entrepriseDe,
-  estRetenue,
   libelleAnneeFiscale,
   lireNombre,
   nomEmploye,
@@ -25,65 +32,75 @@ import {
   totauxSalaires,
   type CalculSalaire,
 } from './outils'
-import type { Entreprise, LigneSalaire, Subvention } from './types'
+import type { LigneSalaire, Subvention, Suivi } from './types'
+
+/** Une ligne de suivi (subvention × compagnie qui dépose) avec sa subvention. */
+interface Demande {
+  l: Suivi
+  g: Subvention
+}
 
 /**
  * Attribution salariale : un seul tableau par année fiscale, qui regroupe
- * toutes les subventions avec des employés (JCTDLO, Emplois d'été Canada…).
- * Une ligne = un employé (référentiel ou nom libre) sur une subvention ;
- * remplace le Google Sheet tenu à côté. Salaires : mêmes droits que le
- * module, jamais gardés sur l'appareil.
+ * toutes les demandes avec des employés (JCTDLO, Emplois d'été Canada…), une
+ * par compagnie qui dépose. Une ligne = un employé (référentiel ou nom libre)
+ * sur une ligne de suivi ; remplace le Google Sheet tenu à côté. Salaires :
+ * mêmes droits que le module, jamais gardés sur l'appareil.
  */
 export function AttributionSalariale() {
   const subventions = useSubventions()
+  const suivis = useSuivis()
   const entreprises = useEntreprises()
   const lignes = useLignesSalaire()
   const employes = useEmployes()
-  const compagnies = useListe<Compagnie>('core', 'entreprises', 'ordre')
+  const { de } = useCompagnies()
   const [annee, setAnnee] = useState(anneeFiscaleCourante)
   const [entreprise, setEntreprise] = useState('')
-  const [edition, setEdition] = useState<{ ligne: LigneSalaire | null; grant: string } | null>(null)
+  const [edition, setEdition] = useState<{ ligne: LigneSalaire | null; suivi: string } | null>(null)
 
-  const avecLignes = useMemo(() => new Set((lignes.data ?? []).map((l) => l.grant_id)), [lignes.data])
+  const avecLignes = useMemo(() => new Set((lignes.data ?? []).map((l) => l.application_id)), [lignes.data])
+  const demandes = useMemo(() => {
+    const carte = new Map((subventions.data ?? []).map((g) => [g.id, g]))
+    return (suivis.data ?? []).map((l) => ({ l, g: carte.get(l.grant_id) })).filter((x): x is Demande => !!x.g)
+  }, [subventions.data, suivis.data])
+  // Demandes où l'on peut ajouter un employé : en cours ou obtenues, ou qui en ont déjà.
   const annees = useMemo(() => {
-    const s = new Set([anneeFiscaleCourante(), ...(subventions.data ?? []).filter((g) => estRetenue(g) || avecLignes.has(g.id)).map((g) => g.fiscal_year)])
+    const ouvertes = demandes.filter((d) => d.l.status !== 'refuse' || avecLignes.has(d.l.id))
+    const s = new Set([anneeFiscaleCourante(), ...ouvertes.map((d) => d.g.fiscal_year)])
     return [...s].sort((a, b) => b - a)
-  }, [subventions.data, avecLignes])
+  }, [demandes, avecLignes])
 
   const donnees = useMemo(() => {
-    const deLAnnee = (subventions.data ?? []).filter((g) => g.fiscal_year === annee && (!entreprise || entrepriseDe(g) === entreprise))
-    const trier = (a: Subvention, b: Subvention) =>
-      Number(b.grant_type === 'salarial') - Number(a.grant_type === 'salarial') || a.program_name.localeCompare(b.program_name, 'fr')
+    const deLAnnee = demandes.filter((d) => d.g.fiscal_year === annee && (!entreprise || d.l.company_id === entreprise))
+    const trier = (a: Demande, b: Demande) =>
+      Number(b.g.grant_type === 'salarial') - Number(a.g.grant_type === 'salarial') ||
+      a.g.program_name.localeCompare(b.g.program_name, 'fr') ||
+      de(a.l.company_id).ordre - de(b.l.company_id).ordre
     const parEmploye = new Map((employes.data ?? []).map((e) => [e.id, e]))
     const nom = (l: LigneSalaire) => (l.employee_id ? nomEmploye(parEmploye.get(l.employee_id) ?? { surnom: '?', prenom: null, nom_famille: null }) : (l.free_name ?? ''))
     const groupes = deLAnnee
-      .filter((g) => avecLignes.has(g.id))
+      .filter((d) => avecLignes.has(d.l.id))
       .sort(trier)
-      .map((g) => {
+      .map((d) => {
         const siennes = (lignes.data ?? [])
-          .filter((l) => l.grant_id === g.id)
-          .map((l) => ({ l, nom: nom(l), calcul: calculLigne(l) }))
+          .filter((x) => x.application_id === d.l.id)
+          .map((x) => ({ l: x, nom: nom(x), calcul: calculLigne(x) }))
           .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
-        return { g, lignes: siennes, total: totauxSalaires(siennes.map((x) => x.calcul)) }
+        return { d, lignes: siennes, total: totauxSalaires(siennes.map((x) => x.calcul)) }
       })
     return {
       groupes,
       total: totauxSalaires(groupes.flatMap((x) => x.lignes.map((y) => y.calcul))),
       nbLignes: groupes.reduce((s, x) => s + x.lignes.length, 0),
-      // Subventions où l'on peut ajouter un employé : retenues ou obtenues de l'année (salariales d'abord), ou qui en ont déjà.
-      offertes: deLAnnee.filter((g) => estRetenue(g) || avecLignes.has(g.id)).sort(trier),
+      offertes: deLAnnee.filter((d) => d.l.status !== 'refuse' || avecLignes.has(d.l.id)).sort(trier),
     }
-  }, [subventions.data, lignes.data, employes.data, avecLignes, annee, entreprise])
+  }, [demandes, lignes.data, employes.data, avecLignes, annee, entreprise, de])
 
-  const erreur = subventions.error ?? entreprises.error ?? lignes.error ?? employes.error
+  const erreur = subventions.error ?? suivis.error ?? entreprises.error ?? lignes.error ?? employes.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
-  if (!subventions.data || !entreprises.data || !lignes.data || !employes.data)
+  if (!subventions.data || !suivis.data || !entreprises.data || !lignes.data || !employes.data)
     return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const compagnieDe = (id: string) => {
-    const e = entreprises.data.find((x) => x.id === id)
-    return (compagnies.data ?? []).find((c) => c.id === e?.entreprise_id) ?? { nom: e?.name ?? '—', couleur: null }
-  }
   const t = donnees.total
 
   return (
@@ -109,7 +126,7 @@ export function AttributionSalariale() {
             1er octobre {annee - 1} au 30 septembre {annee}
           </span>
         </div>
-        <button className={ui.bouton} disabled={!donnees.offertes.length} onClick={() => setEdition({ ligne: null, grant: donnees.offertes[0]?.id ?? '' })}>
+        <button className={ui.bouton} disabled={!donnees.offertes.length} onClick={() => setEdition({ ligne: null, suivi: donnees.offertes[0]?.l.id ?? '' })}>
           <IconePlus /> Ajouter un employé
         </button>
       </div>
@@ -149,19 +166,19 @@ export function AttributionSalariale() {
                 <th className="px-3 py-2 text-right font-medium">% couvert</th>
               </tr>
             </thead>
-            {donnees.groupes.map(({ g, lignes: siennes, total }) => (
-              <tbody key={g.id} className="border-b border-pierre-200 last:border-b-0">
+            {donnees.groupes.map(({ d, lignes: siennes, total }) => (
+              <tbody key={d.l.id} className="border-b border-pierre-200 last:border-b-0">
                 <tr className="bg-pierre-50">
                   <td colSpan={6} className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link to={`/subventions/fiche/${g.id}`} className="font-semibold hover:underline">
-                        {g.program_name}
+                      <Link to={`/subventions/fiche/${d.g.id}`} className="font-semibold hover:underline">
+                        {d.g.program_name}
                       </Link>
-                      <PuceCompagnie compagnie={compagnieDe(entrepriseDe(g))} />
-                      <PastilleStatut statut={g.status} />
+                      <PuceCompagnie compagnie={de(d.l.company_id)} />
+                      <PastilleStatut statut={d.l.status} />
                       <button
                         className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-foret-700 hover:underline"
-                        onClick={() => setEdition({ ligne: null, grant: g.id })}
+                        onClick={() => setEdition({ ligne: null, suivi: d.l.id })}
                       >
                         <IconePlus className="size-3.5" /> Employé
                       </button>
@@ -169,7 +186,7 @@ export function AttributionSalariale() {
                   </td>
                 </tr>
                 {siennes.map(({ l, nom, calcul }) => (
-                  <tr key={l.id} className="cursor-pointer border-t border-pierre-100 hover:bg-foret-50/40" onClick={() => setEdition({ ligne: l, grant: g.id })}>
+                  <tr key={l.id} className="cursor-pointer border-t border-pierre-100 hover:bg-foret-50/40" onClick={() => setEdition({ ligne: l, suivi: d.l.id })}>
                     <td className="px-3 py-2">
                       {nom}
                       {!l.employee_id && <Pastille classe="ml-1.5 bg-amber-100 text-amber-800">à pourvoir</Pastille>}
@@ -222,10 +239,9 @@ export function AttributionSalariale() {
       {edition && (
         <DialogueLigne
           ligne={edition.ligne}
-          grant={edition.grant}
+          suivi={edition.suivi}
           offertes={donnees.offertes}
           employes={employes.data}
-          entreprises={entreprises.data}
           fermer={() => setEdition(null)}
         />
       )}
@@ -251,22 +267,21 @@ const texteNombre = (n: number | null) => (n == null ? '' : String(n).replace('.
 
 function DialogueLigne({
   ligne,
-  grant,
+  suivi,
   offertes,
   employes,
-  entreprises,
   fermer,
 }: {
   ligne: LigneSalaire | null
-  grant: string
-  offertes: Subvention[]
+  suivi: string
+  offertes: Demande[]
   employes: Employe[]
-  entreprises: Entreprise[]
   fermer: () => void
 }) {
   const enregistrer = useEnregistrerLigneSalaire()
   const supprimer = useSupprimerLigneSalaire()
-  const [subvention, setSubvention] = useState(ligne?.grant_id ?? grant)
+  const { de } = useCompagnies()
+  const [demande, setDemande] = useState(ligne?.application_id ?? suivi)
   const [employe, setEmploye] = useState(ligne ? (ligne.employee_id ?? LIBRE) : '')
   const [nomLibre, setNomLibre] = useState(ligne?.free_name ?? '')
   const [enMontant, setEnMontant] = useState(ligne?.salary_amount != null)
@@ -280,7 +295,6 @@ function DialogueLigne({
   const [note, setNote] = useState(ligne?.note ?? '')
   const [erreur, setErreur] = useState<string | null>(null)
 
-  const nomEntreprise = (g: Subvention) => entreprises.find((e) => e.id === entrepriseDe(g))?.name
   // Employés actifs, plus celui de la ligne s'il a été retiré du référentiel.
   const choix = employes
     .filter((e) => e.actif || e.id === ligne?.employee_id)
@@ -299,7 +313,7 @@ function DialogueLigne({
 
   const valider = async () => {
     setErreur(null)
-    if (!subvention) return setErreur('Choisissez la subvention.')
+    if (!demande) return setErreur('Choisissez la subvention.')
     if (!employe) return setErreur('Choisissez un employé, ou « Nom libre ».')
     if (employe === LIBRE && !nomLibre.trim()) return setErreur('Écrivez le nom ou le poste à pourvoir.')
     if (invalide) return setErreur('Un montant, un taux ou un nombre d’heures n’est pas un nombre valide.')
@@ -307,7 +321,7 @@ function DialogueLigne({
     try {
       await enregistrer.mutateAsync({
         ...(ligne ? { id: ligne.id } : {}),
-        grant_id: subvention,
+        application_id: demande,
         employee_id: employe === LIBRE ? null : employe,
         free_name: employe === LIBRE ? nomLibre.trim() : null,
         ...valeurs,
@@ -347,11 +361,10 @@ function DialogueLigne({
           <label className={ui.etiquette} htmlFor="sal-subvention">
             Subvention
           </label>
-          <select id="sal-subvention" className={ui.champ} value={subvention} onChange={(e) => setSubvention(e.target.value)}>
-            {offertes.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.program_name}
-                {nomEntreprise(g) ? ` — ${nomEntreprise(g)}` : ''}
+          <select id="sal-subvention" className={ui.champ} value={demande} onChange={(e) => setDemande(e.target.value)}>
+            {offertes.map(({ l, g }) => (
+              <option key={l.id} value={l.id}>
+                {g.program_name} — {de(l.company_id).nom}
               </option>
             ))}
           </select>
