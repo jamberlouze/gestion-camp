@@ -16,6 +16,7 @@ import type {
   Recherche,
   Reglage,
   Regles,
+  Responsable,
   Subvention,
   Suivi,
 } from './types'
@@ -44,6 +45,17 @@ export const useReglages = () => useListe<Reglage>(S, 'grant_settings', 'key')
 export const usePropositions = () => useListe<Proposition>(S, 'grant_proposals', 'created_at')
 /** Ce que le Worker a écrit dans l'agenda Google « Subventions ». */
 export const useEvenementsAgenda = () => useListe<LigneAgenda>(S, 'grant_calendar_events', 'event_key')
+/** Personnes qu'on peut nommer responsables d'une demande (comptes qui écrivent dans Subventions). */
+export function useResponsables() {
+  return useQuery({
+    queryKey: [S, 'responsables'],
+    queryFn: async () => {
+      const { data, error } = await db().rpc('responsables')
+      if (error) throw error
+      return data as Responsable[]
+    },
+  })
+}
 /** Référentiel Employés (attribution salariale). */
 export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom')
 /** Noms des personnes (notes, heures, décisions) : la direction voit tous les profils. */

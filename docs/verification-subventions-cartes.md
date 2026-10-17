@@ -48,6 +48,7 @@ du `seed.sql` : « Jeunesse Canada au travail (essai) » (en cours, GBPA+),
 ## 4. Suivi et attribution salariale
 
 - [x] Suivi : une ligne par compagnie qui dépose (compagnie, statut de sa demande, montants) ; totaux sur les lignes ; filtres Toutes les demandes / En cours / Obtenues / Refusées.
+- [x] Colonne **Responsable** (ajout du 2026-10-16) : choisie sur place (« À assigner » au départ), sans ouvrir la fiche ; aussi sur chaque ligne de la fiche. Choix : comptes qui écrivent dans Subventions (`subventions.responsables()`). — Admin Test sur Jeunesse Canada au travail (essai)
 - [x] Attribution salariale : un groupe par ligne de suivi (« programme — compagnie ») ; « Ajouter un employé » propose les lignes en cours ou obtenues.
 
 ## 5. Recherche (Worker) et agenda

@@ -85,8 +85,18 @@ export interface Suivi {
   requested_at: string | null
   granted_at: string | null
   received_at: string | null
+  /** Responsable de la demande (compte) ; null = pas encore assignée. */
+  responsible_id: string | null
   created_at: string
   updated_at: string
+}
+
+/** Personne qu'on peut nommer responsable (subventions.responsables()). */
+export interface Responsable {
+  id: string
+  nom: string
+  /** Faux : responsable d'une demande, mais plus accès au module (gardée pour son nom). */
+  choisissable: boolean
 }
 
 export interface Feedback {

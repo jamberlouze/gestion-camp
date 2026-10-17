@@ -5,9 +5,9 @@ import { IconeCorbeille } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import { useCompagnies, useEnregistrer, useNotes, useProfils, useSupprimer } from './donnees'
+import { useCompagnies, useEnregistrer, useNotes, useProfils, useResponsables, useSupprimer } from './donnees'
 import { moment, nomPersonne, STATUTS, TYPES } from './outils'
-import type { Note, Statut, TypeSubvention } from './types'
+import type { Note, Statut, Suivi, TypeSubvention } from './types'
 
 export const menu = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800'
 
@@ -81,6 +81,33 @@ export function ChoixCompagnies({
         )
       })}
     </div>
+  )
+}
+
+/**
+ * Responsable d'une demande (ligne de suivi), enregistré dès qu'il change.
+ * Les personnes qui écrivent dans Subventions, plus la responsable actuelle
+ * si elle n'y a plus accès.
+ */
+export function ChoixResponsable({ l, className = 'text-sm' }: { l: Pick<Suivi, 'id' | 'responsible_id'>; className?: string }) {
+  const responsables = useResponsables().data ?? []
+  const enregistrer = useEnregistrer<Suivi>('grant_applications')
+  const choix = responsables.filter((r) => r.choisissable || r.id === l.responsible_id)
+  return (
+    <select
+      aria-label="Responsable"
+      className={`rounded-lg border border-pierre-300 bg-white px-2 py-1 ${l.responsible_id ? 'text-pierre-800' : 'text-pierre-400'} ${className}`}
+      value={l.responsible_id ?? ''}
+      onChange={(e) => enregistrer.mutate({ id: l.id, responsible_id: e.target.value || null })}
+    >
+      <option value="">À assigner</option>
+      {choix.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.nom}
+          {r.choisissable ? '' : ' (plus accès)'}
+        </option>
+      ))}
+    </select>
   )
 }
 

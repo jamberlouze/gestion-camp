@@ -10,7 +10,18 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { etatEvenement, evenementsVoulus, REGLAGE_AGENDA_DEFAUT, type ReglageAgenda } from './agenda'
-import { ChampDate, ChampMontant, ChoixCompagnies, FilNotes, LienOfficiel, PastilleStatut, PucesCompagnies, Section, ZoneTexte } from './commun'
+import {
+  ChampDate,
+  ChampMontant,
+  ChoixCompagnies,
+  ChoixResponsable,
+  FilNotes,
+  LienOfficiel,
+  PastilleStatut,
+  PucesCompagnies,
+  Section,
+  ZoneTexte,
+} from './commun'
 import {
   ecrireAgendaPlusTard,
   reprendreEtapes,
@@ -688,6 +699,10 @@ function LigneSuivi({
             </option>
           ))}
         </select>
+        <label className="inline-flex items-center gap-1.5 text-xs text-pierre-500">
+          Responsable
+          <ChoixResponsable l={l} className="text-xs" />
+        </label>
         <button
           className="ml-auto text-pierre-400 hover:text-red-700"
           aria-label={`Retirer ${compagnie.nom} du suivi`}

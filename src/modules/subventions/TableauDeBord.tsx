@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
-import { menu, PastilleStatut, PastilleType } from './commun'
+import { ChoixResponsable, menu, PastilleStatut, PastilleType } from './commun'
 import { useCompagnies, useEntreprises, useHeures, useSubventions, useSuivis } from './donnees'
 import { anneeFiscaleCourante, argent, dateCourte, heures as formatHeures, libelleAnneeFiscale, STATUTS_SUIVI } from './outils'
 import type { StatutSuivi, Subvention, Suivi } from './types'
@@ -143,6 +143,7 @@ export function TableauDeBord() {
                 <tr>
                   <th className="px-3 py-2 font-medium">Programme</th>
                   <th className="px-3 py-2 font-medium">Compagnie</th>
+                  <th className="px-3 py-2 font-medium">Responsable</th>
                   <th className="px-3 py-2 font-medium">Type</th>
                   <th className="px-3 py-2 font-medium">Statut</th>
                   <th className="px-3 py-2 text-right font-medium">Demandé</th>
@@ -157,6 +158,10 @@ export function TableauDeBord() {
                     <td className="px-3 py-2 font-medium">{g.program_name}</td>
                     <td className="px-3 py-2">
                       <PuceCompagnie compagnie={de(l.company_id)} />
+                    </td>
+                    {/* Choisi sur place : le clic ne doit pas ouvrir la fiche. */}
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <ChoixResponsable l={l} className="max-w-44 text-sm" />
                     </td>
                     <td className="px-3 py-2">
                       <PastilleType type={g.grant_type} />
