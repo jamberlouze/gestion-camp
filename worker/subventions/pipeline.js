@@ -2,11 +2,14 @@
 // révisée le 2026-10-14).
 //
 // Quatre fois par année (début d'octobre, janvier, avril et juillet : les
-// trimestres de l'année fiscale), le cron fait la recherche en deux temps,
+// trimestres de l'année fiscale), le cron fait la recherche en trois temps,
 // UN travail par passage (une recherche dure plusieurs minutes ; un appel du
 // cron est limité à 15 minutes) :
 //   a) recherche large, une entreprise active à la fois (rechercherEntreprise) ;
-//   b) mise à jour ciblée des subventions retenues ou obtenues de chaque
+//   b) recherche salariale de chaque entreprise active qui embauche
+//      (rechercherEntreprise, genre 'salariale' : organisme par organisme,
+//      plus de recherches web) ;
+//   c) mise à jour ciblée des subventions retenues ou obtenues de chaque
 //      entreprise (mettreAJourRetenues) : champ vide rempli, champ rempli qui
 //      changerait = proposition à valider sur la fiche.
 // Une panne est écrite dans le journal et n'empêche pas le reste.
@@ -18,8 +21,8 @@ import { synchroniserAgenda } from './agenda.js'
 import { base } from './base.js'
 import { clientClaude, modele, rechercher, reparer, synthetiser } from './claude.js'
 import { construireRappel, envoyerGmail, gmailConfigure } from './courriel.js'
-import { invitationMemoire, invitationMiseAJour, invitationRecherche } from './invites.js'
-import { extraireTableau, validerMisesAJour, validerProgrammes } from './resultats.js'
+import { invitationMemoire, invitationMiseAJour, invitationRecherche, invitationRechercheSalariale } from './invites.js'
+import { extraireTableau, sansEditionPassee, validerMisesAJour, validerProgrammes } from './resultats.js'
 
 /** Courriels du module : aucun jusqu'à nouvel ordre. Le remettre = true (et revoir le texte du rappel). */
 export const COURRIELS = false
@@ -36,6 +39,15 @@ function aujourdhui() {
     year: 'numeric',
     timeZone: 'America/Toronto',
   }).format(new Date())
+}
+
+/** « AAAA-MM-JJ » à Montréal. */
+const jourIso = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Toronto' }).format(new Date())
+
+/** Prompt et recherches web permises de chaque genre de recherche de programmes. */
+const GENRES = {
+  large: { invitation: invitationRecherche, budget: { recherches: 20, lectures: 10 } },
+  salariale: { invitation: invitationRechercheSalariale, budget: { recherches: 40, lectures: 20 } },
 }
 
 /** 1er jour (0 h UTC) du trimestre de l'année fiscale : octobre, janvier, avril ou juillet. */
@@ -86,10 +98,13 @@ async function mettreAJourMemoire(db, claude, nom, entreprise) {
 
 /**
  * Recherche complète pour une entreprise : mémoire, journal, recherche,
- * validation, dédoublonnage et insertion. Renvoie le bilan ; en cas de
- * panne, l'erreur est écrite dans le journal puis relancée.
+ * validation, dédoublonnage et insertion. `genre` : 'large' (tous les
+ * types) ou 'salariale' (subventions salariales seulement). Renvoie le
+ * bilan ; en cas de panne, l'erreur est écrite dans le journal puis relancée.
  */
-export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'cron', sansMemoire = false }) {
+export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'cron', sansMemoire = false, genre = 'large' }) {
+  const kind = GENRES[genre] ? genre : 'large'
+  const { invitation, budget } = GENRES[kind]
   const db = base(env)
   const [entreprise] = await db.lire(`grant_companies?id=eq.${entrepriseId}&select=*`)
   if (!entreprise) throw new Error('Entreprise introuvable.')
@@ -100,7 +115,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
 
   const run = await db.inserer('grant_search_runs', {
     company_id: entreprise.id,
-    kind: 'large',
+    kind,
     trigger_source: declencheur,
     memory_version_id: regles?.id ?? null,
     model: nom,
@@ -115,7 +130,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       db.lire('grants?select=program_name,source_url,status,program_key,discovered_fy,company_ids&order=discovered_at.desc&limit=400'),
     ])
     const consignes = reglages.find((r) => r.key === 'consignes_groupe')?.value
-    const invite = invitationRecherche({
+    const invite = invitation({
       entreprise,
       groupe,
       consignes: typeof consignes === 'string' ? consignes : '',
@@ -124,7 +139,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       aujourdhui: aujourdhui(),
     })
 
-    const reponse = await rechercher(claude, nom, invite)
+    const reponse = await rechercher(claude, nom, invite, budget)
     texte = reponse.texte
 
     let elements
@@ -136,7 +151,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       elements = await reparer(clientClaude(env, { delai: 5 * 60 * 1000, essais: 2 }), nom, texte)
     }
     const { valides, invalides } = validerProgrammes(elements)
-    const bilan = await db.rpc('inserer_resultats', { p_run: run.id, p_items: valides })
+    const bilan = await db.rpc('inserer_resultats', { p_run: run.id, p_items: sansEditionPassee(valides, jourIso()) })
 
     await db.modifier('grant_search_runs', `id=eq.${run.id}`, {
       finished_at: new Date().toISOString(),
@@ -280,7 +295,7 @@ export async function envoyerRappelEssai(env, courriel) {
   await envoyerGmail(env, { a: [courriel], ...rappel })
 }
 
-/** Un passage du cron du trimestre : le travail suivant (recherche large, puis mises à jour ciblées). */
+/** Un passage du cron du trimestre : le travail suivant (recherche large, puis salariale, puis mises à jour ciblées). */
 export async function tourTrimestriel(env) {
   if (!rechercheConfiguree(env)) {
     console.log('Vigie de subventions : secrets ANTHROPIC_API_KEY ou SUPABASE_SECRET_KEY manquants, rien à faire.')
@@ -299,7 +314,7 @@ export async function tourTrimestriel(env) {
       const bilan =
         tache.kind === 'ciblee'
           ? await mettreAJourRetenues(env, { entrepriseId: tache.company_id, declencheur: 'cron', trimestre: true })
-          : await rechercherEntreprise(env, { entrepriseId: tache.company_id, declencheur: 'cron' })
+          : await rechercherEntreprise(env, { entrepriseId: tache.company_id, declencheur: 'cron', genre: tache.kind })
       console.log(`Vigie de subventions (${tache.kind}) : ${JSON.stringify(bilan)}`)
     } catch (e) {
       console.error(`Vigie de subventions (${tache.kind}) : ${messageDe(e)}`)

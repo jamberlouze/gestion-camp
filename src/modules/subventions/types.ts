@@ -155,7 +155,7 @@ export interface Recherche {
   error: string | null
   trigger_source: 'cron' | 'manuel'
   /** large : nouvelles subventions ; ciblee : mise à jour des retenues et obtenues (new_count = nouvelles éditions). */
-  kind: 'large' | 'ciblee'
+  kind: 'large' | 'salariale' | 'ciblee'
   filled_count: number
   proposed_count: number
   model: string | null

@@ -104,7 +104,7 @@ function ConfigWorker({ etat, erreur, chargement }: { etat?: Etat; erreur: unkno
 
 type Progres = { etat: 'en_cours'; debut: number } | { etat: 'fini'; message: string; erreur: boolean }
 
-type Genre = 'large' | 'ciblee'
+type Genre = 'large' | 'salariale' | 'ciblee'
 
 function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pret: boolean }) {
   const [entreprise, setEntreprise] = useState(entreprises.find((e) => e.active)?.id ?? '')
@@ -126,7 +126,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
     try {
       const res = await appelerWorker('recherche', {
         method: 'POST',
-        body: JSON.stringify({ company_id: entreprise, genre, sans_memoire: genre === 'large' && sansMemoire }),
+        body: JSON.stringify({ company_id: entreprise, genre, sans_memoire: genre !== 'ciblee' && sansMemoire }),
       })
       if (!res.ok || !res.body) throw new Error(await erreurWorker(res))
       // Flux de lignes JSON : battements « en_cours », puis le bilan.
@@ -166,7 +166,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
   return (
     <div className="space-y-3">
       <p className="text-sm text-pierre-600">
-        Même travail que la recherche automatique, pour une entreprise. Il prend de 3 à 10 minutes : gardez cette page ouverte.
+        Même travail que la recherche automatique, pour une entreprise. Il prend de 3 à 15 minutes : gardez cette page ouverte.
       </p>
       <fieldset className="space-y-1 text-sm">
         <legend className="sr-only">Genre de recherche</legend>
@@ -174,6 +174,13 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
           <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'large'} disabled={enCours} onChange={() => setGenre('large')} />
           <span>
             <b className="font-medium">Recherche large</b> : nouvelles subventions pour l’entreprise
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'salariale'} disabled={enCours} onChange={() => setGenre('salariale')} />
+          <span>
+            <b className="font-medium">Recherche salariale</b> : nouvelles subventions salariales (embauche, stages, emplois d’été), organisme
+            par organisme ; plus longue
           </span>
         </label>
         <label className="flex items-start gap-2">
@@ -197,7 +204,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
           {enCours ? 'Recherche en cours…' : 'Lancer maintenant'}
         </button>
       </div>
-      {genre === 'large' && (
+      {genre !== 'ciblee' && (
         <label className="flex items-center gap-2 text-sm text-pierre-600">
           <input type="checkbox" className="accent-foret-700" checked={sansMemoire} disabled={enCours} onChange={(e) => setSansMemoire(e.target.checked)} />
           Sans la mémoire (pour comparer la qualité avec et sans les règles apprises)
@@ -211,7 +218,7 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
       {progres?.etat === 'fini' && (
         <p className={progres.erreur ? ui.erreur : 'rounded-lg bg-foret-50 px-3 py-2 text-sm text-foret-800'}>
           {progres.message}{' '}
-          {!progres.erreur && genre === 'large' && (
+          {!progres.erreur && genre !== 'ciblee' && (
             <Link className="underline" to="/subventions">
               Voir la validation
             </Link>
@@ -262,8 +269,9 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
                 {moment(r.started_at)}
                 <div className="mt-0.5 flex gap-1">
                   {r.kind === 'ciblee' && <Pastille classe="bg-violet-100 text-violet-800">mise à jour</Pastille>}
+                  {r.kind === 'salariale' && <Pastille classe="bg-amber-100 text-amber-800">salariale</Pastille>}
                   {r.trigger_source === 'manuel' && <Pastille>manuelle</Pastille>}
-                  {r.kind === 'large' && !r.memory_version_id && <Pastille>sans mémoire</Pastille>}
+                  {r.kind !== 'ciblee' && !r.memory_version_id && <Pastille>sans mémoire</Pastille>}
                 </div>
               </td>
               <td className="px-2 py-1.5">{nomEntreprise.get(r.company_id)}</td>
@@ -303,7 +311,7 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
         </tbody>
       </table>
       <p className="mt-2 text-xs text-pierre-500">
-        Trouvées (recherche large) : proposées / nouvelles / déjà connues / écartées (mal formées). Mise à jour : un champ vide est
+        Trouvées (recherche large ou salariale) : proposées / nouvelles / déjà connues / écartées (mal formées). Mise à jour : un champ vide est
         complété directement ; un champ déjà rempli qui changerait attend votre accord sur la fiche.
       </p>
     </div>

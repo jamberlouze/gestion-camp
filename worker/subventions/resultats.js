@@ -113,6 +113,20 @@ export function validerProgramme(brut) {
   }
 }
 
+/**
+ * Programme dont la date limite est passée (`aujourdhui` = « AAAA-MM-JJ » à
+ * Montréal) : ses dates sont celles d'une édition passée — on les retire,
+ * sinon la carte expirerait le lendemain (expirer_echues) au lieu d'attendre
+ * la prochaine édition.
+ */
+export function sansEditionPassee(programmes, aujourdhui) {
+  return programmes.map((p) =>
+    p.deadline_date && p.deadline_date < aujourdhui
+      ? { ...p, open_date: null, deadline_date: null, funded_start: null, funded_end: null }
+      : p,
+  )
+}
+
 /** Champs qu'une mise à jour ciblée peut remplir ou proposer (mêmes que grant_proposals.field). */
 export const CHAMPS_MISE_A_JOUR = [
   'source_url',

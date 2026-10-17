@@ -101,17 +101,22 @@ export async function routeSubventions(request, env, ctx, chemin) {
     if (typeof corps.company_id !== 'string' || !UUID.test(corps.company_id)) {
       return json({ erreur: 'Entreprise manquante.' }, 400)
     }
-    const ciblee = corps.genre === 'ciblee'
+    const genre = ['ciblee', 'salariale'].includes(corps.genre) ? corps.genre : 'large'
     const depuis = encodeURIComponent(new Date(Date.now() - 20 * 60 * 1000).toISOString())
     const enCours = await base(env).lire(
       `grant_search_runs?company_id=eq.${corps.company_id}&finished_at=is.null&started_at=gte.${depuis}&select=id`,
     )
     if (enCours.length) return json({ erreur: 'Une recherche est déjà en cours pour cette entreprise.' }, 409)
 
-    // Recherche large (nouvelles subventions) ou mise à jour des retenues de l'entreprise.
-    const { reponse, travail } = ciblee
-      ? rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel' }, mettreAJourRetenues)
-      : rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel', sansMemoire: corps.sans_memoire === true }, rechercherEntreprise)
+    // Recherche large ou salariale (nouvelles subventions), ou mise à jour des retenues de l'entreprise.
+    const { reponse, travail } =
+      genre === 'ciblee'
+        ? rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel' }, mettreAJourRetenues)
+        : rechercheEnFlux(
+            env,
+            { entrepriseId: corps.company_id, declencheur: 'manuel', sansMemoire: corps.sans_memoire === true, genre },
+            rechercherEntreprise,
+          )
     ctx.waitUntil(travail)
     return reponse
   }
