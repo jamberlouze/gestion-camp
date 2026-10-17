@@ -59,8 +59,10 @@ function verifierFin(reponse) {
 /**
  * Recherche web : boucle tant que l'API met le tour en pause (pause_turn,
  * limite d'itérations côté serveur), puis renvoie le texte final.
+ * `budget` : recherches et lectures de pages permises (la recherche
+ * salariale en a plus : elle passe les organismes un à un).
  */
-export async function rechercher(client, nom, invite) {
+export async function rechercher(client, nom, invite, budget = { recherches: 20, lectures: 10 }) {
   const usage = usageVide()
   const messages = [{ role: 'user', content: invite }]
   for (let reprise = 0; ; reprise++) {
@@ -71,7 +73,7 @@ export async function rechercher(client, nom, invite) {
         {
           type: 'web_search_20260209',
           name: 'web_search',
-          max_uses: 20,
+          max_uses: budget.recherches,
           user_location: {
             type: 'approximate',
             city: 'Mont-Tremblant',
@@ -80,7 +82,7 @@ export async function rechercher(client, nom, invite) {
             timezone: 'America/Toronto',
           },
         },
-        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 10 },
+        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: budget.lectures },
       ],
       messages,
     })

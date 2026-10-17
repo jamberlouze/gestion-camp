@@ -8,9 +8,19 @@ import { actionsAgenda, evenementsVoulus } from '../../src/modules/subventions/a
 import { synchroniserAgenda } from './agenda.js'
 import { routeSubventions } from './api.js'
 import { construireRappel, messageMime, trierPrometteuses } from './courriel.js'
-import { invitationMemoire, invitationMiseAJour, invitationRecherche } from './invites.js'
+import { invitationMemoire, invitationMiseAJour, invitationRecherche, invitationRechercheSalariale } from './invites.js'
 import { debutTrimestre, estTourTrimestriel, mettreAJourRetenues, passageSubventions, rechercherEntreprise, tourTrimestriel } from './pipeline.js'
-import { cleProgramme, dateIso, extraireTableau, montant, texteFinal, typeSubvention, validerMisesAJour, validerProgrammes } from './resultats.js'
+import {
+  cleProgramme,
+  dateIso,
+  extraireTableau,
+  montant,
+  sansEditionPassee,
+  texteFinal,
+  typeSubvention,
+  validerMisesAJour,
+  validerProgrammes,
+} from './resultats.js'
 
 describe('lecture de la réponse', () => {
   it('extrait le tableau même entouré de texte ou de clôtures', () => {
@@ -79,6 +89,21 @@ describe('lecture de la réponse', () => {
   })
 })
 
+describe('édition passée', () => {
+  it('date limite passée : les dates de cette édition sont retirées, le reste gardé', () => {
+    const passe = { program_name: 'A', open_date: '2026-03-01', deadline_date: '2026-08-28', funded_start: '2026-05-01', funded_end: '2026-08-31', potential_amount_max: 5000 }
+    const avenir = { program_name: 'B', open_date: '2026-11-15', deadline_date: '2027-01-10', funded_start: null, funded_end: null }
+    const sansDate = { program_name: 'C', open_date: null, deadline_date: null }
+    const jour = { ...avenir, program_name: 'D', deadline_date: '2026-10-17' }
+    assert.deepEqual(sansEditionPassee([passe, avenir, sansDate, jour], '2026-10-17'), [
+      { program_name: 'A', open_date: null, deadline_date: null, funded_start: null, funded_end: null, potential_amount_max: 5000 },
+      avenir,
+      sansDate,
+      jour,
+    ])
+  })
+})
+
 describe('mise à jour ciblée : lecture de la réponse', () => {
   const parRef = new Map([
     ['S1', { id: 'g-cours', status: 'en_cours' }],
@@ -141,7 +166,7 @@ describe('prompts', () => {
     { id: 't', name: 'Trembloc', legal_status: null },
   ]
 
-  it('recherche : groupe, priorité salariale, critères, règles, programmes connus', () => {
+  it('recherche : groupe, salarial à part, critères, règles, programmes connus', () => {
     const p = invitationRecherche({
       entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
       groupe,
@@ -155,8 +180,12 @@ describe('prompts', () => {
     })
     assert.match(p, /pour Trembloc \(statut juridique non précisé/)
     assert.match(p, /celle-ci vise seulement Trembloc\) :\n- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc\n/)
-    assert.match(p, /Priorité absolue : les subventions salariales/)
+    // Une entreprise qui embauche a sa recherche salariale : la large n'y consacre plus ses recherches.
+    assert.match(p, /ont leur\npropre recherche, faite à part/)
     assert.match(p, /Ratisse large/)
+    // Un programme d'été fermé en octobre compte quand même, sans les dates d'une édition passée.
+    assert.match(p, /Un programme récurrent fermé aujourd'hui .* compte aussi : propose-le\./)
+    assert.match(p, /Ne donne jamais les dates d'une édition passée\./)
     assert.doesNotMatch(p, /Consignes de la direction/)
     assert.match(p, /Bloc extérieur/)
     assert.match(p, /Aucune règle apprise/)
@@ -177,9 +206,42 @@ describe('prompts', () => {
       connus: [],
       aujourdhui: 'lundi 5 octobre 2026',
     })
-    assert.doesNotMatch(p, /Priorité absolue/)
+    assert.doesNotMatch(p, /propre recherche, faite à part/)
     assert.match(p, /n'embauche pas de personnel/)
     assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
+  })
+
+  it('recherche salariale : familles d’organismes une à une, programmes connus, salarial seulement', () => {
+    const entree = {
+      entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
+      groupe,
+      consignes: 'Exclure le manufacturier.',
+      regles: '- Privilégier les emplois d’été.',
+      connus: [{ program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'obtenu', program_key: 'eec', discovered_fy: 2026, company_ids: ['b'] }],
+      aujourdhui: 'samedi 17 octobre 2026',
+    }
+    const p = invitationRechercheSalariale(entree)
+    assert.match(p, /pour Trembloc \(statut juridique non précisé/)
+    assert.match(p, /porte seulement sur les subventions salariales/)
+    assert.doesNotMatch(p, /Trouve des programmes de subvention, de crédit d'impôt ou de financement/)
+    // Les organismes intermédiaires, famille par famille.
+    assert.match(p, /pas versées par un ministère, mais par un organisme/)
+    assert.match(p, /Programme de stages pratiques pour étudiants \(PSPE\)[\s\S]*vérifie chacun/)
+    assert.match(p, /Stratégie emploi et compétences jeunesse/)
+    assert.match(p, /Fonds de travailleurs, syndicats/)
+    assert.match(p, /« financement des\n   stages »/)
+    assert.match(p, /Un programme récurrent fermé aujourd'hui/)
+    // Même contexte que la recherche large.
+    assert.match(p, /celle-ci vise seulement Trembloc\) :\n- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc\n/)
+    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
+    assert.match(p, /Bloc extérieur/)
+    assert.match(p, /- Privilégier les emplois d’été\./)
+    assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| obtenue \| eec \| 2025-26 \| Base de Plein Air Mont-Tremblant\n/)
+    assert.match(p, /même program_key et la même adresse/)
+    assert.match(p, /"grant_type" : "salarial", ou "formation"/)
+    assert.match(p, /Réponds uniquement avec un tableau JSON/)
+    assert.doesNotMatch(p, /n'embauche pas de personnel/)
+    assert.match(invitationRechercheSalariale({ ...entree, entreprise: { ...entree.entreprise, hires_staff: false } }), /n'embauche pas de personnel/)
   })
 
   it('mise à jour ciblée : chaque subvention avec sa référence et ce que l’app en sait', () => {
@@ -469,6 +531,30 @@ describe('pipeline (réseau simulé)', () => {
     assert.ok(appels.patch.at(-1).corps.finished_at)
   })
 
+  it('recherche salariale : sa consigne, plus de recherches web, journal « salariale », dates passées retirées', async () => {
+    const passe = { ...PROGRAMMES[0], program_name: 'Stage d’été', program_key: 'stage-ete', source_url: 'https://stages.ca', open_date: '2020-03-01', deadline_date: '2020-08-28', funded_start: '2020-05-01', funded_end: '2020-08-31' }
+    const appels = fauxReseau({
+      claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([PROGRAMMES[0], passe]) }], stop_reason: 'end_turn', usage: usage(10, 10, 30) }],
+    })
+    const bilan = await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id, declencheur: 'manuel', sansMemoire: true, genre: 'salariale' })
+    assert.equal(bilan.new, 2)
+    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'salariale')
+    const [recherche] = appels.claude
+    assert.match(recherche.corps.messages[0].content, /porte seulement sur les subventions salariales/)
+    assert.deepEqual(recherche.corps.tools.map((t) => t.max_uses), [40, 20])
+    const [eec, stage] = appels.rpc.find((r) => r.nom === 'inserer_resultats').corps.p_items
+    assert.equal(eec.deadline_date, PROGRAMMES[0].deadline_date)
+    assert.deepEqual([stage.open_date, stage.deadline_date, stage.funded_start, stage.funded_end], [null, null, null, null])
+    assert.equal(appels.patch.at(-1).corps.web_search_count, 30)
+  })
+
+  it('recherche large : 20 recherches web et 10 pages, genre inconnu = large', async () => {
+    const appels = fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
+    await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id, sansMemoire: true, genre: 'autre' })
+    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'large')
+    assert.deepEqual(appels.claude[0].corps.tools.map((t) => t.max_uses), [20, 10])
+  })
+
   it('mise à jour ciblée : retenues envoyées avec une référence, réponse appliquée, journal', async () => {
     const retenues = [
       { id: 'g-cours', status: 'en_cours', program_name: 'JCTDLO', organisme: 'PCH', source_url: 'https://x.ca', deadline_date: '2027-02-01', fiscal_year: 2027 },
@@ -512,7 +598,7 @@ describe('pipeline (réseau simulé)', () => {
     assert.match(appels.rpc.find((x) => x.nom === 'retenues_a_verifier').corps.p_depuis, /^\d{4}-(01|04|07|10)-01T00:00:00/)
   })
 
-  it('tour du trimestre : la tâche donnée par la base (large ou ciblée), jamais de courriel', async () => {
+  it('tour du trimestre : la tâche donnée par la base (large, salariale ou ciblée), jamais de courriel', async () => {
     let appels = fauxReseau({
       tache: { kind: 'large', company_id: ENTREPRISE.id },
       claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(10, 10, 1) }],
@@ -520,6 +606,14 @@ describe('pipeline (réseau simulé)', () => {
     await tourTrimestriel(ENV)
     assert.equal(appels.claude.length, 1)
     assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'large')
+
+    appels = fauxReseau({
+      tache: { kind: 'salariale', company_id: ENTREPRISE.id },
+      claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(10, 10, 1) }],
+    })
+    await tourTrimestriel(ENV)
+    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'salariale')
+    assert.match(appels.claude[0].corps.messages[0].content, /porte seulement sur les subventions salariales/)
 
     appels = fauxReseau({
       tache: { kind: 'ciblee', company_id: ENTREPRISE.id },
@@ -733,6 +827,20 @@ describe('routes /api/subventions (réseau simulé)', () => {
     const fin = (await r.text()).trim().split('\n').map((l) => JSON.parse(l)).at(-1)
     assert.deepEqual([fin.fin, fin.checked, fin.filled, fin.proposed], [true, 1, 1, 1])
     assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'ciblee')
+  })
+
+  it('recherche salariale manuelle en flux', async () => {
+    const appels = fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([PROGRAMMES[0]]) }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
+    const r = await routeSubventions(
+      requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { company_id: ENTREPRISE.id, genre: 'salariale', sans_memoire: true } }),
+      ENV,
+      ctx,
+      'recherche',
+    )
+    const fin = (await r.text()).trim().split('\n').map((l) => JSON.parse(l)).at(-1)
+    assert.deepEqual([fin.fin, fin.new], [true, 1])
+    const run = appels.inserts.find((i) => i.table === 'grant_search_runs').corps
+    assert.deepEqual([run.kind, run.trigger_source, run.memory_version_id], ['salariale', 'manuel', null])
   })
 
   it('agenda : synchro d’une subvention depuis la fiche', async () => {
