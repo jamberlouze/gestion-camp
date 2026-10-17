@@ -64,7 +64,7 @@ import {
   valeurChamp,
 } from './outils'
 import type { Entreprise, Etape, Heures, Proposition, StatutEtape, StatutSuivi, Subvention, Suivi, TypeSubvention } from './types'
-import { DialogueRejeter, DialogueValider } from './Validation'
+import { DialogueAttente, DialogueRejeter, DialogueValider } from './Validation'
 
 export function Fiche() {
   const { id } = useParams()
@@ -103,7 +103,7 @@ function ContenuFiche({
   const enregistrer = useEnregistrer<Subvention>('grants')
   const supprimer = useSupprimer('grants')
   const maj = (champs: Partial<Subvention>) => enregistrer.mutate({ id: g.id, ...champs })
-  const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
+  const [dialogue, setDialogue] = useState<'valider' | 'attente' | 'rejeter' | null>(null)
   const [modifier, setModifier] = useState(false)
   const suivis = useMemo(() => suivisTous.filter((l) => l.grant_id === g.id), [suivisTous, g.id])
   useEcrireAgenda(g, suivis)
@@ -142,6 +142,11 @@ function ContenuFiche({
               <button className={ui.bouton} onClick={() => setDialogue('valider')}>
                 Retenir…
               </button>
+              {g.status === 'nouveau' && (
+                <button className={ui.boutonSecondaire} onClick={() => setDialogue('attente')}>
+                  Mettre en attente…
+                </button>
+              )}
               <button className={ui.boutonSecondaire} onClick={() => setDialogue('rejeter')}>
                 Rejeter…
               </button>
@@ -235,6 +240,7 @@ function ContenuFiche({
       </Section>
 
       {dialogue === 'valider' && <DialogueValider g={g} entreprises={entreprises} fermer={() => setDialogue(null)} />}
+      {dialogue === 'attente' && <DialogueAttente g={g} fermer={() => setDialogue(null)} />}
       {dialogue === 'rejeter' && <DialogueRejeter g={g} fermer={() => setDialogue(null)} />}
     </div>
   )

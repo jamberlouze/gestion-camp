@@ -4,7 +4,7 @@ import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
-import { ChoixCompagnies, FilNotes, LienOfficiel, menu, Pastille, PastilleStatut, PastilleType, PucesCompagnies } from './commun'
+import { ChoixCompagnies, FilNotes, LienOfficiel, menu, NotesLues, Pastille, PastilleStatut, PastilleType, PucesCompagnies } from './commun'
 import { useDecider, useEnregistrer, useEntreprises, useNotes, useSubventions } from './donnees'
 import {
   CATEGORIES,
@@ -17,7 +17,7 @@ import {
   trierAValider,
   TYPES,
 } from './outils'
-import type { CategorieRejet, Entreprise, Subvention, TypeSubvention } from './types'
+import type { CategorieRejet, Entreprise, Note, Subvention, TypeSubvention } from './types'
 
 type FiltreStatut = 'tous' | 'nouveau' | 'a_valider'
 
@@ -58,7 +58,7 @@ export function Validation() {
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!subventions.data || !entreprises.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const nbNotes = (id: string) => (notes.data ?? []).filter((n) => n.grant_id === id).length
+  const notesDe = (id: string) => (notes.data ?? []).filter((n) => n.grant_id === id)
 
   return (
     <div className="space-y-4">
@@ -111,7 +111,7 @@ export function Validation() {
 
       <div className="space-y-3">
         {liste.map((g) => (
-          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} nbNotes={nbNotes(g.id)} />
+          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} notes={notesDe(g.id)} />
         ))}
       </div>
 
@@ -149,10 +149,10 @@ export function Validation() {
   )
 }
 
-function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entreprises: Entreprise[]; nbNotes: number }) {
+function CarteValidation({ g, entreprises, notes }: { g: Subvention; entreprises: Entreprise[]; notes: Note[] }) {
   const enregistrer = useEnregistrer<Subvention>('grants')
   const [notesOuvertes, setNotesOuvertes] = useState(false)
-  const [dialogue, setDialogue] = useState<'valider' | 'rejeter' | null>(null)
+  const [dialogue, setDialogue] = useState<'valider' | 'attente' | 'rejeter' | null>(null)
   const montant = montantsPotentiels(g)
   const jours = g.deadline_date ? joursAvant(g.deadline_date) : null
 
@@ -203,6 +203,12 @@ function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entrepris
           <p className="mt-0.5 whitespace-pre-line">{g.relevance_justification}</p>
         </div>
       )}
+      {g.status === 'a_valider' && notes.length > 0 && !notesOuvertes && (
+        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-amber-800">En attente — notes</p>
+          <NotesLues notes={notes} />
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button className={ui.bouton} onClick={() => setDialogue('valider')}>
@@ -211,10 +217,10 @@ function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entrepris
         {g.status === 'nouveau' ? (
           <button
             className={ui.boutonSecondaire}
-            title="Regardée, mais en attente d'une information (posez la question en note)"
-            onClick={() => enregistrer.mutate({ id: g.id, status: 'a_valider' })}
+            title="Regardée, mais il manque une information pour décider : notez ce qu’il faut vérifier"
+            onClick={() => setDialogue('attente')}
           >
-            Mettre en attente
+            Mettre en attente…
           </button>
         ) : (
           <button className={ui.boutonSecondaire} onClick={() => enregistrer.mutate({ id: g.id, status: 'nouveau' })}>
@@ -227,7 +233,7 @@ function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entrepris
         <span className="mx-1 hidden h-5 w-px bg-pierre-200 sm:block" />
         <LienOfficiel url={g.source_url} />
         <button className="text-sm text-pierre-600 underline hover:text-pierre-900" onClick={() => setNotesOuvertes((o) => !o)}>
-          Notes{nbNotes ? ` (${nbNotes})` : ''}
+          Notes{notes.length ? ` (${notes.length})` : ''}
         </button>
         <Link to={`/subventions/fiche/${g.id}`} className="text-sm text-pierre-600 underline hover:text-pierre-900">
           Fiche complète
@@ -241,6 +247,7 @@ function CarteValidation({ g, entreprises, nbNotes }: { g: Subvention; entrepris
       )}
 
       {dialogue === 'valider' && <DialogueValider g={g} entreprises={entreprises} fermer={() => setDialogue(null)} />}
+      {dialogue === 'attente' && <DialogueAttente g={g} fermer={() => setDialogue(null)} />}
       {dialogue === 'rejeter' && <DialogueRejeter g={g} fermer={() => setDialogue(null)} />}
     </article>
   )
@@ -297,6 +304,75 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
         </button>
         <button className={ui.bouton} disabled={!compagnies.length || decider.isPending} onClick={valider}>
           Retenir{compagnies.length > 1 ? ` pour ${compagnies.length} compagnies` : ''}
+        </button>
+      </div>
+    </Dialogue>
+  )
+}
+
+/**
+ * Mettre en attente avec une note : ce qu'il faut vérifier pour décider plus
+ * tard. La note va dans les notes internes de la subvention et y reste après
+ * la décision.
+ */
+export function DialogueAttente({ g, fermer }: { g: Subvention; fermer: () => void }) {
+  const statut = useEnregistrer<Subvention>('grants', { erreurSurPlace: true })
+  const ajouterNote = useEnregistrer<Note>('grant_notes', { erreurSurPlace: true })
+  const notes = (useNotes().data ?? []).filter((n) => n.grant_id === g.id)
+  const [texte, setTexte] = useState('')
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  // La note d'abord : la carte peut quitter la liste filtrée dès que le statut
+  // change. Une note enregistrée vide le champ (un nouvel essai ne la double pas).
+  const mettreEnAttente = async () => {
+    setErreur(null)
+    try {
+      const body = texte.trim()
+      if (body) {
+        await ajouterNote.mutateAsync({ grant_id: g.id, body })
+        setTexte('')
+      }
+      await statut.mutateAsync({ id: g.id, status: 'a_valider' })
+      fermer()
+    } catch (e) {
+      setErreur(messageErreur(e))
+    }
+  }
+
+  return (
+    <Dialogue titre="Mettre en attente" fermer={fermer}>
+      <p className="mb-3 text-sm text-pierre-600">
+        « {g.program_name} » reste dans À valider, marquée <b>en attente</b>. Notez ce qu’il faut vérifier pour décider plus tard : la
+        note reste dans les notes internes de la fiche, même une fois la subvention retenue ou rejetée.
+      </p>
+      {notes.length > 0 && (
+        <div className="mb-3 rounded-lg bg-pierre-50 px-3 py-2">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-pierre-500">Notes déjà prises</p>
+          <NotesLues notes={notes} />
+        </div>
+      )}
+      <label className={ui.etiquette} htmlFor="note-attente">
+        Ce qu’il faut vérifier (facultatif)
+      </label>
+      <textarea
+        id="note-attente"
+        className={ui.champ}
+        rows={3}
+        autoFocus
+        placeholder="Ex. voir si les OBNL sont admissibles ; l’appel de projets rouvre en janvier"
+        value={texte}
+        onChange={(e) => setTexte(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) mettreEnAttente()
+        }}
+      />
+      {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
+      <div className="mt-4 flex justify-end gap-2">
+        <button className={ui.boutonSecondaire} onClick={fermer}>
+          Annuler
+        </button>
+        <button className={ui.bouton} disabled={statut.isPending || ajouterNote.isPending} onClick={mettreEnAttente}>
+          Mettre en attente
         </button>
       </div>
     </Dialogue>
