@@ -5,10 +5,12 @@
 // trimestres de l'année fiscale), le cron fait la recherche en trois temps,
 // UN travail par passage (une recherche dure plusieurs minutes ; un appel du
 // cron est limité à 15 minutes) :
-//   a) recherche large, une entreprise active à la fois (rechercherEntreprise) ;
-//   b) recherche salariale de chaque entreprise active qui embauche
-//      (rechercherEntreprise, genre 'salariale' : organisme par organisme,
-//      plus de recherches web) ;
+//   a) recherche de chaque thème pour tout le groupe (rechercherTheme ;
+//      décision de Maxime du 2026-10-17, après l'essai par thème), dans
+//      l'ordre de THEMES ; chaque programme nomme ses entreprises ;
+//   b) recherche « angle mort » de chaque entreprise active
+//      (rechercherAngleMort : ce qui lui est propre, que les thèmes ont pu
+//      manquer) ;
 //   c) mise à jour ciblée des subventions retenues ou obtenues de chaque
 //      entreprise (mettreAJourRetenues) : champ vide rempli, champ rempli qui
 //      changerait = proposition à valider sur la fiche.
@@ -21,8 +23,9 @@ import { synchroniserAgenda } from './agenda.js'
 import { base } from './base.js'
 import { clientClaude, modele, rechercher, reparer, synthetiser } from './claude.js'
 import { construireRappel, envoyerGmail, gmailConfigure } from './courriel.js'
-import { invitationMemoire, invitationMiseAJour, invitationRecherche, invitationRechercheSalariale } from './invites.js'
-import { extraireTableau, sansEditionPassee, validerMisesAJour, validerProgrammes } from './resultats.js'
+import { THEMES } from '../../src/modules/subventions/themes.ts'
+import { invitationAngleMort, invitationMemoire, invitationMiseAJour, invitationRechercheTheme } from './invites.js'
+import { extraireTableau, sansEditionPassee, validerMisesAJour, validerProgrammes, validerProgrammeTheme } from './resultats.js'
 
 /** Courriels du module : aucun jusqu'à nouvel ordre. Le remettre = true (et revoir le texte du rappel). */
 export const COURRIELS = false
@@ -44,11 +47,16 @@ function aujourdhui() {
 /** « AAAA-MM-JJ » à Montréal. */
 const jourIso = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Toronto' }).format(new Date())
 
-/** Prompt et recherches web permises de chaque genre de recherche de programmes. */
-const GENRES = {
-  large: { invitation: invitationRecherche, budget: { recherches: 20, lectures: 10 } },
-  salariale: { invitation: invitationRechercheSalariale, budget: { recherches: 40, lectures: 20 } },
+/**
+ * Recherches web et pages permises : un thème (budgets de l'essai ; le
+ * salarial passe en revue plus d'organismes) et l'angle mort d'une entreprise.
+ */
+export const BUDGETS = {
+  theme: { recherches: 40, lectures: 20 },
+  salarial: { recherches: 50, lectures: 25 },
+  angle_mort: { recherches: 15, lectures: 8 },
 }
+const budgetTheme = (cle) => (cle === 'salarial' ? BUDGETS.salarial : BUDGETS.theme)
 
 /** 1er jour (0 h UTC) du trimestre de l'année fiscale : octobre, janvier, avril ou juillet. */
 export function debutTrimestre(maintenant = new Date()) {
@@ -70,12 +78,13 @@ export const estTourTrimestriel = (moment) =>
 
 /**
  * Étape 1 : mémoire. Résume tout le feedback du groupe en règles apprises
- * pour cette entreprise. Rien de neuf depuis le dernier résumé : on le
- * réutilise. Une panne ici n'empêche pas la recherche (dernier résumé).
+ * pour cette entreprise (`entreprise` null : pour tout le groupe, recherches
+ * par thème). Rien de neuf depuis le dernier résumé : on le réutilise. Une
+ * panne ici n'empêche pas la recherche (dernier résumé).
  */
 async function mettreAJourMemoire(db, claude, nom, entreprise) {
   const [derniere] = await db.lire(
-    `grant_learned_rules?company_id=eq.${entreprise.id}&order=generated_at.desc&limit=1&select=id,summary,based_on_feedback_count,generated_at`,
+    `grant_learned_rules?company_id=${entreprise ? `eq.${entreprise.id}` : 'is.null'}&order=generated_at.desc&limit=1&select=id,summary,based_on_feedback_count,generated_at`,
   )
   try {
     const feedback = await db.rpc('feedback_pour_memoire')
@@ -86,52 +95,41 @@ async function mettreAJourMemoire(db, claude, nom, entreprise) {
     }
     const summary = await synthetiser(claude, nom, invitationMemoire({ feedback, entreprise }))
     return await db.inserer('grant_learned_rules', {
-      company_id: entreprise.id,
+      company_id: entreprise?.id ?? null,
       summary,
       based_on_feedback_count: feedback.length,
     })
   } catch (e) {
-    console.error(`Mémoire (${entreprise.name}) : ${messageDe(e)}`)
+    console.error(`Mémoire (${entreprise?.name ?? 'groupe'}) : ${messageDe(e)}`)
     return derniere ?? null
   }
 }
 
 /**
- * Recherche complète pour une entreprise : mémoire, journal, recherche,
- * validation, dédoublonnage et insertion. `genre` : 'large' (tous les
- * types) ou 'salariale' (subventions salariales seulement). Renvoie le
- * bilan ; en cas de panne, l'erreur est écrite dans le journal puis relancée.
+ * Une recherche de nouvelles subventions, de la mémoire à l'insertion :
+ * mémoire, journal (`ligne`), consigne (`inviter`, avec le groupe, les
+ * consignes, les règles et les programmes connus), recherche web, lecture
+ * (avec rattrapage au `format` voulu), validation, dédoublonnage. Renvoie
+ * le bilan ; en cas de panne, l'erreur est écrite dans le journal puis relancée.
  */
-export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'cron', sansMemoire = false, genre = 'large' }) {
-  const kind = GENRES[genre] ? genre : 'large'
-  const { invitation, budget } = GENRES[kind]
+async function executerRecherche(env, { ligne, entreprise = null, libelle, sansMemoire, inviter, valider, format, budget }) {
   const db = base(env)
-  const [entreprise] = await db.lire(`grant_companies?id=eq.${entrepriseId}&select=*`)
-  if (!entreprise) throw new Error('Entreprise introuvable.')
   const nom = modele(env)
-  const claude = clientClaude(env)
 
   const regles = sansMemoire ? null : await mettreAJourMemoire(db, clientClaude(env, { delai: 5 * 60 * 1000, essais: 2 }), nom, entreprise)
 
-  const run = await db.inserer('grant_search_runs', {
-    company_id: entreprise.id,
-    kind,
-    trigger_source: declencheur,
-    memory_version_id: regles?.id ?? null,
-    model: nom,
-  })
+  const run = await db.inserer('grant_search_runs', { ...ligne, memory_version_id: regles?.id ?? null, model: nom })
 
   let texte = null
   try {
     const [reglages, groupe, connus] = await Promise.all([
       db.lire('grant_settings?select=key,value'),
-      db.lire('grant_companies?active=is.true&order=sort_order,name&select=id,name,legal_status'),
+      db.lire('grant_companies?active=is.true&order=sort_order,name&select=id,name,legal_status,specific_criteria,hires_staff'),
       // Une carte par programme pour tout le groupe, avec ses entreprises.
       db.lire('grants?select=program_name,source_url,status,program_key,discovered_fy,company_ids&order=discovered_at.desc&limit=400'),
     ])
     const consignes = reglages.find((r) => r.key === 'consignes_groupe')?.value
-    const invite = invitation({
-      entreprise,
+    const invite = inviter({
       groupe,
       consignes: typeof consignes === 'string' ? consignes : '',
       regles: regles?.summary ?? null,
@@ -139,7 +137,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       aujourdhui: aujourdhui(),
     })
 
-    const reponse = await rechercher(claude, nom, invite, budget)
+    const reponse = await rechercher(clientClaude(env), nom, invite, budget)
     texte = reponse.texte
 
     let elements
@@ -147,10 +145,10 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       elements = extraireTableau(texte)
     } catch (e) {
       // Sortie mal formée : une tentative de remise au format.
-      console.warn(`Réponse illisible (${entreprise.name}) : ${messageDe(e)} — rattrapage`)
-      elements = await reparer(clientClaude(env, { delai: 5 * 60 * 1000, essais: 2 }), nom, texte)
+      console.warn(`Réponse illisible (${libelle}) : ${messageDe(e)} — rattrapage`)
+      elements = await reparer(clientClaude(env, { delai: 5 * 60 * 1000, essais: 2 }), nom, texte, format)
     }
-    const { valides, invalides } = validerProgrammes(elements)
+    const { valides, invalides } = valider(elements, groupe)
     const bilan = await db.rpc('inserer_resultats', { p_run: run.id, p_items: sansEditionPassee(valides, jourIso()) })
 
     await db.modifier('grant_search_runs', `id=eq.${run.id}`, {
@@ -162,7 +160,7 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
       error: reponse.fin === 'max_tokens' ? 'Réponse coupée (limite de longueur) : liste peut-être incomplète.' : null,
       raw_output: invalides.length ? `Éléments écartés : ${invalides.join(' ; ')}\n\n${texte}`.slice(0, 20000) : null,
     })
-    return { run: run.id, entreprise: entreprise.name, ...bilan, invalid: invalides.length }
+    return { run: run.id, ...bilan, invalid: invalides.length }
   } catch (e) {
     await db
       .modifier('grant_search_runs', `id=eq.${run.id}`, {
@@ -170,9 +168,45 @@ export async function rechercherEntreprise(env, { entrepriseId, declencheur = 'c
         error: messageDe(e).slice(0, 2000),
         raw_output: texte ? texte.slice(0, 20000) : null,
       })
-      .catch((e2) => console.error(`Journal (${entreprise.name}) : ${messageDe(e2)}`))
+      .catch((e2) => console.error(`Journal (${libelle}) : ${messageDe(e2)}`))
     throw e
   }
+}
+
+/**
+ * Recherche d'un thème pour tout le groupe (clé de THEMES) : chaque
+ * programme nomme les entreprises qui peuvent en profiter ; mémoire du groupe.
+ */
+export async function rechercherTheme(env, { theme, declencheur = 'cron', sansMemoire = false }) {
+  const t = THEMES.find((x) => x.cle === theme)
+  if (!t) throw new Error('Thème inconnu.')
+  const bilan = await executerRecherche(env, {
+    ligne: { company_id: null, kind: 'theme', theme: t.cle, trigger_source: declencheur },
+    libelle: t.libelle,
+    sansMemoire,
+    inviter: (contexte) => invitationRechercheTheme({ theme: t.cle, ...contexte }),
+    valider: (elements, groupe) => validerProgrammes(elements, (e) => validerProgrammeTheme(e, groupe)),
+    format: 'programmes_theme',
+    budget: budgetTheme(t.cle),
+  })
+  return { ...bilan, theme: t.libelle }
+}
+
+/** Recherche « angle mort » d'une entreprise : ce qui lui est propre, après les thèmes. */
+export async function rechercherAngleMort(env, { entrepriseId, declencheur = 'cron', sansMemoire = false }) {
+  const [entreprise] = await base(env).lire(`grant_companies?id=eq.${entrepriseId}&select=*`)
+  if (!entreprise) throw new Error('Entreprise introuvable.')
+  const bilan = await executerRecherche(env, {
+    ligne: { company_id: entreprise.id, kind: 'angle_mort', trigger_source: declencheur },
+    entreprise,
+    libelle: entreprise.name,
+    sansMemoire,
+    inviter: (contexte) => invitationAngleMort({ entreprise, ...contexte }),
+    valider: (elements) => validerProgrammes(elements),
+    format: 'programmes',
+    budget: BUDGETS.angle_mort,
+  })
+  return { ...bilan, entreprise: entreprise.name }
 }
 
 /** Contenu du rappel : nouvelles trouvées par Claude depuis `depuis`. */
@@ -295,7 +329,7 @@ export async function envoyerRappelEssai(env, courriel) {
   await envoyerGmail(env, { a: [courriel], ...rappel })
 }
 
-/** Un passage du cron du trimestre : le travail suivant (recherche large, puis salariale, puis mises à jour ciblées). */
+/** Un passage du cron du trimestre : le travail suivant (chaque thème, puis l'angle mort de chaque entreprise, puis les mises à jour ciblées). */
 export async function tourTrimestriel(env) {
   if (!rechercheConfiguree(env)) {
     console.log('Vigie de subventions : secrets ANTHROPIC_API_KEY ou SUPABASE_SECRET_KEY manquants, rien à faire.')
@@ -308,13 +342,15 @@ export async function tourTrimestriel(env) {
     return
   }
 
-  const tache = await db.rpc('prochaine_tache_trimestre')
-  if (tache?.company_id) {
+  const tache = await db.rpc('prochaine_tache_trimestre', { p_themes: THEMES.map((t) => t.cle) })
+  if (tache?.kind) {
     try {
       const bilan =
-        tache.kind === 'ciblee'
-          ? await mettreAJourRetenues(env, { entrepriseId: tache.company_id, declencheur: 'cron', trimestre: true })
-          : await rechercherEntreprise(env, { entrepriseId: tache.company_id, declencheur: 'cron', genre: tache.kind })
+        tache.kind === 'theme'
+          ? await rechercherTheme(env, { theme: tache.theme, declencheur: 'cron' })
+          : tache.kind === 'angle_mort'
+            ? await rechercherAngleMort(env, { entrepriseId: tache.company_id, declencheur: 'cron' })
+            : await mettreAJourRetenues(env, { entrepriseId: tache.company_id, declencheur: 'cron', trimestre: true })
       console.log(`Vigie de subventions (${tache.kind}) : ${JSON.stringify(bilan)}`)
     } catch (e) {
       console.error(`Vigie de subventions (${tache.kind}) : ${messageDe(e)}`)

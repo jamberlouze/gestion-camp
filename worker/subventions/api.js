@@ -7,7 +7,8 @@ import { modeAgenda, synchroniserAgenda } from './agenda.js'
 import { base } from './base.js'
 import { modele } from './claude.js'
 import { gmailConfigure } from './courriel.js'
-import { COURRIELS, envoyerRappelEssai, mettreAJourRetenues, rechercheConfiguree, rechercherEntreprise } from './pipeline.js'
+import { THEMES } from '../../src/modules/subventions/themes.ts'
+import { COURRIELS, envoyerRappelEssai, mettreAJourRetenues, rechercheConfiguree, rechercherAngleMort, rechercherTheme } from './pipeline.js'
 
 const UUID = /^[0-9a-f-]{36}$/i
 
@@ -98,25 +99,27 @@ export async function routeSubventions(request, env, ctx, chemin) {
       return json({ erreur: 'Secrets manquants dans Cloudflare : ANTHROPIC_API_KEY et SUPABASE_SECRET_KEY.' }, 503)
     }
     const corps = await request.json().catch(() => ({}))
-    if (typeof corps.company_id !== 'string' || !UUID.test(corps.company_id)) {
-      return json({ erreur: 'Entreprise manquante.' }, 400)
+    // Un thème pour tout le groupe, ou l'angle mort ou la mise à jour des retenues d'une entreprise.
+    const genre = corps.genre
+    if (!['theme', 'angle_mort', 'ciblee'].includes(genre)) return json({ erreur: 'Genre de recherche inconnu.' }, 400)
+    if (genre === 'theme' ? !THEMES.some((t) => t.cle === corps.theme) : typeof corps.company_id !== 'string' || !UUID.test(corps.company_id)) {
+      return json({ erreur: genre === 'theme' ? 'Thème inconnu.' : 'Entreprise manquante.' }, 400)
     }
-    const genre = ['ciblee', 'salariale'].includes(corps.genre) ? corps.genre : 'large'
     const depuis = encodeURIComponent(new Date(Date.now() - 20 * 60 * 1000).toISOString())
     const enCours = await base(env).lire(
-      `grant_search_runs?company_id=eq.${corps.company_id}&finished_at=is.null&started_at=gte.${depuis}&select=id`,
+      `grant_search_runs?${genre === 'theme' ? `theme=eq.${corps.theme}` : `company_id=eq.${corps.company_id}`}&finished_at=is.null&started_at=gte.${depuis}&select=id`,
     )
-    if (enCours.length) return json({ erreur: 'Une recherche est déjà en cours pour cette entreprise.' }, 409)
+    if (enCours.length) {
+      return json({ erreur: `Une recherche est déjà en cours pour ${genre === 'theme' ? 'ce thème' : 'cette entreprise'}.` }, 409)
+    }
 
-    // Recherche large ou salariale (nouvelles subventions), ou mise à jour des retenues de l'entreprise.
+    const sansMemoire = corps.sans_memoire === true
     const { reponse, travail } =
-      genre === 'ciblee'
-        ? rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel' }, mettreAJourRetenues)
-        : rechercheEnFlux(
-            env,
-            { entrepriseId: corps.company_id, declencheur: 'manuel', sansMemoire: corps.sans_memoire === true, genre },
-            rechercherEntreprise,
-          )
+      genre === 'theme'
+        ? rechercheEnFlux(env, { theme: corps.theme, declencheur: 'manuel', sansMemoire }, rechercherTheme)
+        : genre === 'angle_mort'
+          ? rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel', sansMemoire }, rechercherAngleMort)
+          : rechercheEnFlux(env, { entrepriseId: corps.company_id, declencheur: 'manuel' }, mettreAJourRetenues)
     ctx.waitUntil(travail)
     return reponse
   }

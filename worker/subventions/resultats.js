@@ -198,12 +198,46 @@ export function validerMisesAJour(elements, parRef) {
   return { valides, invalides }
 }
 
-/** Sépare les éléments valides des autres (avec la raison du rejet). */
-export function validerProgrammes(elements) {
+const nomCompare = (s) =>
+  String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/**
+ * Programme d'une recherche par thème : comme `validerProgramme`, plus ses
+ * entreprises (« companies » : noms du groupe → identifiants, sans égard à la
+ * casse ni aux accents, chacune avec sa justification ; une fois chacune).
+ * Un nom inconnu est ignoré ; aucune entreprise reconnue → élément écarté.
+ * @param {unknown} brut
+ * @param {{id: string, name: string}[]} groupe
+ */
+export function validerProgrammeTheme(brut, groupe) {
+  const r = validerProgramme(brut)
+  if (!r.ok) return r
+  const parNom = new Map(groupe.map((e) => [nomCompare(e.name), e.id]))
+  const companies = []
+  for (const c of Array.isArray(brut.companies) ? brut.companies : []) {
+    const id = parNom.get(nomCompare(typeof c === 'string' ? c : c?.name))
+    if (!id || companies.some((x) => x.company_id === id)) continue
+    companies.push({ company_id: id, justification: texteOuNull(c?.justification, 4000) })
+  }
+  if (!companies.length) return { ok: false, raison: `aucune entreprise du groupe reconnue (${r.valeur.program_name})` }
+  return { ok: true, valeur: { ...r.valeur, relevance_justification: null, companies } }
+}
+
+/**
+ * Sépare les éléments valides des autres (avec la raison du rejet).
+ * `valider` : `validerProgramme` (recherche par entreprise) ou, pour une
+ * recherche par thème, `(e) => validerProgrammeTheme(e, groupe)`.
+ */
+export function validerProgrammes(elements, valider = validerProgramme) {
   const valides = []
   const invalides = []
   for (const e of elements) {
-    const r = validerProgramme(e)
+    const r = valider(e)
     if (r.ok) valides.push(r.valeur)
     else invalides.push(r.raison)
   }

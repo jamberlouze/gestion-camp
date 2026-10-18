@@ -21,7 +21,7 @@ export interface Entreprise {
   name: string
   specific_criteria: string | null
   legal_status: string | null
-  /** Embauche du personnel : priorité aux subventions salariales dans sa recherche. */
+  /** Embauche du personnel : nommée pour les subventions salariales des recherches par thème. */
   hires_staff: boolean
   active: boolean
   sort_order: number
@@ -144,7 +144,10 @@ export interface Etape {
 
 export interface Recherche {
   id: string
-  company_id: string
+  /** Entreprise de la recherche ; null pour une recherche par thème. */
+  company_id: string | null
+  /** Clé du thème (themes.ts) d'une recherche par thème ; null sinon. */
+  theme: string | null
   started_at: string
   finished_at: string | null
   found_count: number
@@ -154,8 +157,12 @@ export interface Recherche {
   memory_version_id: string | null
   error: string | null
   trigger_source: 'cron' | 'manuel'
-  /** large : nouvelles subventions ; ciblee : mise à jour des retenues et obtenues (new_count = nouvelles éditions). */
-  kind: 'large' | 'salariale' | 'ciblee'
+  /**
+   * theme : nouvelles subventions d'un thème pour tout le groupe ; angle_mort : nouvelles subventions propres à
+   * l'entreprise ; ciblee : mise à jour des retenues et obtenues (new_count = nouvelles éditions) ; large et
+   * salariale : anciennes recherches par entreprise (historique).
+   */
+  kind: 'theme' | 'angle_mort' | 'ciblee' | 'large' | 'salariale'
   filled_count: number
   proposed_count: number
   model: string | null

@@ -57,9 +57,9 @@ export function Reglages() {
 
       <Section titre="Consignes pour tout le groupe (facultatif)">
         <p className="mb-2 text-sm text-pierre-600">
-          Ajoutées à chaque recherche. La liste des entreprises du groupe, la priorité aux subventions salariales (pour les
-          entreprises qui embauchent) et « ratisser large » y sont déjà : écrivez ici seulement une règle à imposer avant que la
-          mémoire l’apprenne de vos validations et rejets.
+          Ajoutées à chaque recherche. La liste des entreprises du groupe avec leurs critères, qui embauche et « ratisser
+          large » y sont déjà : écrivez ici seulement une règle à imposer avant que la mémoire l’apprenne de vos validations et
+          rejets.
         </p>
         <ZoneTexte
           className={ui.champ}
@@ -208,7 +208,7 @@ function FicheEntreprise({ e }: { e: Entreprise }) {
         </label>
         <label
           className="flex items-center gap-2 self-end pb-2 text-sm"
-          title="Priorité aux subventions salariales dans la recherche de cette entreprise"
+          title="Seules les entreprises qui embauchent sont nommées pour les subventions salariales"
         >
           <input
             type="checkbox"

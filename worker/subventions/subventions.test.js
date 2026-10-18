@@ -5,11 +5,21 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import { actionsAgenda, evenementsVoulus } from '../../src/modules/subventions/agenda.ts'
+import { THEMES } from '../../src/modules/subventions/themes.ts'
 import { synchroniserAgenda } from './agenda.js'
 import { routeSubventions } from './api.js'
 import { construireRappel, messageMime, trierPrometteuses } from './courriel.js'
-import { invitationMemoire, invitationMiseAJour, invitationRecherche, invitationRechercheSalariale } from './invites.js'
-import { debutTrimestre, estTourTrimestriel, mettreAJourRetenues, passageSubventions, rechercherEntreprise, tourTrimestriel } from './pipeline.js'
+import { invitationAngleMort, invitationMemoire, invitationMiseAJour, invitationRechercheTheme, TEXTES_THEMES } from './invites.js'
+import {
+  BUDGETS,
+  debutTrimestre,
+  estTourTrimestriel,
+  mettreAJourRetenues,
+  passageSubventions,
+  rechercherAngleMort,
+  rechercherTheme,
+  tourTrimestriel,
+} from './pipeline.js'
 import {
   cleProgramme,
   dateIso,
@@ -20,6 +30,7 @@ import {
   typeSubvention,
   validerMisesAJour,
   validerProgrammes,
+  validerProgrammeTheme,
 } from './resultats.js'
 
 describe('lecture de la réponse', () => {
@@ -86,6 +97,41 @@ describe('lecture de la réponse', () => {
         program_key: 'eec',
       },
     )
+  })
+
+  it('recherche par thème : entreprises reconnues par leur nom (casse, accents), une fois chacune, inconnues ignorées', () => {
+    const groupe = [
+      { id: 'g', name: 'Gestion Base de Plein Air Mont-Tremblant +' },
+      { id: 'r', name: 'Rouge & Diable' },
+    ]
+    const { valides, invalides } = validerProgrammes(
+      [
+        {
+          program_name: 'PAFSSPA',
+          source_url: 'https://quebec.ca/pafsspa',
+          grant_type: 'immobilisation',
+          companies: [
+            { name: ' gestion base de plein air mont-tremblant + ', justification: ' Sentiers. ' },
+            { name: 'ROUGE & DIABLE', justification: null },
+            { name: 'Rouge & Diable', justification: 'doublon' },
+            { name: 'Inconnue inc', justification: 'x' },
+          ],
+        },
+        { program_name: 'Personne', source_url: 'https://x.ca', companies: [{ name: 'Inconnue inc' }] },
+        { program_name: 'Sans liste', source_url: 'https://y.ca' },
+        { program_name: 'Sans adresse', companies: [{ name: 'Rouge & Diable' }] },
+      ],
+      (e) => validerProgrammeTheme(e, groupe),
+    )
+    assert.equal(valides.length, 1)
+    assert.deepEqual(valides[0].companies, [
+      { company_id: 'g', justification: 'Sentiers.' },
+      { company_id: 'r', justification: null },
+    ])
+    assert.equal(valides[0].relevance_justification, null)
+    assert.equal(valides[0].program_key, 'pafsspa')
+    assert.equal(invalides.length, 3)
+    assert.match(invalides[0], /aucune entreprise du groupe reconnue \(Personne\)/)
   })
 })
 
@@ -162,86 +208,86 @@ describe('mise à jour ciblée : lecture de la réponse', () => {
 
 describe('prompts', () => {
   const groupe = [
-    { id: 'b', name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL' },
-    { id: 't', name: 'Trembloc', legal_status: null },
+    { id: 'b', name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL', specific_criteria: 'Camp de vacances.\n  Plein air.', hires_staff: true },
+    { id: 't', name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
+    { id: 'i', name: 'Immeubles inc', legal_status: 'Entreprise privée', specific_criteria: null, hires_staff: false },
+  ]
+  const connus = [
+    { program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'rejete', program_key: 'eec', discovered_fy: 2027, company_ids: ['b', 't'] },
+    { program_name: 'PADAT', source_url: null, status: 'nouveau', program_key: 'padat', discovered_fy: 2027, company_ids: ['b'] },
   ]
 
-  it('recherche : groupe, salarial à part, critères, règles, programmes connus', () => {
-    const p = invitationRecherche({
-      entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
+  it('chaque thème a sa consigne', () => {
+    assert.deepEqual(Object.keys(TEXTES_THEMES), THEMES.map((t) => t.cle))
+  })
+
+  it('recherche par thème : tout le groupe avec ses critères, familles du thème, entreprises nommées, programmes connus', () => {
+    const p = invitationRechercheTheme({
+      theme: 'salarial',
       groupe,
-      consignes: '',
-      regles: null,
-      connus: [
-        { program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'rejete', program_key: 'eec', discovered_fy: 2027, company_ids: ['b', 't'] },
-        { program_name: 'PADAT', source_url: null, status: 'nouveau', program_key: 'padat', discovered_fy: 2027, company_ids: ['b'] },
-      ],
-      aujourdhui: 'samedi 3 octobre 2026',
+      consignes: '  Exclure le manufacturier.  ',
+      regles: '- Privilégier les emplois d’été.',
+      connus,
+      aujourdhui: 'samedi 17 octobre 2026',
     })
-    assert.match(p, /pour Trembloc \(statut juridique non précisé/)
-    assert.match(p, /celle-ci vise seulement Trembloc\) :\n- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc\n/)
-    // Une entreprise qui embauche a sa recherche salariale : la large n'y consacre plus ses recherches.
-    assert.match(p, /ont leur\npropre recherche, faite à part/)
-    assert.match(p, /Ratisse large/)
-    // Un programme d'été fermé en octobre compte quand même, sans les dates d'une édition passée.
+    assert.match(p, /un seul thème, pour tout le groupe à la fois : les subventions salariales et l'aide à l'embauche\./)
+    // Le groupe : statut, embauche et critères de chaque entreprise.
+    assert.match(p, /- Base de Plein Air Mont-Tremblant \(OBNL\) : Camp de vacances\. Plein air\.\n/)
+    assert.match(p, /- Trembloc \(statut juridique non précisé[^)]*\) : Bloc extérieur\n/)
+    assert.match(p, /- Immeubles inc \(Entreprise privée, n'embauche pas de personnel\)\n/)
+    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
+    // Les familles d'organismes du salarial, une à une.
+    assert.match(p, /pas versées par un ministère, mais par un organisme/)
+    assert.match(p, /Programme de stages pratiques pour étudiants \(PSPE\)[\s\S]*vérifie chacun/)
+    assert.match(p, /chacune de ses mesures d'aide à l'embauche/)
+    assert.match(p, /« financement des\n   stages »/)
+    // Chaque programme nomme ses entreprises.
+    assert.match(p, /nomme toutes les entreprises du groupe qui peuvent en profiter/)
+    assert.match(p, /"companies": \[ \{ "name": l'un de "Base de Plein Air Mont-Tremblant", "Trembloc", "Immeubles inc"/)
+    assert.doesNotMatch(p, /"relevance_justification"/)
+    assert.match(p, /"companies" n'est jamais vide/)
+    // Mémoire, récurrents, programmes connus et ajout d'une entreprise à une fiche.
+    assert.match(p, /- Privilégier les emplois d’été\./)
     assert.match(p, /Un programme récurrent fermé aujourd'hui .* compte aussi : propose-le\./)
-    assert.match(p, /Ne donne jamais les dates d'une édition passée\./)
-    assert.doesNotMatch(p, /Consignes de la direction/)
-    assert.match(p, /Bloc extérieur/)
-    assert.match(p, /Aucune règle apprise/)
     assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| rejetée \| eec \| 2026-27 \| Base de Plein Air Mont-Tremblant, Trembloc\n/)
     assert.match(p, /- PADAT \| sans adresse \| nouvelle \| padat \| 2026-27 \| Base de Plein Air Mont-Tremblant\n/)
-    // Un programme connu pour une autre entreprise : reproposé avec la même clé, ajouté à sa fiche.
-    assert.match(p, /Ne repropose pas un programme déjà connu pour Trembloc\./)
-    assert.match(p, /même program_key et la même adresse/)
+    assert.match(p, /en ne nommant dans « companies » que les entreprises à ajouter/)
     assert.match(p, /Réponds uniquement avec un tableau JSON/)
   })
 
-  it('recherche : entreprise sans personnel et consignes du groupe', () => {
-    const p = invitationRecherche({
-      entreprise: { name: 'Immeubles inc', legal_status: 'Entreprise privée', specific_criteria: null, hires_staff: false },
-      groupe,
-      consignes: '  Exclure le manufacturier.  ',
-      regles: null,
-      connus: [],
-      aujourdhui: 'lundi 5 octobre 2026',
-    })
-    assert.doesNotMatch(p, /propre recherche, faite à part/)
-    assert.match(p, /n'embauche pas de personnel/)
-    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
+  it('recherche par thème : la consigne du thème seulement ; thème inconnu refusé', () => {
+    const p = invitationRechercheTheme({ theme: 'batiments', groupe, consignes: '', regles: null, connus: [], aujourdhui: 'lundi 5 octobre 2026' })
+    assert.match(p, /Efficacité énergétique/)
+    assert.doesNotMatch(p, /Programme de stages pratiques/)
+    assert.doesNotMatch(p, /Consignes de la direction/)
+    assert.match(p, /Aucune règle apprise/)
+    assert.match(p, /\(aucun pour l’instant\)/)
+    assert.throws(() => invitationRechercheTheme({ theme: 'autre', groupe, consignes: '', regles: null, connus: [], aujourdhui: '' }), /Thème inconnu/)
   })
 
-  it('recherche salariale : familles d’organismes une à une, programmes connus, salarial seulement', () => {
+  it('angle mort : ce qui est propre à l’entreprise, après les thèmes, au format d’une entreprise', () => {
     const entree = {
       entreprise: { name: 'Trembloc', legal_status: null, specific_criteria: 'Bloc extérieur', hires_staff: true },
       groupe,
       consignes: 'Exclure le manufacturier.',
-      regles: '- Privilégier les emplois d’été.',
-      connus: [{ program_name: 'EÉC', source_url: 'https://canada.ca/eec', status: 'obtenu', program_key: 'eec', discovered_fy: 2026, company_ids: ['b'] }],
+      regles: null,
+      connus,
       aujourdhui: 'samedi 17 octobre 2026',
     }
-    const p = invitationRechercheSalariale(entree)
+    const p = invitationAngleMort(entree)
     assert.match(p, /pour Trembloc \(statut juridique non précisé/)
-    assert.match(p, /porte seulement sur les subventions salariales/)
-    assert.doesNotMatch(p, /Trouve des programmes de subvention, de crédit d'impôt ou de financement/)
-    // Les organismes intermédiaires, famille par famille.
-    assert.match(p, /pas versées par un ministère, mais par un organisme/)
-    assert.match(p, /Programme de stages pratiques pour étudiants \(PSPE\)[\s\S]*vérifie chacun/)
-    assert.match(p, /Stratégie emploi et compétences jeunesse/)
-    assert.match(p, /Fonds de travailleurs, syndicats/)
-    assert.match(p, /« financement des\n   stages »/)
-    assert.match(p, /Un programme récurrent fermé aujourd'hui/)
-    // Même contexte que la recherche large.
-    assert.match(p, /celle-ci vise seulement Trembloc\) :\n- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc\n/)
-    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\.\n/)
-    assert.match(p, /Bloc extérieur/)
-    assert.match(p, /- Privilégier les emplois d’été\./)
-    assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| obtenue \| eec \| 2025-26 \| Base de Plein Air Mont-Tremblant\n/)
-    assert.match(p, /même program_key et la même adresse/)
-    assert.match(p, /"grant_type" : "salarial", ou "formation"/)
-    assert.match(p, /Réponds uniquement avec un tableau JSON/)
+    assert.match(p, /Des recherches par thème ont déjà couvert tout le groupe \(les subventions salariales/)
+    assert.match(p, /ce qui est propre à Trembloc/)
+    assert.match(p, /Critères propres à Trembloc :\nBloc extérieur/)
+    assert.match(p, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\./)
+    assert.match(p, /- EÉC \| https:\/\/canada.ca\/eec \| rejetée \| eec \| 2026-27 \| Base de Plein Air Mont-Tremblant, Trembloc\n/)
+    assert.match(p, /Ne repropose pas un programme déjà connu pour Trembloc\./)
+    assert.match(p, /"relevance_justification": string/)
+    assert.doesNotMatch(p, /"companies"/)
     assert.doesNotMatch(p, /n'embauche pas de personnel/)
-    assert.match(invitationRechercheSalariale({ ...entree, entreprise: { ...entree.entreprise, hires_staff: false } }), /n'embauche pas de personnel/)
+    const sans = invitationAngleMort({ ...entree, entreprise: { name: 'Immeubles inc', legal_status: 'Entreprise privée', specific_criteria: null, hires_staff: false } })
+    assert.match(sans, /Cette entreprise n'embauche pas de personnel/)
+    assert.match(sans, /Critères propres à Immeubles inc :\n\(aucun pour l’instant\)/)
   })
 
   it('mise à jour ciblée : chaque subvention avec sa référence et ce que l’app en sait', () => {
@@ -269,6 +315,9 @@ describe('prompts', () => {
     })
     assert.match(p, /Reste sous 500 mots/)
     assert.match(p, /REJETÉE \(montant_trop_faible\) \| X \| type autre \| entreprise : Opikawa \| source : x.ca \| commentaire : « trop petit »/)
+    assert.match(p, /La prochaine recherche vise : Opikawa\./)
+    // Mémoire du groupe (recherches par thème).
+    assert.match(invitationMemoire({ entreprise: null, feedback: [] }), /La prochaine recherche vise tout le groupe, par thème/)
   })
 })
 
@@ -353,6 +402,8 @@ const ENV = {
   GMAIL_EXPEDITEUR: 'vigie@camp.test',
 }
 const ENTREPRISE = { id: '11111111-1111-1111-1111-111111111111', slug: 'bpa', name: 'Base de Plein Air Mont-Tremblant', legal_status: 'OBNL', specific_criteria: 'Camp', active: true }
+const AUTRE = { id: '22222222-2222-2222-2222-222222222222', name: 'Trembloc', legal_status: 'OBNL', specific_criteria: 'Bloc', hires_staff: true }
+const GROUPE = [{ id: ENTREPRISE.id, name: ENTREPRISE.name, legal_status: 'OBNL', specific_criteria: 'Camp', hires_staff: true }, AUTRE]
 
 const fetchOriginal = globalThis.fetch
 afterEach(() => {
@@ -364,7 +415,7 @@ const reponseJson = (corps, status = 200) =>
 
 /** Installe un faux réseau ; `scenario` personnalise les réponses. Renvoie le journal des appels. */
 function fauxReseau(scenario = {}) {
-  const appels = { claude: [], patch: [], inserts: [], rpc: [], gmail: [], google: [], suppressions: [] }
+  const appels = { claude: [], patch: [], inserts: [], rpc: [], gmail: [], google: [], suppressions: [], lectures: [] }
   const reponsesClaude = [...(scenario.claude ?? [])]
   globalThis.fetch = async (entree, init = {}) => {
     const url = new URL(typeof entree === 'string' ? entree : entree.url)
@@ -408,8 +459,11 @@ function fauxReseau(scenario = {}) {
     }
     if (url.pathname === '/auth/v1/user') return reponseJson({ email: 'maxime@camp.test' })
     if (methode === 'GET') {
-      if (chemin === 'grant_companies') return reponseJson(url.search.includes('active=is.true') ? [{ id: ENTREPRISE.id, name: ENTREPRISE.name }] : [ENTREPRISE])
-      if (chemin === 'grant_learned_rules') return reponseJson(scenario.regles ?? [])
+      if (chemin === 'grant_companies') return reponseJson(url.search.includes('active=is.true') ? (scenario.groupe ?? GROUPE) : [ENTREPRISE])
+      if (chemin === 'grant_learned_rules') {
+        appels.lectures.push(url.search)
+        return reponseJson(scenario.regles ?? [])
+      }
       if (chemin === 'grant_settings')
         return reponseJson(
           url.search.includes('recherche_active')
@@ -455,7 +509,7 @@ const PROGRAMMES = [
 ]
 
 describe('pipeline (réseau simulé)', () => {
-  it('recherche : mémoire, pause_turn, validation, insertion, journal', async () => {
+  it('angle mort : mémoire de l’entreprise, pause_turn, validation, insertion, journal', async () => {
     const texte = JSON.stringify(PROGRAMMES)
     const appels = fauxReseau({
       feedback: [{ decided_at: '2026-10-02T10:00:00Z', decision: 'valide', reject_category: null, program_name: 'X', grant_type: 'salarial', company_name: 'Opikawa' }],
@@ -470,15 +524,17 @@ describe('pipeline (réseau simulé)', () => {
       ],
     })
 
-    const bilan = await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id })
+    const bilan = await rechercherAngleMort(ENV, { entrepriseId: ENTREPRISE.id })
     assert.deepEqual(bilan, { run: 'grant_search_runs-1', entreprise: ENTREPRISE.name, found: 1, new: 1, duplicate: 0, invalid: 1 })
 
-    // Mémoire produite puis utilisée par la recherche.
+    // Mémoire de l'entreprise, produite puis utilisée par la recherche.
+    assert.match(appels.lectures[0], new RegExp(`company_id=eq.${ENTREPRISE.id}`))
     const regles = appels.inserts.find((i) => i.table === 'grant_learned_rules')
     assert.equal(regles.corps.summary, '- Privilégier les programmes salariaux.')
+    assert.equal(regles.corps.company_id, ENTREPRISE.id)
     const run = appels.inserts.find((i) => i.table === 'grant_search_runs')
     assert.equal(run.corps.memory_version_id, 'grant_learned_rules-1')
-    assert.equal(run.corps.trigger_source, 'cron')
+    assert.deepEqual([run.corps.kind, run.corps.company_id, run.corps.trigger_source], ['angle_mort', ENTREPRISE.id, 'cron'])
 
     // Requête de recherche : modèle, repli, effort, outils web.
     const [memoire, recherche, reprise] = appels.claude
@@ -488,8 +544,10 @@ describe('pipeline (réseau simulé)', () => {
     assert.match(recherche.entetes.get('anthropic-beta'), /server-side-fallback-2026-07-01/)
     assert.equal(recherche.corps.output_config.effort, 'high')
     assert.deepEqual(recherche.corps.tools.map((t) => t.type), ['web_search_20260209', 'web_fetch_20260209'])
+    assert.deepEqual(recherche.corps.tools.map((t) => t.max_uses), [BUDGETS.angle_mort.recherches, BUDGETS.angle_mort.lectures])
+    assert.match(recherche.corps.messages[0].content, /ce qui est propre à Base de Plein Air Mont-Tremblant/)
     assert.match(recherche.corps.messages[0].content, /Privilégier les programmes salariaux/)
-    assert.match(recherche.corps.messages[0].content, /- Base de Plein Air Mont-Tremblant\n/)
+    assert.match(recherche.corps.messages[0].content, /- Base de Plein Air Mont-Tremblant \(OBNL\)\n- Trembloc \(OBNL\)\n/)
     assert.match(recherche.corps.messages[0].content, /Consignes de la direction pour tout le groupe :\nExclure le manufacturier\./)
     assert.equal(recherche.entetes.get('x-api-key'), 'sk-ant-test')
     // Reprise après pause : le tour de l'assistant est renvoyé, sans message « continue ».
@@ -516,9 +574,10 @@ describe('pipeline (réseau simulé)', () => {
         { content: [{ type: 'text', text: JSON.stringify({ programmes: [PROGRAMMES[0]] }) }], stop_reason: 'end_turn', usage: usage(10, 10, 0) },
       ],
     })
-    const bilan = await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id, declencheur: 'manuel', sansMemoire: true })
+    const bilan = await rechercherAngleMort(ENV, { entrepriseId: ENTREPRISE.id, declencheur: 'manuel', sansMemoire: true })
     assert.equal(bilan.new, 1)
     assert.equal(appels.claude[1].corps.output_config.format.type, 'json_schema')
+    assert.ok(appels.claude[1].corps.output_config.format.schema.properties.programmes.items.properties.relevance_justification)
     assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.memory_version_id, null)
   })
 
@@ -526,33 +585,67 @@ describe('pipeline (réseau simulé)', () => {
     const appels = fauxReseau({
       claude: [{ content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'cyber', explanation: null }, usage: usage(1, 0, 0) }],
     })
-    await assert.rejects(rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id }), /refusé/)
+    await assert.rejects(rechercherTheme(ENV, { theme: 'tourisme', sansMemoire: true }), /refusé/)
     assert.match(appels.patch.at(-1).corps.error, /Claude a refusé la demande \(cyber\)/)
     assert.ok(appels.patch.at(-1).corps.finished_at)
   })
 
-  it('recherche salariale : sa consigne, plus de recherches web, journal « salariale », dates passées retirées', async () => {
-    const passe = { ...PROGRAMMES[0], program_name: 'Stage d’été', program_key: 'stage-ete', source_url: 'https://stages.ca', open_date: '2020-03-01', deadline_date: '2020-08-28', funded_start: '2020-05-01', funded_end: '2020-08-31' }
+  it('thème : mémoire du groupe, consigne du thème, entreprises de chaque programme, journal « theme », dates passées retirées', async () => {
+    const eec = { ...PROGRAMMES[0], relevance_justification: undefined, companies: [{ name: 'base de plein air mont-tremblant', justification: 'Camp' }, { name: 'Trembloc', justification: 'Bloc' }, { name: 'Inconnue', justification: 'x' }] }
+    const passe = { ...eec, program_name: 'Stage d’été', program_key: 'stage-ete', source_url: 'https://stages.ca', open_date: '2020-03-01', deadline_date: '2020-08-28', funded_start: '2020-05-01', funded_end: '2020-08-31', companies: [{ name: 'Trembloc', justification: 'Bloc' }] }
+    const personne = { ...eec, program_name: 'Pour personne', program_key: 'personne', companies: [{ name: 'Inconnue' }] }
     const appels = fauxReseau({
-      claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([PROGRAMMES[0], passe]) }], stop_reason: 'end_turn', usage: usage(10, 10, 30) }],
+      feedback: [{ decided_at: '2026-10-02T10:00:00Z', decision: 'valide', reject_category: null, program_name: 'X', grant_type: 'salarial', company_name: 'GBPA+' }],
+      claude: [
+        { content: [{ type: 'text', text: '- Règle du groupe.' }], stop_reason: 'end_turn', usage: usage(10, 10, 0) },
+        { content: [...outil, { type: 'text', text: JSON.stringify([eec, passe, personne]) }], stop_reason: 'end_turn', usage: usage(10, 10, 30) },
+      ],
     })
-    const bilan = await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id, declencheur: 'manuel', sansMemoire: true, genre: 'salariale' })
-    assert.equal(bilan.new, 2)
-    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'salariale')
-    const [recherche] = appels.claude
-    assert.match(recherche.corps.messages[0].content, /porte seulement sur les subventions salariales/)
-    assert.deepEqual(recherche.corps.tools.map((t) => t.max_uses), [40, 20])
-    const [eec, stage] = appels.rpc.find((r) => r.nom === 'inserer_resultats').corps.p_items
-    assert.equal(eec.deadline_date, PROGRAMMES[0].deadline_date)
-    assert.deepEqual([stage.open_date, stage.deadline_date, stage.funded_start, stage.funded_end], [null, null, null, null])
-    assert.equal(appels.patch.at(-1).corps.web_search_count, 30)
+    const bilan = await rechercherTheme(ENV, { theme: 'salarial', declencheur: 'manuel' })
+    assert.deepEqual(bilan, { run: 'grant_search_runs-1', theme: 'Salarial', found: 2, new: 2, duplicate: 0, invalid: 1 })
+
+    // Mémoire du groupe (sans entreprise).
+    assert.match(appels.lectures[0], /company_id=is\.null/)
+    assert.equal(appels.inserts.find((i) => i.table === 'grant_learned_rules').corps.company_id, null)
+    const run = appels.inserts.find((i) => i.table === 'grant_search_runs').corps
+    assert.deepEqual([run.kind, run.theme, run.company_id, run.trigger_source, run.memory_version_id], ['theme', 'salarial', null, 'manuel', 'grant_learned_rules-1'])
+
+    const recherche = appels.claude[1]
+    assert.match(recherche.corps.messages[0].content, /pour tout le groupe à la fois : les subventions salariales/)
+    assert.match(recherche.corps.messages[0].content, /- Règle du groupe\./)
+    assert.match(recherche.corps.messages[0].content, /- Trembloc \(OBNL\) : Bloc\n/)
+    assert.deepEqual(recherche.corps.tools.map((t) => t.max_uses), [BUDGETS.salarial.recherches, BUDGETS.salarial.lectures])
+
+    const [p1, p2] = appels.rpc.find((r) => r.nom === 'inserer_resultats').corps.p_items
+    assert.deepEqual(p1.companies, [
+      { company_id: ENTREPRISE.id, justification: 'Camp' },
+      { company_id: AUTRE.id, justification: 'Bloc' },
+    ])
+    assert.equal(p1.deadline_date, PROGRAMMES[0].deadline_date)
+    assert.deepEqual([p2.open_date, p2.deadline_date, p2.funded_start, p2.funded_end], [null, null, null, null])
+    const fin = appels.patch.at(-1).corps
+    assert.equal(fin.web_search_count, 30)
+    assert.match(fin.raw_output, /aucune entreprise du groupe reconnue \(Pour personne\)/)
   })
 
-  it('recherche large : 20 recherches web et 10 pages, genre inconnu = large', async () => {
-    const appels = fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
-    await rechercherEntreprise(ENV, { entrepriseId: ENTREPRISE.id, sansMemoire: true, genre: 'autre' })
-    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'large')
-    assert.deepEqual(appels.claude[0].corps.tools.map((t) => t.max_uses), [20, 10])
+  it('thème : budgets (le salarial plus large), rattrapage avec les entreprises, thème inconnu refusé', async () => {
+    let appels = fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
+    await rechercherTheme(ENV, { theme: 'marketing', sansMemoire: true })
+    assert.deepEqual(appels.claude[0].corps.tools.map((t) => t.max_uses), [BUDGETS.theme.recherches, BUDGETS.theme.lectures])
+
+    appels = fauxReseau({
+      claude: [
+        { content: [...outil, { type: 'text', text: 'Un programme : CanExport.' }], stop_reason: 'end_turn', usage: usage(1, 1, 1) },
+        { content: [{ type: 'text', text: JSON.stringify({ programmes: [{ ...PROGRAMMES[0], companies: [{ name: 'Trembloc', justification: 'j' }] }] }) }], stop_reason: 'end_turn', usage: usage(1, 1, 0) },
+      ],
+    })
+    const bilan = await rechercherTheme(ENV, { theme: 'marketing', sansMemoire: true })
+    assert.equal(bilan.new, 1)
+    assert.ok(appels.claude[1].corps.output_config.format.schema.properties.programmes.items.properties.companies)
+
+    appels = fauxReseau()
+    await assert.rejects(rechercherTheme(ENV, { theme: 'autre' }), /Thème inconnu/)
+    assert.equal(appels.inserts.length, 0)
   })
 
   it('mise à jour ciblée : retenues envoyées avec une référence, réponse appliquée, journal', async () => {
@@ -598,22 +691,26 @@ describe('pipeline (réseau simulé)', () => {
     assert.match(appels.rpc.find((x) => x.nom === 'retenues_a_verifier').corps.p_depuis, /^\d{4}-(01|04|07|10)-01T00:00:00/)
   })
 
-  it('tour du trimestre : la tâche donnée par la base (large, salariale ou ciblée), jamais de courriel', async () => {
+  it('tour du trimestre : la tâche donnée par la base (thème, angle mort ou ciblée), jamais de courriel', async () => {
     let appels = fauxReseau({
-      tache: { kind: 'large', company_id: ENTREPRISE.id },
+      tache: { kind: 'theme', theme: 'tourisme' },
       claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(10, 10, 1) }],
     })
     await tourTrimestriel(ENV)
+    // La base reçoit la liste des thèmes, dans l'ordre du code.
+    assert.deepEqual(appels.rpc.find((x) => x.nom === 'prochaine_tache_trimestre').corps, { p_themes: THEMES.map((t) => t.cle) })
     assert.equal(appels.claude.length, 1)
-    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'large')
+    const theme = appels.inserts.find((i) => i.table === 'grant_search_runs').corps
+    assert.deepEqual([theme.kind, theme.theme, theme.trigger_source], ['theme', 'tourisme', 'cron'])
+    assert.match(appels.claude[0].corps.messages[0].content, /le tourisme, le plein air, le loisir, le sport et les camps/)
 
     appels = fauxReseau({
-      tache: { kind: 'salariale', company_id: ENTREPRISE.id },
+      tache: { kind: 'angle_mort', company_id: ENTREPRISE.id },
       claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(10, 10, 1) }],
     })
     await tourTrimestriel(ENV)
-    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'salariale')
-    assert.match(appels.claude[0].corps.messages[0].content, /porte seulement sur les subventions salariales/)
+    assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'angle_mort')
+    assert.match(appels.claude[0].corps.messages[0].content, /ce qui est propre à Base de Plein Air Mont-Tremblant/)
 
     appels = fauxReseau({
       tache: { kind: 'ciblee', company_id: ENTREPRISE.id },
@@ -632,7 +729,7 @@ describe('pipeline (réseau simulé)', () => {
   })
 
   it('tour du trimestre : recherche en pause, secrets manquants', async () => {
-    let appels = fauxReseau({ actif: false, tache: { kind: 'large', company_id: ENTREPRISE.id } })
+    let appels = fauxReseau({ actif: false, tache: { kind: 'theme', theme: 'salarial' } })
     await tourTrimestriel(ENV)
     assert.equal(appels.rpc.length, 0)
 
@@ -793,24 +890,32 @@ describe('routes /api/subventions (réseau simulé)', () => {
     assert.doesNotMatch(JSON.stringify(corps), /sk-ant|sb_secret/)
   })
 
-  it('recherche manuelle en flux : battement puis bilan', async () => {
-    fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([PROGRAMMES[0]]) }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
+  it('recherche d’un thème en flux : battement puis bilan', async () => {
+    const appels = fauxReseau({
+      claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([{ ...PROGRAMMES[0], companies: [{ name: 'Trembloc', justification: 'j' }] }]) }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }],
+    })
     const r = await routeSubventions(
-      requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { company_id: ENTREPRISE.id, sans_memoire: true } }),
+      requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { genre: 'theme', theme: 'regional', sans_memoire: true } }),
       ENV,
       ctx,
       'recherche',
     )
     const lignes = (await r.text()).trim().split('\n').map((l) => JSON.parse(l))
     assert.deepEqual(lignes[0], { etat: 'en_cours' })
-    assert.equal(lignes.at(-1).fin, true)
-    assert.equal(lignes.at(-1).new, 1)
+    assert.deepEqual([lignes.at(-1).fin, lignes.at(-1).new, lignes.at(-1).theme], [true, 1, 'Régional, OBNL et dons'])
+    const run = appels.inserts.find((i) => i.table === 'grant_search_runs').corps
+    assert.deepEqual([run.kind, run.theme, run.trigger_source, run.memory_version_id], ['theme', 'regional', 'manuel', null])
   })
 
-  it('recherche refusée si une autre est en cours', async () => {
+  it('recherche refusée si une autre est en cours (même thème ou même entreprise), ou si la demande est incomplète', async () => {
     fauxReseau({ runs: [{ id: 'r' }] })
-    const r = await routeSubventions(requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { company_id: ENTREPRISE.id } }), ENV, ctx, 'recherche')
-    assert.equal(r.status, 409)
+    const envoyer = (corps) => routeSubventions(requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps }), ENV, ctx, 'recherche')
+    assert.equal((await envoyer({ genre: 'angle_mort', company_id: ENTREPRISE.id })).status, 409)
+    assert.equal((await envoyer({ genre: 'theme', theme: 'salarial' })).status, 409)
+    assert.equal((await envoyer({ company_id: ENTREPRISE.id })).status, 400) // sans genre (ancienne recherche large)
+    assert.equal((await envoyer({ genre: 'salariale', company_id: ENTREPRISE.id })).status, 400)
+    assert.equal((await envoyer({ genre: 'theme', theme: 'inconnu' })).status, 400)
+    assert.equal((await envoyer({ genre: 'angle_mort' })).status, 400)
   })
 
   it('mise à jour ciblée manuelle en flux', async () => {
@@ -829,18 +934,18 @@ describe('routes /api/subventions (réseau simulé)', () => {
     assert.equal(appels.inserts.find((i) => i.table === 'grant_search_runs').corps.kind, 'ciblee')
   })
 
-  it('recherche salariale manuelle en flux', async () => {
+  it('angle mort manuel en flux', async () => {
     const appels = fauxReseau({ claude: [{ content: [...outil, { type: 'text', text: JSON.stringify([PROGRAMMES[0]]) }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }] })
     const r = await routeSubventions(
-      requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { company_id: ENTREPRISE.id, genre: 'salariale', sans_memoire: true } }),
+      requete('recherche', { jeton: 'jeton-direction', methode: 'POST', corps: { company_id: ENTREPRISE.id, genre: 'angle_mort', sans_memoire: true } }),
       ENV,
       ctx,
       'recherche',
     )
     const fin = (await r.text()).trim().split('\n').map((l) => JSON.parse(l)).at(-1)
-    assert.deepEqual([fin.fin, fin.new], [true, 1])
+    assert.deepEqual([fin.fin, fin.new, fin.entreprise], [true, 1, ENTREPRISE.name])
     const run = appels.inserts.find((i) => i.table === 'grant_search_runs').corps
-    assert.deepEqual([run.kind, run.trigger_source, run.memory_version_id], ['salariale', 'manuel', null])
+    assert.deepEqual([run.kind, run.company_id, run.trigger_source, run.memory_version_id], ['angle_mort', ENTREPRISE.id, 'manuel', null])
   })
 
   it('agenda : synchro d’une subvention depuis la fiche', async () => {
