@@ -119,23 +119,28 @@ const texteOuNull = { anyOf: [{ type: 'string' }, { type: 'null' }] }
 const objet = (proprietes) => ({ type: 'object', additionalProperties: false, required: Object.keys(proprietes), properties: proprietes })
 const tableau = (cle, element) => objet({ [cle]: { type: 'array', items: element } })
 
-const SCHEMA_PROGRAMMES = tableau(
+const CHAMPS_PROGRAMME = {
+  program_name: { type: 'string' },
+  organisme: texteOuNull,
+  description: texteOuNull,
+  source_url: texteOuNull,
+  grant_type: { type: 'string', enum: TYPES },
+  potential_amount_min: nombreOuNull,
+  potential_amount_max: nombreOuNull,
+  open_date: texteOuNull,
+  deadline_date: texteOuNull,
+  funded_start: texteOuNull,
+  funded_end: texteOuNull,
+  eligibility_criteria: texteOuNull,
+  program_key: texteOuNull,
+}
+const SCHEMA_PROGRAMMES = tableau('programmes', objet({ ...CHAMPS_PROGRAMME, relevance_justification: texteOuNull }))
+// Recherche par thème : chaque programme nomme ses entreprises, chacune avec sa justification.
+const SCHEMA_PROGRAMMES_THEME = tableau(
   'programmes',
   objet({
-    program_name: { type: 'string' },
-    organisme: texteOuNull,
-    description: texteOuNull,
-    source_url: texteOuNull,
-    grant_type: { type: 'string', enum: TYPES },
-    potential_amount_min: nombreOuNull,
-    potential_amount_max: nombreOuNull,
-    open_date: texteOuNull,
-    deadline_date: texteOuNull,
-    funded_start: texteOuNull,
-    funded_end: texteOuNull,
-    eligibility_criteria: texteOuNull,
-    relevance_justification: texteOuNull,
-    program_key: texteOuNull,
+    ...CHAMPS_PROGRAMME,
+    companies: { type: 'array', items: objet({ name: { type: 'string' }, justification: texteOuNull }) },
   }),
 )
 
@@ -171,13 +176,15 @@ const SCHEMA_MISES_A_JOUR = tableau(
 
 const FORMATS = {
   programmes: { schema: SCHEMA_PROGRAMMES, cle: 'programmes', quoi: 'programmes' },
+  programmes_theme: { schema: SCHEMA_PROGRAMMES_THEME, cle: 'programmes', quoi: 'programmes (chacun avec ses entreprises « companies »)' },
   mises_a_jour: { schema: SCHEMA_MISES_A_JOUR, cle: 'mises_a_jour', quoi: 'mises à jour de subventions (une par subvention vérifiée, avec sa référence « ref »)' },
 }
 
 /**
  * Rattrapage d'une réponse qui n'était pas un tableau JSON lisible :
  * Claude la remet au format, sorties structurées (JSON garanti).
- * `format` : « programmes » (recherche large) ou « mises_a_jour » (ciblée).
+ * `format` : « programmes » (angle mort d'une entreprise), « programmes_theme »
+ * (recherche par thème) ou « mises_a_jour » (ciblée).
  */
 export async function reparer(client, nom, texte, format = 'programmes') {
   const { schema, cle, quoi } = FORMATS[format]

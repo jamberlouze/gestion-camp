@@ -6,6 +6,7 @@ import { ui } from '@/lib/ui'
 import { menu, Pastille, Section } from './commun'
 import { appelerWorker, erreurWorker, useEntreprises, useRecherches, useReglages, useRegles } from './donnees'
 import { dateCourte, moment, prochainTrimestre } from './outils'
+import { type CleTheme, libelleTheme, THEMES } from './themes'
 import type { Entreprise, Recherche, Regles } from './types'
 
 interface Etat {
@@ -49,8 +50,9 @@ export function Recherches() {
               <>
                 <b>active</b>, 4 fois par année (début d’octobre, janvier, avril et juillet) :{' '}
                 {prochaine.enCours ? <>en cours depuis le {dateCourte(prochaine.date)}</> : <>prochaine le {dateCourte(prochaine.date)}</>}, tôt
-                le matin. D’abord une recherche large de nouvelles subventions pour chaque entreprise, puis la mise à jour des subventions
-                retenues et obtenues ; un travail à la fois.
+                le matin. D’abord une recherche de nouvelles subventions par thème, pour tout le groupe ({THEMES.length} thèmes : chaque
+                programme nomme les entreprises qui peuvent en profiter), puis une courte recherche « angle mort » par entreprise (ce qui
+                lui est propre), puis la mise à jour des subventions retenues et obtenues ; un travail à la fois.
               </>
             ) : (
               <>
@@ -104,11 +106,12 @@ function ConfigWorker({ etat, erreur, chargement }: { etat?: Etat; erreur: unkno
 
 type Progres = { etat: 'en_cours'; debut: number } | { etat: 'fini'; message: string; erreur: boolean }
 
-type Genre = 'large' | 'salariale' | 'ciblee'
+type Genre = 'theme' | 'angle_mort' | 'ciblee'
 
 function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pret: boolean }) {
   const [entreprise, setEntreprise] = useState(entreprises.find((e) => e.active)?.id ?? '')
-  const [genre, setGenre] = useState<Genre>('large')
+  const [theme, setTheme] = useState<CleTheme>(THEMES[0].cle)
+  const [genre, setGenre] = useState<Genre>('theme')
   const [sansMemoire, setSansMemoire] = useState(false)
   const [progres, setProgres] = useState<Progres | null>(null)
   const [maintenant, setMaintenant] = useState(0)
@@ -126,7 +129,11 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
     try {
       const res = await appelerWorker('recherche', {
         method: 'POST',
-        body: JSON.stringify({ company_id: entreprise, genre, sans_memoire: genre !== 'ciblee' && sansMemoire }),
+        body: JSON.stringify(
+          genre === 'theme'
+            ? { genre, theme, sans_memoire: sansMemoire }
+            : { genre, company_id: entreprise, sans_memoire: genre === 'angle_mort' && sansMemoire },
+        ),
       })
       if (!res.ok || !res.body) throw new Error(await erreurWorker(res))
       // Flux de lignes JSON : battements « en_cours », puis le bilan.
@@ -145,15 +152,19 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
       if (fin.erreur) throw new Error(String(fin.erreur))
       const n = Number(fin.new)
       const ecartees = Number(fin.invalid) ? `, ${fin.invalid} écartée${Number(fin.invalid) > 1 ? 's' : ''} (mal formée)` : ''
+      const completees = Number(fin.added_to)
+        ? `, ${fin.added_to} carte${Number(fin.added_to) > 1 ? 's' : ''} connue${Number(fin.added_to) > 1 ? 's' : ''} complétée${Number(fin.added_to) > 1 ? 's' : ''} d’une entreprise`
+        : ''
+      const pour = String(fin.theme ?? fin.entreprise)
       setProgres({
         etat: 'fini',
         erreur: false,
         message:
           'checked' in fin
             ? Number(fin.checked) === 0
-              ? `${fin.entreprise} : aucune subvention retenue ou obtenue à mettre à jour.`
-              : `${fin.entreprise} : ${bilanMiseAJour(Number(fin.checked), Number(fin.filled), Number(fin.proposed), n)}${ecartees}.`
-            : `${fin.entreprise} : ${n} nouvelle${n > 1 ? 's' : ''}, ${fin.duplicate} déjà connue${Number(fin.duplicate) > 1 ? 's' : ''}${ecartees}.`,
+              ? `${pour} : aucune subvention retenue ou obtenue à mettre à jour.`
+              : `${pour} : ${bilanMiseAJour(Number(fin.checked), Number(fin.filled), Number(fin.proposed), n)}${ecartees}.`
+            : `${pour} : ${n} nouvelle${n > 1 ? 's' : ''}, ${fin.duplicate} déjà connue${Number(fin.duplicate) > 1 ? 's' : ''}${completees}${ecartees}.`,
       })
     } catch (e) {
       setProgres({ etat: 'fini', erreur: true, message: messageErreur(e) })
@@ -166,21 +177,23 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
   return (
     <div className="space-y-3">
       <p className="text-sm text-pierre-600">
-        Même travail que la recherche automatique, pour une entreprise. Il prend de 3 à 15 minutes : gardez cette page ouverte.
+        Même travail que la recherche automatique, pour un thème ou une entreprise. Il prend de 3 à 15 minutes : gardez cette page
+        ouverte.
       </p>
       <fieldset className="space-y-1 text-sm">
         <legend className="sr-only">Genre de recherche</legend>
         <label className="flex items-start gap-2">
-          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'large'} disabled={enCours} onChange={() => setGenre('large')} />
+          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'theme'} disabled={enCours} onChange={() => setGenre('theme')} />
           <span>
-            <b className="font-medium">Recherche large</b> : nouvelles subventions pour l’entreprise
+            <b className="font-medium">Recherche par thème</b> : nouvelles subventions d’un thème pour tout le groupe ; chaque programme
+            nomme les entreprises qui peuvent en profiter
           </span>
         </label>
         <label className="flex items-start gap-2">
-          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'salariale'} disabled={enCours} onChange={() => setGenre('salariale')} />
+          <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'angle_mort'} disabled={enCours} onChange={() => setGenre('angle_mort')} />
           <span>
-            <b className="font-medium">Recherche salariale</b> : nouvelles subventions salariales (embauche, stages, emplois d’été), organisme
-            par organisme ; plus longue
+            <b className="font-medium">Angle mort</b> : courte recherche de ce qui est propre à une entreprise (activités, actifs,
+            clientèle), après les thèmes
           </span>
         </label>
         <label className="flex items-start gap-2">
@@ -192,15 +205,25 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
         </label>
       </fieldset>
       <div className="flex flex-wrap items-center gap-2">
-        <select aria-label="Entreprise" className={menu} value={entreprise} disabled={enCours} onChange={(e) => setEntreprise(e.target.value)}>
-          {entreprises.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-              {e.active ? '' : ' (inactive)'}
-            </option>
-          ))}
-        </select>
-        <button className={ui.bouton} disabled={!pret || !entreprise || enCours} onClick={lancer}>
+        {genre === 'theme' ? (
+          <select aria-label="Thème" className={menu} value={theme} disabled={enCours} onChange={(e) => setTheme(e.target.value as CleTheme)}>
+            {THEMES.map((t) => (
+              <option key={t.cle} value={t.cle}>
+                {t.libelle}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select aria-label="Entreprise" className={menu} value={entreprise} disabled={enCours} onChange={(e) => setEntreprise(e.target.value)}>
+            {entreprises.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+                {e.active ? '' : ' (inactive)'}
+              </option>
+            ))}
+          </select>
+        )}
+        <button className={ui.bouton} disabled={!pret || (genre !== 'theme' && !entreprise) || enCours} onClick={lancer}>
           {enCours ? 'Recherche en cours…' : 'Lancer maintenant'}
         </button>
       </div>
@@ -251,7 +274,7 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
         <thead className="text-left text-xs uppercase tracking-wide text-pierre-500">
           <tr>
             <th className="px-2 py-1.5 font-medium">Date</th>
-            <th className="px-2 py-1.5 font-medium">Entreprise</th>
+            <th className="px-2 py-1.5 font-medium">Pour</th>
             <th className="px-2 py-1.5 font-medium">Résultat</th>
             <th className="px-2 py-1.5 text-right font-medium" title="Proposées / nouvelles / déjà connues / écartées">
               Trouvées
@@ -268,13 +291,24 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
               <td className="whitespace-nowrap px-2 py-1.5">
                 {moment(r.started_at)}
                 <div className="mt-0.5 flex gap-1">
+                  {r.kind === 'theme' && <Pastille classe="bg-foret-100 text-foret-800">thème</Pastille>}
+                  {r.kind === 'angle_mort' && <Pastille classe="bg-sky-100 text-sky-800">angle mort</Pastille>}
                   {r.kind === 'ciblee' && <Pastille classe="bg-violet-100 text-violet-800">mise à jour</Pastille>}
                   {r.kind === 'salariale' && <Pastille classe="bg-amber-100 text-amber-800">salariale</Pastille>}
                   {r.trigger_source === 'manuel' && <Pastille>manuelle</Pastille>}
                   {r.kind !== 'ciblee' && !r.memory_version_id && <Pastille>sans mémoire</Pastille>}
                 </div>
               </td>
-              <td className="px-2 py-1.5">{nomEntreprise.get(r.company_id)}</td>
+              <td className="px-2 py-1.5">
+                {r.theme ? (
+                  <>
+                    {libelleTheme(r.theme)}
+                    <span className="block text-xs text-pierre-500">tout le groupe</span>
+                  </>
+                ) : (
+                  nomEntreprise.get(r.company_id ?? '')
+                )}
+              </td>
               <td className="px-2 py-1.5">
                 {!r.finished_at ? (
                   <span className="text-pierre-500">En cours…</span>
@@ -311,8 +345,9 @@ function Journal({ recherches, nomEntreprise }: { recherches: Recherche[]; nomEn
         </tbody>
       </table>
       <p className="mt-2 text-xs text-pierre-500">
-        Trouvées (recherche large ou salariale) : proposées / nouvelles / déjà connues / écartées (mal formées). Mise à jour : un champ vide est
-        complété directement ; un champ déjà rempli qui changerait attend votre accord sur la fiche.
+        Trouvées (recherche par thème ou angle mort) : proposées / nouvelles / déjà connues / écartées (mal formées ou sans entreprise
+        du groupe). Une subvention déjà connue reçoit les entreprises qui n’y étaient pas. Mise à jour : un champ vide est complété
+        directement ; un champ déjà rempli qui changerait attend votre accord sur la fiche.
       </p>
     </div>
   )
@@ -328,11 +363,13 @@ function Memoire({ regles, entreprises }: { regles: Regles[]; entreprises: Entre
     )
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {entreprises.map((e) => {
+      {/* Mémoire du groupe (recherches par thème), puis celle de chaque entreprise (angle mort). */}
+      {[{ id: null, name: 'Tout le groupe (recherches par thème)' }, ...entreprises].map((e) => {
+        const cle = e.id ?? 'groupe'
         const siennes = regles.filter((r) => r.company_id === e.id).sort((a, b) => b.generated_at.localeCompare(a.generated_at))
         const [derniere, ...anciennes] = siennes
         return (
-          <div key={e.id} className="rounded-lg bg-pierre-50 p-3">
+          <div key={cle} className="rounded-lg bg-pierre-50 p-3">
             <p className="font-medium">{e.name}</p>
             {derniere ? (
               <>
@@ -342,11 +379,11 @@ function Memoire({ regles, entreprises }: { regles: Regles[]; entreprises: Entre
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm">{derniere.summary}</p>
                 {anciennes.length > 0 && (
-                  <button className="mt-2 text-xs text-pierre-500 underline" onClick={() => setHistorique(historique === e.id ? null : e.id)}>
-                    {historique === e.id ? 'Masquer' : `Voir les ${anciennes.length} versions précédentes`}
+                  <button className="mt-2 text-xs text-pierre-500 underline" onClick={() => setHistorique(historique === cle ? null : cle)}>
+                    {historique === cle ? 'Masquer' : `Voir les ${anciennes.length} versions précédentes`}
                   </button>
                 )}
-                {historique === e.id &&
+                {historique === cle &&
                   anciennes.map((r) => (
                     <div key={r.id} className="mt-2 border-t border-pierre-200 pt-2">
                       <p className="text-xs text-pierre-500">{moment(r.generated_at)}</p>

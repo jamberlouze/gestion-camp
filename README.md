@@ -192,9 +192,10 @@ Les anciennes apps restent en service jusqu'au portage de leur module. On
 Quatre fois par année (du 1er au 7 octobre, janvier, avril et juillet, aux
 passages de 8 h à 11 h UTC du cron, soit tôt le matin à Montréal), le Worker
 demande à Claude (recherche web), un travail par passage : d'abord une
-recherche large de nouvelles subventions pour chaque entreprise active, puis
-une recherche salariale pour chaque entreprise active qui embauche
-(organisme par organisme, 40 recherches web), puis la mise à jour des
+recherche de nouvelles subventions par thème, pour tout le groupe (6 thèmes :
+salarial, bâtiments, tourisme, numérique, régional, marketing ; 40 recherches
+web chacun, 50 pour le salarial), puis une courte recherche « angle mort » pour
+chaque entreprise active (15 recherches web), puis la mise à jour des
 subventions retenues et obtenues (dates, montants, critères, lien ; nouvelle
 édition d'une obtenue). **Aucun courriel** n'est
 envoyé par ce module jusqu'à nouvel ordre (les secrets `GMAIL_REFRESH_TOKEN`
@@ -252,15 +253,15 @@ Les mêmes quatre valeurs `GMAIL_*` servent au module Vigie des camps
 compétiteurs (secrets Supabase, mêmes noms).
 
 **Vérifier** : app → Subventions → Recherches. La carte Configuration doit
-afficher deux ✓. « Lancer maintenant » une recherche large pour une
-entreprise (3 à 10 minutes), une « Recherche salariale » (jusqu'à 15 minutes),
-puis une « Mise à jour des retenues ».
+afficher deux ✓. « Lancer maintenant » une « Recherche par thème » (jusqu'à
+15 minutes), un « Angle mort » pour une entreprise, puis une « Mise à jour des
+retenues ».
 
 **Coût** : avec `claude-opus-5-5` (variable `SUBVENTIONS_MODELE` dans
-`wrangler.jsonc`), compter de l'ordre de 1 à 2 $ US par entreprise et par
-recherche (jetons + recherches web à 10 $ les 1000), autant pour une mise à
-jour des retenues, et de 2 à 4 $ pour une recherche salariale (deux fois plus
-de recherches web) : environ 25 à 45 $ par trimestre pour six entreprises. Le journal des recherches affiche les jetons et le
+`wrangler.jsonc`), compter de l'ordre de 2 à 4 $ US par thème
+(jetons + recherches web à 10 $ les 1000), de 0,50 à 1 $ par angle mort et de
+1 à 2 $ par mise à jour des retenues : environ 25 à 45 $ par trimestre pour six
+entreprises. Le journal des recherches affiche les jetons et le
 nombre de recherches web de chaque passage. `claude-sonnet-5-5` coûte deux fois
 moins cher.
 
