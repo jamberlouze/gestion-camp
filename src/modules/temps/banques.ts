@@ -180,3 +180,16 @@ export function resumePeriode(mouvements: Mouvement[], debut: string, fin: strin
   const retraits = arrondi(dans.filter((m) => m.heures < 0).reduce((s, m) => s + m.heures, 0))
   return { avant, mouvements: dans, ajouts, retraits, apres: arrondi(avant + ajouts + retraits) }
 }
+
+/**
+ * Ligne « Prises en banque » et banque d'heures d'un employé pour une
+ * période (décision de Maxime du 2026-10-18) : seulement si la mise en
+ * banque est activée pour la période, s'il a un solde (au début ou à la fin
+ * de la période, négatif compris) ou s'il a déjà pris des heures en banque
+ * dans la période. Sinon rien à prendre : on ne l'affiche pas.
+ */
+export function banqueAffichee(mouvements: Mouvement[], active: boolean, debut: string, fin: string): boolean {
+  if (active) return true
+  const r = resumePeriode(mouvements, debut, fin)
+  return r.avant !== 0 || r.apres !== 0 || r.mouvements.some((m) => m.genre === 'prises')
+}

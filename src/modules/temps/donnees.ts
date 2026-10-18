@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Role } from '@/lib/types'
-import type { AjustementBanque, EtatBanqueHeures } from './banques'
+import { etatBanqueHeures, mouvementsBanqueHeures, resumePeriode, type AjustementBanque, type EtatBanqueHeures } from './banques'
 import { finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
 
 // Module en ligne seulement : mutations networkMode « always », erreurs dans
@@ -403,6 +403,38 @@ export function useDonneesBanques(t: Titulaire, au: string) {
   })
 }
 
+export type DonneesBanques = NonNullable<ReturnType<typeof useDonneesBanques>['data']>
+
+/**
+ * Banque d'heures d'une feuille pour la période : mouvements, interrupteur
+ * en vigueur et résumé. Heures de la période : celles de la feuille à
+ * l'écran (saisie en cours) plutôt que la copie lue. Sert aussi à la feuille
+ * d'un employé pour savoir s'il a une banque (banqueAffichee).
+ */
+export function banqueDeLaFeuille(
+  donnees: DonneesBanques,
+  titulaire: Titulaire,
+  debut: string,
+  heuresPeriode: { jour: string; type: string; heures: number }[],
+  entrepriseId: string | null = null,
+) {
+  const fin = finPeriode(debut)
+  const dansFeuille = (h: { jour: string; entreprise_id: string | null }) =>
+    h.jour >= debut && h.jour <= fin && (entrepriseId == null || h.entreprise_id === entrepriseId)
+  const heures = [...donnees.heures.filter((h) => !dansFeuille(h)), ...heuresPeriode]
+  const parDefaut = heuresActivesParDefaut(titulaire)
+  const mouvements = mouvementsBanqueHeures({
+    heures,
+    ajustements: donnees.ajustements,
+    au: fin,
+    etatsHeures: donnees.etatsHeures,
+    heuresActivesParDefaut: parDefaut,
+  })
+  // Interrupteur « Heures en banque » en vigueur pour cette période (réglé dans l'onglet Banques).
+  const etat = etatBanqueHeures(donnees.etatsHeures, parDefaut, debut)
+  return { mouvements, etat, r: resumePeriode(mouvements, debut, fin) }
+}
+
 /** Heures d'une personne pour une semaine (temps.semaines_banques). */
 export interface SemaineBanque {
   user_id: string | null
@@ -444,12 +476,27 @@ export function useBanquesTous(au: string) {
   })
 }
 
-/** Interrupteurs « Heures en banque » des employés (grille Employés : ligne « Prises en banque »). */
-export function useEtatsBanqueHeures() {
-  return useQuery({
-    queryKey: [S, 'banques', 'etats'],
-    queryFn: () => toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
+export type BanquesTous = NonNullable<ReturnType<typeof useBanquesTous>['data']>
+
+/**
+ * Banque d'heures d'une personne d'après useBanquesTous (heures lues par
+ * semaine) : mouvements jusqu'au jour `au` et ses interrupteurs (onglet
+ * Banques ; grille Employés : ligne « Prises en banque »).
+ */
+export function banqueDe(d: BanquesTous, t: Titulaire, au: string) {
+  const siennes = (x: { user_id: string | null; employe_id: string | null }) => (t.userId ? x.user_id === t.userId : x.employe_id === t.employeId)
+  const etats = d.etatsHeures.filter(siennes)
+  const mouvements = mouvementsBanqueHeures({
+    heures: d.semaines.filter(siennes).flatMap((w) => [
+      { jour: w.semaine, type: 'regulieres', heures: w.regulieres },
+      { jour: w.semaine, type: 'banque', heures: w.banque },
+    ]),
+    ajustements: d.ajustements.filter(siennes),
+    etatsHeures: etats,
+    heuresActivesParDefaut: heuresActivesParDefaut(t),
+    au,
   })
+  return { mouvements, etats }
 }
 
 const titulaireRpc = (t: Titulaire) => ({ p_user: t.userId ?? null, p_employe: t.employeId ?? null })

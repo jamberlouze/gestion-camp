@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { etatBanqueHeures, mouvementsBanqueHeures, SEUIL_SEMAINE, type HeureBanque, type Mouvement } from './banques'
+import { etatBanqueHeures, SEUIL_SEMAINE, type Mouvement } from './banques'
 import { FenetreAjustement, TableHistorique } from './BanquesFeuille'
-import { nomDe, useBanquesTous, useMembres, useReglerBanqueHeures, type EtatBanqueHeuresLigne, type Titulaire } from './donnees'
+import { banqueDe, heuresActivesParDefaut, nomDe, useBanquesTous, useMembres, useReglerBanqueHeures, type Titulaire } from './donnees'
 import { nomEmploye, useEmployesFeuille, useFeuillesPropres } from './donneesEmployes'
 import { libelleEtatHeures, menu, periodeCourante } from './outils'
 import { aujourdhui, dateCourte, formatHeures, libellePeriode } from './periodes'
@@ -53,23 +53,9 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
   const lignes = useMemo(() => {
     if (!donnees.data || !membres.data || !employes.data || !propres.data) return null
     const d = donnees.data
-    const de = (t: Titulaire) => (x: { user_id: string | null; employe_id: string | null }) =>
-      t.userId ? x.user_id === t.userId : x.employe_id === t.employeId
-    const calculer = (t: Titulaire, parDefaut: boolean) => {
-      const siennes = de(t)
-      const heures: HeureBanque[] = d.semaines.filter(siennes).flatMap((w) => [
-        { jour: w.semaine, type: 'regulieres', heures: w.regulieres },
-        { jour: w.semaine, type: 'banque', heures: w.banque },
-      ])
-      const etats: EtatBanqueHeuresLigne[] = d.etatsHeures.filter(siennes)
-      const mouvements = mouvementsBanqueHeures({
-        heures,
-        ajustements: d.ajustements.filter(siennes),
-        etatsHeures: etats,
-        heuresActivesParDefaut: parDefaut,
-        au,
-      })
-      return { mouvements, heures: mouvements.at(-1)?.solde ?? 0, etat: etatBanqueHeures(etats, parDefaut, au) }
+    const calculer = (t: Titulaire) => {
+      const { mouvements, etats } = banqueDe(d, t, au)
+      return { mouvements, heures: mouvements.at(-1)?.solde ?? 0, etat: etatBanqueHeures(etats, heuresActivesParDefaut(t), au) }
     }
 
     const resultat: LigneBanque[] = []
@@ -78,7 +64,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
       for (const m of membres.data) {
         if (m.role !== 'admin' && m.role !== 'direction') continue
         const t: Titulaire = { userId: m.id }
-        const c = calculer(t, true)
+        const c = calculer(t)
         if (!m.actif && !c.mouvements.length) continue
         resultat.push({
           cle: `u:${m.id}`,
@@ -93,7 +79,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
     for (const e of employes.data) {
       const compte = propres.data.has(e.id)
       const t: Titulaire = { employeId: e.id }
-      const c = calculer(t, false)
+      const c = calculer(t)
       // Inactif : seulement s'il lui reste quelque chose en banque.
       if (!e.actif && !c.heures) continue
       resultat.push({
@@ -135,8 +121,8 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
           Mise en banque : activée par défaut pour la direction et les admins, désactivée pour les employés.
           {estAdmin ? ' Un changement vaut' : ' Seul un admin la change ; un changement vaut'} à partir de la période en
           cours ({libellePeriode(periodeCourante())}) ; les périodes passées ne bougent pas. Désactivée : plus rien ne
-          s’ajoute, le solde reste et peut encore être pris ou ajusté. Les heures prises en banque d’un employé sans compte se
-          saisissent dans l’onglet Employés (ligne « Prises en banque »).
+          s’ajoute, le solde reste et peut encore être pris ou ajusté. Un employé n’a la ligne « Prises en banque » (dans sa
+          feuille, ou dans l’onglet Employés s’il n’a pas de compte) que si sa mise en banque est activée ou s’il a un solde.
         </p>
       </div>
 

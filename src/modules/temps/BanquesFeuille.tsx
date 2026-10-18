@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { etatBanqueHeures, mouvementsBanqueHeures, PREMIERE_ANNEE_BANQUES, resumePeriode, SEUIL_SEMAINE, type Mouvement } from './banques'
-import { heuresActivesParDefaut, useAjusterBanque, useDonneesBanques, type Titulaire } from './donnees'
+import { PREMIERE_ANNEE_BANQUES, SEUIL_SEMAINE, type Mouvement } from './banques'
+import { banqueDeLaFeuille, useAjusterBanque, useDonneesBanques, type Titulaire } from './donnees'
 import { libelleEtatHeures, signe } from './outils'
 import { aujourdhui, dateCourte, finPeriode, formatHeures } from './periodes'
 
@@ -39,21 +39,7 @@ export function BanquesFeuille({
   if (donnees.error) return <p className={`${ui.erreur} print:hidden`}>Banque d’heures : {messageErreur(donnees.error)}</p>
   if (!donnees.data) return <p className="py-4 text-center text-sm text-pierre-500 print:hidden">Chargement de la banque d’heures…</p>
 
-  // Heures de la période : celles de la feuille à l'écran (saisie en cours) plutôt que la copie lue.
-  const dansFeuille = (h: { jour: string; entreprise_id: string | null }) =>
-    h.jour >= debut && h.jour <= fin && (entrepriseId == null || h.entreprise_id === entrepriseId)
-  const heures = [...donnees.data.heures.filter((h) => !dansFeuille(h)), ...heuresPeriode]
-  const parDefaut = heuresActivesParDefaut(titulaire)
-  const mouvements = mouvementsBanqueHeures({
-    heures,
-    ajustements: donnees.data.ajustements,
-    au: fin,
-    etatsHeures: donnees.data.etatsHeures,
-    heuresActivesParDefaut: parDefaut,
-  })
-  // Interrupteur « Heures en banque » en vigueur pour cette période (réglé dans l'onglet Banques).
-  const etat = etatBanqueHeures(donnees.data.etatsHeures, parDefaut, debut)
-  const r = resumePeriode(mouvements, debut, fin)
+  const { mouvements, etat, r } = banqueDeLaFeuille(donnees.data, titulaire, debut, heuresPeriode, entrepriseId)
   const solde = (n: number) => <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>{formatHeures(n)} h</span>
 
   return (

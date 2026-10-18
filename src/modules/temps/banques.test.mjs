@@ -1,7 +1,7 @@
 // Banque d'heures des feuilles de temps (banques.ts). Lancer : npm run test:temps
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { etatBanqueHeures, mouvementsBanqueHeures, resumePeriode } from './banques.ts'
+import { banqueAffichee, etatBanqueHeures, mouvementsBanqueHeures, resumePeriode } from './banques.ts'
 
 const semaine = (dimanche, heuresParJour, type = 'regulieres') => {
   const [a, m, j] = dimanche.split('-').map(Number)
@@ -132,4 +132,22 @@ test('sommes par semaine (onglet Banques) : même résultat que les heures par j
   const a = mouvementsBanqueHeures({ heures: parJour, ajustements: [], au: '2026-10-17' })
   const b = mouvementsBanqueHeures({ heures: parSemaine, ajustements: [], au: '2026-10-17' })
   assert.deepEqual(b.map((x) => [x.cle, x.heures, x.solde]), a.map((x) => [x.cle, x.heures, x.solde]))
+})
+
+test('ligne « Prises en banque » d’un employé : banque activée, solde ou heures déjà prises dans la période', () => {
+  const [debut, fin] = ['2026-10-18', '2026-10-31']
+  const employe = (heures, ajustements = []) => mouvementsBanqueHeures({ heures, ajustements, au: fin, heuresActivesParDefaut: false })
+  // Désactivée, rien en banque : pas de ligne ; activée : la ligne.
+  assert.equal(banqueAffichee(employe(semaine('2026-10-18', [0, 9, 9, 9, 9, 9, 0])), false, debut, fin), false)
+  assert.equal(banqueAffichee([], true, debut, fin), true)
+  // Désactivée avec un solde de départ (ajustement d'une période passée) : la ligne, pour le prendre.
+  const depart = [{ id: 'd', banque: 'heures', jour: '2026-10-10', heures: 6, note: 'Solde de départ', auteur_nom: 'Admin', created_at: '' }]
+  assert.equal(banqueAffichee(employe([], depart), false, debut, fin), true)
+  // Tout pris dans la période : le solde de fin est nul, la ligne reste.
+  assert.equal(banqueAffichee(employe([{ jour: '2026-10-20', type: 'banque', heures: 6 }], depart), false, debut, fin), true)
+  // Heures prises sans solde (par erreur) : solde négatif, la ligne reste pour les corriger.
+  assert.equal(banqueAffichee(employe([{ jour: '2026-10-20', type: 'banque', heures: 2 }]), false, debut, fin), true)
+  // Solde remis à zéro par un ajustement dans une période passée : plus de ligne.
+  const remis = [...depart, { id: 'r', banque: 'heures', jour: '2026-10-15', heures: -6, note: 'Heures payées', auteur_nom: 'Admin', created_at: '' }]
+  assert.equal(banqueAffichee(employe([], remis), false, debut, fin), false)
 })

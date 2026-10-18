@@ -4,7 +4,8 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
-import { useJournal, type Action } from './donnees'
+import { banqueAffichee } from './banques'
+import { banqueDeLaFeuille, useDonneesBanques, useJournal, type Action } from './donnees'
 import {
   nomEmploye,
   useChangerFeuilleEmploye,
@@ -18,7 +19,7 @@ import {
 import { BanquesFeuille } from './BanquesFeuille'
 import { nomCompagnie } from './employeurD'
 import { Note, Semaine } from './Feuille'
-import { formatHeures, joursPeriode, libellePaie, libellePeriode } from './periodes'
+import { finPeriode, formatHeures, joursPeriode, libellePaie, libellePeriode } from './periodes'
 import { BarreStatut, Journal } from './Statut'
 
 const REGULIERES = { id: 'regulieres', libelle: 'Heures' }
@@ -33,7 +34,9 @@ const BANQUE = { id: 'banque', libelle: 'Prises en banque' }
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
  * base) ; le woofing (non payé) reste ici ; maladie et prises en banque
  * paraissent à part dans l'onglet Employés. En bas : sa banque d'heures
- * (toutes compagnies confondues), réglée par la direction.
+ * (toutes compagnies confondues), réglée par la direction. Ligne « Prises
+ * en banque » et banque d'heures seulement s'il en a une (banqueAffichee :
+ * activée, un solde ou des heures déjà prises dans la période).
  */
 export function FeuilleEmploye({
   employe,
@@ -49,6 +52,8 @@ export function FeuilleEmploye({
 }) {
   const { estDirection, estAdmin, employeTemps } = useAuth()
   const donnees = useFeuilleEmploye(employe.id, entreprise.id, debut)
+  const titulaire = { employeId: employe.id }
+  const banques = useDonneesBanques(titulaire, finPeriode(debut))
   const saisir = useSaisirFeuilleEmploye(employe.id, entreprise.id, debut)
   const noter = useNoteFeuilleEmploye()
   const changer = useChangerFeuilleEmploye()
@@ -58,14 +63,23 @@ export function FeuilleEmploye({
   useTitreImpression(`Feuille de temps - ${nomEmploye(employe)} - ${nomCompagnie(entreprise)} - ${libellePeriode(debut)}`)
 
   if (donnees.error) return <p className={ui.erreur}>{messageErreur(donnees.error)}</p>
-  if (!donnees.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  // La banque attendue aussi : la ligne « Prises en banque » ne doit pas apparaître après coup.
+  if (!donnees.data || (!banques.data && !banques.error)) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const { heures, feuille } = donnees.data
   const statut = feuille?.statut ?? 'ouverte'
   const soi = employeTemps === employe.id
   // Mêmes règles que temps.peut_modifier_employe.
   const modifiable = statut === 'ouverte' ? estDirection || soi : statut === 'soumise' && estDirection
-  const types = [REGULIERES, ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : []), MALADIE, BANQUE]
+  // Banque illisible : on montre tout (l'encadré affiche l'erreur).
+  const banque = banques.data && banqueDeLaFeuille(banques.data, titulaire, debut, heures, entreprise.id)
+  const avecBanque = !banque || banqueAffichee(banque.mouvements, banque.etat.active, debut, finPeriode(debut))
+  const types = [
+    REGULIERES,
+    ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : []),
+    MALADIE,
+    ...(avecBanque ? [BANQUE] : []),
+  ]
   const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
   const jours = joursPeriode(debut)
@@ -125,9 +139,11 @@ export function FeuilleEmploye({
         <span>
           Maladie : <b className="tabular-nums">{formatHeures(total('maladie'))} h</b>
         </span>
-        <span>
-          Prises en banque : <b className="tabular-nums">{formatHeures(total('banque'))} h</b>
-        </span>
+        {avecBanque && (
+          <span>
+            Prises en banque : <b className="tabular-nums">{formatHeures(total('banque'))} h</b>
+          </span>
+        )}
       </div>
 
       <Note
@@ -144,13 +160,9 @@ export function FeuilleEmploye({
 
       <Journal journal={journal.data ?? []} peutNoter={statut !== 'ouverte'} onNoter={(texte) => agir('noter', texte)} />
 
-      <BanquesFeuille
-        titulaire={{ employeId: employe.id }}
-        debut={debut}
-        heuresPeriode={heures}
-        entrepriseId={entreprise.id}
-        peutRegler={estDirection}
-      />
+      {avecBanque && (
+        <BanquesFeuille titulaire={titulaire} debut={debut} heuresPeriode={heures} entrepriseId={entreprise.id} peutRegler={estDirection} />
+      )}
     </div>
   )
 }
