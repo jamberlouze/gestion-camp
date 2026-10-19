@@ -192,27 +192,42 @@ export type Donnees = ReturnType<typeof useDonnees>
 // Photos
 // ------------------------------------------------------------------
 
-const adressePublique = (chemin: string) => supabase.storage.from(SEAU).getPublicUrl(chemin).data.publicUrl
+/** Durée d'une adresse signée ; relue avant d'expirer. */
+const DUREE_ADRESSE = 3600
 
-/** Adresse à afficher : le fichier sur l'appareil s'il attend encore, sinon le seau. */
+/**
+ * Adresse à afficher : le fichier sur l'appareil s'il attend encore, sinon une
+ * adresse signée du seau (privé ; jamais gardée sur l'appareil : voir requetes.ts).
+ */
 export function useAdressePhoto(p: Photo) {
-  const [url, setUrl] = useState<string | null>(null)
+  // Lecture de l'appareil pour cette photo : url null = rien sur l'appareil.
+  const [lue, setLue] = useState<{ id: string; url: string | null } | null>(null)
+  const locale = lue?.id === p.id ? lue.url : undefined
   useEffect(() => {
     let annule = false
     let objet: string | null = null
     lirePhoto(p.id).then((b) => {
       if (annule) return
-      if (b) {
-        objet = URL.createObjectURL(b)
-        setUrl(objet)
-      } else setUrl(adressePublique(p.chemin))
+      objet = b ? URL.createObjectURL(b) : null
+      setLue({ id: p.id, url: objet })
     })
     return () => {
       annule = true
       if (objet) URL.revokeObjectURL(objet)
     }
   }, [p.id, p.chemin])
-  return url
+  const signee = useQuery({
+    queryKey: ['travaux-adresses', p.chemin],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from(SEAU).createSignedUrl(p.chemin, DUREE_ADRESSE)
+      if (error) throw error
+      return data.signedUrl
+    },
+    enabled: locale === null,
+    staleTime: (DUREE_ADRESSE - 600) * 1000,
+    refetchInterval: (DUREE_ADRESSE - 600) * 1000,
+  })
+  return locale ?? signee.data ?? null
 }
 
 // ------------------------------------------------------------------

@@ -99,7 +99,7 @@ export function Utilisateurs() {
         supabase.schema('core').from('profils').select('*').order('courriel'),
         supabase.schema('core').from('acces_modules').select('*'),
         supabase.schema('core').from('acces_roles').select('*'),
-        supabase.schema('core').from('employes').select('id, surnom, nom_complet, courriel, actif'),
+        supabase.schema('core').rpc('employes_complets').select('id, surnom, nom_complet, courriel, actif'),
       ])
       if (profils.error) throw profils.error
       if (acces.error) throw acces.error

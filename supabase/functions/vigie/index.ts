@@ -9,7 +9,9 @@
 //      dans le journal et courriel par Gmail.
 //
 // Le réveil ne lance jamais de recherche par lui-même (pg_cron s'en charge
-// via vigie.planifier()) : l'appeler sans être connecté ne coûte rien de plus.
+// via vigie.planifier()). Déployée sans vérification du JWT : le réveil exige
+// la clé `vigie_cle_tic` du Vault (en-tête X-Cle-Tic, envoyé par vigie.tic())
+// ou une personne qui écrit dans le module ; les autres actions, la seconde.
 //
 // Secrets Supabase : ANTHROPIC_API_KEY (clé personnelle de Maxime) et
 // GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN / GMAIL_EXPEDITEUR.
@@ -521,6 +523,16 @@ async function peutEcrire(req: Request) {
   return niveau === 'ecriture'
 }
 
+/** Réveil permis : pg_cron (vigie.tic(), clé du Vault en en-tête) ou une personne qui écrit dans le module. */
+async function peutReveiller(req: Request) {
+  const cle = req.headers.get('X-Cle-Tic')
+  if (cle) {
+    const { data } = await admin.schema('vigie').rpc('cle_tic_valide', { p_cle: cle })
+    if (data === true) return true
+  }
+  return peutEcrire(req)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   let corps: any = {}
@@ -532,6 +544,7 @@ Deno.serve(async (req) => {
   try {
     switch (corps.action ?? 'tic') {
       case 'tic':
+        if (!(await peutReveiller(req))) return json({ erreur: 'Accès refusé.' }, 403)
         return json(await tic())
       case 'etat':
         if (!(await peutEcrire(req))) return json({ erreur: 'Accès refusé.' }, 403)

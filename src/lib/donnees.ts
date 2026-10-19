@@ -1,12 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase, type Schema } from './supabase'
+import { COLONNES_EMPLOYE, type Employe } from './types'
+
+/** Ce que useListe lit : certaines colonnes seulement, ou une fonction qui rend les lignes de la table. */
+export interface SourceListe {
+  colonnes?: string
+  /** Fonction du schéma (security definer) lue à la place de la table, ex. core.employes_complets. */
+  rpc?: string
+}
 
 /**
  * Lit une table au complet et la garde à jour en temps réel : tout
  * changement fait ailleurs (autre onglet, autre personne) recharge la liste.
  */
-export function useListe<T>(schema: Schema, table: string, tri: string) {
+export function useListe<T>(schema: Schema, table: string, tri: string, { colonnes = '*', rpc }: SourceListe = {}) {
   const client = useQueryClient()
 
   useEffect(() => {
@@ -23,14 +31,22 @@ export function useListe<T>(schema: Schema, table: string, tri: string) {
   }, [schema, table, client])
 
   return useQuery({
-    queryKey: [schema, table],
+    // Lue par une fonction : clé à part (autre forme), invalidée avec la table (même début de clé).
+    queryKey: rpc ? [schema, table, rpc] : [schema, table],
     queryFn: async () => {
-      const { data, error } = await supabase.schema(schema).from(table).select('*').order(tri)
+      const db = supabase.schema(schema)
+      const { data, error } = await (rpc ? db.rpc(rpc) : db.from(table)).select(colonnes).order(tri)
       if (error) throw error
       return data as T[]
     },
   })
 }
+
+/**
+ * Employés du référentiel, sans courriel ni matricule (droits par colonne de
+ * core.employes : la direction et le RH les lisent par core.employes_complets).
+ */
+export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom', { colonnes: COLONNES_EMPLOYE })
 
 /** Ajoute ou modifie une ligne (selon la présence d'un id). */
 export function useEnregistrer<T extends { id?: string }>(schema: Schema, table: string) {

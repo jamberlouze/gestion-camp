@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { Employe } from '@/lib/types'
+import { COLONNES_EMPLOYE, type Employe } from '@/lib/types'
 import { completer, REGLAGES_DEFAUT } from './logique'
 import type { Dossier, EtatSemaine, Horaire, Reglages } from './types'
 
@@ -121,7 +121,7 @@ export function useEnregistrerReglages() {
 function useEmployes() {
   return useQuery({
     queryKey: ['core', 'employes'],
-    queryFn: async () => (await verifier(supabase.schema('core').from('employes').select('*').order('surnom'))) as Employe[],
+    queryFn: async () => (await verifier(supabase.schema('core').from('employes').select(COLONNES_EMPLOYE).order('surnom'))) as Employe[],
   })
 }
 

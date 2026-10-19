@@ -1,4 +1,4 @@
-import { adressePhoto } from './donnees'
+import { useAdressePhoto } from './donnees'
 import { dateLisible, delaiLisible, type EtatEcheance } from './outils'
 import type { Statut, TypeVehicule } from './types'
 
@@ -46,10 +46,20 @@ const ICONES: Record<TypeVehicule, string> = { minibus: '🚌', voiture: '🚗',
 /** Photo du véhicule, ou l'icône de son type sur fond gris. */
 export function Photo({ chemin, type, className = '' }: { chemin: string | null; type: TypeVehicule; className?: string }) {
   return chemin ? (
-    <img src={adressePhoto(chemin)} alt="" loading="lazy" className={`object-cover ${className}`} />
+    <ImageSignee chemin={chemin} className={className} />
   ) : (
     <div className={`flex items-center justify-center bg-pierre-100 text-4xl ${className}`} aria-hidden>
       <span className="opacity-60">{ICONES[type]}</span>
     </div>
+  )
+}
+
+/** Fond gris tant que l'adresse signée n'est pas lue. */
+function ImageSignee({ chemin, className }: { chemin: string; className: string }) {
+  const url = useAdressePhoto(chemin)
+  return url ? (
+    <img src={url} alt="" loading="lazy" className={`object-cover ${className}`} />
+  ) : (
+    <div className={`bg-pierre-100 ${className}`} aria-hidden />
   )
 }

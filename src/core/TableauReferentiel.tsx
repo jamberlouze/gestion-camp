@@ -33,6 +33,8 @@ interface Props<T> {
   colonnes: Colonne<T>[]
   valeursDefaut: Partial<T>
   nomLigne: (ligne: T) => string
+  /** Fonction qui rend les lignes à la place de la table (colonnes que la table cache, ex. core.employes_complets). */
+  rpc?: string
 }
 
 /**
@@ -46,8 +48,9 @@ export function TableauReferentiel<T extends { id: string }>({
   colonnes,
   valeursDefaut,
   nomLigne,
+  rpc,
 }: Props<T>) {
-  const { data: lignes, isLoading, error } = useListe<T>(schema, table, tri)
+  const { data: lignes, isLoading, error } = useListe<T>(schema, table, tri, { rpc })
   const enregistrer = useEnregistrer<T>(schema, table)
   const supprimer = useSupprimer(schema, table)
   const [edition, setEdition] = useState<Partial<T> | null>(null)

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
-import type { Entreprise as Compagnie, Employe, Profil } from '@/lib/types'
+import type { Entreprise as Compagnie, Profil } from '@/lib/types'
 import type { LigneAgenda } from './agenda'
 import type {
   CategorieRejet,
@@ -57,7 +57,7 @@ export function useResponsables() {
   })
 }
 /** Référentiel Employés (attribution salariale). */
-export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom')
+export { useEmployes } from '@/lib/donnees'
 /** Noms des personnes (notes, heures, décisions) : la direction voit tous les profils. */
 export const useProfils = () => useListe<Profil>('core', 'profils', 'courriel')
 

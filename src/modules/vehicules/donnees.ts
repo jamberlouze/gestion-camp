@@ -14,6 +14,8 @@ const S = 'vehicules'
 const db = () => supabase.schema(S)
 const SEAU = 'vehicules-photos'
 const SEAU_DOCUMENTS = 'vehicules-documents'
+/** Durée d'une adresse signée (photos et documents : seaux privés) ; relue avant d'expirer. */
+const DUREE_ADRESSE = 3600
 
 type Table = 'vehicules' | 'inspections' | 'entretiens'
 
@@ -120,7 +122,21 @@ export async function supprimerVehicule(v: Vehicule) {
   if (docs.data.length) await supabase.storage.from(SEAU_DOCUMENTS).remove(docs.data.map((d) => d.chemin))
 }
 
-export const adressePhoto = (chemin: string) => supabase.storage.from(SEAU).getPublicUrl(chemin).data.publicUrl
+/** Adresse signée de la photo d'un véhicule (jamais gardée sur l'appareil : voir requetes.ts). */
+export function useAdressePhoto(chemin: string) {
+  return (
+    useQuery({
+      queryKey: ['vehicules-adresses', SEAU, chemin],
+      queryFn: async () => {
+        const { data, error } = await supabase.storage.from(SEAU).createSignedUrl(chemin, DUREE_ADRESSE)
+        if (error) throw error
+        return data.signedUrl
+      },
+      staleTime: (DUREE_ADRESSE - 600) * 1000,
+      refetchInterval: (DUREE_ADRESSE - 600) * 1000,
+    }).data ?? null
+  )
+}
 
 /** Remplace la photo d'un véhicule (l'ancienne est retirée du seau). */
 export async function changerPhoto(v: Vehicule, fichier: File | null) {
@@ -142,9 +158,6 @@ export async function changerPhoto(v: Vehicule, fichier: File | null) {
 // Documents (immatriculation, assurance, inspection…) : seau privé,
 // lu par adresses signées
 // ------------------------------------------------------------------
-
-/** Durée d'une adresse signée ; relue avant d'expirer. */
-const DUREE_ADRESSE = 3600
 
 /** Adresse signée d'un document (jamais gardée sur l'appareil : voir requetes.ts). */
 export function useAdresseDocument(d: Pick<DocumentVehicule, 'chemin'>) {
