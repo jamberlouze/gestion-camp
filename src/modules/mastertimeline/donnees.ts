@@ -163,6 +163,19 @@ export async function creerTache(champs: Partial<Tache>) {
   return data as Tache
 }
 
+/** Crée plusieurs tâches d'un coup (import en lot) : tout ou rien. */
+export async function creerTaches(lignes: Partial<Tache>[]) {
+  const { error } = await db().from('taches').insert(lignes)
+  if (error) throw error
+}
+
+/** Ajoute un projet ou un responsable (nom seulement) ; renvoie son id (import en lot). */
+export async function ajouterALaListe(table: 'projets' | 'responsables', champs: { nom: string; ordre?: number }) {
+  const { data, error } = await db().from(table).insert(champs).select('id').single()
+  if (error) throw error
+  return (data as { id: string }).id
+}
+
 /** Toutes les tâches d'un responsable passent à un autre (départ, remplacement). */
 export async function reassigner(de: string, vers: string | null) {
   const { error, count } = await db().from('taches').update({ responsable_id: vers }, { count: 'exact' }).eq('responsable_id', de)

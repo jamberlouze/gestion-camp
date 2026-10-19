@@ -415,6 +415,18 @@ export async function enregistrerListe<T extends { id?: string }>(table: TableLi
   await executer(id ? db().from(table).update(champs).eq('id', id) : db().from(table).insert(champs))
 }
 
+/** Ajoute une ligne à une liste et renvoie son id (import en lot). */
+export async function ajouterALaListe(table: TableListe, champs: { nom: string; ordre?: number }) {
+  const { data, error } = await db().from(table).insert(champs).select('id').single()
+  if (error) throw error
+  return (data as { id: string }).id
+}
+
+/** Ajoute des tâches déjà triées d'un coup (import en lot, direction) : tout ou rien. */
+export async function importerTaches(taches: NouvelleTache[]) {
+  await executer(db().from('taches').insert(taches))
+}
+
 export async function supprimerListe(table: TableListe, id: string) {
   await executer(db().from(table).delete().eq('id', id))
 }

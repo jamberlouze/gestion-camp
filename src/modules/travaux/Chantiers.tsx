@@ -8,6 +8,7 @@ import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { Pastille, Puce, Section } from './commun'
 import { enregistrerListe, supprimerListe, useRelire, type Donnees } from './donnees'
+import { BoutonImporter } from './Importer'
 import { comparer, comparerFaites, dateCourte, enRetard, jourAujourdhui, useDroits, useOuvrir } from './outils'
 import type { Chantier, Tache } from './types'
 
@@ -170,6 +171,9 @@ function DetailChantier({ id, d }: { id: string; d: Donnees }) {
                 })
               }}
             />
+            <span className="hidden sm:contents">
+              <BoutonImporter d={d} defauts={{ chantier: c.id, ...(c.lieu_id ? { lieu: c.lieu_id } : {}) }} />
+            </span>
             <button
               className={ui.bouton}
               onClick={() => ouvrir({ type: 'signaler', defauts: { chantier_id: c.id, lieu_id: c.lieu_id, position: prochainePosition } })}

@@ -9,6 +9,7 @@ import { Chantiers } from './Chantiers'
 import { Chargement } from './commun'
 import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Fiche } from './Fiche'
+import { BoutonImporter } from './Importer'
 import { ContexteFenetre, useDroits, type Fenetre } from './outils'
 import { Reglages } from './Reglages'
 import { Signaler } from './Signaler'
@@ -35,7 +36,9 @@ export default function ModuleTravaux() {
           <EtatSynchro />
           {/* Sur téléphone : bouton flottant en bas (plus bas). */}
           {droits.ecriture && (
-            <span className="hidden sm:block">
+            <span className="hidden gap-2 sm:flex">
+              {/* Import en lot : direction, sur ordinateur. */}
+              {droits.trieur && d.pret && <BoutonImporter d={d} />}
               <button className={ui.bouton} onClick={signaler}>
                 <IconePlus /> {droits.trieur ? 'Nouvelle tâche' : 'Signaler'}
               </button>

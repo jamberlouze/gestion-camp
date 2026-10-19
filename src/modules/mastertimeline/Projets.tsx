@@ -21,6 +21,7 @@ import { LigneTache, Pastille, Puce } from './commun'
 import { useCoches, useReferences, useTaches, type References } from './donnees'
 import { trierPassages, useEcriture, useOuvrirFiche, type Passage } from './outils'
 import type { Projet, Tache } from './types'
+import { BoutonImporter } from './Importer'
 
 const regle = (e: Etat) => e === 'faite' || e === 'sautee'
 
@@ -181,9 +182,12 @@ function ProjetAnnuel({ projet, taches, refs }: { projet: Projet; taches: Tache[
               </button>
             </div>
             {ecriture && (
-              <button className={ui.bouton} onClick={() => ouvrir({ tache: null, defauts: { projet_id: projet.id } })}>
-                <IconePlus /> Nouvelle tâche
-              </button>
+              <>
+                <BoutonImporter defauts={{ projet: projet.id }} />
+                <button className={ui.bouton} onClick={() => ouvrir({ tache: null, defauts: { projet_id: projet.id } })}>
+                  <IconePlus /> Nouvelle tâche
+                </button>
+              </>
             )}
           </>
         }

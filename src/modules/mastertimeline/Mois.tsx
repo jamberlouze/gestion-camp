@@ -8,6 +8,7 @@ import { BarreFiltres, ChoixRegroupement, EnTeteGroupe, LigneTache } from './com
 import { useCoches, useReferences, useTaches, type References } from './donnees'
 import { passagesDuMois, regrouper, retards, trierPassages, useEcriture, useFiltres, useOuvrirFiche, type Passage, type Regroupement } from './outils'
 import { TableauPassages, type Colonnes } from './TableauPassages'
+import { BoutonImporter } from './Importer'
 
 const CLE_REGROUPEMENT = 'mastertimeline-regroupement'
 
@@ -80,9 +81,12 @@ export function Mois() {
           </button>
         </div>
         {ecriture && (
-          <button className={ui.bouton} onClick={() => ouvrir({ tache: null })}>
-            <IconePlus /> Nouvelle tâche
-          </button>
+          <div className="flex gap-2">
+            <BoutonImporter />
+            <button className={ui.bouton} onClick={() => ouvrir({ tache: null })}>
+              <IconePlus /> Nouvelle tâche
+            </button>
+          </div>
         )}
       </div>
 
