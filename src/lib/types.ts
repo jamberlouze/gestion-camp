@@ -40,6 +40,7 @@ export interface Groupe {
   actif: boolean
 }
 
+/** Fiche du référentiel Employés telle que toute personne active la lit (sans courriel ni matricule). */
 export interface Employe {
   id: string
   surnom: string
@@ -47,13 +48,23 @@ export interface Employe {
   nom_famille: string | null
   /** « Nom, Prénom », posé par la base à partir de prenom et nom_famille (lecture seulement). */
   nom_complet: string | null
-  courriel: string | null
   poste: string | null
   secteur: string | null
   /** Compagnies (mastertimeline.entreprises) : une ligne par compagnie dans la feuille des employés. */
   entreprise_ids: string[]
   actif: boolean
   airtable_id: string | null
+}
+
+/**
+ * Colonnes de core.employes lisibles par toute personne active (droits par colonne) :
+ * jamais `select('*')` sur cette table.
+ */
+export const COLONNES_EMPLOYE = 'id, surnom, prenom, nom_famille, nom_complet, poste, secteur, entreprise_ids, actif, airtable_id'
+
+/** Fiche complète, lue par core.employes_complets() : courriel et matricule null hors direction et RH. */
+export interface EmployeComplet extends Employe {
+  courriel: string | null
   /** Matricule Employeur D (paie), le même pour toutes ses compagnies ; nettoyé par la base. */
   matricule_employeur_d: string | null
 }

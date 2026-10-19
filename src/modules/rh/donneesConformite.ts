@@ -49,14 +49,14 @@ export function usePaiesMasquees(actif: boolean) {
   })
 }
 
-/** Fiches du référentiel Employés (core.employes : lues par toute personne active). */
+/** Fiches du référentiel Employés, courriel et matricule compris (core.employes_complets : direction et RH). */
 export function useEmployesReferentiel() {
   return useQuery({
     queryKey: ['rh', 'employes-referentiel'],
     queryFn: async () => {
       const { data, error } = await supabase
         .schema('core')
-        .from('employes')
+        .rpc('employes_complets')
         .select('id, surnom, nom_complet, prenom, nom_famille, courriel, actif, entreprise_ids, matricule_employeur_d')
         .order('surnom')
       if (error) throw error

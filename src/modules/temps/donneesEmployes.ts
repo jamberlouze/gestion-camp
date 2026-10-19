@@ -87,7 +87,7 @@ export function useEmployesFeuille() {
     queryFn: async () => {
       const { data, error } = await supabase
         .schema('core')
-        .from('employes')
+        .rpc('employes_complets')
         .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif, matricule_employeur_d')
         .order('surnom')
       if (error) throw error

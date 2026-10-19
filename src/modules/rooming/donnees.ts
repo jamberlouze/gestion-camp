@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
+import { COLONNES_EMPLOYE } from '@/lib/types'
 import type { Chambre, Employe, Lieu, Occupation, Personne, Plan, TypeChambre } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne) : sans réseau,
@@ -19,7 +20,7 @@ export function useRooming() {
   const plans = useListe<Plan>(S, 'plans', 'created_at')
   const occupations = useListe<Occupation>(S, 'occupations', 'id')
   const personnes = useListe<Personne>(S, 'personnes', 'created_at')
-  const employes = useListe<Employe>('core', 'employes', 'surnom')
+  const employes = useListe<Employe>('core', 'employes', 'surnom', { colonnes: COLONNES_EMPLOYE })
   return useMemo(() => {
     const requetes = [lieux, chambres, plans, occupations, personnes, employes]
     return {

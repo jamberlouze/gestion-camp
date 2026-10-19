@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router'
 import { useListe } from '@/lib/donnees'
-import type { Employe, Entreprise, Groupe, Semaine } from '@/lib/types'
+import type { EmployeComplet, Entreprise, Groupe, Semaine } from '@/lib/types'
 import { TableauReferentiel } from './TableauReferentiel'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -63,9 +63,10 @@ export function Employes() {
         La source officielle des employés est Airtable (base « Inscriptions Camp de vacances »). Une
         synchronisation automatique viendra plus tard ; en attendant, la liste se gère ici.
       </p>
-      <TableauReferentiel<Employe>
+      <TableauReferentiel<EmployeComplet>
         schema="core"
         table="employes"
+        rpc="employes_complets"
         tri="surnom"
         nomLigne={(e) => e.surnom}
         valeursDefaut={{ entreprise_ids: [], actif: true }}
