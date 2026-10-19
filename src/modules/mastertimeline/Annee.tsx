@@ -25,6 +25,7 @@ import { BarreFiltres, ChoixRegroupement, Pastille, PucesEtiquettes } from './co
 import { garder, regrouper, useBasculer, useEcriture, useFiltres, useOuvrirFiche, type Regroupement } from './outils'
 import { useCoches, useReferences, useTaches } from './donnees'
 import type { Coche, Tache } from './types'
+import { BoutonImporter } from './Importer'
 
 interface Rangee {
   tache: Tache
@@ -126,9 +127,12 @@ export function Annee() {
           </button>
         </div>
         {ecriture && (
-          <button className={ui.bouton} onClick={() => ouvrir({ tache: null })}>
-            <IconePlus /> Nouvelle tâche
-          </button>
+          <div className="flex gap-2">
+            <BoutonImporter />
+            <button className={ui.bouton} onClick={() => ouvrir({ tache: null })}>
+              <IconePlus /> Nouvelle tâche
+            </button>
+          </div>
         )}
       </div>
 
