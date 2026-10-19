@@ -13,7 +13,29 @@ import { FrontiereErreur } from './shell/FrontiereErreur'
 
 // Service worker : garde l'app disponible sans réseau et se met à jour seul.
 // Pas sur les pages publiques : un client n'a pas à télécharger toute l'app.
-if (!estPagePublique()) registerSW({ immediate: true })
+if (!estPagePublique()) {
+  registerSW({
+    immediate: true,
+    // Le navigateur ne cherche une nouvelle version qu'en ouvrant l'app : un
+    // onglet resté ouvert gardait l'ancienne après une mise en ligne (base
+    // changée → erreurs). On la cherche aussi au retour sur l'onglet ou la
+    // fenêtre, au plus une fois par minute ; trouvée, elle s'installe et la
+    // page se recharge seule (autoUpdate).
+    onRegisteredSW(_adresse, enregistrement) {
+      if (!enregistrement) return
+      let derniere = Date.now()
+      const chercher = () => {
+        if (document.visibilityState !== 'visible' || !navigator.onLine || Date.now() - derniere < 60_000) return
+        derniere = Date.now()
+        enregistrement.update().catch(() => {
+          // Réseau coupé ou serveur injoignable : on réessaiera au prochain retour.
+        })
+      }
+      document.addEventListener('visibilitychange', chercher)
+      window.addEventListener('focus', chercher)
+    },
+  })
+}
 
 // Après une mise en ligne, un onglet resté ouvert peut réclamer les fichiers
 // d'un module qui n'existent plus (nouveaux noms) : au lieu d'une page
