@@ -5,31 +5,36 @@ import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { ChoixCompagnies, FilNotes, LienOfficiel, menu, NotesLues, Pastille, PastilleStatut, PastilleType, PucesCompagnies } from './commun'
-import { useDecider, useEnregistrer, useEntreprises, useNotes, useSubventions } from './donnees'
+import { useDecider, useEnregistrer, useEntreprises, useFeedback, useNotes, useProfils, useSubventions } from './donnees'
 import {
+  aDecider,
   CATEGORIES,
   cleProgramme,
   correspond,
   dateCourte,
   joursAvant,
+  moment,
   montantsPotentiels,
+  nomPersonne,
   prochainTrimestre,
   trierAValider,
   TYPES,
 } from './outils'
-import type { CategorieRejet, Entreprise, Note, Subvention, TypeSubvention } from './types'
+import type { CategorieRejet, Entreprise, Feedback, Note, Subvention, TypeSubvention } from './types'
 
-type FiltreStatut = 'tous' | 'nouveau' | 'a_valider'
+type FiltreStatut = 'tous' | 'nouveau' | 'a_valider' | 'rejete'
 
 /**
  * Vue de validation : les subventions nouvelles ou en attente, une carte par
  * programme avec ses compagnies ; on la retient (en cochant les compagnies
- * qui déposent) ou on la rejette une seule fois.
+ * qui déposent) ou on la rejette une seule fois. Le filtre « Rejetées » les
+ * montre de nouveau, pour revenir sur un rejet.
  */
 export function Validation() {
   const subventions = useSubventions()
   const entreprises = useEntreprises()
   const notes = useNotes()
+  const feedback = useFeedback()
   const [entreprise, setEntreprise] = useState('')
   const [type, setType] = useState('')
   const [statut, setStatut] = useState<FiltreStatut>('tous')
@@ -44,15 +49,28 @@ export function Validation() {
         .filter((g) => correspond(g, recherche)),
     [subventions.data, entreprise, type, recherche],
   )
+  // Dernier rejet de chaque carte : raison montrée sur une rejetée, et tri (la plus récente d'abord).
+  const rejets = useMemo(() => {
+    const m = new Map<string, Feedback>()
+    for (const f of feedback.data ?? []) {
+      if (f.decision === 'rejete' && f.decided_at >= (m.get(f.grant_id)?.decided_at ?? '')) m.set(f.grant_id, f)
+    }
+    return m
+  }, [feedback.data])
+  const rejetees = statut === 'rejete'
+  const rejeteeLe = (g: Subvention) => rejets.get(g.id)?.decided_at ?? g.updated_at
   const liste = filtrees
-    .filter((g) => (statut === 'tous' ? g.status === 'nouveau' || g.status === 'a_valider' : g.status === statut))
-    .sort(trierAValider)
+    .filter((g) => (statut === 'tous' ? aDecider(g) : g.status === statut))
+    .sort(rejetees ? (a, b) => rejeteeLe(b).localeCompare(rejeteeLe(a)) : trierAValider)
   // En cherchant, on montre aussi les subventions déjà décidées : « Claude l'a-t-il déjà trouvée ? »
   const dejaDecidees = recherche.trim()
     ? filtrees
-        .filter((g) => g.status !== 'nouveau' && g.status !== 'a_valider')
+        .filter((g) => !aDecider(g) && !(rejetees && g.status === 'rejete'))
         .sort((a, b) => b.discovered_at.localeCompare(a.discovered_at))
     : []
+  const s = (n: number) => (n > 1 ? 's' : '')
+  const quoi = rejetees ? 'rejetée' : 'à valider'
+  const nombre = (n: number) => `${n} subvention${s(n)} ${rejetees ? `rejetée${s(n)}` : 'à valider'}`
 
   const erreur = subventions.error ?? entreprises.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
@@ -92,6 +110,7 @@ export function Validation() {
             <option value="tous">Nouvelles et en attente</option>
             <option value="nouveau">Nouvelles seulement</option>
             <option value="a_valider">En attente seulement</option>
+            <option value="rejete">Rejetées</option>
           </select>
         </div>
         <button className={ui.bouton} onClick={() => setNouvelle(true)}>
@@ -102,16 +121,20 @@ export function Validation() {
       <p className="text-sm text-pierre-500">
         {recherche.trim()
           ? liste.length === 0
-            ? `Aucune subvention à valider ne correspond à « ${recherche.trim()} ».`
-            : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à valider correspond${liste.length > 1 ? 'ent' : ''} à « ${recherche.trim()} ».`
+            ? `Aucune subvention ${quoi} ne correspond à « ${recherche.trim()} ».`
+            : `${nombre(liste.length)} correspond${liste.length > 1 ? 'ent' : ''} à « ${recherche.trim()} ».`
+          : rejetees
+          ? liste.length === 0
+            ? 'Aucune subvention rejetée.'
+            : `${nombre(liste.length)}, la plus récente d’abord. « Remettre à valider » la renvoie dans les nouvelles.`
           : liste.length === 0
           ? `Rien à valider. La prochaine recherche automatique a lieu le ${dateCourte(prochainTrimestre().date)} ; vous pouvez aussi en lancer une dans l’onglet Recherches.`
-          : `${liste.length} subvention${liste.length > 1 ? 's' : ''} à regarder — salariales d’abord, puis date limite la plus proche.`}
+          : `${liste.length} subvention${s(liste.length)} à regarder — salariales d’abord, puis date limite la plus proche.`}
       </p>
 
       <div className="space-y-3">
         {liste.map((g) => (
-          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} notes={notesDe(g.id)} />
+          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} notes={notesDe(g.id)} rejet={rejets.get(g.id)} />
         ))}
       </div>
 
@@ -121,7 +144,9 @@ export function Validation() {
             Déjà décidées{dejaDecidees.length ? ` (${dejaDecidees.length})` : ''}
           </h3>
           {dejaDecidees.length === 0 ? (
-            <p className="text-sm text-pierre-500">Aucune subvention retenue, rejetée ou terminée ne correspond.</p>
+            <p className="text-sm text-pierre-500">
+              Aucune subvention retenue{rejetees ? '' : ', rejetée'} ou terminée ne correspond.
+            </p>
           ) : (
             <ul className={`${ui.carte} divide-y divide-pierre-100`}>
               {dejaDecidees.map((g) => (
@@ -149,8 +174,9 @@ export function Validation() {
   )
 }
 
-function CarteValidation({ g, entreprises, notes }: { g: Subvention; entreprises: Entreprise[]; notes: Note[] }) {
+function CarteValidation({ g, entreprises, notes, rejet }: { g: Subvention; entreprises: Entreprise[]; notes: Note[]; rejet?: Feedback }) {
   const enregistrer = useEnregistrer<Subvention>('grants')
+  const profils = useProfils().data
   const [notesOuvertes, setNotesOuvertes] = useState(false)
   const [dialogue, setDialogue] = useState<'valider' | 'attente' | 'rejeter' | null>(null)
   const montant = montantsPotentiels(g)
@@ -161,7 +187,7 @@ function CarteValidation({ g, entreprises, notes }: { g: Subvention; entreprises
       <div className="flex flex-wrap items-center gap-1.5">
         <PastilleType type={g.grant_type} />
         <PucesCompagnies ids={g.company_ids} />
-        {g.status === 'a_valider' && <PastilleStatut statut="a_valider" />}
+        {(g.status === 'a_valider' || g.status === 'rejete') && <PastilleStatut statut={g.status} />}
         {g.previous_grant_id && <Pastille classe="bg-sky-50 text-sky-800">Programme récurrent</Pastille>}
         <span className="ml-auto text-xs text-pierre-500">
           {g.origin === 'claude' ? 'Trouvée par Claude' : 'Ajoutée à la main'} le {dateCourte(g.discovered_at)}
@@ -203,6 +229,17 @@ function CarteValidation({ g, entreprises, notes }: { g: Subvention; entreprises
           <p className="mt-0.5 whitespace-pre-line">{g.relevance_justification}</p>
         </div>
       )}
+      {g.status === 'rejete' && rejet && (
+        <div className="mt-3 rounded-lg bg-pierre-100 px-3 py-2 text-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-pierre-500">
+            Rejetée par {nomPersonne(profils, rejet.decided_by)}, {moment(rejet.decided_at)}
+          </p>
+          <p className="mt-0.5">
+            {CATEGORIES[rejet.reject_category ?? 'autre']}
+            {rejet.comment && ` — « ${rejet.comment} »`}
+          </p>
+        </div>
+      )}
       {g.status === 'a_valider' && notes.length > 0 && !notesOuvertes && (
         <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-amber-800">En attente — notes</p>
@@ -224,12 +261,14 @@ function CarteValidation({ g, entreprises, notes }: { g: Subvention; entreprises
           </button>
         ) : (
           <button className={ui.boutonSecondaire} onClick={() => enregistrer.mutate({ id: g.id, status: 'nouveau' })}>
-            Remettre en nouvelle
+            {g.status === 'rejete' ? 'Remettre à valider' : 'Remettre en nouvelle'}
           </button>
         )}
-        <button className={ui.boutonSecondaire} onClick={() => setDialogue('rejeter')}>
-          Rejeter…
-        </button>
+        {g.status !== 'rejete' && (
+          <button className={ui.boutonSecondaire} onClick={() => setDialogue('rejeter')}>
+            Rejeter…
+          </button>
+        )}
         <span className="mx-1 hidden h-5 w-px bg-pierre-200 sm:block" />
         <LienOfficiel url={g.source_url} />
         <button className="text-sm text-pierre-600 underline hover:text-pierre-900" onClick={() => setNotesOuvertes((o) => !o)}>

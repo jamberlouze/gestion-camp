@@ -120,7 +120,7 @@ function Subventions() {
       {proches.map(({ g, jours }) => (
         <Ligne
           key={g.id}
-          to="/subventions"
+          to={`/subventions/fiche/${g.id}`}
           icone="💰"
           module="Subventions"
           pastille={jours <= 7 ? 'forte' : 'douce'}
