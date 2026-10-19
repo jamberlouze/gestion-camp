@@ -1,5 +1,6 @@
 // Routes /api/qbo/* (équipe : jeton de session + droit d'écrire dans
-// Réservations, vérifiés par reservations.peut_facturer) :
+// Réservations et de lire le CRM, vérifiés par reservations.peut_facturer ;
+// compagnie, reservation et facture : des UUID) :
 //   GET  etat        : QBO configuré ? environnement ;
 //   POST connexion   : {compagnie} → adresse d'autorisation d'Intuit ;
 //   GET  retour      : retour d'Intuit (code, state signé, realmId) → jetons chiffrés ;
@@ -21,6 +22,7 @@ import { candidatsClients, devis, document, listes, majEcheancier, synchroniserC
 
 const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const erreur = (e) => {
   const message = e instanceof Error ? e.message : String(e)
@@ -109,6 +111,10 @@ export async function routeQbo(request, env, chemin) {
   }
   if (request.method !== 'POST') return json({ erreur: 'Méthode non permise.' }, 405)
   const corps = await corpsJson(request)
+  // Ces identifiants vont dans des adresses PostgREST lues avec la clé secrète.
+  if (['compagnie', 'reservation', 'facture'].some((champ) => corps[champ] != null && !UUID.test(String(corps[champ])))) {
+    return json({ erreur: 'Identifiant invalide.' }, 400)
+  }
 
   try {
     switch (chemin) {

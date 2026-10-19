@@ -220,6 +220,8 @@ test('bilan des factures : crédit non appliqué retranché, crédit appliqué p
 // ------------------------------------------------------------------
 
 const fetchOriginal = globalThis.fetch
+// Identifiant d'une réservation dans le corps : un UUID (le Worker refuse le reste).
+const R1 = '00000000-0000-4000-8000-000000000001'
 afterEach(() => {
   globalThis.fetch = fetchOriginal
 })
@@ -273,9 +275,22 @@ async function simuler({ lien = null, devisExistant = null, pieces = false, rese
 const requete = (chemin, corps) =>
   new Request(`https://app.test/api/qbo/${chemin}`, { method: 'POST', body: JSON.stringify(corps), headers: { Authorization: 'Bearer session' } })
 
+test('identifiant qui n’est pas un UUID : refusé avant toute lecture', async () => {
+  const appels = await simuler()
+  for (const [chemin, corps] of [
+    ['clients', { reservation: `${R1}&select=*` }],
+    ['deconnexion', { compagnie: 'c1' }],
+    ['pdf', { facture: 'x,id.not.is.null' }],
+  ]) {
+    const res = await routeQbo(requete(chemin, corps), env, chemin)
+    assert.equal(res.status, 400, chemin)
+  }
+  assert.ok(appels.every((a) => a.u.endsWith('/rpc/peut_facturer')))
+})
+
 test('devis : client créé, lignes de l’estimé accepté, total contrôlé, relances posées', async () => {
   const appels = await simuler()
-  const res = await routeQbo(requete('devis', { reservation: 'r1', client: { creer: true } }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1, client: { creer: true } }), env, 'devis')
   const corps = await res.json()
   assert.equal(res.status, 200, JSON.stringify(corps))
   const creationClient = appels.find((a) => a.u.includes('/customer') && a.m === 'POST')
@@ -294,7 +309,7 @@ test('devis : client créé, lignes de l’estimé accepté, total contrôlé, r
 
 test('devis : contrat signé et spécimen joints (fichiers reçus en ArrayBuffer)', async () => {
   const appels = await simuler({ pieces: true })
-  const res = await routeQbo(requete('devis', { reservation: 'r1', client: { creer: true } }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1, client: { creer: true } }), env, 'devis')
   const corps = await res.json()
   assert.equal(res.status, 200, JSON.stringify(corps))
   assert.deepEqual(corps.avertissements, [])
@@ -306,7 +321,7 @@ test('devis : contrat signé et spécimen joints (fichiers reçus en ArrayBuffer
 
 test('devis existant : mise à jour (SyncToken), pas de nouvelles pièces jointes', async () => {
   const appels = await simuler({ lien: { qbo_id: '55', nom: 'École' }, devisExistant: { qbo_id: '12' } })
-  const res = await routeQbo(requete('devis', { reservation: 'r1' }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
   assert.equal(res.status, 200)
   const maj = JSON.parse(appels.find((a) => a.u.includes('/estimate') && a.m === 'POST').corps)
   assert.deepEqual([maj.Id, maj.SyncToken, maj.sparse], ['12', '3', true])
@@ -318,7 +333,7 @@ test('devis existant : mise à jour (SyncToken), pas de nouvelles pièces jointe
 
 test('facture séparée : numérotée par QBO, client relié, reçue dans l’app', async () => {
   const appels = await simuler({ lien: { qbo_id: '55', nom: 'École' } })
-  const res = await routeQbo(requete('document', { reservation: 'r1', genre: 'separee', lignes: [{ description: 'Bris', quantite: 1, prix_unitaire: 123.45 }, { description: '', quantite: 1, prix_unitaire: 5 }] }), env, 'document')
+  const res = await routeQbo(requete('document', { reservation: R1, genre: 'separee', lignes: [{ description: 'Bris', quantite: 1, prix_unitaire: 123.45 }, { description: '', quantite: 1, prix_unitaire: 5 }] }), env, 'document')
   const corps = await res.json()
   assert.equal(res.status, 200, JSON.stringify(corps))
   const f = JSON.parse(appels.find((a) => a.u.includes('/invoice?') && a.m === 'POST').corps)
@@ -337,7 +352,7 @@ test('annulation, frais à facturer : le devis ne porte plus que les frais, rela
     reservation: { fermeture: 'annulee', annule_le: '2027-04-04' },
     factures: [{ qbo_type: 'Invoice', genre: 'progressive', total: 3888.26, solde: 0 }],
   })
-  const res = await routeQbo(requete('devis', { reservation: 'r1' }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
   const corps = await res.json()
   assert.equal(res.status, 200, JSON.stringify(corps))
   const maj = JSON.parse(appels.find((a) => a.u.includes('/estimate') && a.m === 'POST').corps)
@@ -360,7 +375,7 @@ test('annulation, trop facturé : note de crédit de l’excédent, devis fermé
     reservation: { fermeture: 'annulee', annule_le: '2027-04-04' },
     factures: [{ qbo_type: 'Invoice', genre: 'progressive', total: 11664.77, solde: 0 }],
   })
-  const res = await routeQbo(requete('devis', { reservation: 'r1' }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
   const corps = await res.json()
   assert.equal(res.status, 200, JSON.stringify(corps))
   const note = JSON.parse(appels.find((a) => a.u.includes('/creditmemo?') && a.m === 'POST').corps)
@@ -374,6 +389,6 @@ test('annulation, trop facturé : note de crédit de l’excédent, devis fermé
 
 test('sans session de l’équipe : refusé', async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ ok: false }), { status: 200 })
-  const res = await routeQbo(requete('devis', { reservation: 'r1' }), env, 'devis')
+  const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
   assert.equal(res.status, 403)
 })
