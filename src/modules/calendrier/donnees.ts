@@ -243,7 +243,8 @@ export function useRetirer(table: TableModifiable) {
 
 /**
  * Coche ou décoche une présence simple, ou change sa note. Une case
- * décochée garde sa ligne (deleted_at) : la recocher la réactive.
+ * décochée garde sa ligne (deleted_at) : la recocher la réactive, sans
+ * son ancienne note (une présence neuve).
  * Affichage mis à jour d'avance, remis en place si la base refuse.
  */
 export function usePresence(debut: string, fin: string) {
@@ -260,6 +261,11 @@ export function usePresence(debut: string, fin: string) {
         deleted_at: p.present ? null : new Date().toISOString(),
       }
       if (p.description !== undefined) valeurs.description = p.description
+      else if (p.present) {
+        // Recochée : rien de la présence d'avant (note, choix) ne revient.
+        valeurs.description = null
+        valeurs.statut = null
+      }
       const { error } = await db().from('presences_simples').upsert(valeurs, { onConflict: 'personnel_id,date,secteur' })
       if (error) throw error
     },
@@ -277,8 +283,8 @@ export function usePresence(debut: string, fin: string) {
             personnel_id: p.personnel_id,
             date: p.date,
             secteur: p.secteur,
-            description: p.description !== undefined ? p.description : (existante?.description ?? null),
-            statut: existante?.statut ?? null,
+            description: p.description !== undefined ? p.description : null,
+            statut: p.description !== undefined ? (existante?.statut ?? null) : null,
             updated_by: null,
             updated_at: new Date().toISOString(),
             deleted_at: null,

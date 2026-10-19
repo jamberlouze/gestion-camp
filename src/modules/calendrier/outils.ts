@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { aujourdhui, estIso } from './dates'
 import { occurrences } from './recurrence'
-import { ETATS_MASQUES, type Evenement, type Sejour } from './types'
+import { ETATS_MASQUES, type Evenement, type PresenceJour, type Sejour } from './types'
 
 /**
  * Date affichée, gardée dans l'adresse (?date=AAAA-MM-JJ) : elle suit d'un
@@ -68,6 +68,9 @@ export function teinteSejour(s: Sejour): string {
   const code = (s.batiment ?? '').split(',')[0].trim().toUpperCase()
   return TEINTES_BATIMENT.find((t) => t.code === code)?.classes ?? TEINTE_AUTRE
 }
+
+/** Personnes au travail : chacune une fois, même dans deux secteurs le même jour (direction et terrain). */
+export const nombrePersonnes = (liste: PresenceJour[]) => new Set(liste.map((p) => p.personnel_id)).size
 
 /** Réservation pas encore confirmée : bordure pointillée et mention de l'état. */
 export const nonConfirme = (s: Sejour) => !!s.etat && s.etat !== 'Confirmée'

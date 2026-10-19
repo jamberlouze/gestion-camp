@@ -138,7 +138,7 @@ export function Journal() {
             </option>
           ))}
         </select>
-        <p className="text-sm text-pierre-500">Pour revoir une journée passée telle quelle, changez simplement la date dans Aujourd'hui ou Calendrier.</p>
+        <p className="text-sm text-pierre-500">Pour revoir une journée passée telle quelle, changez simplement la date dans l'onglet Calendrier.</p>
       </div>
       {journal.error && <p className={ui.erreur}>{messageErreur(journal.error)}</p>}
       {!journal.data ? (

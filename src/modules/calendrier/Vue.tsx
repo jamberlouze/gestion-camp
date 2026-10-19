@@ -4,7 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { dateCourtePaie, dateVersementPaie, debutPeriodePaie, finPeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { nombrePersonnes, nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
@@ -565,7 +565,7 @@ function GrilleMois({
               <div className="mb-1 flex items-center gap-0.5">
                 <LienJour jour={j} className="flex flex-1 items-center justify-between rounded px-1 text-xs hover:bg-pierre-100">
                   <span className={`font-medium ${j === auj ? 'rounded-full bg-foret-700 px-1.5 text-white' : hors ? 'text-pierre-400' : ''}`}>{depuisIso(j).getDate()}</span>
-                  <span className="text-pierre-500" title="Personnes au travail">{presenceParJour.get(j)?.length || ''}</span>
+                  <span className="text-pierre-500" title="Personnes au travail">{nombrePersonnes(presenceParJour.get(j) ?? []) || ''}</span>
                 </LienJour>
                 {ecriture && (
                   <button
