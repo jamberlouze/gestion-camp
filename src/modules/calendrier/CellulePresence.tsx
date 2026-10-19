@@ -18,6 +18,7 @@ export function CellulePresence({
   secteur,
   presences,
   personnel,
+  noms,
   ecriture,
   cocher,
 }: {
@@ -25,20 +26,22 @@ export function CellulePresence({
   secteur: SecteurSimple
   /** Présences de ce secteur, ce jour-là. */
   presences: PresenceSimple[]
+  /** Qu'on peut cocher (jamais les personnes retirées). */
   personnel: Personne[]
+  /** Noms affichés, personnes retirées comprises (leurs journées passées restent). */
+  noms: Map<string, string>
   ecriture: boolean
   cocher: Cocher
 }) {
   const [ouverte, setOuverte] = useState(false)
-  const nom = new Map(personnel.map((p) => [p.id, p.nom]))
-  const presents = [...presences].sort((a, b) => (nom.get(a.personnel_id) ?? '').localeCompare(nom.get(b.personnel_id) ?? '', 'fr'))
+  const presents = [...presences].sort((a, b) => (noms.get(a.personnel_id) ?? '').localeCompare(noms.get(b.personnel_id) ?? '', 'fr'))
 
   return (
     <div className="relative min-h-9 border-b border-l border-pierre-200 p-1.5">
       <ul className="space-y-0.5 text-xs leading-4">
         {presents.map((p) => (
           <li key={p.id}>
-            <span className="font-medium">{nom.get(p.personnel_id) ?? '?'}</span>
+            <span className="font-medium">{noms.get(p.personnel_id) ?? '?'}</span>
             {p.description && <span className="text-pierre-500"> · {p.description}</span>}
           </li>
         ))}

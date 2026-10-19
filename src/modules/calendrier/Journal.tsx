@@ -4,7 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement } from './commun'
 import { dateCourte, heure } from './dates'
-import { lireJournal, usePersonnel, useSejours } from './donnees'
+import { lireJournal, useNomsPersonnel, useSejours } from './donnees'
 import { META_SECTEUR, STATUTS_PRESENCE, type EntreeJournal, type Secteur, type StatutPresence } from './types'
 
 const TABLES: Record<string, string> = {
@@ -63,6 +63,7 @@ const CHAMPS: Record<string, string> = {
   courriel: 'courriel',
   personne_cuisine_id: 'horaire de cuisine',
 }
+const AUCUN_NOM = new Map<string, string>()
 const IGNORES = new Set(['id', 'created_at', 'updated_at', 'updated_by', 'deleted_at', 'synced_at', 'raw', 'airtable_record_id'])
 
 const valeurLisible = (v: unknown): string => {
@@ -78,7 +79,8 @@ const valeurLisible = (v: unknown): string => {
 /** Qui a modifié quoi, quand (rien n'est effacé : on peut tout retrouver). */
 export function Journal() {
   const [table, setTable] = useState('')
-  const personnel = usePersonnel()
+  // Personnes retirées comprises : leurs présences gardent leur nom.
+  const noms = useNomsPersonnel().data ?? AUCUN_NOM
   const sejours = useSejours()
   const journal = useInfiniteQuery({
     queryKey: ['calendrier', 'journal', table],
@@ -87,7 +89,6 @@ export function Journal() {
     getNextPageParam: (derniere) => (derniere.length === 100 ? derniere[derniere.length - 1].id : undefined),
   })
   const entrees = useMemo(() => journal.data?.pages.flat() ?? [], [journal.data])
-  const noms = useMemo(() => new Map((personnel.data ?? []).map((p) => [p.id, p.nom])), [personnel.data])
   const groupes = useMemo(() => new Map((sejours.data ?? []).map((s) => [s.id, s.nom_groupe])), [sejours.data])
 
   /** Ce que la ligne désigne : « Livraison Colabor », « Julie, 4 oct. »… */

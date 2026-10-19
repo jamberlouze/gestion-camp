@@ -66,7 +66,9 @@ export function FicheEvenement({
     e.preventDefault()
     if (!titre.trim()) return setErreur('Le titre est obligatoire.')
     if (frequence === 'WEEKLY' && !jours.length) return setErreur('Cochez au moins un jour de la semaine.')
-    if (fin && fin < debut) return setErreur('La date de fin est avant la date de début.')
+    // La fin qui compte dépend de la répétition (l'autre champ est caché, pas enregistré).
+    if (!texteRegle && fin && fin < debut) return setErreur('La date de fin est avant la date de début.')
+    if (texteRegle && finRecurrence && finRecurrence < debut) return setErreur("La fin de la répétition (« Jusqu'au ») est avant « À partir du ».")
     if (heureDebut && heureFin && heureFin < heureDebut) return setErreur("L'heure de fin est avant l'heure de début.")
     setErreur(null)
     try {
