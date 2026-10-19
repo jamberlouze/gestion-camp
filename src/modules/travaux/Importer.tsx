@@ -5,13 +5,15 @@ import { lireChoix, lireDate, lireNombre } from '@/lib/importLot'
 import { ui } from '@/lib/ui'
 import { ajouterALaListe, importerTaches, useRelire, type Donnees } from './donnees'
 import { dateCourte, useDroits } from './outils'
-import { PRIORITES, type Priorite } from './types'
+import { PRIORITES, STATUTS, type Priorite, type Statut } from './types'
 
 const CHOIX_PRIORITES = ([1, 2, 3] as Priorite[]).map((p) => ({ texte: String(p), libelle: PRIORITES[p] }))
+/** À trier = signalement que la direction classera dans le bandeau (ex. « À classer » d'Asana). */
+const CHOIX_STATUTS = (['a_trier', 'a_faire'] as Statut[]).map((s) => ({ texte: s, libelle: STATUTS[s] }))
 
 /**
  * Bouton « Importer » (direction, à côté de « Nouvelle tâche ») : plusieurs
- * tâches déjà triées d'un coup. En ligne seulement : tout ou rien.
+ * tâches d'un coup, à faire (par défaut) ou à trier. En ligne seulement : tout ou rien.
  */
 export function BoutonImporter({ d, defauts }: { d: Donnees; defauts?: Record<string, string> }) {
   const [ouvert, setOuvert] = useState(false)
@@ -150,6 +152,18 @@ function Fenetre({ d, defauts, fermer }: { d: Donnees; defauts?: Record<string, 
           aide: 'Une ou plusieurs, séparées par des virgules.',
           exemple: d.etiquettes.map((e) => e.nom).join(', '),
         },
+        {
+          cle: 'statut',
+          entete: 'Statut',
+          synonymes: ['État'],
+          type: 'valeur',
+          lire: lireChoix(CHOIX_STATUTS),
+          afficher: (v) => STATUTS[v as Statut],
+          choix: CHOIX_STATUTS,
+          lot: true,
+          aide: 'À trier (signalement que la direction classera) ou À faire (vide = À faire).',
+          exemple: 'À faire',
+        },
       ],
       enregistrer: async (lignes) => {
         await importerTaches(
@@ -166,7 +180,7 @@ function Fenetre({ d, defauts, fermer }: { d: Donnees; defauts?: Record<string, 
             assigne_a: (v.assigne as string) ?? null,
             fournisseur_id: (v.fournisseur as string) ?? null,
             etiquette_ids: (v.etiquettes as string[]) ?? [],
-            statut: 'a_faire',
+            statut: (v.statut as Statut) ?? 'a_faire',
             signale_par: droits.moi,
           })),
         )
