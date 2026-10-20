@@ -50,7 +50,10 @@ export interface EntreeJournal {
 export interface Membre {
   id: string
   courriel: string
+  /** « Prénom Nom » (posé par la base d'après le prénom et le nom de famille, page Utilisateurs). */
   nom: string | null
+  prenom: string | null
+  nom_famille: string | null
   role: Role
   actif: boolean
 }
@@ -140,7 +143,7 @@ export function useMembres(actif = true) {
       const { data, error } = await supabase
         .schema('core')
         .from('profils')
-        .select('id, courriel, nom, role, actif')
+        .select('id, courriel, nom, prenom, nom_famille, role, actif')
         .order('nom')
         .order('courriel')
       if (error) throw error

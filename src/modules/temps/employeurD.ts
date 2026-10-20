@@ -77,6 +77,8 @@ export type StatutFeuille = 'ouverte' | 'soumise' | 'approuvee'
 export interface MembreDirectionExport {
   id: string
   nom: string | null
+  prenom?: string | null
+  nom_famille?: string | null
   courriel: string
   admin: boolean
 }
@@ -142,11 +144,14 @@ const arrondi = (n: number) => Math.round(n * 100) / 100
 export const nomExport = (e: Pick<EmployeExport, 'surnom' | 'nom_complet'>) => e.nom_complet || e.surnom
 
 /**
- * « Nom, prénom » d'un compte de la direction, tiré de son nom affiché
- * (« Julie Tremblay » → « Tremblay, Julie » ; le prénom = le premier mot,
- * les prénoms composés ont un trait d'union). Sans nom : le courriel.
+ * « Nom, prénom » d'un compte de la direction : son nom de famille et son
+ * prénom (page Utilisateurs) ; sinon tiré de son nom affiché (« Julie
+ * Tremblay » → « Tremblay, Julie » ; le prénom = le premier mot, les
+ * prénoms composés ont un trait d'union). Sans nom : le courriel.
  */
-export function nomDirection(m: Pick<MembreDirectionExport, 'nom' | 'courriel'>): string {
+export function nomDirection(m: Pick<MembreDirectionExport, 'nom' | 'prenom' | 'nom_famille' | 'courriel'>): string {
+  const famille = m.nom_famille?.trim()
+  if (famille) return m.prenom?.trim() ? `${famille}, ${m.prenom.trim()}` : famille
   const nom = m.nom?.trim().replace(/\s+/g, ' ')
   if (!nom) return m.courriel
   const i = nom.indexOf(' ')

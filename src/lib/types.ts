@@ -8,7 +8,10 @@ export type Niveau = 'lecture' | 'ecriture'
 export interface Profil {
   id: string
   courriel: string
+  /** « Prénom Nom », posé par la base dès que le prénom ou le nom de famille est connu (core.poser_nom_profil). */
   nom: string | null
+  prenom: string | null
+  nom_famille: string | null
   role: Role
   actif: boolean
   /** Fiche d'employé dont ce compte remplit lui-même la feuille de temps (jamais pour la direction). */

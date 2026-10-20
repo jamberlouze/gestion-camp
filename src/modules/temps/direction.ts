@@ -3,7 +3,7 @@
 // sa compagnie de paie (temps.paie_direction). Fonction pure.
 import type { Feuille, Heure, Membre, Statut } from './donnees'
 import type { Entreprise } from './donneesEmployes'
-import type { PaieDirectionExport } from './employeurD'
+import { nomDirection, type PaieDirectionExport } from './employeurD'
 
 export interface LigneDirection {
   cle: string
@@ -28,7 +28,7 @@ export interface LigneDirection {
 /**
  * Toute la direction active (pas les admins : ils ne remplissent pas de
  * feuille, décision du 2026-10-20), plus quiconque a des heures
- * dans la période (ex. compte désactivé depuis), triée par nom.
+ * dans la période (ex. compte désactivé depuis), triée par nom de famille.
  * `heures` et `feuilles` : celles de la période ; `milieu` = 1er jour de la semaine 2 ;
  * `tirees` : heures tirées de sa banque dans la période (banques.ts).
  */
@@ -82,5 +82,5 @@ export function lignesDirection(p: {
         statut: membre.role === 'admin' ? null : (feuille?.statut ?? 'ouverte'),
       }
     })
-    .sort((a, b) => (a.membre.nom || a.membre.courriel).localeCompare(b.membre.nom || b.membre.courriel, 'fr'))
+    .sort((a, b) => nomDirection(a.membre).localeCompare(nomDirection(b.membre), 'fr'))
 }
