@@ -597,7 +597,7 @@ export function FeuilleEmployes() {
         passe à la ligne suivante, Tab au jour suivant. Un employé qui travaille pour deux compagnies a une ligne pour chacune.
         Un employé avec un état (En cours, Soumise, Approuvée) remplit sa propre feuille : ses heures régulières
         s’affichent ici (maladie sous son nom), et on les corrige dans sa feuille (clic sur son nom). Banque d’heures
-        activée (onglet Banques) : une semaine finie sous les heures attendues (40 h, 8 h de moins par férié), le manque est
+        activée (onglet Banques) : une période finie sous les heures attendues (40 h par semaine, 8 h de moins par férié), le manque est
         tiré de sa banque tout seul et paraît sous son nom (« Tirées de la banque »). Un employé sans heures depuis 2
         périodes est retiré de la saisie (dossier à fermer).
         {estAdmin &&

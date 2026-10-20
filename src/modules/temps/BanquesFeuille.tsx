@@ -61,7 +61,7 @@ export function BanquesFeuille({
         </div>
         <p className="text-xs text-pierre-500">
           {etat.active
-            ? `Calculée seule : régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam. ; ${HEURES_FERIE} h de moins par férié) ajoutées, manque d'une semaine finie tiré · mise en banque ${libelleEtatHeures(etat)}`
+            ? `Calculée seule sur la période de paie complète : heures attendues = ${SEUIL_SEMAINE} h par semaine, ${HEURES_FERIE} h de moins par férié ; régulières au-delà ajoutées, manque d'une période finie tiré (vacances et maladie comptées) · mise en banque ${libelleEtatHeures(etat)}`
             : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute ni ne se retire, le solde reste`}
         </p>
         {estAdmin && alerteBanque(mouvements, etat.active) && (

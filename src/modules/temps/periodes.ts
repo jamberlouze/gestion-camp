@@ -103,7 +103,7 @@ export function jourCourt(iso: string): string {
 
 /**
  * banque : anciennes heures prises dans la banque, saisies à la main ; plus
- * de ligne pour en saisir (2026-10-20) : le manque d'une semaine est tiré
+ * de ligne pour en saisir (2026-10-20) : le manque d'une période est tiré
  * tout seul de la banque (banques.ts).
  */
 export type TypeHeures = 'regulieres' | 'vacances' | 'maladie' | 'banque'

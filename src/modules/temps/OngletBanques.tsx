@@ -53,8 +53,8 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
       <div className={`${ui.carte} space-y-1 px-4 py-3 text-sm text-pierre-700`}>
         <p>
           Soldes au <b>{dateCourte(au)}</b>. La banque se calcule seule quand la mise en banque est activée : les heures
-          régulières au-delà des heures attendues ({SEUIL_SEMAINE} h par semaine, {HEURES_FERIE} h de moins par férié)
-          s’y ajoutent, heure pour heure ; une semaine finie sous les heures attendues (régulières, vacances et maladie
+          régulières d’une période de paie au-delà de ses heures attendues ({SEUIL_SEMAINE} h par semaine, {HEURES_FERIE} h de moins par férié)
+          s’y ajoutent, heure pour heure ; une période finie sous les heures attendues (régulières, vacances et maladie
           comptées), le manque en est tiré et payé. Vacances et maladie : les soldes sont dans Employeur D.
         </p>
         <p className="text-pierre-600">
@@ -148,7 +148,7 @@ function Rangee({
       !(await confirmer({
         titre: `${active ? 'Activer' : 'Désactiver'} la mise en banque des heures de ${l.nom} ?`,
         message: active
-          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (${HEURES_FERIE} h de moins par férié) s’ajoutent à sa banque, heure pour heure, et le manque d’une semaine finie en est tiré. Les périodes passées ne changent pas.`
+          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà des heures attendues de chaque période (${SEUIL_SEMAINE} h par semaine, ${HEURES_FERIE} h de moins par férié) s’ajoutent à sa banque, heure pour heure, et le manque d’une période finie en est tiré. Les périodes passées ne changent pas.`
           : `À partir de ${periode} (période en cours), rien ne s’ajoute ni ne se retire de sa banque. Son solde (${formatHeures(l.heures)} h) reste et ne change plus que par un ajustement.`,
         libelleOk: active ? 'Activer' : 'Désactiver',
         danger: false,

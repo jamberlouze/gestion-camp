@@ -1,6 +1,7 @@
 // Banque d'heures d'une feuille individuelle (direction, admins, employé
-// qui remplit la sienne, employé sans compte) : fonctions pures, seul import
-// la liste des fériés (pure aussi ; testées sous Node : npm run test:temps).
+// qui remplit la sienne, employé sans compte) : fonctions pures, seuls
+// imports la liste des fériés et les périodes de paie (pures aussi ; testées
+// sous Node : npm run test:temps).
 // Rien n'est stocké : le solde se recalcule d'après les heures et les
 // ajustements manuels (temps.ajustements_banques).
 //
@@ -9,33 +10,37 @@
 //     (2026-10-14 pour les vacances, 2026-10-16 pour la maladie) ; leurs
 //     heures sont saisies dans les feuilles et exportées avec leur code
 //     d'utilisation (employeurD.ts) ;
-//   - heures accumulées : les heures régulières au-delà de 40 h dans une
-//     semaine (dimanche au samedi) s'ajoutent heure pour heure (1×). Woofing
-//     (non payé), vacances et maladie ne comptent pas dans les 40 h.
-//     Employé de plusieurs compagnies : toutes ses heures comptent ;
-//   - semaine avec un férié (liste de la CNESST, src/lib/feries.ts ;
-//     2026-10-20) : 8 h de moins par férié tombé du lundi au vendredi
-//     (semaine de l'Action de grâces : 32 h attendues, au-delà = en banque) ;
-//   - retrait automatique (2026-10-20, dès la première période, PP21) :
-//     plus de ligne « Prises en banque » à remplir ; une semaine finie où
-//     les heures payées (régulières, vacances, maladie) n'atteignent pas les
-//     heures attendues, l'écart est tiré de la banque (payé avec le code des
-//     heures prises en banque). Une semaine sans aucune heure n'est pas
-//     comptée (feuille pas remplie, compte d'admin sans feuille). Le solde
-//     peut devenir négatif (avertissement aux admins sous 20 h : SEUIL_ALERTE).
-//     Les anciennes heures « banque » saisies à la main se déduisent encore ;
+//   - tout se compte par PÉRIODE DE PAIE complète (2026-10-20 : « si tu
+//     regardes la période au complet, 72 h sur 72 h attendues ») : une
+//     semaine longue et une semaine courte de la même période s'annulent ;
+//   - heures attendues de la période : 40 h par semaine, 8 h de moins par
+//     férié tombé du lundi au vendredi (liste de la CNESST, src/lib/feries.ts ;
+//     PP21, avec l'Action de grâces : 72 h) ;
+//   - heures accumulées : les heures régulières de la période au-delà des
+//     heures attendues s'ajoutent heure pour heure (1×). Woofing (non payé),
+//     vacances et maladie n'en créent pas. Employé de plusieurs compagnies :
+//     toutes ses heures comptent ;
+//   - retrait automatique (2026-10-20, dès PP21) : plus de ligne « Prises en
+//     banque » à remplir ; une période finie où les heures payées
+//     (régulières, vacances, maladie) n'atteignent pas les heures attendues,
+//     le manque est tiré de la banque (payé avec le code des heures prises en
+//     banque). Une période sans aucune heure n'est pas comptée (feuille pas
+//     remplie, compte d'admin sans feuille). Le solde peut devenir négatif
+//     (avertissement aux admins sous 20 h : SEUIL_ALERTE). Les anciennes
+//     heures « banque » saisies à la main se déduisent encore ;
 //   - solde continu, reporté : jamais remis à zéro tout seul ; ajustements
 //     manuels avec une note ;
 //   - interrupteur « Heures en banque » (temps.banque_heures_etats) :
 //     désactivé par défaut pour tout le monde, quel que soit le rôle
 //     (2026-10-20 ; les comptes de la direction et les admins d'avant ont
-//     reçu une ligne « activée » depuis PP21, migration 20261020174807) ;
+//     reçu une ligne « activée » depuis PP21, migration 20261020171759) ;
 //     un admin l'active ; chaque changement vaut à partir d'une période (`depuis`,
-//     un dimanche de début de période). Une semaine ajoute ou retire
-//     seulement si l'état en vigueur à son dimanche est « activé » ;
+//     un dimanche de début de période). Une période ajoute ou retire
+//     seulement si l'état en vigueur à son début est « activé » ;
 //     désactivé, le solde reste et ne change plus que par un ajustement.
 
 import { ferie } from '../../lib/feries.ts'
+import { codePeriodePaie, debutPeriodePaie, finPeriodePaie } from '../../lib/periodesPaie.ts'
 
 export const SEUIL_SEMAINE = 40
 /** Heures de moins dans la semaine pour chaque férié (1 jour = 8 h). */
@@ -74,7 +79,7 @@ export interface Mouvement {
   jour: string
   /** + ajout, − retrait */
   heures: number
-  /** tirees : manque d'une semaine tiré tout seul ; prises : anciennes heures saisies à la main. */
+  /** tirees : manque d'une période tiré tout seul ; prises : anciennes heures saisies à la main. */
   genre: 'accumulees' | 'tirees' | 'prises' | 'ajustement'
   libelle: string
   detail: string | null
@@ -110,9 +115,10 @@ const nombre = (n: number) => String(arrondi(n)).replace('.', ',')
 const ORDRE: Record<Mouvement['genre'], number> = { ajustement: 0, accumulees: 1, tirees: 2, prises: 3 }
 
 /**
- * Heures attendues dans la semaine de `jour` (dimanche au samedi), au-delà
- * desquelles les régulières vont en banque : 40 h, moins 8 h par férié tombé
- * du lundi au vendredi. Un férié du samedi ou du dimanche ne change rien.
+ * Heures attendues dans la semaine de `jour` (dimanche au samedi) : 40 h,
+ * moins 8 h par férié tombé du lundi au vendredi ; un férié du samedi ou du
+ * dimanche ne change rien. Affichées sous chaque semaine d'une feuille ; la
+ * banque compte la période entière (attenduPeriode).
  */
 export function seuilSemaine(jour: string): { seuil: number; feries: { jour: string; nom: string }[] } {
   const d = versJour(dimanche(jour))
@@ -124,13 +130,23 @@ export function seuilSemaine(jour: string): { seuil: number; feries: { jour: str
   return { seuil: SEUIL_SEMAINE - HEURES_FERIE * feries.length, feries }
 }
 
-/** « 32 h attendues (férié : Action de grâces) » */
-export function libelleAttendu(jour: string): string {
-  const { seuil, feries } = seuilSemaine(jour)
-  return `${seuil} h attendues${feries.length ? ` (${feries.length > 1 ? 'fériés' : 'férié'} : ${feries.map((f) => f.nom).join(', ')})` : ''}`
+/**
+ * Heures attendues de la période de paie de `jour` : la somme des deux
+ * semaines (40 h chacune, 8 h de moins par férié du lundi au vendredi).
+ */
+export function attenduPeriode(jour: string): { attendu: number; feries: { jour: string; nom: string }[] } {
+  const debut = debutPeriodePaie(jour)
+  const semaines = [seuilSemaine(debut), seuilSemaine(depuisJour(versJour(debut) + 7))]
+  return { attendu: semaines[0].seuil + semaines[1].seuil, feries: semaines.flatMap((x) => x.feries) }
 }
 
-/** « au-delà de 32 h (férié : Action de grâces) » */
+/** « 72 h attendues (férié : Action de grâces) » */
+export function libelleAttendu(jour: string): string {
+  const { attendu, feries } = attenduPeriode(jour)
+  return `${attendu} h attendues${feries.length ? ` (${feries.length > 1 ? 'fériés' : 'férié'} : ${feries.map((f) => f.nom).join(', ')})` : ''}`
+}
+
+/** « au-delà de 72 h (férié : Action de grâces) » */
 export function libelleSeuil(jour: string): string {
   return `au-delà de ${libelleAttendu(jour).replace(' attendues', '')}`
 }
@@ -153,15 +169,17 @@ export function etatBanqueHeures(etats: EtatBanqueHeures[], jour: string): { act
 /**
  * Tous les mouvements de la banque d'heures jusqu'au jour `au` (inclus), du
  * plus ancien au plus récent, avec le solde courant. Les heures d'une
- * semaine comptent en un mouvement daté de son samedi (ou de `au`). Le
- * manque d'une semaine n'est tiré qu'une fois la semaine finie (son samedi
- * avant `aujourdhui` ; par défaut, toute semaine finie au plus tard `au`).
+ * période de paie comptent ensemble, en un mouvement daté de son dernier
+ * jour (ou de `au`). Le manque d'une période n'est tiré qu'une fois la
+ * période finie (son dernier jour avant `aujourdhui` ; par défaut, toute
+ * période finie au plus tard `au`) ; un surplus déjà atteint se montre
+ * pendant la période (il ne peut que grandir).
  */
 export function mouvementsBanqueHeures(p: {
   heures: HeureBanque[]
   ajustements: AjustementBanque[]
   au: string
-  /** Jour où l'on regarde : une semaine dont le samedi n'est pas passé est en cours (rien de tiré). */
+  /** Jour où l'on regarde : une période dont le dernier jour n'est pas passé est en cours (rien de tiré). */
   aujourdhui?: string
   /** Interrupteur « Heures en banque » (vide = désactivée partout). */
   etatsHeures?: EtatBanqueHeures[]
@@ -170,42 +188,42 @@ export function mouvementsBanqueHeures(p: {
   const etats = p.etatsHeures ?? []
   const aujourdhui = p.aujourdhui ?? depuisJour(versJour(p.au) + 1)
 
-  // Heures, semaine par semaine.
-  const semaines = new Map<string, { regulieres: number; absences: number; banque: number }>()
+  // Heures, période par période.
+  const periodes = new Map<string, { regulieres: number; absences: number; banque: number }>()
   for (const h of p.heures) {
     if (h.jour > p.au) continue
-    const d = dimanche(h.jour)
-    const s = semaines.get(d) ?? { regulieres: 0, absences: 0, banque: 0 }
+    const d = debutPeriodePaie(h.jour)
+    const s = periodes.get(d) ?? { regulieres: 0, absences: 0, banque: 0 }
     if (h.type === 'regulieres') s.regulieres += Number(h.heures)
     else if (h.type === 'vacances' || h.type === 'maladie') s.absences += Number(h.heures)
     else if (h.type === 'banque') s.banque += Number(h.heures)
-    semaines.set(d, s)
+    periodes.set(d, s)
   }
-  for (const [d, s] of semaines) {
-    const samedi = depuisJour(versJour(d) + 6)
-    const jour = samedi > p.au ? p.au : samedi
-    const semaine = `semaine du ${intervalle(d, samedi)}`
+  for (const [d, s] of periodes) {
+    const fin = finPeriodePaie(d)
+    const jour = fin > p.au ? p.au : fin
+    const periode = `${codePeriodePaie(d)} · ${intervalle(d, fin)}`
     const active = etatBanqueHeures(etats, d).active
-    const { seuil } = seuilSemaine(d)
-    const surplus = active ? arrondi(s.regulieres - seuil) : 0
+    const { attendu } = attenduPeriode(d)
+    const surplus = active ? arrondi(s.regulieres - attendu) : 0
     if (surplus > 0)
       liste.push({
         cle: `accumulees-${d}`,
         jour,
         heures: surplus,
         genre: 'accumulees',
-        libelle: `Accumulées, ${semaine}`,
+        libelle: `Accumulées, ${periode}`,
         detail: `${nombre(s.regulieres)} h régulières, ${libelleSeuil(d)}`,
       })
     const payees = s.regulieres + s.absences + s.banque
-    const manque = active && samedi < aujourdhui && payees > 0 ? arrondi(seuil - payees) : 0
+    const manque = active && fin < aujourdhui && payees > 0 ? arrondi(attendu - payees) : 0
     if (manque > 0)
       liste.push({
         cle: `tirees-${d}`,
         jour,
         heures: -manque,
         genre: 'tirees',
-        libelle: `Tirées de la banque, ${semaine}`,
+        libelle: `Tirées de la banque, ${periode}`,
         detail: `${nombre(payees)} h payées sur ${libelleAttendu(d)}`,
       })
     if (s.banque > 0)
@@ -214,7 +232,7 @@ export function mouvementsBanqueHeures(p: {
         jour,
         heures: -arrondi(s.banque),
         genre: 'prises',
-        libelle: `Prises en banque, ${semaine}`,
+        libelle: `Prises en banque, ${periode}`,
         detail: null,
       })
   }

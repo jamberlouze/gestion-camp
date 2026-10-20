@@ -31,7 +31,7 @@ export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Regl
   { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres', genre: 'gain', detail: 'Employés et direction' },
   { type: 'vacances', libelle: 'Vacances', reglage: 'code_vacances', genre: 'utilisation', detail: 'Direction seulement' },
   { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'utilisation', detail: 'Heures de maladie des feuilles' },
-  { type: 'banque', libelle: 'Tirées de la banque', reglage: 'code_banque', genre: 'gain', detail: 'Manque d’une semaine tiré de la banque d’heures de l’app (calculé)' },
+  { type: 'banque', libelle: 'Tirées de la banque', reglage: 'code_banque', genre: 'gain', detail: 'Manque d’une période tiré de la banque d’heures de l’app (calculé)' },
 ]
 
 export type DatePeriode = 'date_paie' | 'fin_periode'
