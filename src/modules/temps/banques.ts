@@ -10,33 +10,44 @@
 //     heures sont saisies dans les feuilles et exportées avec leur code
 //     d'utilisation (employeurD.ts) ;
 //   - heures accumulées : les heures régulières au-delà de 40 h dans une
-//     semaine (dimanche au samedi) s'ajoutent heure pour heure (1×) ; les
-//     heures « prises en banque » se déduisent. Woofing (non payé),
-//     vacances, maladie et heures prises en banque ne comptent pas dans les
-//     40 h. Employé de plusieurs compagnies : toutes ses heures comptent ;
+//     semaine (dimanche au samedi) s'ajoutent heure pour heure (1×). Woofing
+//     (non payé), vacances et maladie ne comptent pas dans les 40 h.
+//     Employé de plusieurs compagnies : toutes ses heures comptent ;
 //   - semaine avec un férié (liste de la CNESST, src/lib/feries.ts ;
 //     2026-10-20) : 8 h de moins par férié tombé du lundi au vendredi
 //     (semaine de l'Action de grâces : 32 h attendues, au-delà = en banque) ;
+//   - retrait automatique (2026-10-20, à partir de PP22 : RETRAIT_DEPUIS) :
+//     plus de ligne « Prises en banque » à remplir ; une semaine finie où
+//     les heures payées (régulières, vacances, maladie) n'atteignent pas les
+//     heures attendues, l'écart est tiré de la banque (payé avec le code des
+//     heures prises en banque). Une semaine sans aucune heure n'est pas
+//     comptée (feuille pas remplie, compte d'admin sans feuille). Le solde
+//     peut devenir négatif (avertissement aux admins sous 20 h : SEUIL_ALERTE).
+//     Les anciennes heures « banque » saisies à la main se déduisent encore ;
 //   - solde continu, reporté : jamais remis à zéro tout seul ; ajustements
 //     manuels avec une note ;
 //   - interrupteur « Heures en banque » (temps.banque_heures_etats) : activé
 //     par défaut pour la direction et les admins, désactivé pour les
 //     employés ; chaque changement vaut à partir d'une période (`depuis`,
-//     un dimanche de début de période). Une semaine accumule seulement si
-//     l'état en vigueur à son dimanche est « activé » ; désactivé, le solde
-//     reste et peut encore être pris ou ajusté.
+//     un dimanche de début de période). Une semaine ajoute ou retire
+//     seulement si l'état en vigueur à son dimanche est « activé » ;
+//     désactivé, le solde reste et ne change plus que par un ajustement.
 
 import { ferie } from '../../lib/feries.ts'
 
 export const SEUIL_SEMAINE = 40
 /** Heures de moins dans la semaine pour chaque férié (1 jour = 8 h). */
 export const HEURES_FERIE = 8
+/** Premier dimanche (PP22) des semaines dont le manque est tiré tout seul de la banque. */
+export const RETRAIT_DEPUIS = '2026-10-18'
+/** Sous ce solde, les admins sont avertis (onglet Banques, accueil, feuille). */
+export const SEUIL_ALERTE = 20
 /** Premier jour possible d'un ajustement (année de la première période). */
 export const PREMIERE_ANNEE_BANQUES = 2026
 
 export interface HeureBanque {
   jour: string
-  /** regulieres, vacances, maladie, banque (prises en banque), woofing */
+  /** regulieres, vacances, maladie, woofing ; banque = anciennes heures prises à la main */
   type: string
   heures: number
 }
@@ -63,7 +74,8 @@ export interface Mouvement {
   jour: string
   /** + ajout, − retrait */
   heures: number
-  genre: 'accumulees' | 'prises' | 'ajustement'
+  /** tirees : manque d'une semaine tiré tout seul ; prises : anciennes heures saisies à la main. */
+  genre: 'accumulees' | 'tirees' | 'prises' | 'ajustement'
   libelle: string
   detail: string | null
   /** Solde de la banque après ce mouvement. */
@@ -95,7 +107,7 @@ const intervalle = (d: string, f: string) => (d.slice(0, 7) === f.slice(0, 7) ? 
 const arrondi = (n: number) => Math.round(n * 100) / 100
 const nombre = (n: number) => String(arrondi(n)).replace('.', ',')
 
-const ORDRE: Record<Mouvement['genre'], number> = { ajustement: 0, accumulees: 1, prises: 2 }
+const ORDRE: Record<Mouvement['genre'], number> = { ajustement: 0, accumulees: 1, tirees: 2, prises: 3 }
 
 /**
  * Heures attendues dans la semaine de `jour` (dimanche au samedi), au-delà
@@ -112,10 +124,20 @@ export function seuilSemaine(jour: string): { seuil: number; feries: { jour: str
   return { seuil: SEUIL_SEMAINE - HEURES_FERIE * feries.length, feries }
 }
 
+/** « 32 h attendues (férié : Action de grâces) » */
+export function libelleAttendu(jour: string): string {
+  const { seuil, feries } = seuilSemaine(jour)
+  return `${seuil} h attendues${feries.length ? ` (${feries.length > 1 ? 'fériés' : 'férié'} : ${feries.map((f) => f.nom).join(', ')})` : ''}`
+}
+
 /** « au-delà de 32 h (férié : Action de grâces) » */
 export function libelleSeuil(jour: string): string {
-  const { seuil, feries } = seuilSemaine(jour)
-  return `au-delà de ${seuil} h${feries.length ? ` (${feries.length > 1 ? 'fériés' : 'férié'} : ${feries.map((f) => f.nom).join(', ')})` : ''}`
+  return `au-delà de ${libelleAttendu(jour).replace(' attendues', '')}`
+}
+
+/** Heures tirées toutes seules de la banque entre `du` et `au` (positif ; payées avec le code des heures prises en banque). */
+export function heuresTirees(mouvements: Mouvement[], du: string, au: string): number {
+  return arrondi(-mouvements.filter((m) => m.genre === 'tirees' && m.jour >= du && m.jour <= au).reduce((t, m) => t + m.heures, 0))
 }
 
 /**
@@ -130,12 +152,16 @@ export function etatBanqueHeures(etats: EtatBanqueHeures[], parDefaut: boolean, 
 /**
  * Tous les mouvements de la banque d'heures jusqu'au jour `au` (inclus), du
  * plus ancien au plus récent, avec le solde courant. Les heures d'une
- * semaine comptent en un mouvement daté de son samedi (ou de `au`).
+ * semaine comptent en un mouvement daté de son samedi (ou de `au`). Le
+ * manque d'une semaine n'est tiré qu'une fois la semaine finie (son samedi
+ * avant `aujourdhui` ; par défaut, toute semaine finie au plus tard `au`).
  */
 export function mouvementsBanqueHeures(p: {
   heures: HeureBanque[]
   ajustements: AjustementBanque[]
   au: string
+  /** Jour où l'on regarde : une semaine dont le samedi n'est pas passé est en cours (rien de tiré). */
+  aujourdhui?: string
   /** Interrupteur « Heures en banque » (vide = le défaut partout). */
   etatsHeures?: EtatBanqueHeures[]
   /** Défaut de l'interrupteur : oui pour la direction et les admins (par défaut), non pour un employé. */
@@ -144,14 +170,16 @@ export function mouvementsBanqueHeures(p: {
   const liste: Omit<Mouvement, 'solde'>[] = []
   const etats = p.etatsHeures ?? []
   const parDefaut = p.heuresActivesParDefaut ?? true
+  const aujourdhui = p.aujourdhui ?? depuisJour(versJour(p.au) + 1)
 
   // Heures, semaine par semaine.
-  const semaines = new Map<string, { regulieres: number; banque: number }>()
+  const semaines = new Map<string, { regulieres: number; absences: number; banque: number }>()
   for (const h of p.heures) {
     if (h.jour > p.au) continue
     const d = dimanche(h.jour)
-    const s = semaines.get(d) ?? { regulieres: 0, banque: 0 }
+    const s = semaines.get(d) ?? { regulieres: 0, absences: 0, banque: 0 }
     if (h.type === 'regulieres') s.regulieres += Number(h.heures)
+    else if (h.type === 'vacances' || h.type === 'maladie') s.absences += Number(h.heures)
     else if (h.type === 'banque') s.banque += Number(h.heures)
     semaines.set(d, s)
   }
@@ -159,7 +187,9 @@ export function mouvementsBanqueHeures(p: {
     const samedi = depuisJour(versJour(d) + 6)
     const jour = samedi > p.au ? p.au : samedi
     const semaine = `semaine du ${intervalle(d, samedi)}`
-    const surplus = etatBanqueHeures(etats, parDefaut, d).active ? arrondi(s.regulieres - seuilSemaine(d).seuil) : 0
+    const active = etatBanqueHeures(etats, parDefaut, d).active
+    const { seuil } = seuilSemaine(d)
+    const surplus = active ? arrondi(s.regulieres - seuil) : 0
     if (surplus > 0)
       liste.push({
         cle: `accumulees-${d}`,
@@ -168,6 +198,17 @@ export function mouvementsBanqueHeures(p: {
         genre: 'accumulees',
         libelle: `Accumulées, ${semaine}`,
         detail: `${nombre(s.regulieres)} h régulières, ${libelleSeuil(d)}`,
+      })
+    const payees = s.regulieres + s.absences + s.banque
+    const manque = active && d >= RETRAIT_DEPUIS && samedi < aujourdhui && payees > 0 ? arrondi(seuil - payees) : 0
+    if (manque > 0)
+      liste.push({
+        cle: `tirees-${d}`,
+        jour,
+        heures: -manque,
+        genre: 'tirees',
+        libelle: `Tirées de la banque, ${semaine}`,
+        detail: `${nombre(payees)} h payées sur ${libelleAttendu(d)}`,
       })
     if (s.banque > 0)
       liste.push({
@@ -210,14 +251,25 @@ export function resumePeriode(mouvements: Mouvement[], debut: string, fin: strin
 }
 
 /**
- * Ligne « Prises en banque » et banque d'heures d'un employé pour une
- * période (décision de Maxime du 2026-10-18) : seulement si la mise en
- * banque est activée pour la période, s'il a un solde (au début ou à la fin
- * de la période, négatif compris) ou s'il a déjà pris des heures en banque
- * dans la période. Sinon rien à prendre : on ne l'affiche pas.
+ * Banque d'heures d'un employé pour une période (décision de Maxime du
+ * 2026-10-18) : seulement si la mise en banque est activée pour la période,
+ * s'il a un solde (au début ou à la fin de la période, négatif compris) ou
+ * si des heures en ont été tirées dans la période. Sinon on ne l'affiche pas.
  */
 export function banqueAffichee(mouvements: Mouvement[], active: boolean, debut: string, fin: string): boolean {
   if (active) return true
   const r = resumePeriode(mouvements, debut, fin)
-  return r.avant !== 0 || r.apres !== 0 || r.mouvements.some((m) => m.genre === 'prises')
+  return r.avant !== 0 || r.apres !== 0 || r.mouvements.some((m) => m.genre === 'prises' || m.genre === 'tirees')
+}
+
+/**
+ * Avertissement aux admins (demande de Maxime du 2026-10-20) : la banque est
+ * descendue sous 20 h — mise en banque activée, solde sous SEUIL_ALERTE et au
+ * moins un retrait dans son historique (une banque jamais utilisée, ex. un
+ * admin à 0 h, ne compte pas) — ou elle est négative.
+ */
+export function alerteBanque(mouvements: Mouvement[], active: boolean): boolean {
+  const solde = mouvements.at(-1)?.solde ?? 0
+  if (solde < 0) return true
+  return active && solde < SEUIL_ALERTE && mouvements.some((m) => m.genre === 'tirees' || m.genre === 'prises')
 }

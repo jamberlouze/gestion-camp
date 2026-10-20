@@ -5,7 +5,8 @@ import { IconeTableur } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { ChoixPeriode } from './commun'
 import { menu, usePeriode } from './outils'
-import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre, type Statut } from './donnees'
+import { heuresTirees } from './banques'
+import { banqueDe, nomDe, useBanquesTous, useFeuillesPlage, useHeuresPlage, useMembres, type Heure, type Membre, type Statut } from './donnees'
 import { PastilleStatut } from './Statut'
 import {
   ajouterJours,
@@ -35,6 +36,8 @@ interface Ligne {
 }
 
 const vide = (): Record<TypeHeures, number> => ({ regulieres: 0, vacances: 0, maladie: 0, banque: 0 })
+/** Colonnes : les rangées de la feuille, puis les heures tirées de la banque (calculées, banques.ts). */
+const COLONNES: { id: TypeHeures; libelle: string }[] = [...TYPES, { id: 'banque', libelle: 'Tirées de la banque' }]
 
 /**
  * Administrateurs seulement : toutes les feuilles d'une période (heures
@@ -50,19 +53,21 @@ export function TableauDeBord() {
   const membres = useMembres()
   const heures = useHeuresPlage(du, fin)
   const feuilles = useFeuillesPlage(debut, debut)
+  const banques = useBanquesTous(fin)
 
   const donnees = useMemo(() => {
-    if (!membres.data || !heures.data || !feuilles.data) return null
+    if (!membres.data || !heures.data || !feuilles.data || !banques.data) return null
     const milieu = ajouterJours(debut, 7)
     const dePeriode = heures.data.filter((h) => h.jour >= debut)
     // Toute la direction active, plus quiconque a des heures (ex. compte désactivé depuis).
     const ids = new Set(heures.data.map((h) => h.user_id))
     const liste = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || ids.has(m.id))
 
-    const resumer = (lignes: Heure[], m: Membre): Ligne => {
+    const resumer = (lignes: Heure[], m: Membre, depuis: string): Ligne => {
       const siennes = lignes.filter((h) => h.user_id === m.id)
       const types = vide()
       for (const h of siennes) types[h.type] += h.heures
+      types.banque += heuresTirees(banqueDe(banques.data, { userId: m.id }, fin).mouvements, depuis, fin)
       const reg = siennes.filter((h) => h.type === 'regulieres')
       return {
         membre: m,
@@ -75,12 +80,12 @@ export function TableauDeBord() {
       }
     }
     return {
-      periode: liste.map((m) => resumer(dePeriode, m)),
-      cumul: liste.map((m) => resumer(heures.data, m)),
+      periode: liste.map((m) => resumer(dePeriode, m, debut)),
+      cumul: liste.map((m) => resumer(heures.data, m, du)),
     }
-  }, [membres.data, heures.data, feuilles.data, debut])
+  }, [membres.data, heures.data, feuilles.data, banques.data, debut, du, fin])
 
-  const erreur = membres.error ?? heures.error ?? feuilles.error
+  const erreur = membres.error ?? heures.error ?? feuilles.error ?? banques.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
 
   const ouvrir = (id: string) => navigate(`/temps/personne/${id}?periode=${debut}`)
@@ -123,7 +128,7 @@ export function TableauDeBord() {
                   <th className="px-3 py-2 text-left font-medium">État</th>
                   <th className="px-3 py-2 text-right font-medium" title="Heures régulières, semaine 1">Rég. sem. 1</th>
                   <th className="px-3 py-2 text-right font-medium" title="Heures régulières, semaine 2">Rég. sem. 2</th>
-                  {TYPES.map((t) => (
+                  {COLONNES.map((t) => (
                     <th key={t.id} className="px-3 py-2 text-right font-medium">
                       {t.libelle}
                     </th>
@@ -143,7 +148,7 @@ export function TableauDeBord() {
                     <td className="px-3 py-2">{l.membre.role === 'admin' && l.statut === 'ouverte' ? null : <PastilleStatut statut={l.statut} />}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(l.sem1)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(l.sem2)}</td>
-                    {TYPES.map((t) => (
+                    {COLONNES.map((t) => (
                       <td key={t.id} className="px-3 py-2 text-right tabular-nums">
                         {h(l.types[t.id])}
                       </td>
@@ -169,7 +174,7 @@ export function TableauDeBord() {
                     <td />
                     <td className="px-3 py-2 text-right tabular-nums">{h(somme(donnees.periode, (l) => l.sem1))}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h(somme(donnees.periode, (l) => l.sem2))}</td>
-                    {TYPES.map((t) => (
+                    {COLONNES.map((t) => (
                       <td key={t.id} className="px-3 py-2 text-right tabular-nums">
                         {h(somme(donnees.periode, (l) => l.types[t.id]))}
                       </td>
@@ -205,7 +210,7 @@ export function TableauDeBord() {
               <thead className="text-xs uppercase tracking-wide text-pierre-500">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Personne</th>
-                  {TYPES.map((t) => (
+                  {COLONNES.map((t) => (
                     <th key={t.id} className="px-3 py-2 text-right font-medium">
                       {t.libelle}
                     </th>
@@ -217,7 +222,7 @@ export function TableauDeBord() {
                 {donnees.cumul.map((l) => (
                   <tr key={l.membre.id}>
                     <td className="px-3 py-2 font-medium">{nomDe(l.membre)}</td>
-                    {TYPES.map((t) => (
+                    {COLONNES.map((t) => (
                       <td key={t.id} className="px-3 py-2 text-right tabular-nums">
                         {h(l.types[t.id])}
                       </td>
@@ -259,7 +264,7 @@ function exporter(debut: string, lignes: Ligne[]) {
     'Régulières',
     'Vacances',
     'Maladie',
-    'Prises en banque',
+    'Tirées de la banque',
     'Total',
     'Note',
   ]

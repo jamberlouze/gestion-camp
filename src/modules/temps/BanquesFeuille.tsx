@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { HEURES_FERIE, PREMIERE_ANNEE_BANQUES, SEUIL_SEMAINE, type Mouvement } from './banques'
+import { useAuth } from '@/shell/auth'
+import { alerteBanque, HEURES_FERIE, PREMIERE_ANNEE_BANQUES, SEUIL_ALERTE, SEUIL_SEMAINE, type Mouvement } from './banques'
 import { banqueDeLaFeuille, useAjusterBanque, useDonneesBanques, type Titulaire } from './donnees'
 import { libelleEtatHeures, signe } from './outils'
 import { aujourdhui, dateCourte, finPeriode, formatHeures } from './periodes'
@@ -31,6 +32,7 @@ export function BanquesFeuille({
   entrepriseId?: string | null
   peutRegler: boolean
 }) {
+  const { estAdmin } = useAuth()
   const fin = finPeriode(debut)
   const donnees = useDonneesBanques(titulaire, fin)
   const [historique, setHistorique] = useState(false)
@@ -59,9 +61,14 @@ export function BanquesFeuille({
         </div>
         <p className="text-xs text-pierre-500">
           {etat.active
-            ? `Heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam. ; ${HEURES_FERIE} h de moins par férié), heure pour heure · mise en banque ${libelleEtatHeures(etat)}`
-            : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute, le solde reste utilisable`}
+            ? `Calculée seule : régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam. ; ${HEURES_FERIE} h de moins par férié) ajoutées, manque d'une semaine finie tiré · mise en banque ${libelleEtatHeures(etat)}`
+            : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute ni ne se retire, le solde reste`}
         </p>
+        {estAdmin && alerteBanque(mouvements, etat.active) && (
+          <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+            {(mouvements.at(-1)?.solde ?? 0) < 0 ? 'Banque négative' : `Banque sous ${SEUIL_ALERTE} h`} : à surveiller.
+          </p>
+        )}
         <ul className="mt-2 space-y-1">
           <li className="flex justify-between gap-3 text-pierre-600">
             <span>Solde au {dateCourte(debut, false)}</span>

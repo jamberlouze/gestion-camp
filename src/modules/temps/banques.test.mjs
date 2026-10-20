@@ -1,7 +1,7 @@
 // Banque d'heures des feuilles de temps (banques.ts). Lancer : npm run test:temps
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { banqueAffichee, etatBanqueHeures, libelleSeuil, mouvementsBanqueHeures, resumePeriode, seuilSemaine } from './banques.ts'
+import { alerteBanque, banqueAffichee, etatBanqueHeures, heuresTirees, libelleSeuil, mouvementsBanqueHeures, resumePeriode, seuilSemaine } from './banques.ts'
 
 const semaine = (dimanche, heuresParJour, type = 'regulieres') => {
   const [a, m, j] = dimanche.split('-').map(Number)
@@ -171,4 +171,56 @@ test('ligne « Prises en banque » d’un employé : banque activée, solde ou h
   // Solde remis à zéro par un ajustement dans une période passée : plus de ligne.
   const remis = [...depart, { id: 'r', banque: 'heures', jour: '2026-10-15', heures: -6, note: 'Heures payées', auteur_nom: 'Admin', created_at: '' }]
   assert.equal(banqueAffichee(employe([], remis), false, debut, fin), false)
+})
+
+test('retrait automatique : le manque d’une semaine finie est tiré de la banque, à partir de PP22', () => {
+  const heures = [
+    ...semaine('2026-10-04', [0, 6, 6, 6, 6, 7, 0]), // PP21, 31 h : avant le retrait automatique → rien
+    ...semaine('2026-10-18', [0, 7, 6, 6, 6, 6, 0]), // 31 h → −9
+    ...semaine('2026-10-25', [0, 8, 8, 8, 8, 0, 0]), // 32 h + 8 h de vacances → rien (vacances et maladie comblent)
+    { jour: '2026-10-30', type: 'vacances', heures: 8 },
+    ...semaine('2026-12-20', [0, 8, 8, 6, 8, 0, 0]), // Noël : 30 h sur 32 → −2
+  ]
+  const ajustements = [{ id: 'o', banque: 'heures', jour: '2026-10-04', heures: 30, note: 'Solde d’ouverture', auteur_nom: 'Admin', created_at: '' }]
+  const m = mouvementsBanqueHeures({ heures, ajustements, au: '2026-12-31', aujourdhui: '2027-01-05' })
+  assert.deepEqual(m.map((x) => [x.jour, x.genre, x.heures, x.solde]), [
+    ['2026-10-04', 'ajustement', 30, 30],
+    ['2026-10-24', 'tirees', -9, 21],
+    ['2026-12-26', 'tirees', -2, 19],
+  ])
+  assert.equal(m[1].detail, '31 h payées sur 40 h attendues')
+  assert.equal(m[2].detail, '30 h payées sur 32 h attendues (férié : Noël)')
+  assert.equal(heuresTirees(m, '2026-10-18', '2026-10-31'), 9)
+  assert.equal(heuresTirees(m, '2026-12-20', '2027-01-02'), 2)
+})
+
+test('retrait automatique : rien pour une semaine en cours, vide, ou banque désactivée', () => {
+  const heures = semaine('2026-10-18', [0, 8, 8, 4, 0, 0, 0]) // 20 h
+  // Semaine en cours (samedi 24 pas passé) : rien de tiré, même avec « au » à la fin de la période.
+  assert.deepEqual(mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-31', aujourdhui: '2026-10-22' }), [])
+  assert.deepEqual(mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-31', aujourdhui: '2026-10-24' }), [])
+  assert.equal(mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-31', aujourdhui: '2026-10-25' }).at(-1).heures, -20)
+  // Semaine sans heure, ou seulement des « 0 » : pas remplie, rien de tiré (ex. un admin sans feuille).
+  const zeros = [0, 0, 0, 0, 0].map((h, i) => ({ jour: `2026-10-2${i}`, type: 'regulieres', heures: h }))
+  assert.deepEqual(mouvementsBanqueHeures({ heures: zeros, ajustements: [], au: '2026-11-07', aujourdhui: '2026-11-08' }), [])
+  // Banque désactivée (ou employé, désactivé par défaut) : rien.
+  const etatsHeures = [{ depuis: '2026-10-18', active: false }]
+  assert.deepEqual(mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-31', aujourdhui: '2026-11-01', etatsHeures }), [])
+  assert.deepEqual(mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-31', aujourdhui: '2026-11-01', heuresActivesParDefaut: false }), [])
+  // Anciennes heures « banque » saisies à la main : déduites, et elles comblent le manque (pas de double retrait).
+  const anciennes = [...semaine('2026-10-18', [0, 8, 8, 8, 8, 0, 0]), { jour: '2026-10-23', type: 'banque', heures: 8 }]
+  const m = mouvementsBanqueHeures({ heures: anciennes, ajustements: [], au: '2026-10-31', aujourdhui: '2026-11-01' })
+  assert.deepEqual(m.map((x) => [x.genre, x.heures]), [['prises', -8]])
+})
+
+test('avertissement sous 20 h : banque utilisée et sous 20 h, ou négative ; jamais une banque jamais utilisée', () => {
+  const ouverture = (h) => [{ id: 'o', banque: 'heures', jour: '2026-10-04', heures: h, note: 'Ouverture', auteur_nom: 'Admin', created_at: '' }]
+  const semaineDe = (h) => semaine('2026-10-18', [0, h, 8, 8, 8, 8, 0])
+  const m = (h, ajustements) => mouvementsBanqueHeures({ heures: semaineDe(h), ajustements, au: '2026-10-31', aujourdhui: '2026-11-01' })
+  assert.equal(alerteBanque(m(8, ouverture(25)), true), false) // 40 h : rien de tiré, 25 h
+  assert.equal(alerteBanque(m(4, ouverture(25)), true), false) // −4 → 21 h
+  assert.equal(alerteBanque(m(0, ouverture(25)), true), true) // −8 → 17 h
+  assert.equal(alerteBanque(m(0, ouverture(25)), false), false) // désactivée : rien de tiré, 25 h
+  assert.equal(alerteBanque([], true), false) // admin sans feuille, 0 h
+  assert.equal(alerteBanque(mouvementsBanqueHeures({ heures: [], ajustements: ouverture(-3), au: '2026-10-31' }), false), true) // négative
 })

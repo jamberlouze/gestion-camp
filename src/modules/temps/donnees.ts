@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Role } from '@/lib/types'
 import { etatBanqueHeures, mouvementsBanqueHeures, resumePeriode, type AjustementBanque, type EtatBanqueHeures } from './banques'
-import { finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
+import { aujourdhui, finPeriode, PREMIERE_PERIODE, type TypeHeures } from './periodes'
 
 // Module en ligne seulement : mutations networkMode « always », erreurs dans
 // le bandeau du module (racine S). Pas de temps réel (voir la migration) ni
@@ -427,6 +427,7 @@ export function banqueDeLaFeuille(
     heures,
     ajustements: donnees.ajustements,
     au: fin,
+    aujourdhui: aujourdhui(),
     etatsHeures: donnees.etatsHeures,
     heuresActivesParDefaut: parDefaut,
   })
@@ -441,6 +442,8 @@ export interface SemaineBanque {
   employe_id: string | null
   semaine: string
   regulieres: number
+  vacances: number
+  maladie: number
   banque: number
 }
 
@@ -468,7 +471,13 @@ export function useBanquesTous(au: string) {
         toutLire<EtatBanqueHeuresLigne>((a, b) => db().from('banque_heures_etats').select('*').order('depuis').order('id').range(a, b)),
       ])
       return {
-        semaines: semaines.map((x) => ({ ...x, regulieres: Number(x.regulieres), banque: Number(x.banque) })),
+        semaines: semaines.map((x) => ({
+          ...x,
+          regulieres: Number(x.regulieres),
+          vacances: Number(x.vacances),
+          maladie: Number(x.maladie),
+          banque: Number(x.banque),
+        })),
         ajustements: ajustements.map((x) => ({ ...x, heures: Number(x.heures) })),
         etatsHeures: etats,
       }
@@ -481,7 +490,7 @@ export type BanquesTous = NonNullable<ReturnType<typeof useBanquesTous>['data']>
 /**
  * Banque d'heures d'une personne d'après useBanquesTous (heures lues par
  * semaine) : mouvements jusqu'au jour `au` et ses interrupteurs (onglet
- * Banques ; grille Employés : ligne « Prises en banque »).
+ * Banques, avertissement sous 20 h ; onglet Employés : heures tirées de la banque).
  */
 export function banqueDe(d: BanquesTous, t: Titulaire, au: string) {
   const siennes = (x: { user_id: string | null; employe_id: string | null }) => (t.userId ? x.user_id === t.userId : x.employe_id === t.employeId)
@@ -489,12 +498,15 @@ export function banqueDe(d: BanquesTous, t: Titulaire, au: string) {
   const mouvements = mouvementsBanqueHeures({
     heures: d.semaines.filter(siennes).flatMap((w) => [
       { jour: w.semaine, type: 'regulieres', heures: w.regulieres },
+      { jour: w.semaine, type: 'vacances', heures: w.vacances },
+      { jour: w.semaine, type: 'maladie', heures: w.maladie },
       { jour: w.semaine, type: 'banque', heures: w.banque },
     ]),
     ajustements: d.ajustements.filter(siennes),
     etatsHeures: etats,
     heuresActivesParDefaut: heuresActivesParDefaut(t),
     au,
+    aujourdhui: aujourdhui(),
   })
   return { mouvements, etats }
 }

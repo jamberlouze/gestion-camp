@@ -25,18 +25,17 @@ import { BarreStatut, Journal } from './Statut'
 const REGULIERES = { id: 'regulieres', libelle: 'Heures' }
 const WOOFING = { id: 'woofing', libelle: 'Woofing' }
 const MALADIE = { id: 'maladie', libelle: 'Maladie' }
-const BANQUE = { id: 'banque', libelle: 'Prises en banque' }
 
 /**
  * Feuille d'un employé qui remplit la sienne, pour une compagnie et une
  * période. Il saisit puis soumet à la direction ; la direction corrige,
  * approuve ou renvoie ; un admin peut annuler une approbation. Ses heures
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
- * base) ; le woofing (non payé) reste ici ; maladie et prises en banque
- * paraissent à part dans l'onglet Employés. En bas : sa banque d'heures
- * (toutes compagnies confondues), réglée par la direction. Ligne « Prises
- * en banque » et banque d'heures seulement s'il en a une (banqueAffichee :
- * activée, un solde ou des heures déjà prises dans la période).
+ * base) ; le woofing (non payé) reste ici ; la maladie et les heures
+ * tirées de sa banque paraissent à part dans l'onglet Employés. En bas : sa
+ * banque d'heures (toutes compagnies confondues, ajouts et retraits calculés
+ * seuls), réglée par la direction, seulement s'il en a une (banqueAffichee :
+ * activée, un solde ou des heures tirées dans la période).
  */
 export function FeuilleEmploye({
   employe,
@@ -63,7 +62,7 @@ export function FeuilleEmploye({
   useTitreImpression(`Feuille de temps - ${nomEmploye(employe)} - ${nomCompagnie(entreprise)} - ${libellePeriode(debut)}`)
 
   if (donnees.error) return <p className={ui.erreur}>{messageErreur(donnees.error)}</p>
-  // La banque attendue aussi : la ligne « Prises en banque » ne doit pas apparaître après coup.
+  // La banque attendue aussi : son encadré ne doit pas apparaître après coup.
   if (!donnees.data || (!banques.data && !banques.error)) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const { heures, feuille } = donnees.data
@@ -78,7 +77,6 @@ export function FeuilleEmploye({
     REGULIERES,
     ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : []),
     MALADIE,
-    ...(avecBanque ? [BANQUE] : []),
   ]
   const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? null
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
@@ -139,11 +137,6 @@ export function FeuilleEmploye({
         <span>
           Maladie : <b className="tabular-nums">{formatHeures(total('maladie'))} h</b>
         </span>
-        {avecBanque && (
-          <span>
-            Prises en banque : <b className="tabular-nums">{formatHeures(total('banque'))} h</b>
-          </span>
-        )}
       </div>
 
       <Note
