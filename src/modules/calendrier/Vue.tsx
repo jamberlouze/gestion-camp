@@ -4,11 +4,11 @@ import { messageErreur } from '@/lib/donnees'
 import { dateCourtePaie, dateVersementPaie, debutPeriodePaie, finPeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { nombrePersonnes, nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
-import { useEcriture, useEvenements, useMoi, usePersonnel, usePresence, usePresenceJour, usePresencesLot, usePresencesSimples, useSejours } from './donnees'
+import { useEcriture, useEvenements, useMoi, useNomsPersonnel, usePersonnel, usePresence, usePresenceJour, usePresencesLot, usePresencesSimples, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
 import { RangeeDirection, type Annulable, type Ecrire } from './HoraireDirection'
 import { META_SECTEUR, TYPES_EVENEMENT, type Evenement, type Personne, type PresenceJour, type PresenceSimple, type Sejour, type Secteur } from './types'
@@ -18,6 +18,7 @@ const SANS_SECTION = 'Section à préciser'
 type Mode = 'semaine' | 'mois' | 'periode'
 /** Période libre : au plus deux mois de colonnes. */
 const MAX_JOURS = 62
+const AUCUN_NOM = new Map<string, string>()
 
 /**
  * Calendrier : semaine, mois ou période de paie (14 jours, du dimanche au
@@ -54,6 +55,8 @@ export function Vue() {
   }, [presence.data])
   // Direction et terrain : saisis directement dans la grille (semaine, période).
   const personnel = usePersonnel()
+  // Noms affichés : aussi ceux des personnes retirées (leurs journées passées).
+  const noms = useNomsPersonnel()
   const simples = usePresencesSimples(debut, fin)
   const cocher = usePresence(debut, fin)
   // Direction : choix rapide (un ou plusieurs jours), annulable.
@@ -174,6 +177,7 @@ export function Vue() {
           evParJour={evParJour}
           presenceParJour={presenceParJour}
           personnel={personnel.data ?? []}
+          noms={noms.data ?? AUCUN_NOM}
           simples={simples.data ?? []}
           cocher={cocher.mutate}
           moi={moi}
@@ -362,6 +366,7 @@ function GrilleJours({
   evParJour,
   presenceParJour,
   personnel,
+  noms,
   simples,
   cocher,
   moi,
@@ -375,6 +380,7 @@ function GrilleJours({
   evParJour: Map<string, Evenement[]>
   presenceParJour: Map<string, PresenceJour[]>
   personnel: Personne[]
+  noms: Map<string, string>
   simples: PresenceSimple[]
   cocher: React.ComponentProps<typeof CellulePresence>['cocher']
   moi: Personne | null
@@ -481,6 +487,7 @@ function GrilleJours({
           colonnes={colonnes}
           gabarit={gabarit}
           personnel={personnel}
+          noms={noms}
           presences={simples.filter((p) => p.secteur === 'direction')}
           ecriture={ecriture}
           moi={moi}
@@ -495,6 +502,7 @@ function GrilleJours({
               secteur="terrain"
               presences={simples.filter((p) => p.date === j && p.secteur === 'terrain')}
               personnel={personnel}
+              noms={noms}
               ecriture={ecriture}
               cocher={cocher}
             />
@@ -557,7 +565,7 @@ function GrilleMois({
               <div className="mb-1 flex items-center gap-0.5">
                 <LienJour jour={j} className="flex flex-1 items-center justify-between rounded px-1 text-xs hover:bg-pierre-100">
                   <span className={`font-medium ${j === auj ? 'rounded-full bg-foret-700 px-1.5 text-white' : hors ? 'text-pierre-400' : ''}`}>{depuisIso(j).getDate()}</span>
-                  <span className="text-pierre-500" title="Personnes au travail">{presenceParJour.get(j)?.length || ''}</span>
+                  <span className="text-pierre-500" title="Personnes au travail">{nombrePersonnes(presenceParJour.get(j) ?? []) || ''}</span>
                 </LienJour>
                 {ecriture && (
                   <button

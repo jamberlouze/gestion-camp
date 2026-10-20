@@ -48,15 +48,27 @@ async function toutLire<T>(tranche: (debut: number, fin: number) => PromiseLike<
 // Lectures
 // ------------------------------------------------------------------
 
-/** Tout le personnel (y compris inactif) ; jamais les lignes supprimées. */
-export function usePersonnel() {
+/** Une seule lecture, personnes retirées comprises ; chaque hook en tire ce qu'il montre. */
+function usePersonnelLu<T>(select: (liste: Personne[]) => T) {
   useTempsReel(S, 'personnel', [[S, 'personnel'], [S, 'presence']])
   return useQuery({
     queryKey: [S, 'personnel'],
-    queryFn: () =>
-      toutLire<Personne>((a, b) => db().from('personnel').select('*').is('deleted_at', null).order('ordre').order('nom').range(a, b)),
+    queryFn: () => toutLire<Personne>((a, b) => db().from('personnel').select('*').order('ordre').order('nom').range(a, b)),
+    select,
   })
 }
+
+const sansRetirees = (liste: Personne[]) => liste.filter((p) => !p.deleted_at)
+const nomsDe = (liste: Personne[]) => new Map(liste.map((p) => [p.id, p.nom]))
+
+/** Tout le personnel (y compris inactif) ; jamais les personnes retirées. */
+export const usePersonnel = () => usePersonnelLu(sansRetirees)
+
+/**
+ * Nom de chaque personne, retirées comprises : leurs présences passées
+ * restent dans la grille et le journal (Réglages › Personnel › Retirer).
+ */
+export const useNomsPersonnel = () => usePersonnelLu(nomsDe)
 
 /**
  * La personne du Calendrier liée au compte connecté (son courriel, réglé
@@ -231,7 +243,8 @@ export function useRetirer(table: TableModifiable) {
 
 /**
  * Coche ou décoche une présence simple, ou change sa note. Une case
- * décochée garde sa ligne (deleted_at) : la recocher la réactive.
+ * décochée garde sa ligne (deleted_at) : la recocher la réactive, sans
+ * son ancienne note (une présence neuve).
  * Affichage mis à jour d'avance, remis en place si la base refuse.
  */
 export function usePresence(debut: string, fin: string) {
@@ -248,6 +261,11 @@ export function usePresence(debut: string, fin: string) {
         deleted_at: p.present ? null : new Date().toISOString(),
       }
       if (p.description !== undefined) valeurs.description = p.description
+      else if (p.present) {
+        // Recochée : rien de la présence d'avant (note, choix) ne revient.
+        valeurs.description = null
+        valeurs.statut = null
+      }
       const { error } = await db().from('presences_simples').upsert(valeurs, { onConflict: 'personnel_id,date,secteur' })
       if (error) throw error
     },
@@ -265,8 +283,8 @@ export function usePresence(debut: string, fin: string) {
             personnel_id: p.personnel_id,
             date: p.date,
             secteur: p.secteur,
-            description: p.description !== undefined ? p.description : (existante?.description ?? null),
-            statut: existante?.statut ?? null,
+            description: p.description !== undefined ? p.description : null,
+            statut: p.description !== undefined ? (existante?.statut ?? null) : null,
             updated_by: null,
             updated_at: new Date().toISOString(),
             deleted_at: null,

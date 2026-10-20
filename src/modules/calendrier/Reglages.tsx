@@ -37,7 +37,7 @@ function ListePersonnel() {
   const nbInactifs = (personnel.data ?? []).filter((p) => !p.actif).length
 
   async function supprimer(p: Personne) {
-    if (!(await confirmer({ titre: `Retirer ${p.nom} de la liste ?`, message: 'Ses présences passées restent dans l\'historique. Pour une personne qui revient plus tard, décochez plutôt « Actif ».' }))) return
+    if (!(await confirmer({ titre: `Retirer ${p.nom} de la liste ?`, message: 'Ses journées passées restent dans le calendrier ; celles d\'aujourd\'hui et à venir sont retirées. Pour une personne qui revient plus tard, décochez plutôt « Actif ».' }))) return
     retirer.mutate(p.id)
   }
 

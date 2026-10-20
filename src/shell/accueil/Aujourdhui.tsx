@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { aujourdhui as jourCalendrier } from '@/modules/calendrier/dates'
 import { useEvenements, usePresenceJour, useSejours } from '@/modules/calendrier/donnees'
-import { sejourDuJour, sejourVisible, useEvenementsPlage } from '@/modules/calendrier/outils'
+import { nombrePersonnes, sejourDuJour, sejourVisible, useEvenementsPlage } from '@/modules/calendrier/outils'
 import type { Secteur } from '@/modules/calendrier/types'
 import { reunionsAVenir } from '@/modules/reunions/contexte'
 import { usePoints, useRecurrents, useReunions } from '@/modules/reunions/donnees'
@@ -135,7 +135,7 @@ export function AuTravail() {
       })).filter((s) => s.noms.length),
     [data],
   )
-  const total = parSecteur.reduce((n, s) => n + s.noms.length, 0)
+  const total = nombrePersonnes(data ?? [])
   if (!data) return null
   return (
     <section className={`${ui.carte} space-y-2 px-4 py-2.5`}>

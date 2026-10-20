@@ -43,6 +43,7 @@ export function RangeeDirection({
   colonnes,
   gabarit,
   personnel,
+  noms,
   presences,
   ecriture,
   moi,
@@ -53,7 +54,10 @@ export function RangeeDirection({
   entete: ReactNode
   colonnes: string
   gabarit: CSSProperties
+  /** Qu'on peut choisir (jamais les personnes retirées). */
   personnel: Personne[]
+  /** Noms affichés, personnes retirées comprises (leurs journées passées restent). */
+  noms: Map<string, string>
   /** Présences de la direction sur les jours affichés. */
   presences: PresenceSimple[]
   ecriture: boolean
@@ -66,7 +70,6 @@ export function RangeeDirection({
   const glisse = useRef<{ depart: number; pointeur: number; bouge: boolean } | null>(null)
   // Un glissement fini sur un « + » ne doit pas l'ouvrir en plus.
   const vientDeGlisser = useRef(false)
-  const nom = new Map(personnel.map((p) => [p.id, p.nom]))
 
   const indiceSous = (x: number, y: number) => {
     const cible = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-jour-direction]')
@@ -120,7 +123,7 @@ export function RangeeDirection({
         {jours.map((j, i) => {
           const duJour = triees(
             presences.filter((p) => p.date === j),
-            nom,
+            noms,
           )
           return (
             <div
@@ -140,7 +143,7 @@ export function RangeeDirection({
                           {statut.emoji}
                         </span>
                       )}
-                      <span className="font-medium">{nom.get(p.personnel_id) ?? '?'}</span>
+                      <span className="font-medium">{noms.get(p.personnel_id) ?? '?'}</span>
                       {p.description && <span className={p.statut === 'conge' ? '' : 'text-pierre-500'}> · {p.description}</span>}
                     </li>
                   )
