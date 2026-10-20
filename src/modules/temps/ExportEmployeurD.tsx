@@ -673,14 +673,15 @@ function Reglages({ debut, estAdmin }: { debut: string; estAdmin: boolean }) {
 
 /**
  * Admins : compagnie de paie et matricule de chaque compte de la direction
- * (actifs, admins compris, plus ceux qui ont déjà une ligne de paie).
+ * (actifs, plus ceux qui ont déjà une ligne de paie ; pas les admins, qui ne
+ * remplissent pas de feuille).
  */
 function PaieDirection({ compagnies }: { compagnies: Entreprise[] }) {
   const membres = useMembres()
   const paie = usePaieDirection()
   if (!membres.data || !paie.data) return null
   const paieDe = new Map(paie.data.map((x) => [x.user_id, x]))
-  const personnes = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || paieDe.has(m.id))
+  const personnes = membres.data.filter((m) => (m.actif && m.role === 'direction') || paieDe.has(m.id))
   const colonnes = 'sm:grid sm:grid-cols-[minmax(0,1fr)_10rem_7rem] sm:gap-x-4'
   return (
     <BlocReglage

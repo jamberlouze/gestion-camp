@@ -10,7 +10,7 @@ import { dateCourte, formatHeures, libellePeriode } from './periodes'
 import { useSoldesBanques, type GroupeBanque, type SoldeBanque } from './soldes'
 
 const TITRES: Record<GroupeBanque, string> = {
-  direction: 'Direction et admins',
+  direction: 'Direction',
   compte: 'Employés qui remplissent leur feuille',
   'sans-compte': 'Employés sans compte (onglet Employés)',
 }

@@ -61,7 +61,8 @@ export function TableauDeBord() {
     const dePeriode = heures.data.filter((h) => h.jour >= debut)
     // Toute la direction active, plus quiconque a des heures (ex. compte désactivé depuis).
     const ids = new Set(heures.data.map((h) => h.user_id))
-    const liste = membres.data.filter((m) => (m.actif && (m.role === 'admin' || m.role === 'direction')) || ids.has(m.id))
+    // Les admins ne remplissent pas de feuille : seulement s'ils ont des heures (anciennes).
+    const liste = membres.data.filter((m) => (m.actif && m.role === 'direction') || ids.has(m.id))
 
     const resumer = (lignes: Heure[], m: Membre, depuis: string): Ligne => {
       const siennes = lignes.filter((h) => h.user_id === m.id)
