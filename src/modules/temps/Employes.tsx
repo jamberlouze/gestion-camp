@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -11,9 +11,8 @@ import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
 import { heuresTirees } from './banques'
 import { lignesDirection, type LigneDirection } from './direction'
-import { nomCompagnie } from './employeurD'
+import { nomCompagnie, nomDirection } from './employeurD'
 import {
-  nomDe,
   banqueDe,
   useBanquesTous,
   useDossiersAFermer,
@@ -26,6 +25,7 @@ import {
 } from './donnees'
 import {
   nomEmploye,
+  parNomDeFamille,
   useEmployesFeuille,
   useFeuillesEmployes,
   useFeuillesPropres,
@@ -40,7 +40,7 @@ import {
 import { usePaieDirection } from './donneesEmployeurD'
 import { ExportEmployeurD } from './ExportEmployeurD'
 import { Case } from './Feuille'
-import { RangeesDirection } from './SectionDirection'
+import { RangeeDirection } from './SectionDirection'
 import { PastilleStatut } from './Statut'
 import { menu, usePeriode } from './outils'
 import {
@@ -87,6 +87,24 @@ interface Ligne {
   aFermer: boolean
 }
 
+/** Une rangée de la grille : un employé pour une compagnie, ou une personne de la direction (admins seulement). */
+type Rangee = { genre: 'employe'; ligne: Ligne } | { genre: 'direction'; ligne: LigneDirection }
+
+/** Nom de famille, puis prénom ; sans nom de famille : le nom affiché (« Nom, Prénom »). */
+function cleNom(r: Rangee) {
+  if (r.genre === 'employe') {
+    const e = r.ligne.employe
+    return { famille: e.nom_famille || nomEmploye(e), prenom: e.prenom ?? '' }
+  }
+  const m = r.ligne.membre
+  return { famille: m.nom_famille || nomDirection(m), prenom: m.prenom ?? '' }
+}
+const parNom = (a: Rangee, b: Rangee) => {
+  const x = cleNom(a)
+  const y = cleNom(b)
+  return x.famille.localeCompare(y.famille, 'fr') || x.prenom.localeCompare(y.prenom, 'fr')
+}
+
 const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'Soumise', approuvee: 'Approuvée' }
 
 /**
@@ -95,7 +113,8 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * compagnie (deux compagnies dans la même paie = deux lignes) et une
  * colonne par jour de la période, comme l'ancien Google Sheets. Un seul
  * nombre d'heures par jour (pas de vacances ni de maladie). Filtres par
- * secteur et par compagnie (réglés dans le référentiel).
+ * secteur et par compagnie (réglés dans le référentiel). Regroupée par
+ * compagnie par défaut, ou par secteur ; par nom de famille dans chaque groupe.
  * Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
  * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
@@ -111,7 +130,9 @@ export function FeuilleEmployes() {
   const [params, setParams] = useSearchParams()
   const secteur = params.get('secteur') ?? ''
   const compagnie = params.get('compagnie') ?? ''
-  const choisir = (cle: 'secteur' | 'compagnie', v: string) =>
+  // Regroupement : par compagnie (défaut, rien dans l'adresse) ou par secteur.
+  const regroupement = params.get('groupe') === 'secteur' ? 'secteur' : 'compagnie'
+  const choisir = (cle: 'secteur' | 'compagnie' | 'groupe', v: string) =>
     setParams(
       (avant) => {
         const suivants = new URLSearchParams(avant)
@@ -138,7 +159,7 @@ export function FeuilleEmployes() {
   const [afficherMasques, setAfficherMasques] = useState(false)
   const banques = useBanquesTous(finPeriode(debut))
   const [employeurD, setEmployeurD] = useState(false)
-  // Section Direction (admins seulement, qui préparent la paie) : feuilles de la direction, lues ici, jamais saisies.
+  // Direction (admins seulement, qui préparent la paie) : feuilles de la direction, lues ici, jamais saisies.
   const { estAdmin } = useAuth()
   const membres = useMembres(estAdmin)
   const heuresDirection = useHeuresPlage(debut, finPeriode(debut), estAdmin)
@@ -250,9 +271,7 @@ export function FeuilleEmployes() {
     }
     return resultat.sort(
       (a, b) =>
-        (a.employe.secteur == null ? 1 : 0) - (b.employe.secteur == null ? 1 : 0) ||
-        (a.employe.secteur ?? '').localeCompare(b.employe.secteur ?? '', 'fr') ||
-        nomEmploye(a.employe).localeCompare(nomEmploye(b.employe), 'fr') ||
+        parNomDeFamille(a.employe, b.employe) ||
         a.employe.id.localeCompare(b.employe.id) ||
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise ? nomCompagnie(a.entreprise) : '').localeCompare(b.entreprise ? nomCompagnie(b.entreprise) : '', 'fr'),
@@ -307,7 +326,7 @@ export function FeuilleEmployes() {
     if (mots && ![e.surnom, e.nom_complet, e.poste].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
-  // Section Direction : avec tous les secteurs ou « Direction » ; compagnie = sa compagnie de paie.
+  // Direction : avec tous les secteurs ou « Direction » ; compagnie = sa compagnie de paie.
   const directionVisibles = direction.filter((d) => {
     if (secteur && secteur !== DIRECTION) return false
     if (compagnie === SANS ? d.compagnie : compagnie && d.compagnie?.id !== compagnie) return false
@@ -315,14 +334,40 @@ export function FeuilleEmployes() {
     if (mots && ![d.membre.nom, d.membre.courriel].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
-  // Regroupées par secteur seulement quand on les voit tous.
-  const groupes: { secteur: string | null; lignes: Ligne[] }[] = []
-  for (const l of lignes) {
-    const dernier = groupes[groupes.length - 1]
-    if (secteur === '' && (!dernier || dernier.secteur !== l.employe.secteur)) groupes.push({ secteur: l.employe.secteur, lignes: [l] })
-    else if (dernier) dernier.lignes.push(l)
-    else groupes.push({ secteur: null, lignes: [l] })
-  }
+  // Employés et direction (admins) ensemble, par nom de famille (tri stable : un employé de deux compagnies
+  // garde l'ordre de ses compagnies). Regroupés par compagnie (ordre du référentiel ; la direction à sa
+  // compagnie de paie) ou par secteur (la direction à part, à la fin), seulement quand on les voit toutes.
+  const rangees: Rangee[] = [
+    ...lignes.map((ligne) => ({ genre: 'employe' as const, ligne })),
+    ...directionVisibles.map((ligne) => ({ genre: 'direction' as const, ligne })),
+  ].sort(parNom)
+  const groupes: { cle: string; titre: ReactNode; rangees: Rangee[] }[] = []
+  if (regroupement === 'compagnie' && compagnie === '') {
+    const compagnieDe = (r: Rangee) => (r.genre === 'employe' ? r.ligne.entreprise : r.ligne.compagnie)?.id ?? null
+    for (const x of [...(entreprises.data ?? []), null]) {
+      const siennes = rangees.filter((r) => compagnieDe(r) === (x?.id ?? null))
+      if (siennes.length)
+        groupes.push({ cle: x?.id ?? SANS, titre: x ? <PuceCompagnie compagnie={x} court /> : 'Sans compagnie', rangees: siennes })
+    }
+  } else if (regroupement === 'secteur' && secteur === '') {
+    const employes = rangees.filter((r) => r.genre === 'employe')
+    const ordreSecteurs = [...new Set(employes.map((r) => r.ligne.employe.secteur))].sort(
+      (a, b) => (a == null ? 1 : 0) - (b == null ? 1 : 0) || (a ?? '').localeCompare(b ?? '', 'fr'),
+    )
+    for (const s of ordreSecteurs)
+      groupes.push({ cle: s ?? SANS, titre: libelleSecteur(s), rangees: employes.filter((r) => r.ligne.employe.secteur === s) })
+    const direction = rangees.filter((r) => r.genre === 'direction')
+    if (direction.length)
+      groupes.push({
+        cle: DIRECTION,
+        titre: (
+          <>
+            Direction <span className="font-normal normal-case tracking-normal text-pierre-500">· admins seulement</span>
+          </>
+        ),
+        rangees: direction,
+      })
+  } else if (rangees.length) groupes.push({ cle: '', titre: null, rangees })
 
   // Totaux : employés et direction affichés (heures régulières).
   const totalJour = (jour: string) =>
@@ -351,7 +396,7 @@ export function FeuilleEmployes() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             className={ui.boutonSecondaire}
-            onClick={() => exporter(debut, jours, lignes, directionVisibles)}
+            onClick={() => exporter(debut, jours, groupes.flatMap((g) => g.rangees))}
             disabled={!lignes.length && !directionVisibles.length}
           >
             <IconeTableur className="size-4" />
@@ -371,6 +416,15 @@ export function FeuilleEmployes() {
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
+        <select
+          aria-label="Regrouper"
+          className={menu}
+          value={regroupement}
+          onChange={(e) => choisir('groupe', e.target.value === 'secteur' ? 'secteur' : '')}
+        >
+          <option value="compagnie">Regrouper par compagnie</option>
+          <option value="secteur">Regrouper par secteur</option>
+        </select>
         <select aria-label="Secteur" className={menu} value={secteur} onChange={(e) => choisir('secteur', e.target.value)}>
           <option value="">Tous les secteurs</option>
           {secteurs.map((s) => (
@@ -463,17 +517,22 @@ export function FeuilleEmployes() {
             </thead>
             <tbody className="divide-y divide-pierre-100">
               {groupes.map((g) => (
-                <Fragment key={g.secteur ?? SANS}>
-                  {secteur === '' && (
+                <Fragment key={g.cle}>
+                  {g.titre != null && (
                     <tr className="bg-pierre-50">
                       {/* Titre dans la colonne figée : reste visible quand la grille défile. */}
                       <th className="sticky left-0 z-10 bg-pierre-50 px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap text-pierre-600">
-                        {libelleSecteur(g.secteur)}
+                        {g.titre}
                       </th>
                       <td colSpan={jours.length + 4} />
                     </tr>
                   )}
-                  {g.lignes.map((l) => {
+                  {g.rangees.map((r) => {
+                    if (r.genre === 'direction')
+                      return (
+                        <RangeeDirection key={r.ligne.cle} ligne={r.ligne} jours={jours} debut={debut} classeJour={fond} coupure={coupure} />
+                      )
+                    const l = r.ligne
                     const n = numero++
                     const e = l.employe
                     const details = [e.nom_complet ? e.surnom : null, e.poste].filter(Boolean).join(' · ')
@@ -556,14 +615,6 @@ export function FeuilleEmployes() {
                   })}
                 </Fragment>
               ))}
-              <RangeesDirection
-                lignes={directionVisibles}
-                jours={jours}
-                debut={debut}
-                avecTitre={secteur === ''}
-                classeJour={fond}
-                coupure={coupure}
-              />
               <tr className="bg-pierre-50 font-semibold">
                 <th className="sticky left-0 z-10 bg-pierre-50 px-3 py-1.5 text-left">
                   Total
@@ -601,7 +652,7 @@ export function FeuilleEmployes() {
         tiré de sa banque tout seul et paraît sous son nom (« Tirées de la banque »). Un employé sans heures depuis 2
         périodes est retiré de la saisie (dossier à fermer).
         {estAdmin &&
-          ' Section Direction (admins seulement) : les heures de la feuille de chaque personne de la direction, lues ici (on les corrige dans sa feuille : clic sur son nom) ; sa compagnie de paie et son matricule se règlent dans Employeur D › Réglages.'}
+          ' Direction (admins seulement) : chaque personne de la direction est classée avec les employés, dans le groupe de sa compagnie de paie ; ses heures sont lues de sa feuille (on les corrige dans sa feuille : clic sur son nom) ; sa compagnie de paie et son matricule se règlent dans Employeur D › Réglages, son nom de famille dans Utilisateurs.'}
       </p>
     </div>
   )
@@ -643,9 +694,9 @@ function CaseNote({ valeur, libelle, onEnregistrer }: { valeur: string; libelle:
 
 /**
  * CSV pour Excel (séparateur « ; », virgule décimale, BOM pour les accents),
- * lignes affichées seulement, la section Direction (admins) comprise.
+ * rangées affichées seulement, dans l'ordre de la grille, la direction (admins) comprise.
  */
-function exporter(debut: string, jours: string[], lignes: Ligne[], direction: LigneDirection[]) {
+function exporter(debut: string, jours: string[], rangees: Rangee[]) {
   const nombre = (n: number) => (n ? String(Math.round(n * 100) / 100).replace('.', ',') : '')
   const champ = (t: string | null) => (t && /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : (t ?? ''))
   const entete = [
@@ -667,29 +718,33 @@ function exporter(debut: string, jours: string[], lignes: Ligne[], direction: Li
     'État',
   ]
   const pp = codeAnneePeriode(debut)
-  const rangees = lignes.map((l) => [
-    pp,
-    datePaie(debut),
-    champ(l.employe.nom_complet ?? l.employe.surnom),
-    champ(l.employe.surnom),
-    champ(l.entreprise ? nomCompagnie(l.entreprise) : null),
-    champ(l.employe.secteur),
-    champ(l.employe.poste),
-    ...jours.map((j) => nombre(l.parJour.get(j) ?? 0)),
-    nombre(l.sem1) || '0',
-    nombre(l.sem2) || '0',
-    nombre(l.total) || '0',
-    '',
-    nombre(l.maladie),
-    nombre(l.banque),
-    champ(l.note),
-    l.statut ? LIBELLES_ETAT[l.statut] : '',
-  ])
-  for (const d of direction)
-    rangees.push([
+  const lignesCsv = rangees.map((r) => {
+    if (r.genre === 'employe') {
+      const l = r.ligne
+      return [
+        pp,
+        datePaie(debut),
+        champ(l.employe.nom_complet ?? l.employe.surnom),
+        champ(l.employe.surnom),
+        champ(l.entreprise ? nomCompagnie(l.entreprise) : null),
+        champ(l.employe.secteur),
+        champ(l.employe.poste),
+        ...jours.map((j) => nombre(l.parJour.get(j) ?? 0)),
+        nombre(l.sem1) || '0',
+        nombre(l.sem2) || '0',
+        nombre(l.total) || '0',
+        '',
+        nombre(l.maladie),
+        nombre(l.banque),
+        champ(l.note),
+        l.statut ? LIBELLES_ETAT[l.statut] : '',
+      ]
+    }
+    const d = r.ligne
+    return [
       pp,
       datePaie(debut),
-      champ(nomDe(d.membre)),
+      champ(nomDirection(d.membre)),
       '',
       champ(d.compagnie ? nomCompagnie(d.compagnie) : null),
       'Direction',
@@ -703,8 +758,9 @@ function exporter(debut: string, jours: string[], lignes: Ligne[], direction: Li
       nombre(d.banque),
       champ(d.note),
       d.statut ? LIBELLES_ETAT[d.statut] : '',
-    ])
-  const csv = '﻿' + [entete, ...rangees].map((r) => r.join(';')).join('\r\n')
+    ]
+  })
+  const csv = '﻿' + [entete, ...lignesCsv].map((r) => r.join(';')).join('\r\n')
   const lien = document.createElement('a')
   lien.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   const { numero, annee } = numeroPeriodePaie(debut)

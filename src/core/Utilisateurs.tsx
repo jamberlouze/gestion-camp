@@ -202,14 +202,22 @@ export function Utilisateurs() {
                   <tr>
                     <td className="px-3 py-2">{p.courriel}</td>
                     <td className="px-3 py-2">
-                      <input
-                        className={`${ui.champ} min-w-36`}
-                        defaultValue={p.nom ?? ''}
-                        onBlur={(e) => {
-                          const nom = e.target.value.trim() || null
-                          if (nom !== p.nom) majProfil.mutate({ id: p.id, nom })
-                        }}
-                      />
+                      {/* Le nom affiché partout (« Prénom Nom ») est refait par la base. */}
+                      <div className="flex gap-2">
+                        {(['prenom', 'nom_famille'] as const).map((champ) => (
+                          <input
+                            key={champ}
+                            aria-label={`${champ === 'prenom' ? 'Prénom' : 'Nom de famille'} de ${p.courriel}`}
+                            placeholder={champ === 'prenom' ? 'Prénom' : 'Nom de famille'}
+                            className={`${ui.champ} min-w-32 ${champ === 'nom_famille' && !p.nom_famille && p.role === 'direction' ? 'border-amber-300 bg-amber-50' : ''}`}
+                            defaultValue={p[champ] ?? ''}
+                            onBlur={(e) => {
+                              const valeur = e.target.value.trim() || null
+                              if (valeur !== p[champ]) majProfil.mutate({ id: p.id, [champ]: valeur })
+                            }}
+                          />
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <select

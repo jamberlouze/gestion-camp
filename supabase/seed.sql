@@ -35,19 +35,20 @@ select gen_random_uuid(), id, id::text, 'email',
   jsonb_build_object('sub', id::text, 'email', email, 'email_verified', true), now(), now(), now()
 from auth.users;
 
-update core.profils p set nom = v.nom, role = v.role
+-- Prénom et nom de famille : le nom affiché (« Prénom Nom ») est posé par core.poser_nom_profil.
+update core.profils p set prenom = v.prenom, nom_famille = v.nom_famille, role = v.role
 from (values
-  ('admin@camp.test', 'Admin Test', 'admin'),
-  ('julie@camp.test', 'Julie Tremblay', 'direction'),
-  ('olivier@camp.test', 'Olivier Lavoie', 'direction'),
-  ('sarah@camp.test', 'Sarah Bouchard', 'coordo'),
-  ('felix@camp.test', 'Félix Gagnon', 'direction'),
-  ('camille@camp.test', 'Camille Roy', 'coordo'),
-  ('noah@camp.test', 'Noah Côté', 'coordo'),
-  ('alex@camp.test', 'Alex Bergeron', 'terrain'),
-  ('lea@camp.test', 'Léa Morin', 'terrain'),
-  ('dev@camp.test', 'Gabriel Dev', 'developpeur')
-) as v (courriel, nom, role)
+  ('admin@camp.test', 'Admin', 'Test', 'admin'),
+  ('julie@camp.test', 'Julie', 'Tremblay', 'direction'),
+  ('olivier@camp.test', 'Olivier', 'Lavoie', 'direction'),
+  ('sarah@camp.test', 'Sarah', 'Bouchard', 'coordo'),
+  ('felix@camp.test', 'Félix', 'Gagnon', 'direction'),
+  ('camille@camp.test', 'Camille', 'Roy', 'coordo'),
+  ('noah@camp.test', 'Noah', 'Côté', 'coordo'),
+  ('alex@camp.test', 'Alex', 'Bergeron', 'terrain'),
+  ('lea@camp.test', 'Léa', 'Morin', 'terrain'),
+  ('dev@camp.test', 'Gabriel', 'Dev', 'developpeur')
+) as v (courriel, prenom, nom_famille, role)
 where p.courriel = v.courriel;
 
 -- Pokes : un reçu aujourd'hui (pas vu) et un d'hier (vu), pour l'admin.

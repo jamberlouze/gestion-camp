@@ -104,7 +104,14 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
       statuts: feuilles.data,
       direction: estAdmin
         ? {
-            membres: membres.data!.map((m) => ({ id: m.id, nom: m.nom, courriel: m.courriel, admin: m.role === 'admin' })),
+            membres: membres.data!.map((m) => ({
+              id: m.id,
+              nom: m.nom,
+              prenom: m.prenom,
+              nom_famille: m.nom_famille,
+              courriel: m.courriel,
+              admin: m.role === 'admin',
+            })),
             paie: paieDirection.data!,
             heures: heuresDeLaDirection,
             statuts: feuillesDirection.data!.map((f) => ({ user_id: f.user_id, statut: f.statut })),

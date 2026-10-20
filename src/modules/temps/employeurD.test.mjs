@@ -287,4 +287,7 @@ test('nom d’un compte de la direction en « Nom, prénom »', () => {
   assert.equal(nomDirection({ nom: 'Marie-Ève De La Fontaine', courriel: 'x' }), 'De La Fontaine, Marie-Ève')
   assert.equal(nomDirection({ nom: ' Cliff ', courriel: 'x' }), 'Cliff')
   assert.equal(nomDirection({ nom: '', courriel: 'a@b.c' }), 'a@b.c')
+  // Prénom et nom de famille du compte (page Utilisateurs) : ils l'emportent sur le nom affiché.
+  assert.equal(nomDirection({ nom: 'Anna Sofia Crespo', prenom: 'Anna Sofia', nom_famille: 'Crespo', courriel: 'x' }), 'Crespo, Anna Sofia')
+  assert.equal(nomDirection({ nom: 'Tremblay', prenom: null, nom_famille: 'Tremblay', courriel: 'x' }), 'Tremblay')
 })
