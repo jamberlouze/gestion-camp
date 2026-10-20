@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
@@ -26,6 +26,7 @@ import {
 } from './donnees'
 import {
   nomEmploye,
+  parNomDeFamille,
   useEmployesFeuille,
   useFeuillesEmployes,
   useFeuillesPropres,
@@ -95,7 +96,8 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * compagnie (deux compagnies dans la même paie = deux lignes) et une
  * colonne par jour de la période, comme l'ancien Google Sheets. Un seul
  * nombre d'heures par jour (pas de vacances ni de maladie). Filtres par
- * secteur et par compagnie (réglés dans le référentiel).
+ * secteur et par compagnie (réglés dans le référentiel). Regroupée par
+ * compagnie par défaut, ou par secteur ; par nom de famille dans chaque groupe.
  * Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
  * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
@@ -111,7 +113,9 @@ export function FeuilleEmployes() {
   const [params, setParams] = useSearchParams()
   const secteur = params.get('secteur') ?? ''
   const compagnie = params.get('compagnie') ?? ''
-  const choisir = (cle: 'secteur' | 'compagnie', v: string) =>
+  // Regroupement : par compagnie (défaut, rien dans l'adresse) ou par secteur.
+  const regroupement = params.get('groupe') === 'secteur' ? 'secteur' : 'compagnie'
+  const choisir = (cle: 'secteur' | 'compagnie' | 'groupe', v: string) =>
     setParams(
       (avant) => {
         const suivants = new URLSearchParams(avant)
@@ -250,9 +254,7 @@ export function FeuilleEmployes() {
     }
     return resultat.sort(
       (a, b) =>
-        (a.employe.secteur == null ? 1 : 0) - (b.employe.secteur == null ? 1 : 0) ||
-        (a.employe.secteur ?? '').localeCompare(b.employe.secteur ?? '', 'fr') ||
-        nomEmploye(a.employe).localeCompare(nomEmploye(b.employe), 'fr') ||
+        parNomDeFamille(a.employe, b.employe) ||
         a.employe.id.localeCompare(b.employe.id) ||
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise ? nomCompagnie(a.entreprise) : '').localeCompare(b.entreprise ? nomCompagnie(b.entreprise) : '', 'fr'),
@@ -315,14 +317,22 @@ export function FeuilleEmployes() {
     if (mots && ![d.membre.nom, d.membre.courriel].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
-  // Regroupées par secteur seulement quand on les voit tous.
-  const groupes: { secteur: string | null; lignes: Ligne[] }[] = []
-  for (const l of lignes) {
-    const dernier = groupes[groupes.length - 1]
-    if (secteur === '' && (!dernier || dernier.secteur !== l.employe.secteur)) groupes.push({ secteur: l.employe.secteur, lignes: [l] })
-    else if (dernier) dernier.lignes.push(l)
-    else groupes.push({ secteur: null, lignes: [l] })
-  }
+  // Regroupées par compagnie (dans l'ordre du référentiel) ou par secteur, seulement quand on les voit toutes ;
+  // les lignes restent par nom de famille dans chaque groupe. « Sans compagnie » et « Sans secteur » à la fin.
+  const groupes: { cle: string; titre: ReactNode; lignes: Ligne[] }[] = []
+  if (regroupement === 'compagnie' && compagnie === '') {
+    for (const x of [...(entreprises.data ?? []), null]) {
+      const siennes = lignes.filter((l) => (l.entreprise?.id ?? null) === (x?.id ?? null))
+      if (siennes.length)
+        groupes.push({ cle: x?.id ?? SANS, titre: x ? <PuceCompagnie compagnie={x} court /> : 'Sans compagnie', lignes: siennes })
+    }
+  } else if (regroupement === 'secteur' && secteur === '') {
+    const ordreSecteurs = [...new Set(lignes.map((l) => l.employe.secteur))].sort(
+      (a, b) => (a == null ? 1 : 0) - (b == null ? 1 : 0) || (a ?? '').localeCompare(b ?? '', 'fr'),
+    )
+    for (const s of ordreSecteurs)
+      groupes.push({ cle: s ?? SANS, titre: libelleSecteur(s), lignes: lignes.filter((l) => l.employe.secteur === s) })
+  } else if (lignes.length) groupes.push({ cle: '', titre: null, lignes })
 
   // Totaux : employés et direction affichés (heures régulières).
   const totalJour = (jour: string) =>
@@ -351,7 +361,7 @@ export function FeuilleEmployes() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             className={ui.boutonSecondaire}
-            onClick={() => exporter(debut, jours, lignes, directionVisibles)}
+            onClick={() => exporter(debut, jours, groupes.flatMap((g) => g.lignes), directionVisibles)}
             disabled={!lignes.length && !directionVisibles.length}
           >
             <IconeTableur className="size-4" />
@@ -371,6 +381,15 @@ export function FeuilleEmployes() {
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
+        <select
+          aria-label="Regrouper"
+          className={menu}
+          value={regroupement}
+          onChange={(e) => choisir('groupe', e.target.value === 'secteur' ? 'secteur' : '')}
+        >
+          <option value="compagnie">Regrouper par compagnie</option>
+          <option value="secteur">Regrouper par secteur</option>
+        </select>
         <select aria-label="Secteur" className={menu} value={secteur} onChange={(e) => choisir('secteur', e.target.value)}>
           <option value="">Tous les secteurs</option>
           {secteurs.map((s) => (
@@ -463,12 +482,12 @@ export function FeuilleEmployes() {
             </thead>
             <tbody className="divide-y divide-pierre-100">
               {groupes.map((g) => (
-                <Fragment key={g.secteur ?? SANS}>
-                  {secteur === '' && (
+                <Fragment key={g.cle}>
+                  {g.titre != null && (
                     <tr className="bg-pierre-50">
                       {/* Titre dans la colonne figée : reste visible quand la grille défile. */}
                       <th className="sticky left-0 z-10 bg-pierre-50 px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap text-pierre-600">
-                        {libelleSecteur(g.secteur)}
+                        {g.titre}
                       </th>
                       <td colSpan={jours.length + 4} />
                     </tr>

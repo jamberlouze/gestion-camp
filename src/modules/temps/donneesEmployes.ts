@@ -22,6 +22,8 @@ const RELECTURE = 30_000
 export interface EmployeFeuille {
   id: string
   surnom: string
+  prenom: string | null
+  nom_famille: string | null
   nom_complet: string | null
   poste: string | null
   secteur: string | null
@@ -80,6 +82,11 @@ export interface NoteEmploye {
 /** « Chamberland, Maxime » si le nom complet est connu, sinon le surnom. */
 export const nomEmploye = (e: Pick<EmployeFeuille, 'surnom' | 'nom_complet'>) => e.nom_complet || e.surnom
 
+/** Ordre alphabétique du nom de famille, puis du prénom (sans nom de famille : le nom affiché). */
+export const parNomDeFamille = (a: EmployeFeuille, b: EmployeFeuille) =>
+  (a.nom_famille || nomEmploye(a)).localeCompare(b.nom_famille || nomEmploye(b), 'fr') ||
+  (a.prenom ?? '').localeCompare(b.prenom ?? '', 'fr')
+
 /** Tous les employés du référentiel, y compris inactifs (ils peuvent avoir des heures passées). */
 export function useEmployesFeuille() {
   return useQuery({
@@ -88,7 +95,7 @@ export function useEmployesFeuille() {
       const { data, error } = await supabase
         .schema('core')
         .rpc('employes_complets')
-        .select('id, surnom, nom_complet, poste, secteur, entreprise_ids, actif, matricule_employeur_d')
+        .select('id, surnom, prenom, nom_famille, nom_complet, poste, secteur, entreprise_ids, actif, matricule_employeur_d')
         .order('surnom')
       if (error) throw error
       return data as EmployeFeuille[]
