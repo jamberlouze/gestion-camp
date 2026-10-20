@@ -16,7 +16,7 @@
 //   - semaine avec un férié (liste de la CNESST, src/lib/feries.ts ;
 //     2026-10-20) : 8 h de moins par férié tombé du lundi au vendredi
 //     (semaine de l'Action de grâces : 32 h attendues, au-delà = en banque) ;
-//   - retrait automatique (2026-10-20, à partir de PP22 : RETRAIT_DEPUIS) :
+//   - retrait automatique (2026-10-20, dès la première période, PP21) :
 //     plus de ligne « Prises en banque » à remplir ; une semaine finie où
 //     les heures payées (régulières, vacances, maladie) n'atteignent pas les
 //     heures attendues, l'écart est tiré de la banque (payé avec le code des
@@ -38,8 +38,6 @@ import { ferie } from '../../lib/feries.ts'
 export const SEUIL_SEMAINE = 40
 /** Heures de moins dans la semaine pour chaque férié (1 jour = 8 h). */
 export const HEURES_FERIE = 8
-/** Premier dimanche (PP22) des semaines dont le manque est tiré tout seul de la banque. */
-export const RETRAIT_DEPUIS = '2026-10-18'
 /** Sous ce solde, les admins sont avertis (onglet Banques, accueil, feuille). */
 export const SEUIL_ALERTE = 20
 /** Premier jour possible d'un ajustement (année de la première période). */
@@ -200,7 +198,7 @@ export function mouvementsBanqueHeures(p: {
         detail: `${nombre(s.regulieres)} h régulières, ${libelleSeuil(d)}`,
       })
     const payees = s.regulieres + s.absences + s.banque
-    const manque = active && d >= RETRAIT_DEPUIS && samedi < aujourdhui && payees > 0 ? arrondi(seuil - payees) : 0
+    const manque = active && samedi < aujourdhui && payees > 0 ? arrondi(seuil - payees) : 0
     if (manque > 0)
       liste.push({
         cle: `tirees-${d}`,

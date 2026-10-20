@@ -11,8 +11,9 @@ const semaine = (dimanche, heuresParJour, type = 'regulieres') => {
   })
 }
 
-test('maladie : plus de banque dans l’app (Employeur D), ni octroi ni retrait', () => {
-  const heures = [{ jour: '2026-10-06', type: 'maladie', heures: 8 }, { jour: '2026-10-07', type: 'maladie', heures: 4 }]
+test('maladie : plus de banque dans l’app (Employeur D), ni octroi ni retrait ; ses heures comblent la semaine', () => {
+  // 28 h régulières + 12 h de maladie = 40 h : rien de tiré ; l'ancien ajustement « maladie » est ignoré.
+  const heures = [...semaine('2026-10-04', [0, 0, 0, 7, 7, 7, 7]), { jour: '2026-10-05', type: 'maladie', heures: 8 }, { jour: '2026-10-06', type: 'maladie', heures: 4 }]
   const ajustements = [{ id: 'm', banque: 'maladie', jour: '2026-10-03', heures: 16, note: 'Ancien solde maladie', auteur_nom: 'Admin', created_at: '' }]
   assert.deepEqual(mouvementsBanqueHeures({ heures, ajustements, au: '2027-02-01' }), [])
 })
@@ -64,7 +65,7 @@ test('ajustements : solde de départ, heures payées, triés par date ; rien apr
   const r = resumePeriode(m, '2026-10-18', '2026-10-31')
   assert.deepEqual([r.avant, r.retraits, r.apres], [14, -10, 4])
   // Solde négatif possible (affiché en rouge) : pas de blocage.
-  const neg = mouvementsBanqueHeures({ heures: [{ jour: '2026-10-05', type: 'banque', heures: 8 }], ajustements: [], au: '2026-10-17' })
+  const neg = mouvementsBanqueHeures({ heures: [{ jour: '2026-10-05', type: 'banque', heures: 8 }], ajustements: [], au: '2026-10-17', heuresActivesParDefaut: false })
   assert.equal(neg.at(-1).solde, -8)
 })
 
@@ -136,7 +137,7 @@ test('désactivée : plus d’accumulation, le solde reste et se prend ; réacti
 })
 
 test('employé sans compte : heures accumulées si activée', () => {
-  const heures = [...semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]), { jour: '2026-10-13', type: 'banque', heures: 1.5 }]
+  const heures = [...semaine('2026-10-04', [0, 9, 9, 9, 9, 9, 0]), ...semaine('2026-10-11', [0, 0, 8, 8, 8, 6.5, 0]), { jour: '2026-10-13', type: 'banque', heures: 1.5 }]
   const m = mouvementsBanqueHeures({
     heures, ajustements: [], au: '2027-02-01',
     heuresActivesParDefaut: false, etatsHeures: [{ depuis: '2026-10-04', active: true }],
@@ -173,9 +174,9 @@ test('ligne « Prises en banque » d’un employé : banque activée, solde ou h
   assert.equal(banqueAffichee(employe([], remis), false, debut, fin), false)
 })
 
-test('retrait automatique : le manque d’une semaine finie est tiré de la banque, à partir de PP22', () => {
+test('retrait automatique : le manque d’une semaine finie est tiré de la banque, dès PP21', () => {
   const heures = [
-    ...semaine('2026-10-04', [0, 6, 6, 6, 6, 7, 0]), // PP21, 31 h : avant le retrait automatique → rien
+    ...semaine('2026-10-04', [0, 6, 6, 6, 6, 7, 0]), // PP21, 31 h → −9
     ...semaine('2026-10-18', [0, 7, 6, 6, 6, 6, 0]), // 31 h → −9
     ...semaine('2026-10-25', [0, 8, 8, 8, 8, 0, 0]), // 32 h + 8 h de vacances → rien (vacances et maladie comblent)
     { jour: '2026-10-30', type: 'vacances', heures: 8 },
@@ -185,11 +186,13 @@ test('retrait automatique : le manque d’une semaine finie est tiré de la banq
   const m = mouvementsBanqueHeures({ heures, ajustements, au: '2026-12-31', aujourdhui: '2027-01-05' })
   assert.deepEqual(m.map((x) => [x.jour, x.genre, x.heures, x.solde]), [
     ['2026-10-04', 'ajustement', 30, 30],
-    ['2026-10-24', 'tirees', -9, 21],
-    ['2026-12-26', 'tirees', -2, 19],
+    ['2026-10-10', 'tirees', -9, 21],
+    ['2026-10-24', 'tirees', -9, 12],
+    ['2026-12-26', 'tirees', -2, 10],
   ])
   assert.equal(m[1].detail, '31 h payées sur 40 h attendues')
-  assert.equal(m[2].detail, '30 h payées sur 32 h attendues (férié : Noël)')
+  assert.equal(m[3].detail, '30 h payées sur 32 h attendues (férié : Noël)')
+  assert.equal(heuresTirees(m, '2026-10-04', '2026-10-17'), 9)
   assert.equal(heuresTirees(m, '2026-10-18', '2026-10-31'), 9)
   assert.equal(heuresTirees(m, '2026-12-20', '2027-01-02'), 2)
 })
