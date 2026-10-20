@@ -71,7 +71,7 @@ export function FeuilleEmploye({
   // Mêmes règles que temps.peut_modifier_employe.
   const modifiable = statut === 'ouverte' ? estDirection || soi : statut === 'soumise' && estDirection
   // Banque illisible : on montre tout (l'encadré affiche l'erreur).
-  const banque = banques.data && banqueDeLaFeuille(banques.data, titulaire, debut, heures, entreprise.id)
+  const banque = banques.data && banqueDeLaFeuille(banques.data, debut, heures, entreprise.id)
   const avecBanque = !banque || banqueAffichee(banque.mouvements, banque.etat.active, debut, finPeriode(debut))
   const types = [
     REGULIERES,

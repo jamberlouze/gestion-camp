@@ -31,7 +31,7 @@ export function usePeriode(): [string, (debut: string) => void] {
 /** « +4 h », « −2,5 h » */
 export const signe = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatHeures(Math.abs(n))} h`
 
-/** Interrupteur « Heures en banque » : « activée (par défaut) », « désactivée depuis PP22 ». */
+/** Interrupteur « Heures en banque » : « désactivée (par défaut) », « activée depuis PP21 », « désactivée depuis PP22 ». */
 export function libelleEtatHeures(etat: { active: boolean; depuis: string | null }): string {
   return `${etat.active ? 'activée' : 'désactivée'} ${etat.depuis ? `depuis ${codePeriodePaie(etat.depuis)}` : '(par défaut)'}`
 }

@@ -41,7 +41,7 @@ export function BanquesFeuille({
   if (donnees.error) return <p className={`${ui.erreur} print:hidden`}>Banque d’heures : {messageErreur(donnees.error)}</p>
   if (!donnees.data) return <p className="py-4 text-center text-sm text-pierre-500 print:hidden">Chargement de la banque d’heures…</p>
 
-  const { mouvements, etat, r } = banqueDeLaFeuille(donnees.data, titulaire, debut, heuresPeriode, entrepriseId)
+  const { mouvements, etat, r } = banqueDeLaFeuille(donnees.data, debut, heuresPeriode, entrepriseId)
   const solde = (n: number) => <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>{formatHeures(n)} h</span>
 
   return (

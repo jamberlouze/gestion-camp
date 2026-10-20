@@ -383,6 +383,13 @@ select e.id, '2026-10-04', true, '00000000-0000-0000-0000-000000000001', 'Admin 
   from core.employes e
  where e.surnom in ('Pinson', 'Manitou')
 on conflict do nothing;
+-- Banque désactivée par défaut pour tout le monde (2026-10-20) : la
+-- direction et l'admin d'essai l'ont activée depuis PP21, comme en PROD.
+insert into temps.banque_heures_etats (user_id, depuis, active, auteur, auteur_nom)
+select p.id, '2026-10-04', true, null, 'Réglage d''origine'
+  from core.profils p
+ where p.role in ('admin', 'direction')
+on conflict do nothing;
 
 -- Export Employeur D : numéros fictifs (essai) pour GBPA+ et Opikawa,
 -- matricules fictifs pour Pinson, Manitou et Marteau ; Aquabounga et les

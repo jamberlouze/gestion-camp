@@ -4,7 +4,7 @@
 // tout ; direction : les employés).
 import { useMemo } from 'react'
 import { alerteBanque, etatBanqueHeures, type Mouvement } from './banques'
-import { banqueDe, heuresActivesParDefaut, nomDe, useBanquesTous, useMembres, type Titulaire } from './donnees'
+import { banqueDe, nomDe, useBanquesTous, useMembres, type Titulaire } from './donnees'
 import { nomEmploye, useEmployesFeuille, useFeuillesPropres } from './donneesEmployes'
 import { aujourdhui } from './periodes'
 
@@ -38,7 +38,7 @@ export function useSoldesBanques(avecDirection: boolean) {
     const d = donnees.data
     const calculer = (t: Titulaire) => {
       const { mouvements, etats } = banqueDe(d, t, au)
-      const etat = etatBanqueHeures(etats, heuresActivesParDefaut(t), au)
+      const etat = etatBanqueHeures(etats, au)
       return { mouvements, heures: mouvements.at(-1)?.solde ?? 0, etat, alerte: alerteBanque(mouvements, etat.active) }
     }
 

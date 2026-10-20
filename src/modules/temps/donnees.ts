@@ -344,9 +344,6 @@ export interface EtatBanqueHeuresLigne extends EtatBanqueHeures {
   created_at: string
 }
 
-/** Défaut de l'interrupteur : activé pour un compte (direction, admin), désactivé pour un employé. */
-export const heuresActivesParDefaut = (t: Titulaire) => !!t.userId
-
 /** Heures d'une banque : avec la compagnie pour un employé (une feuille par compagnie). */
 export interface HeureBanqueLigne {
   jour: string
@@ -413,7 +410,6 @@ export type DonneesBanques = NonNullable<ReturnType<typeof useDonneesBanques>['d
  */
 export function banqueDeLaFeuille(
   donnees: DonneesBanques,
-  titulaire: Titulaire,
   debut: string,
   heuresPeriode: { jour: string; type: string; heures: number }[],
   entrepriseId: string | null = null,
@@ -422,17 +418,15 @@ export function banqueDeLaFeuille(
   const dansFeuille = (h: { jour: string; entreprise_id: string | null }) =>
     h.jour >= debut && h.jour <= fin && (entrepriseId == null || h.entreprise_id === entrepriseId)
   const heures = [...donnees.heures.filter((h) => !dansFeuille(h)), ...heuresPeriode]
-  const parDefaut = heuresActivesParDefaut(titulaire)
   const mouvements = mouvementsBanqueHeures({
     heures,
     ajustements: donnees.ajustements,
     au: fin,
     aujourdhui: aujourdhui(),
     etatsHeures: donnees.etatsHeures,
-    heuresActivesParDefaut: parDefaut,
   })
   // Interrupteur « Heures en banque » en vigueur pour cette période (réglé dans l'onglet Banques).
-  const etat = etatBanqueHeures(donnees.etatsHeures, parDefaut, debut)
+  const etat = etatBanqueHeures(donnees.etatsHeures, debut)
   return { mouvements, etat, r: resumePeriode(mouvements, debut, fin) }
 }
 
@@ -504,7 +498,6 @@ export function banqueDe(d: BanquesTous, t: Titulaire, au: string) {
     ]),
     ajustements: d.ajustements.filter(siennes),
     etatsHeures: etats,
-    heuresActivesParDefaut: heuresActivesParDefaut(t),
     au,
     aujourdhui: aujourdhui(),
   })

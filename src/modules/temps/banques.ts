@@ -26,9 +26,11 @@
 //     Les anciennes heures « banque » saisies à la main se déduisent encore ;
 //   - solde continu, reporté : jamais remis à zéro tout seul ; ajustements
 //     manuels avec une note ;
-//   - interrupteur « Heures en banque » (temps.banque_heures_etats) : activé
-//     par défaut pour la direction et les admins, désactivé pour les
-//     employés ; chaque changement vaut à partir d'une période (`depuis`,
+//   - interrupteur « Heures en banque » (temps.banque_heures_etats) :
+//     désactivé par défaut pour tout le monde, quel que soit le rôle
+//     (2026-10-20 ; les comptes de la direction et les admins d'avant ont
+//     reçu une ligne « activée » depuis PP21, migration 20261020174807) ;
+//     un admin l'active ; chaque changement vaut à partir d'une période (`depuis`,
 //     un dimanche de début de période). Une semaine ajoute ou retire
 //     seulement si l'état en vigueur à son dimanche est « activé » ;
 //     désactivé, le solde reste et ne change plus que par un ajustement.
@@ -140,11 +142,12 @@ export function heuresTirees(mouvements: Mouvement[], du: string, au: string): n
 
 /**
  * État de la mise en banque au jour `jour` : le dernier changement dont
- * `depuis` est au plus tard ce jour-là, sinon le défaut (`depuis` null).
+ * `depuis` est au plus tard ce jour-là, sinon désactivée (`depuis` null :
+ * le défaut, pour tout le monde).
  */
-export function etatBanqueHeures(etats: EtatBanqueHeures[], parDefaut: boolean, jour: string): { active: boolean; depuis: string | null } {
+export function etatBanqueHeures(etats: EtatBanqueHeures[], jour: string): { active: boolean; depuis: string | null } {
   const e = etats.filter((x) => x.depuis <= jour).sort((a, b) => b.depuis.localeCompare(a.depuis))[0]
-  return e ? { active: e.active, depuis: e.depuis } : { active: parDefaut, depuis: null }
+  return e ? { active: e.active, depuis: e.depuis } : { active: false, depuis: null }
 }
 
 /**
@@ -160,14 +163,11 @@ export function mouvementsBanqueHeures(p: {
   au: string
   /** Jour où l'on regarde : une semaine dont le samedi n'est pas passé est en cours (rien de tiré). */
   aujourdhui?: string
-  /** Interrupteur « Heures en banque » (vide = le défaut partout). */
+  /** Interrupteur « Heures en banque » (vide = désactivée partout). */
   etatsHeures?: EtatBanqueHeures[]
-  /** Défaut de l'interrupteur : oui pour la direction et les admins (par défaut), non pour un employé. */
-  heuresActivesParDefaut?: boolean
 }): Mouvement[] {
   const liste: Omit<Mouvement, 'solde'>[] = []
   const etats = p.etatsHeures ?? []
-  const parDefaut = p.heuresActivesParDefaut ?? true
   const aujourdhui = p.aujourdhui ?? depuisJour(versJour(p.au) + 1)
 
   // Heures, semaine par semaine.
@@ -185,7 +185,7 @@ export function mouvementsBanqueHeures(p: {
     const samedi = depuisJour(versJour(d) + 6)
     const jour = samedi > p.au ? p.au : samedi
     const semaine = `semaine du ${intervalle(d, samedi)}`
-    const active = etatBanqueHeures(etats, parDefaut, d).active
+    const active = etatBanqueHeures(etats, d).active
     const { seuil } = seuilSemaine(d)
     const surplus = active ? arrondi(s.regulieres - seuil) : 0
     if (surplus > 0)

@@ -58,7 +58,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
           comptées), le manque en est tiré et payé. Vacances et maladie : les soldes sont dans Employeur D.
         </p>
         <p className="text-pierre-600">
-          Mise en banque : activée par défaut pour la direction et les admins, désactivée pour les employés.
+          Mise en banque : désactivée par défaut pour tout le monde, quel que soit le rôle ; un admin l’active.
           {estAdmin ? ' Un changement vaut' : ' Seul un admin la change ; un changement vaut'} à partir de la période en
           cours ({libellePeriode(periodeCourante())}) ; les périodes passées ne bougent pas. Désactivée : rien ne s’ajoute
           ni ne se retire, le solde reste et ne change plus que par un ajustement.
