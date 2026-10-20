@@ -3,11 +3,13 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import type { Action, EntreeJournal, Statut } from './donnees'
+import { echeancePassee, echeanceSoumission, libelleEcheance } from './echeance'
 
 // Soumission et approbation d'une feuille (direction ou employé) : pastille
 // d'état, barre d'actions et journal. La base décide de qui peut faire quoi
 // (temps.changer_feuille / changer_feuille_employe) ; l'app ne montre que
-// les boutons utiles.
+// les boutons utiles. Une feuille encore en cours à son échéance est soumise
+// par la base (echeance.ts).
 
 const PASTILLES: Record<Statut, { libelle: string; classe: string }> = {
   ouverte: { libelle: 'En cours', classe: 'bg-pierre-100 text-pierre-700' },
@@ -25,6 +27,9 @@ const quand = (iso: string) =>
 
 const derniere = (journal: EntreeJournal[], genre: EntreeJournal['genre']) => journal.filter((e) => e.genre === genre).at(-1)
 
+/** Soumission faite par la base à l'échéance (temps.soumettre_feuilles_echues). */
+const automatique = (e: EntreeJournal) => e.genre === 'soumission' && e.auteur === null && e.auteur_nom === 'Automatique'
+
 /**
  * État de la feuille et ce qu'on peut en faire.
  *   auteur      : soumettre (feuille ouverte) ;
@@ -33,6 +38,8 @@ const derniere = (journal: EntreeJournal[], genre: EntreeJournal['genre']) => jo
  */
 export function BarreStatut({
   statut,
+  debut,
+  contenu,
   journal,
   auteur,
   approbateur,
@@ -41,6 +48,10 @@ export function BarreStatut({
   onAction,
 }: {
   statut: Statut
+  /** Dimanche de la période : donne l'échéance de la soumission automatique. */
+  debut: string
+  /** Au moins une heure saisie (0 compris) ou une note : seule une telle feuille est soumise à l'échéance. */
+  contenu: boolean
   journal: EntreeJournal[]
   auteur: boolean
   approbateur: boolean
@@ -70,14 +81,20 @@ export function BarreStatut({
   const approbation = derniere(journal, 'approbation')
   // Ouverte après un renvoi : le message de l'approbateur reste affiché jusqu'à la prochaine soumission.
   const dernierRenvoi = statut === 'ouverte' ? journal.filter((e) => e.genre !== 'note').at(-1) : undefined
+  // Échue sans heure ni note : rien ne part ; des heures ajoutées partiront au passage suivant.
+  const echeance = echeanceSoumission(debut, derniere(journal, 'renvoi')?.created_at)
+  const auto = !echeancePassee(echeance) ? `le ${libelleEcheance(echeance)}` : contenu ? 'dans les prochaines minutes' : null
 
   let texte: string
   if (statut === 'ouverte') {
     texte = auteur
-      ? `Quand la feuille est complète, soumettez-la à ${destinataire}. Vous ne pourrez plus changer les heures ensuite, seulement ajouter des notes.`
-      : 'Pas encore soumise.'
+      ? `Quand la feuille est complète, soumettez-la à ${destinataire}${
+          auto ? ` ; sinon, elle le sera automatiquement ${auto}` : ''
+        }. Vous ne pourrez plus changer les heures ensuite, seulement ajouter des notes.`
+      : `Pas encore soumise.${auto ? ` Elle le sera automatiquement ${auto}.` : ''}`
   } else if (statut === 'soumise') {
-    texte = `Soumise${soumission ? ` par ${soumission.auteur_nom} le ${quand(soumission.created_at)}` : ''}${
+    const par = soumission && (automatique(soumission) ? ' automatiquement' : ` par ${soumission.auteur_nom}`)
+    texte = `Soumise${soumission ? `${par} le ${quand(soumission.created_at)}` : ''}${
       auteur ? `, en attente d'approbation. Elle est gelée : vous pouvez seulement ajouter une note.` : '.'
     }`
   } else {
@@ -166,6 +183,10 @@ export function BarreStatut({
             value={renvoi}
             onChange={(e) => setRenvoi(e.target.value)}
           />
+          <p className="text-xs text-pierre-500">
+            Si elle n'est pas soumise de nouveau, elle le sera automatiquement le{' '}
+            {libelleEcheance(echeanceSoumission(debut, new Date().toISOString()))}.
+          </p>
           <div className="flex gap-2">
             <button type="submit" className={ui.bouton} disabled={enCours || !renvoi.trim()}>
               Renvoyer

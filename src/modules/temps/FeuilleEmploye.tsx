@@ -97,6 +97,8 @@ export function FeuilleEmploye({
 
       <BarreStatut
         statut={statut}
+        debut={debut}
+        contenu={heures.length > 0 || !!feuille?.note}
         journal={journal.data ?? []}
         auteur={soi}
         approbateur={estDirection}

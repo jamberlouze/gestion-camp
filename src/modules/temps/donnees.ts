@@ -41,6 +41,8 @@ export interface EntreeJournal {
   id: string
   genre: 'soumission' | 'approbation' | 'renvoi' | 'reouverture' | 'note'
   texte: string | null
+  /** null : soumission automatique (temps.soumettre_feuilles_echues, `auteur_nom` « Automatique ») ou compte retiré. */
+  auteur: string | null
   auteur_nom: string
   created_at: string
 }
@@ -253,7 +255,7 @@ export function useJournal(colonne: 'feuille_id' | 'feuille_employe_id', id: str
     queryFn: async () => {
       const { data, error } = await db()
         .from('journal')
-        .select('id, genre, texte, auteur_nom, created_at')
+        .select('id, genre, texte, auteur, auteur_nom, created_at')
         .eq(colonne, id!)
         .order('created_at')
       if (error) throw error
