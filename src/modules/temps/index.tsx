@@ -24,7 +24,9 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 /**
  * Feuilles de temps de la direction. Chacun ne voit que la sienne ; les
- * admins ont en plus le tableau de bord et les feuilles de tous. La base
+ * admins n'en remplissent pas (décision de Maxime du 2026-10-20 : pas
+ * d'onglet « Ma feuille », le module s'ouvre sur Employés) et ont le tableau
+ * de bord et les feuilles de tous. La base
  * applique la même règle (schéma temps) : l'app ne fait que suivre.
  * Onglet Employés : feuille partagée des heures des employés (hors
  * direction), que toute la direction remplit ; un employé coché « Remplit
@@ -53,9 +55,11 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
       <h1 className="text-2xl font-semibold print:hidden">Feuilles de temps</h1>
       {/* Adresses absolues : voir Embarcations. */}
       <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
-        <NavLink to={`/temps${suffixe}`} end className={onglet}>
-          Ma feuille
-        </NavLink>
+        {!estAdmin && (
+          <NavLink to={`/temps${suffixe}`} end className={onglet}>
+            Ma feuille
+          </NavLink>
+        )}
         <NavLink to={`/temps/employes${suffixe}`} className={onglet}>
           Employés
         </NavLink>
@@ -74,7 +78,8 @@ function ModuleDirection({ estAdmin }: { estAdmin: boolean }) {
       </nav>
       <BandeauErreurs racine="temps" />
       <Routes>
-        <Route index element={<MaFeuille />} />
+        {/* Un admin ne remplit pas de feuille : il arrive sur Employés. */}
+        <Route index element={estAdmin ? <Navigate to={`/temps/employes${suffixe}`} replace /> : <MaFeuille />} />
         <Route path="employes" element={<FeuilleEmployes />} />
         <Route path="approuver" element={<AApprouver estAdmin={estAdmin} />} />
         <Route path="banques" element={<OngletBanques estAdmin={estAdmin} />} />

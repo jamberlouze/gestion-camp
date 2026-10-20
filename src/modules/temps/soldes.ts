@@ -25,7 +25,10 @@ export interface SoldeBanque {
   alerte: boolean
 }
 
-/** `avecDirection` : direction et admins aussi (un admin seulement ; la base ne les donne qu'à lui). */
+/**
+ * `avecDirection` : la direction aussi (un admin seulement ; la base ne la
+ * donne qu'à lui). Les admins n'ont ni feuille ni banque (2026-10-20).
+ */
 export function useSoldesBanques(avecDirection: boolean) {
   const au = aujourdhui()
   const donnees = useBanquesTous(au)
@@ -45,7 +48,7 @@ export function useSoldesBanques(avecDirection: boolean) {
     const resultat: SoldeBanque[] = []
     if (avecDirection)
       for (const m of membres.data) {
-        if (m.role !== 'admin' && m.role !== 'direction') continue
+        if (m.role !== 'direction') continue
         const t: Titulaire = { userId: m.id }
         const c = calculer(t)
         if (!m.actif && !c.mouvements.length) continue
@@ -53,7 +56,7 @@ export function useSoldesBanques(avecDirection: boolean) {
           cle: `u:${m.id}`,
           titulaire: t,
           nom: nomDe(m),
-          detail: m.role === 'admin' ? 'Admin' : 'Direction',
+          detail: 'Direction',
           groupe: 'direction',
           actif: m.actif,
           ...c,
