@@ -113,7 +113,8 @@ export const TYPES: { id: TypeHeures; libelle: string }[] = [
 
 /**
  * Lit une saisie : « 7 », « 7,5 », « 7.5 », « 7h30 », « 7:30 », « 7 h ».
- * Vide ou zéro → null (rien ce jour-là). Au quart d'heure près, au plus 24.
+ * Vide → null (case effacée) ; « 0 » est gardé et affiché (journée remplie,
+ * sans heures : pas un oubli). Au quart d'heure près, au plus 24.
  */
 export function lireHeures(texte: string): { heures: number | null } | { erreur: string } {
   const t = texte.trim().toLowerCase().replace(/\s+/g, '')
@@ -130,7 +131,6 @@ export function lireHeures(texte: string): { heures: number | null } | { erreur:
     return { erreur: 'Nombre d’heures invalide (ex. 7,5 ou 7h30).' }
   }
   if (!Number.isFinite(n)) return { erreur: 'Nombre d’heures invalide.' }
-  if (n === 0) return { heures: null }
   if (n > 24) return { erreur: 'Au plus 24 heures par jour.' }
   if (Math.abs(n * 4 - Math.round(n * 4)) > 1e-9) return { erreur: 'Au quart d’heure près (ex. 7,25 ou 7h15).' }
   return { heures: Math.round(n * 4) / 4 }

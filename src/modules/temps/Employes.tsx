@@ -8,13 +8,14 @@ import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
-import { etatBanqueHeures } from './banques'
+import { banqueAffichee, etatBanqueHeures } from './banques'
 import { lignesDirection, type LigneDirection } from './direction'
 import { nomCompagnie } from './employeurD'
 import {
   nomDe,
+  banqueDe,
+  useBanquesTous,
   useDossiersAFermer,
-  useEtatsBanqueHeures,
   useFeuillesPlage,
   useFermerDossier,
   useHeuresPlage,
@@ -78,6 +79,8 @@ interface Ligne {
   banqueParJour: Map<string, number>
   /** Mise en banque des heures activée pour cette période (interrupteur de l'onglet Banques). */
   banqueActive: boolean
+  /** Employé sans compte : ligne « Prises en banque » (activée, un solde ou des heures prises dans la période : banqueAffichee). */
+  banqueAffichee: boolean
   note: string
   /** État de sa feuille s'il remplit la sienne (ou si elle a un état) ; null sinon. */
   statut: Statut | null
@@ -98,8 +101,9 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
  * Ses heures de maladie et prises en banque paraissent sous son nom et dans
- * l'export. Employé sans compte dont la mise en banque est activée (onglet
- * Banques) : une ligne « Prises en banque » sous la sienne, saisie ici.
+ * l'export. Employé sans compte qui a une banque (activée dans l'onglet
+ * Banques, un solde ou des heures déjà prises dans la période) : une ligne
+ * « Prises en banque » sous la sienne, saisie ici.
  * Dossier à fermer : un employé sans heures depuis 2 périodes disparaît de
  * la saisie (« Afficher les dossiers masqués ») et la direction voit
  * « Produire le relevé d'emploi » ; confirmer désactive sa fiche.
@@ -134,7 +138,7 @@ export function FeuilleEmployes() {
   // Dossiers à fermer pour la période affichée (masqués) et pour la période en cours (alertes).
   const masques = useDossiersAFermer(debut)
   const [afficherMasques, setAfficherMasques] = useState(false)
-  const etatsBanque = useEtatsBanqueHeures()
+  const banques = useBanquesTous(finPeriode(debut))
   const [employeurD, setEmployeurD] = useState(false)
   // Section Direction (admins seulement, qui préparent la paie) : feuilles de la direction, lues ici, jamais saisies.
   const { estAdmin } = useAuth()
@@ -162,14 +166,15 @@ export function FeuilleEmployes() {
   // assignée (s'il est actif) ou qui a des heures ou une note ; un employé actif sans compagnie a une
   // ligne vide pour le signaler.
   const toutes = useMemo(() => {
-    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data || !propres.data || !masques.data || !etatsBanque.data)
+    if (!employes.data || !entreprises.data || !heures.data || !notes.data || !feuilles.data || !propres.data || !masques.data || !banques.data)
       return null
-    const banqueActive = (employeId: string) =>
-      etatBanqueHeures(
-        etatsBanque.data.filter((x) => x.employe_id === employeId),
-        false,
-        debut,
-      ).active
+    // Banque d'heures de chaque employé (toutes compagnies) pour la période : interrupteur et ligne « Prises en banque ».
+    const fin = finPeriode(debut)
+    const banqueEmploye = (employeId: string) => {
+      const { mouvements, etats } = banqueDe(banques.data, { employeId }, fin)
+      const active = etatBanqueHeures(etats, false, debut).active
+      return { active, affichee: banqueAffichee(mouvements, active, debut, fin) }
+    }
     const banqueParLigne = new Map<string, Map<string, number>>()
     const statutDe = new Map(feuilles.data.map((f) => [`${f.employe_id}|${f.entreprise_id}`, f.statut]))
     const parCompagnie = new Map(entreprises.data.map((x) => [x.id, x]))
@@ -215,12 +220,14 @@ export function FeuilleEmployes() {
             banque: 0,
             banqueParJour: new Map(),
             banqueActive: false,
+            banqueAffichee: false,
             note: '',
             statut: null,
             aFermer: aFermer.has(e.id),
           })
         continue
       }
+      const banque = banqueEmploye(e.id)
       for (const x of compagnies) {
         const cle = `${e.id}|${x.id}`
         const parJour = parLigne.get(cle) ?? new Map<string, number>()
@@ -243,7 +250,8 @@ export function FeuilleEmployes() {
           maladie: a.maladie,
           banque: a.banque,
           banqueParJour: banqueParLigne.get(cle) ?? new Map(),
-          banqueActive: banqueActive(e.id),
+          banqueActive: banque.active,
+          banqueAffichee: banque.affichee,
           note: noteDe.get(cle) ?? '',
           statut,
           aFermer: aFermer.has(e.id),
@@ -259,7 +267,7 @@ export function FeuilleEmployes() {
         (a.entreprise?.ordre ?? 0) - (b.entreprise?.ordre ?? 0) ||
         (a.entreprise ? nomCompagnie(a.entreprise) : '').localeCompare(b.entreprise ? nomCompagnie(b.entreprise) : '', 'fr'),
     )
-  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, masques.data, etatsBanque.data, milieu, debut])
+  }, [employes.data, entreprises.data, heures.data, notes.data, feuilles.data, propres.data, masques.data, banques.data, milieu, debut])
 
   const direction = useMemo(() => {
     if (!estAdmin) return []
@@ -282,7 +290,7 @@ export function FeuilleEmployes() {
     feuilles.error ??
     propres.error ??
     masques.error ??
-    etatsBanque.error ??
+    banques.error ??
     (estAdmin ? (membres.error ?? heuresDirection.error ?? feuillesDirection.error ?? paieDirection.error) : null)
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!toutes || !direction) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
@@ -476,8 +484,8 @@ export function FeuilleEmployes() {
                     // Remplie par l'employé : on corrige dans sa feuille. Approuvée : gelée.
                     const parSaFeuille = !!propres.data?.has(e.id) || (l.statut != null && l.statut !== 'ouverte')
                     const saFeuille = l.entreprise ? `/temps/employe/${e.id}/${l.entreprise.id}?periode=${debut}` : null
-                    // Employé sans compte dont la mise en banque est activée : ses heures prises en banque se saisissent ici.
-                    const ligneBanque = !!l.entreprise && !parSaFeuille && (l.banqueActive || l.banque > 0)
+                    // Employé sans compte qui a une banque (banqueAffichee) : ses heures prises en banque se saisissent ici.
+                    const ligneBanque = !!l.entreprise && !parSaFeuille && (l.banqueAffichee || l.banque > 0)
                     const nb = ligneBanque ? numero++ : -1
                     let semBanque1 = 0
                     let semBanque2 = 0
@@ -530,7 +538,7 @@ export function FeuilleEmployes() {
                               modifiable={!!l.entreprise && !parSaFeuille}
                               ligne={n}
                               colonne={i}
-                              valeur={l.parJour.get(j) ?? 0}
+                              valeur={l.parJour.get(j) ?? null}
                               libelle={`${nomEmploye(e)}${l.entreprise ? `, ${nomCompagnie(l.entreprise)}` : ''}, ${jourCourt(j)}`}
                               onSaisir={(h) => l.entreprise && saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise.id, jour: j, heures: h })}
                             />
@@ -569,7 +577,7 @@ export function FeuilleEmployes() {
                                 modifiable
                                 ligne={nb}
                                 colonne={i}
-                                valeur={l.banqueParJour.get(j) ?? 0}
+                                valeur={l.banqueParJour.get(j) ?? null}
                                 libelle={`Prises en banque, ${nomEmploye(e)}, ${nomCompagnie(l.entreprise!)}, ${jourCourt(j)}`}
                                 onSaisir={(h) =>
                                   saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise!.id, jour: j, heures: h, type: 'banque' })
@@ -631,8 +639,8 @@ export function FeuilleEmployes() {
         passe à la ligne suivante, Tab au jour suivant. Un employé qui travaille pour deux compagnies a une ligne pour chacune.
         Un employé avec un état (En cours, Soumise, Approuvée) remplit sa propre feuille : ses heures régulières
         s’affichent ici (maladie et heures prises en banque sous son nom), et on les corrige dans sa feuille (clic sur son
-        nom). Un employé sans compte dont la mise en banque est activée (onglet Banques) a une ligne « Prises en banque »
-        sous la sienne. Un employé sans heures depuis 2 périodes est retiré de la saisie (dossier à fermer).
+        nom). Un employé sans compte qui a une banque (mise en banque activée dans l’onglet Banques, ou un solde) a une
+        ligne « Prises en banque » sous la sienne. Un employé sans heures depuis 2 périodes est retiré de la saisie (dossier à fermer).
         {estAdmin &&
           ' Section Direction (admins seulement) : les heures de la feuille de chaque personne de la direction, lues ici (on les corrige dans sa feuille : clic sur son nom) ; sa compagnie de paie et son matricule se règlent dans Employeur D › Réglages.'}
       </p>
