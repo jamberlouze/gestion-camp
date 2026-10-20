@@ -2,6 +2,9 @@ import { useAchatsACommanderBientot } from '@/modules/achats/donnees'
 import { HORIZON_JOURS } from '@/modules/achats/outils'
 import { useNotes } from '@/modules/embarcations/donnees'
 import { useSubventions } from '@/modules/subventions/donnees'
+import { SEUIL_ALERTE } from '@/modules/temps/banques'
+import { formatHeures } from '@/modules/temps/periodes'
+import { useSoldesBanques } from '@/modules/temps/soldes'
 import { joursAvant } from '@/modules/subventions/outils'
 import { useTaches } from '@/modules/travaux/donnees'
 import { estOuverte } from '@/modules/travaux/outils'
@@ -14,7 +17,7 @@ const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
 
 /** Alertes de l'équipe : ce qui demande l'attention, dans les modules de la personne seulement. */
 export function ASurveiller() {
-  const { peutLire, peutEcrire } = useAuth()
+  const { peutLire, peutEcrire, estAdmin } = useAuth()
   const sources = {
     travaux: peutLire('travaux'),
     vehicules: peutLire('vehicules'),
@@ -22,6 +25,8 @@ export function ASurveiller() {
     // Subventions : écriture ou rien (pas de mode lecture).
     subventions: peutEcrire('subventions'),
     achats: peutLire('achats'),
+    // Banques d'heures sous 20 h : les admins seulement (demande de Maxime).
+    banques: estAdmin,
   }
   if (!Object.values(sources).some(Boolean)) return null
   return (
@@ -31,6 +36,7 @@ export function ASurveiller() {
       {sources.vehicules && <Vehicules />}
       {sources.embarcations && <Embarcations />}
       {sources.subventions && <Subventions />}
+      {sources.banques && <BanquesSousSeuil />}
     </Carte>
   )
 }
@@ -130,5 +136,27 @@ function Subventions() {
         />
       ))}
     </>
+  )
+}
+
+/** Banques d'heures descendues sous 20 h ou négatives (Feuilles de temps › Banques). */
+function BanquesSousSeuil() {
+  const { data } = useSoldesBanques(true)
+  const sous = (data ?? []).filter((l) => l.alerte).sort((a, b) => a.heures - b.heures)
+  if (!sous.length) return null
+  const negative = sous.some((l) => l.heures < 0)
+  return (
+    <Ligne
+      to="/temps/banques"
+      icone="⏱️"
+      module="Feuilles de temps"
+      pastille={negative ? 'forte' : 'douce'}
+      titre={`${pluriel(sous.length, 'banque')} d’heures sous ${SEUIL_ALERTE} h`}
+      detail={sous
+        .slice(0, 3)
+        .map((l) => `${l.nom} ${formatHeures(l.heures)} h`)
+        .join(' · ')}
+      alerte={negative}
+    />
   )
 }

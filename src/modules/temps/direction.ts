@@ -18,6 +18,7 @@ export interface LigneDirection {
   total: number
   vacances: number
   maladie: number
+  /** Heures tirées de sa banque dans la période (calculées seules), plus d'anciennes heures « banque » saisies à la main. */
   banque: number
   note: string
   /** État de sa feuille ; null pour un admin (pas d'approbation). */
@@ -27,7 +28,8 @@ export interface LigneDirection {
 /**
  * Toute la direction active (admins compris), plus quiconque a des heures
  * dans la période (ex. compte désactivé depuis), triée par nom.
- * `heures` et `feuilles` : celles de la période ; `milieu` = 1er jour de la semaine 2.
+ * `heures` et `feuilles` : celles de la période ; `milieu` = 1er jour de la semaine 2 ;
+ * `tirees` : heures tirées de sa banque dans la période (banques.ts).
  */
 export function lignesDirection(p: {
   membres: Membre[]
@@ -36,6 +38,7 @@ export function lignesDirection(p: {
   paie: PaieDirectionExport[]
   entreprises: Entreprise[]
   milieu: string
+  tirees?: (userId: string) => number
 }): LigneDirection[] {
   const avecHeures = new Set(p.heures.map((h) => h.user_id))
   const parCompagnie = new Map(p.entreprises.map((x) => [x.id, x]))
@@ -49,7 +52,7 @@ export function lignesDirection(p: {
       let sem2 = 0
       let vacances = 0
       let maladie = 0
-      let banque = 0
+      let banque = p.tirees?.(membre.id) ?? 0
       for (const h of p.heures) {
         if (h.user_id !== membre.id) continue
         if (h.type === 'regulieres') {

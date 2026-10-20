@@ -1,32 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { etatBanqueHeures, SEUIL_SEMAINE, type Mouvement } from './banques'
+import { HEURES_FERIE, SEUIL_ALERTE, SEUIL_SEMAINE } from './banques'
 import { FenetreAjustement, TableHistorique } from './BanquesFeuille'
-import { banqueDe, heuresActivesParDefaut, nomDe, useBanquesTous, useMembres, useReglerBanqueHeures, type Titulaire } from './donnees'
-import { nomEmploye, useEmployesFeuille, useFeuillesPropres } from './donneesEmployes'
+import { useReglerBanqueHeures } from './donnees'
 import { libelleEtatHeures, menu, periodeCourante } from './outils'
-import { aujourdhui, dateCourte, formatHeures, libellePeriode } from './periodes'
+import { dateCourte, formatHeures, libellePeriode } from './periodes'
+import { useSoldesBanques, type GroupeBanque, type SoldeBanque } from './soldes'
 
-type Groupe = 'direction' | 'compte' | 'sans-compte'
-
-const TITRES: Record<Groupe, string> = {
+const TITRES: Record<GroupeBanque, string> = {
   direction: 'Direction et admins',
   compte: 'Employés qui remplissent leur feuille',
   'sans-compte': 'Employés sans compte (onglet Employés)',
-}
-
-interface LigneBanque {
-  cle: string
-  titulaire: Titulaire
-  nom: string
-  detail: string
-  groupe: Groupe
-  actif: boolean
-  mouvements: Mouvement[]
-  heures: number
-  etat: { active: boolean; depuis: string | null }
 }
 
 const bouton = `${ui.boutonSecondaire} whitespace-nowrap px-2.5! py-1.5!`
@@ -40,63 +26,15 @@ const bouton = `${ui.boutonSecondaire} whitespace-nowrap px-2.5! py-1.5!`
  * change que par un admin (temps.regler_banque_heures).
  */
 export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
-  const au = aujourdhui()
-  const donnees = useBanquesTous(au)
-  const membres = useMembres()
-  const employes = useEmployesFeuille()
-  const propres = useFeuillesPropres()
+  const soldes = useSoldesBanques(estAdmin)
+  const au = soldes.au
   const [recherche, setRecherche] = useState('')
   const [avecBanque, setAvecBanque] = useState(false)
   const [ouverte, setOuverte] = useState<string | null>(null)
-  const [fenetre, setFenetre] = useState<LigneBanque | null>(null)
+  const [fenetre, setFenetre] = useState<SoldeBanque | null>(null)
 
-  const lignes = useMemo(() => {
-    if (!donnees.data || !membres.data || !employes.data || !propres.data) return null
-    const d = donnees.data
-    const calculer = (t: Titulaire) => {
-      const { mouvements, etats } = banqueDe(d, t, au)
-      return { mouvements, heures: mouvements.at(-1)?.solde ?? 0, etat: etatBanqueHeures(etats, heuresActivesParDefaut(t), au) }
-    }
-
-    const resultat: LigneBanque[] = []
-    // Direction et admins : seulement pour un admin (la base ne donne rien d'autre à la direction).
-    if (estAdmin)
-      for (const m of membres.data) {
-        if (m.role !== 'admin' && m.role !== 'direction') continue
-        const t: Titulaire = { userId: m.id }
-        const c = calculer(t)
-        if (!m.actif && !c.mouvements.length) continue
-        resultat.push({
-          cle: `u:${m.id}`,
-          titulaire: t,
-          nom: nomDe(m),
-          detail: m.role === 'admin' ? 'Admin' : 'Direction',
-          groupe: 'direction',
-          actif: m.actif,
-          ...c,
-        })
-      }
-    for (const e of employes.data) {
-      const compte = propres.data.has(e.id)
-      const t: Titulaire = { employeId: e.id }
-      const c = calculer(t)
-      // Inactif : seulement s'il lui reste quelque chose en banque.
-      if (!e.actif && !c.heures) continue
-      resultat.push({
-        cle: `e:${e.id}`,
-        titulaire: t,
-        nom: nomEmploye(e),
-        detail: [e.nom_complet ? e.surnom : null, e.poste].filter(Boolean).join(' · '),
-        groupe: compte ? 'compte' : 'sans-compte',
-        actif: e.actif,
-        ...c,
-      })
-    }
-    return resultat.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
-  }, [donnees.data, membres.data, employes.data, propres.data, estAdmin, au])
-
-  const erreur = donnees.error ?? membres.error ?? employes.error ?? propres.error
-  if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
+  if (soldes.error) return <p className={ui.erreur}>{messageErreur(soldes.error)}</p>
+  const lignes = soldes.data
   if (!lignes) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const mots = recherche.trim().toLocaleLowerCase('fr')
@@ -105,7 +43,8 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
     if (avecBanque && !l.etat.active && !l.heures) return false
     return true
   })
-  const groupes = (['direction', 'compte', 'sans-compte'] as Groupe[])
+  const sousSeuil = lignes.filter((l) => l.alerte)
+  const groupes = (['direction', 'compte', 'sans-compte'] as GroupeBanque[])
     .map((g) => ({ groupe: g, lignes: visibles.filter((l) => l.groupe === g) }))
     .filter((g) => g.lignes.length)
 
@@ -113,18 +52,27 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
     <div className="space-y-4">
       <div className={`${ui.carte} space-y-1 px-4 py-3 text-sm text-pierre-700`}>
         <p>
-          Soldes au <b>{dateCourte(au)}</b>. <b>Heures accumulées</b> : heures régulières au-delà de {SEUIL_SEMAINE} h par
-          semaine, heure pour heure, quand la mise en banque est activée ; heures prises en banque déduites. Vacances et
-          maladie : les soldes sont dans Employeur D.
+          Soldes au <b>{dateCourte(au)}</b>. La banque se calcule seule quand la mise en banque est activée : les heures
+          régulières d’une période de paie au-delà de ses heures attendues ({SEUIL_SEMAINE} h par semaine, {HEURES_FERIE} h de moins par férié)
+          s’y ajoutent, heure pour heure ; une période finie sous les heures attendues (régulières, vacances et maladie
+          comptées), le manque en est tiré et payé. Vacances et maladie : les soldes sont dans Employeur D.
         </p>
         <p className="text-pierre-600">
-          Mise en banque : activée par défaut pour la direction et les admins, désactivée pour les employés.
+          Mise en banque : désactivée par défaut pour tout le monde, quel que soit le rôle ; un admin l’active.
           {estAdmin ? ' Un changement vaut' : ' Seul un admin la change ; un changement vaut'} à partir de la période en
-          cours ({libellePeriode(periodeCourante())}) ; les périodes passées ne bougent pas. Désactivée : plus rien ne
-          s’ajoute, le solde reste et peut encore être pris ou ajusté. Un employé n’a la ligne « Prises en banque » (dans sa
-          feuille, ou dans l’onglet Employés s’il n’a pas de compte) que si sa mise en banque est activée ou s’il a un solde.
+          cours ({libellePeriode(periodeCourante())}) ; les périodes passées ne bougent pas. Désactivée : rien ne s’ajoute
+          ni ne se retire, le solde reste et ne change plus que par un ajustement.
         </p>
       </div>
+
+      {estAdmin && sousSeuil.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <b>
+            {sousSeuil.length > 1 ? `${sousSeuil.length} banques sous ${SEUIL_ALERTE} h` : `Une banque sous ${SEUIL_ALERTE} h`}
+          </b>{' '}
+          : {sousSeuil.map((l) => `${l.nom} (${formatHeures(l.heures)} h)`).join(', ')}.
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
         <input
@@ -183,7 +131,7 @@ function Rangee({
   basculer,
   ouvrir,
 }: {
-  ligne: LigneBanque
+  ligne: SoldeBanque
   estAdmin: boolean
   historique: boolean
   basculer: () => void
@@ -200,8 +148,8 @@ function Rangee({
       !(await confirmer({
         titre: `${active ? 'Activer' : 'Désactiver'} la mise en banque des heures de ${l.nom} ?`,
         message: active
-          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine s’ajoutent à sa banque, heure pour heure. Les périodes passées ne changent pas.`
-          : `À partir de ${periode} (période en cours), plus rien ne s’ajoute à sa banque. Son solde (${formatHeures(l.heures)} h) reste et peut encore être pris ou ajusté.`,
+          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà des heures attendues de chaque période (${SEUIL_SEMAINE} h par semaine, ${HEURES_FERIE} h de moins par férié) s’ajoutent à sa banque, heure pour heure, et le manque d’une période finie en est tiré. Les périodes passées ne changent pas.`
+          : `À partir de ${periode} (période en cours), rien ne s’ajoute ni ne se retire de sa banque. Son solde (${formatHeures(l.heures)} h) reste et ne change plus que par un ajustement.`,
         libelleOk: active ? 'Activer' : 'Désactiver',
         danger: false,
       }))
@@ -222,6 +170,13 @@ function Rangee({
         <div className="w-28 text-sm xl:text-right">
           <span className="text-xs text-pierre-500 xl:hidden">Accumulées </span>
           {montant(l.heures)}
+          {l.alerte && (
+            <span
+              className={`mt-0.5 block w-fit rounded-full px-1.5 py-px text-xs font-medium xl:ml-auto ${l.heures < 0 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}
+            >
+              {l.heures < 0 ? 'négative' : `sous ${SEUIL_ALERTE} h`}
+            </span>
+          )}
         </div>
         <div className="w-56 text-sm">
           {estAdmin ? (

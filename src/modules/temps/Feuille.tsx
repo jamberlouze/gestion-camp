@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { messageErreur } from '@/lib/donnees'
+import { ferie } from '@/lib/feries'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
@@ -15,6 +16,7 @@ import {
   type Heure,
 } from './donnees'
 import { BanquesFeuille } from './BanquesFeuille'
+import { seuilSemaine } from './banques'
 import { BarreStatut, Journal } from './Statut'
 import {
   aujourdhui,
@@ -69,6 +71,7 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   const somme = (liste: Heure[]) => liste.reduce((s, h) => s + h.heures, 0)
   const totalType = (type: TypeHeures) => somme(heures.data.filter((h) => h.type === type))
   const total = somme(heures.data)
+  const attendu = semaines.reduce((s, sem) => s + seuilSemaine(sem[0]).seuil, 0)
 
   return (
     <div className="space-y-4">
@@ -96,6 +99,7 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
           key={s[0]}
           titre={`Semaine ${i + 1}`}
           jours={s}
+          attendu
           types={TYPES}
           valeur={(jour, type) => valeur(jour, type as TypeHeures)}
           modifiable={modifiable}
@@ -114,6 +118,9 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
         ))}
         <span>
           Total : <b className="tabular-nums">{formatHeures(total)} h</b>
+        </span>
+        <span className="text-pierre-600">
+          Attendu : <b className="tabular-nums">{formatHeures(attendu)} h</b>
         </span>
       </div>
 
@@ -138,11 +145,14 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
 /**
  * Une semaine de la feuille : une rangée par type d'heures, une colonne par
  * jour. `valeur` null = rien de saisi ; un « 0 » saisi s'affiche, et le total
- * du jour aussi : la journée est remplie, ce n'est pas un oubli.
+ * du jour aussi : la journée est remplie, ce n'est pas un oubli. Un férié
+ * (liste de la CNESST) est marqué ; `attendu` (feuilles de la direction) :
+ * heures attendues sous le titre, 8 h de moins par férié (seuilSemaine).
  */
 export function Semaine({
   titre,
   jours,
+  attendu = false,
   types,
   valeur,
   modifiable,
@@ -150,6 +160,7 @@ export function Semaine({
 }: {
   titre: string
   jours: string[]
+  attendu?: boolean
   types: { id: string; libelle: string }[]
   valeur: (jour: string, type: string) => number | null
   modifiable: boolean
@@ -160,17 +171,27 @@ export function Semaine({
   const rempli = (jour: string) => types.some((t) => valeur(jour, t.id) != null)
   const totalType = (type: string) => jours.reduce((s, j) => s + (valeur(j, type) ?? 0), 0)
   const totalSemaine = jours.reduce((s, j) => s + totalJour(j), 0)
-  const fond = (jour: string) => (jour === auj ? 'bg-foret-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : '')
+  const fond = (jour: string) =>
+    jour === auj ? 'bg-foret-50' : ferie(jour) ? 'bg-amber-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : ''
+  const { seuil, feries } = seuilSemaine(jours[0])
 
   return (
     <div className={`${ui.carte} overflow-x-auto break-inside-avoid`}>
       <table className="w-full min-w-[46rem] text-sm">
         <thead>
           <tr className="border-b border-pierre-200 text-xs text-pierre-500">
-            <th className="px-3 py-2 text-left font-semibold text-pierre-800">{titre}</th>
+            <th className="px-3 py-2 text-left font-semibold text-pierre-800">
+              {titre}
+              {attendu && (
+                <span className="block font-normal text-pierre-500">
+                  {seuil} h attendues{feries.length > 0 && ` (${feries.length > 1 ? 'fériés' : 'férié'})`}
+                </span>
+              )}
+            </th>
             {jours.map((j) => (
-              <th key={j} className={`px-1 py-2 text-center font-medium ${fond(j)} ${j === auj ? 'text-foret-800' : ''}`}>
+              <th key={j} className={`px-1 py-2 text-center font-medium ${fond(j)} ${j === auj ? 'text-foret-800' : ''}`} title={ferie(j) ?? undefined}>
                 {jourCourt(j)}
+                {ferie(j) && <span className="block font-semibold text-amber-800">Férié</span>}
               </th>
             ))}
             <th className="px-3 py-2 text-right font-medium">Total</th>

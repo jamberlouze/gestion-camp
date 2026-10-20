@@ -6,7 +6,8 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { menu } from './outils'
-import { nomDe, useFeuillesPlage, useHeuresPlage, useMembres } from './donnees'
+import { heuresTirees } from './banques'
+import { banqueDe, nomDe, useBanquesTous, useFeuillesPlage, useHeuresPlage, useMembres, type Titulaire } from './donnees'
 import { useEmployesFeuille, useEntreprises, useFeuillesEmployes, useFeuillesPropres, useHeuresEmployes, type Entreprise } from './donneesEmployes'
 import {
   useEnregistrerMatricule,
@@ -63,6 +64,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
   const heuresDirection = useHeuresPlage(debut, finPeriode(debut), estAdmin)
   const feuillesDirection = useFeuillesPlage(debut, debut, estAdmin)
   const paieDirection = usePaieDirection(estAdmin)
+  const banques = useBanquesTous(finPeriode(debut))
   const [compagnie, setCompagnie] = useState(compagnieDepart)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState(false)
@@ -70,12 +72,32 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
   const datePeriode = reglages.data?.periode === 'fin_periode' ? finPeriode(debut) : datePaie(debut)
 
   const resultat = useMemo(() => {
-    if (!employes.data || !entreprises.data || !heures.data || !feuilles.data || !propres.data || !reglages.data) return null
+    if (!employes.data || !entreprises.data || !heures.data || !feuilles.data || !propres.data || !reglages.data || !banques.data) return null
     if (estAdmin && (!membres.data || !heuresDirection.data || !feuillesDirection.data || !paieDirection.data)) return null
+    // Heures tirées de la banque dans la période (calculées : banques.ts), exportées comme des heures « banque » :
+    // un employé, à la compagnie où il a fait le plus d'heures régulières dans la période (sinon sa première).
+    const fin = finPeriode(debut)
+    const tirees = (t: Titulaire) => heuresTirees(banqueDe(banques.data, t, fin).mouvements, debut, fin)
+    const heuresEmployes: { employe_id: string; entreprise_id: string; type: string; heures: number }[] = [...heures.data]
+    for (const e of employes.data) {
+      const n = tirees({ employeId: e.id })
+      if (n <= 0) continue
+      const parCompagnie = new Map<string, number>()
+      for (const h of heures.data)
+        if (h.employe_id === e.id && h.type === 'regulieres') parCompagnie.set(h.entreprise_id, (parCompagnie.get(h.entreprise_id) ?? 0) + h.heures)
+      const principale = [...parCompagnie].sort((a, b) => b[1] - a[1])[0]?.[0] ?? e.entreprise_ids[0]
+      if (principale) heuresEmployes.push({ employe_id: e.id, entreprise_id: principale, type: 'banque', heures: n })
+    }
+    const heuresDeLaDirection = estAdmin
+      ? [
+          ...heuresDirection.data!,
+          ...membres.data!.map((m) => ({ user_id: m.id, type: 'banque', heures: tirees({ userId: m.id }) })).filter((h) => h.heures > 0),
+        ]
+      : []
     return preparerExport({
       employes: employes.data,
       compagnies: entreprises.data,
-      heures: heures.data,
+      heures: heuresEmployes,
       reglages: reglages.data,
       compagnie: compagnie || null,
       propres: propres.data.keys(),
@@ -84,7 +106,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
         ? {
             membres: membres.data!.map((m) => ({ id: m.id, nom: m.nom, courriel: m.courriel, admin: m.role === 'admin' })),
             paie: paieDirection.data!,
-            heures: heuresDirection.data!,
+            heures: heuresDeLaDirection,
             statuts: feuillesDirection.data!.map((f) => ({ user_id: f.user_id, statut: f.statut })),
           }
         : undefined,
@@ -102,6 +124,8 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
     heuresDirection.data,
     feuillesDirection.data,
     paieDirection.data,
+    banques.data,
+    debut,
   ])
 
   // Compagnies qui ont des heures payées dans la période (choix du haut), direction comprise.
@@ -141,6 +165,7 @@ export function ExportEmployeurD({ debut, compagnieDepart, fermer }: { debut: st
     feuilles.error ??
     propres.error ??
     reglages.error ??
+    banques.error ??
     (estAdmin ? (membres.error ?? heuresDirection.error ?? feuillesDirection.error ?? paieDirection.error) : null)
   const r = resultat
   const total = (code: number) => (r?.lignes ?? []).reduce((s, l) => s + (l.quantites[code] ?? 0), 0)

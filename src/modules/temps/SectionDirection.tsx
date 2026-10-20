@@ -40,7 +40,7 @@ export function RangeesDirection({
         const autres = [
           l.vacances ? `Vacances ${formatHeures(l.vacances)} h` : null,
           l.maladie ? `Maladie ${formatHeures(l.maladie)} h` : null,
-          l.banque ? `Prises en banque ${formatHeures(l.banque)} h` : null,
+          l.banque ? `Tirées de la banque ${formatHeures(l.banque)} h` : null,
         ].filter(Boolean)
         return (
           <tr key={l.cle} className="break-inside-avoid">

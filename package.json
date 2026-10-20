@@ -19,7 +19,7 @@
     "import:sauvegarder": "node scripts/migration/importer.mjs --sauvegarder",
     "deploy": "npm run build && wrangler deploy",
     "test:worker": "node --test \"worker/**/*.test.js\"",
-    "test:periodes": "node --test src/lib/periodesPaie.test.mjs",
+    "test:periodes": "node --test src/lib/periodesPaie.test.mjs src/lib/feries.test.mjs",
     "test:temps": "node --test src/modules/temps/banques.test.mjs src/modules/temps/employeurD.test.mjs",
     "test:rh": "node --test \"src/modules/rh/*.test.mjs\"",
     "test:import": "node --test src/lib/importLot.test.mjs"

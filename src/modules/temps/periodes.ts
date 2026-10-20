@@ -101,14 +101,18 @@ export function jourCourt(iso: string): string {
 // Heures
 // ------------------------------------------------------------------
 
-/** banque : heures prises dans la banque d'heures accumulées (voir banques.ts). */
+/**
+ * banque : anciennes heures prises dans la banque, saisies à la main ; plus
+ * de ligne pour en saisir (2026-10-20) : le manque d'une période est tiré
+ * tout seul de la banque (banques.ts).
+ */
 export type TypeHeures = 'regulieres' | 'vacances' | 'maladie' | 'banque'
 
+/** Rangées de la feuille de la direction. */
 export const TYPES: { id: TypeHeures; libelle: string }[] = [
   { id: 'regulieres', libelle: 'Régulières' },
   { id: 'vacances', libelle: 'Vacances' },
   { id: 'maladie', libelle: 'Maladie' },
-  { id: 'banque', libelle: 'Prises en banque' },
 ]
 
 /**

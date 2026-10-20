@@ -178,9 +178,9 @@ export function useSaisirEmploye(debut: string) {
   return useMutation({
     mutationKey: [S, 'employes-heures'],
     networkMode: 'always',
-    // type : régulières (la grille) ou banque (ligne « Prises en banque » d'un employé sans compte dont la banque est activée).
-    mutationFn: async (c: { employeId: string; entrepriseId: string; jour: string; heures: number | null; type?: 'regulieres' | 'banque' }) => {
-      const type = c.type ?? 'regulieres'
+    // Heures régulières seulement (la banque se calcule seule : plus de ligne « Prises en banque »).
+    mutationFn: async (c: { employeId: string; entrepriseId: string; jour: string; heures: number | null }) => {
+      const type = 'regulieres'
       const { error } =
         c.heures == null
           ? await db()
@@ -199,7 +199,7 @@ export function useSaisirEmploye(debut: string) {
       if (error) throw error
     },
     onMutate: async (c) => {
-      const type = c.type ?? 'regulieres'
+      const type = 'regulieres'
       await client.cancelQueries({ queryKey: cle })
       const avant = client.getQueryData<HeureEmploye[]>(cle)
       client.setQueryData<HeureEmploye[]>(cle, (liste = []) => {
