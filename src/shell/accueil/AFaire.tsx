@@ -6,6 +6,7 @@ import { CaseCoche } from '@/modules/mastertimeline/commun'
 import { useCoches, useResponsables, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
 import { FILTRES_VIDES, passagesDuMois, retards, trierPassages, useBasculer, type Passage } from '@/modules/mastertimeline/outils'
 import { useAApprouver, useDossiersAFermer, useFeuille, useFermerDossier, type DossierAFermer } from '@/modules/temps/donnees'
+import { echeancePassee, echeanceSoumission, libelleEcheance } from '@/modules/temps/echeance'
 import { periodePrecedente, PREMIERE_PERIODE } from '@/modules/temps/periodes'
 import { periodeCourante } from '@/modules/temps/outils'
 import { comparer, dateCourte, enRetard, estOuverte, jourAujourdhui } from '@/modules/travaux/outils'
@@ -58,6 +59,8 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
 
   const soumises = [...(aApprouver.data?.employes ?? []), ...(aApprouver.data?.direction ?? [])]
   const aSoumettre = soumettre && !maFeuille.isPending && (!maFeuille.data || maFeuille.data.statut === 'ouverte')
+  // Soumise automatiquement à l'échéance ; passée (feuille renvoyée après coup), la date n'est pas montrée.
+  const echeance = echeanceSoumission(precedente)
   const releves = dossiers.data ?? []
   if (!soumises.length && !aSoumettre && !releves.length) return null
 
@@ -86,7 +89,14 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
           detail={periodes(soumises.map((f) => f.debut))}
         />
       )}
-      {aSoumettre && <Ligne to={`/temps?periode=${precedente}`} titre="Soumettre ma feuille de temps" detail={libellePeriodePaie(precedente)} alerte />}
+      {aSoumettre && (
+        <Ligne
+          to={`/temps?periode=${precedente}`}
+          titre="Soumettre ma feuille de temps"
+          detail={`${libellePeriodePaie(precedente)}${echeancePassee(echeance) ? '' : ` · avant le ${libelleEcheance(echeance)}`}`}
+          alerte
+        />
+      )}
       {releves.slice(0, MAX_PAR_SOURCE).map((d) => (
         <Ligne
           key={d.employe_id}

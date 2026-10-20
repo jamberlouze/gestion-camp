@@ -84,6 +84,8 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
       {avecApprobation && (
         <BarreStatut
           statut={statut}
+          debut={debut}
+          contenu={heures.data.length > 0 || !!feuille.data?.note}
           journal={journal.data ?? []}
           auteur={mienne}
           approbateur={estAdmin && !mienne}
