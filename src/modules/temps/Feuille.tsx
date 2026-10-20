@@ -65,7 +65,7 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
     changer.mutateAsync({ userId, debut, action, texte })
   const jours = joursPeriode(debut)
   const semaines = [jours.slice(0, 7), jours.slice(7)]
-  const valeur = (jour: string, type: TypeHeures) => heures.data.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
+  const valeur = (jour: string, type: TypeHeures) => heures.data.find((h) => h.jour === jour && h.type === type)?.heures ?? null
   const somme = (liste: Heure[]) => liste.reduce((s, h) => s + h.heures, 0)
   const totalType = (type: TypeHeures) => somme(heures.data.filter((h) => h.type === type))
   const total = somme(heures.data)
@@ -135,7 +135,11 @@ export function Feuille({ userId, debut }: { userId: string; debut: string }) {
   )
 }
 
-/** Une semaine de la feuille : une rangée par type d'heures, une colonne par jour. */
+/**
+ * Une semaine de la feuille : une rangée par type d'heures, une colonne par
+ * jour. `valeur` null = rien de saisi ; un « 0 » saisi s'affiche, et le total
+ * du jour aussi : la journée est remplie, ce n'est pas un oubli.
+ */
 export function Semaine({
   titre,
   jours,
@@ -147,13 +151,14 @@ export function Semaine({
   titre: string
   jours: string[]
   types: { id: string; libelle: string }[]
-  valeur: (jour: string, type: string) => number
+  valeur: (jour: string, type: string) => number | null
   modifiable: boolean
   onSaisir: (jour: string, type: string, heures: number | null) => void
 }) {
   const auj = aujourdhui()
-  const totalJour = (jour: string) => types.reduce((s, t) => s + valeur(jour, t.id), 0)
-  const totalType = (type: string) => jours.reduce((s, j) => s + valeur(j, type), 0)
+  const totalJour = (jour: string) => types.reduce((s, t) => s + (valeur(jour, t.id) ?? 0), 0)
+  const rempli = (jour: string) => types.some((t) => valeur(jour, t.id) != null)
+  const totalType = (type: string) => jours.reduce((s, j) => s + (valeur(j, type) ?? 0), 0)
   const totalSemaine = jours.reduce((s, j) => s + totalJour(j), 0)
   const fond = (jour: string) => (jour === auj ? 'bg-foret-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : '')
 
@@ -192,7 +197,7 @@ export function Semaine({
             <th className="px-3 py-1.5 text-left">Total</th>
             {jours.map((j) => (
               <td key={j} className="px-1 py-1.5 text-center tabular-nums">
-                {totalJour(j) ? formatHeures(totalJour(j)) : ''}
+                {rempli(j) ? formatHeures(totalJour(j)) : ''}
               </td>
             ))}
             <td className="px-3 py-1.5 text-right tabular-nums">{formatHeures(totalSemaine)}</td>
@@ -206,7 +211,8 @@ export function Semaine({
 /**
  * Une case : « 7,5 », « 7h30 »… enregistrée en quittant la case (Entrée, Tab
  * ou clic ailleurs). Dans une grille (`ligne` et `colonne` donnés), Entrée
- * passe à la case du dessous, comme dans un tableur.
+ * passe à la case du dessous, comme dans un tableur. `valeur` null = case
+ * vide ; « 0 » saisi reste affiché (vider la case l'efface).
  */
 export function Case({
   valeur,
@@ -217,7 +223,7 @@ export function Case({
   colonne,
   etroite = false,
 }: {
-  valeur: number
+  valeur: number | null
   modifiable: boolean
   libelle: string
   onSaisir: (heures: number | null) => void
@@ -225,7 +231,7 @@ export function Case({
   colonne?: number
   etroite?: boolean
 }) {
-  const affiche = valeur ? formatHeures(valeur) : ''
+  const affiche = valeur == null ? '' : formatHeures(valeur)
   const [texte, setTexte] = useState(affiche)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enSaisie, setEnSaisie] = useState(false)
@@ -248,8 +254,8 @@ export function Case({
       return
     }
     setErreur(null)
-    setTexte(lu.heures ? formatHeures(lu.heures) : '')
-    if ((lu.heures ?? 0) !== valeur) onSaisir(lu.heures)
+    setTexte(lu.heures == null ? '' : formatHeures(lu.heures))
+    if (lu.heures !== valeur) onSaisir(lu.heures)
   }
 
   return (

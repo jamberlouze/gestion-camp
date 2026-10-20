@@ -70,7 +70,7 @@ export function RangeesDirection({
             </th>
             {jours.map((j, i) => (
               <td key={j} className={`px-0.5 py-1 text-center ${classeJour(j)} ${coupure(i)}`}>
-                <span className="inline-block w-11 tabular-nums">{l.parJour.get(j) ? formatHeures(l.parJour.get(j)!) : ''}</span>
+                <span className="inline-block w-11 tabular-nums">{l.parJour.has(j) ? formatHeures(l.parJour.get(j)!) : ''}</span>
               </td>
             ))}
             <td className="border-l-2 border-pierre-300 px-2 py-1 text-right tabular-nums text-pierre-700">{formatHeures(l.sem1)}</td>

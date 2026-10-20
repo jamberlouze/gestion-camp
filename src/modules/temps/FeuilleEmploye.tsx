@@ -80,7 +80,7 @@ export function FeuilleEmploye({
     MALADIE,
     ...(avecBanque ? [BANQUE] : []),
   ]
-  const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? 0
+  const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? null
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
   const jours = joursPeriode(debut)
   const agir = (action: Action, texte?: string) =>

@@ -538,7 +538,7 @@ export function FeuilleEmployes() {
                               modifiable={!!l.entreprise && !parSaFeuille}
                               ligne={n}
                               colonne={i}
-                              valeur={l.parJour.get(j) ?? 0}
+                              valeur={l.parJour.get(j) ?? null}
                               libelle={`${nomEmploye(e)}${l.entreprise ? `, ${nomCompagnie(l.entreprise)}` : ''}, ${jourCourt(j)}`}
                               onSaisir={(h) => l.entreprise && saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise.id, jour: j, heures: h })}
                             />
@@ -577,7 +577,7 @@ export function FeuilleEmployes() {
                                 modifiable
                                 ligne={nb}
                                 colonne={i}
-                                valeur={l.banqueParJour.get(j) ?? 0}
+                                valeur={l.banqueParJour.get(j) ?? null}
                                 libelle={`Prises en banque, ${nomEmploye(e)}, ${nomCompagnie(l.entreprise!)}, ${jourCourt(j)}`}
                                 onSaisir={(h) =>
                                   saisir.mutate({ employeId: e.id, entrepriseId: l.entreprise!.id, jour: j, heures: h, type: 'banque' })
