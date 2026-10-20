@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
+import { ferie } from '@/lib/feries'
 import { IconeTableur } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
@@ -346,7 +347,8 @@ export function FeuilleEmployes() {
     }))
     .filter((x) => x.total)
   const auj = aujourdhui()
-  const fond = (jour: string) => (jour === auj ? 'bg-foret-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : '')
+  const fond = (jour: string) =>
+    jour === auj ? 'bg-foret-50' : ferie(jour) ? 'bg-amber-50' : depuisIso(jour).getDay() % 6 === 0 ? 'bg-pierre-50' : ''
   const coupure = (i: number) => (i === 7 ? 'border-l-2 border-pierre-300' : '')
   let numero = 0
 
@@ -454,9 +456,11 @@ export function FeuilleEmployes() {
                   <th
                     key={j}
                     className={`px-0.5 py-2 text-center font-medium ${fond(j)} ${coupure(i)} ${j === auj ? 'text-foret-800' : ''}`}
+                    title={ferie(j) ?? undefined}
                   >
                     <span className="block">{JOURS_COURTS[depuisIso(j).getDay()]}</span>
                     <span className="block">{depuisIso(j).getDate()}</span>
+                    {ferie(j) && <span className="block font-semibold text-amber-800">Férié</span>}
                   </th>
                 ))}
                 <th className="border-l-2 border-pierre-300 px-2 py-2 text-right font-medium">Sem. 1</th>

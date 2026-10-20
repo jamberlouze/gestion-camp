@@ -1,8 +1,8 @@
 // Banque d'heures d'une feuille individuelle (direction, admins, employé
-// qui remplit la sienne, employé sans compte) : fonctions pures, sans
-// import (testées sous Node : npm run test:temps). Rien n'est stocké : le
-// solde se recalcule d'après les heures et les ajustements manuels
-// (temps.ajustements_banques).
+// qui remplit la sienne, employé sans compte) : fonctions pures, seul import
+// la liste des fériés (pure aussi ; testées sous Node : npm run test:temps).
+// Rien n'est stocké : le solde se recalcule d'après les heures et les
+// ajustements manuels (temps.ajustements_banques).
 //
 // Règles (décisions de Maxime) :
 //   - vacances et maladie : pas dans l'app, ce sont des banques d'Employeur D
@@ -14,6 +14,9 @@
 //     heures « prises en banque » se déduisent. Woofing (non payé),
 //     vacances, maladie et heures prises en banque ne comptent pas dans les
 //     40 h. Employé de plusieurs compagnies : toutes ses heures comptent ;
+//   - semaine avec un férié (liste de la CNESST, src/lib/feries.ts ;
+//     2026-10-20) : 8 h de moins par férié tombé du lundi au vendredi
+//     (semaine de l'Action de grâces : 32 h attendues, au-delà = en banque) ;
 //   - solde continu, reporté : jamais remis à zéro tout seul ; ajustements
 //     manuels avec une note ;
 //   - interrupteur « Heures en banque » (temps.banque_heures_etats) : activé
@@ -23,7 +26,11 @@
 //     l'état en vigueur à son dimanche est « activé » ; désactivé, le solde
 //     reste et peut encore être pris ou ajusté.
 
+import { ferie } from '../../lib/feries.ts'
+
 export const SEUIL_SEMAINE = 40
+/** Heures de moins dans la semaine pour chaque férié (1 jour = 8 h). */
+export const HEURES_FERIE = 8
 /** Premier jour possible d'un ajustement (année de la première période). */
 export const PREMIERE_ANNEE_BANQUES = 2026
 
@@ -91,6 +98,27 @@ const nombre = (n: number) => String(arrondi(n)).replace('.', ',')
 const ORDRE: Record<Mouvement['genre'], number> = { ajustement: 0, accumulees: 1, prises: 2 }
 
 /**
+ * Heures attendues dans la semaine de `jour` (dimanche au samedi), au-delà
+ * desquelles les régulières vont en banque : 40 h, moins 8 h par férié tombé
+ * du lundi au vendredi. Un férié du samedi ou du dimanche ne change rien.
+ */
+export function seuilSemaine(jour: string): { seuil: number; feries: { jour: string; nom: string }[] } {
+  const d = versJour(dimanche(jour))
+  const feries = [1, 2, 3, 4, 5].flatMap((i) => {
+    const j = depuisJour(d + i)
+    const nom = ferie(j)
+    return nom ? [{ jour: j, nom }] : []
+  })
+  return { seuil: SEUIL_SEMAINE - HEURES_FERIE * feries.length, feries }
+}
+
+/** « au-delà de 32 h (férié : Action de grâces) » */
+export function libelleSeuil(jour: string): string {
+  const { seuil, feries } = seuilSemaine(jour)
+  return `au-delà de ${seuil} h${feries.length ? ` (${feries.length > 1 ? 'fériés' : 'férié'} : ${feries.map((f) => f.nom).join(', ')})` : ''}`
+}
+
+/**
  * État de la mise en banque au jour `jour` : le dernier changement dont
  * `depuis` est au plus tard ce jour-là, sinon le défaut (`depuis` null).
  */
@@ -131,7 +159,7 @@ export function mouvementsBanqueHeures(p: {
     const samedi = depuisJour(versJour(d) + 6)
     const jour = samedi > p.au ? p.au : samedi
     const semaine = `semaine du ${intervalle(d, samedi)}`
-    const surplus = etatBanqueHeures(etats, parDefaut, d).active ? arrondi(s.regulieres - SEUIL_SEMAINE) : 0
+    const surplus = etatBanqueHeures(etats, parDefaut, d).active ? arrondi(s.regulieres - seuilSemaine(d).seuil) : 0
     if (surplus > 0)
       liste.push({
         cle: `accumulees-${d}`,
@@ -139,7 +167,7 @@ export function mouvementsBanqueHeures(p: {
         heures: surplus,
         genre: 'accumulees',
         libelle: `Accumulées, ${semaine}`,
-        detail: `${nombre(s.regulieres)} h régulières, au-delà de ${SEUIL_SEMAINE} h`,
+        detail: `${nombre(s.regulieres)} h régulières, ${libelleSeuil(d)}`,
       })
     if (s.banque > 0)
       liste.push({

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { etatBanqueHeures, SEUIL_SEMAINE, type Mouvement } from './banques'
+import { etatBanqueHeures, HEURES_FERIE, SEUIL_SEMAINE, type Mouvement } from './banques'
 import { FenetreAjustement, TableHistorique } from './BanquesFeuille'
 import { banqueDe, heuresActivesParDefaut, nomDe, useBanquesTous, useMembres, useReglerBanqueHeures, type Titulaire } from './donnees'
 import { nomEmploye, useEmployesFeuille, useFeuillesPropres } from './donneesEmployes'
@@ -114,7 +114,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
       <div className={`${ui.carte} space-y-1 px-4 py-3 text-sm text-pierre-700`}>
         <p>
           Soldes au <b>{dateCourte(au)}</b>. <b>Heures accumulées</b> : heures régulières au-delà de {SEUIL_SEMAINE} h par
-          semaine, heure pour heure, quand la mise en banque est activée ; heures prises en banque déduites. Vacances et
+          semaine ({HEURES_FERIE} h de moins par férié), heure pour heure, quand la mise en banque est activée ; heures prises en banque déduites. Vacances et
           maladie : les soldes sont dans Employeur D.
         </p>
         <p className="text-pierre-600">
@@ -200,7 +200,7 @@ function Rangee({
       !(await confirmer({
         titre: `${active ? 'Activer' : 'Désactiver'} la mise en banque des heures de ${l.nom} ?`,
         message: active
-          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine s’ajoutent à sa banque, heure pour heure. Les périodes passées ne changent pas.`
+          ? `À partir de ${periode} (période en cours), ses heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (${HEURES_FERIE} h de moins par férié) s’ajoutent à sa banque, heure pour heure. Les périodes passées ne changent pas.`
           : `À partir de ${periode} (période en cours), plus rien ne s’ajoute à sa banque. Son solde (${formatHeures(l.heures)} h) reste et peut encore être pris ou ajusté.`,
         libelleOk: active ? 'Activer' : 'Désactiver',
         danger: false,

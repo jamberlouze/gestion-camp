@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { PREMIERE_ANNEE_BANQUES, SEUIL_SEMAINE, type Mouvement } from './banques'
+import { HEURES_FERIE, PREMIERE_ANNEE_BANQUES, SEUIL_SEMAINE, type Mouvement } from './banques'
 import { banqueDeLaFeuille, useAjusterBanque, useDonneesBanques, type Titulaire } from './donnees'
 import { libelleEtatHeures, signe } from './outils'
 import { aujourdhui, dateCourte, finPeriode, formatHeures } from './periodes'
@@ -59,7 +59,7 @@ export function BanquesFeuille({
         </div>
         <p className="text-xs text-pierre-500">
           {etat.active
-            ? `Heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam.), heure pour heure · mise en banque ${libelleEtatHeures(etat)}`
+            ? `Heures régulières au-delà de ${SEUIL_SEMAINE} h par semaine (dim. au sam. ; ${HEURES_FERIE} h de moins par férié), heure pour heure · mise en banque ${libelleEtatHeures(etat)}`
             : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute, le solde reste utilisable`}
         </p>
         <ul className="mt-2 space-y-1">

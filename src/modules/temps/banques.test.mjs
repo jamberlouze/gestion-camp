@@ -1,7 +1,7 @@
 // Banque d'heures des feuilles de temps (banques.ts). Lancer : npm run test:temps
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { banqueAffichee, etatBanqueHeures, mouvementsBanqueHeures, resumePeriode } from './banques.ts'
+import { banqueAffichee, etatBanqueHeures, libelleSeuil, mouvementsBanqueHeures, resumePeriode, seuilSemaine } from './banques.ts'
 
 const semaine = (dimanche, heuresParJour, type = 'regulieres') => {
   const [a, m, j] = dimanche.split('-').map(Number)
@@ -24,8 +24,8 @@ test('heures accumulées : au-delà de 40 h par semaine, à 1×, déduites quand
     { jour: '2026-10-10', type: 'woofing', heures: 6 },
     { jour: '2026-10-05', type: 'vacances', heures: 8 },
     { jour: '2026-10-09', type: 'maladie', heures: 4 },
-    // Semaine du 11 oct. : 38 h régulières + 2 h prises en banque → rien d'ajouté, −2 h.
-    ...semaine('2026-10-11', [0, 8, 8, 8, 8, 6, 0]),
+    // Semaine du 11 oct. (Action de grâces : 32 h) : 30 h régulières + 2 h prises en banque → rien d'ajouté, −2 h.
+    ...semaine('2026-10-11', [0, 0, 8, 8, 8, 6, 0]),
     { jour: '2026-10-16', type: 'banque', heures: 2 },
     // Semaine du 18 oct. : exactement 40 h → rien.
     ...semaine('2026-10-18', [0, 8, 8, 8, 8, 8, 0]),
@@ -69,9 +69,30 @@ test('ajustements : solde de départ, heures payées, triés par date ; rien apr
 })
 
 test('semaine en cours : datée de « au », pas du samedi à venir', () => {
-  const heures = semaine('2026-10-11', [0, 11, 11, 11, 11, 0, 0])
-  const m = mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-15' })
-  assert.deepEqual(m.map((x) => [x.jour, x.heures]), [['2026-10-15', 4]])
+  const heures = semaine('2026-10-18', [0, 11, 11, 11, 11, 0, 0])
+  const m = mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-22' })
+  assert.deepEqual(m.map((x) => [x.jour, x.heures]), [['2026-10-22', 4]])
+})
+
+test('semaine avec un férié : 8 h de moins par férié du lundi au vendredi', () => {
+  // PP21 de la direction : 52 h la semaine du 4 oct. (+12), 33 h celle de l'Action de grâces, rien le lundi 12 (+1).
+  const heures = [...semaine('2026-10-04', [12, 8, 10, 8, 8, 6, 0]), ...semaine('2026-10-11', [0, 0, 8, 8, 5, 8, 4])]
+  const m = mouvementsBanqueHeures({ heures, ajustements: [], au: '2026-10-17' })
+  assert.deepEqual(m.map((x) => [x.jour, x.heures, x.detail]), [
+    ['2026-10-10', 12, '52 h régulières, au-delà de 40 h'],
+    ['2026-10-17', 1, '33 h régulières, au-delà de 32 h (férié : Action de grâces)'],
+  ])
+  // Heures faites le férié : elles comptent comme les autres (40 h → +8).
+  const travaille = mouvementsBanqueHeures({ heures: semaine('2026-10-11', [0, 8, 8, 8, 8, 8, 0]), ajustements: [], au: '2026-10-17' })
+  assert.equal(travaille.at(-1).solde, 8)
+  assert.deepEqual(seuilSemaine('2026-10-14'), { seuil: 32, feries: [{ jour: '2026-10-12', nom: 'Action de grâces' }] })
+  // Noël (ven.) puis le jour de l'An (ven.) : deux semaines à 32 h.
+  assert.equal(seuilSemaine('2026-12-20').seuil, 32)
+  assert.equal(seuilSemaine('2026-12-27').seuil, 32)
+  // Noël 2027 et le jour de l'An 2028 tombent un samedi : rien ne change.
+  assert.equal(seuilSemaine('2027-12-19').seuil, 40)
+  assert.equal(seuilSemaine('2027-12-26').seuil, 40)
+  assert.equal(libelleSeuil('2026-10-04'), 'au-delà de 40 h')
 })
 
 test('interrupteur « Heures en banque » : défaut oui pour la direction, non pour un employé', () => {
