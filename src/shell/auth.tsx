@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { viderCache } from '@/lib/requetes'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, AccesRole, ModuleId, Profil } from '@/lib/types'
-import { niveauModule } from './acces'
+import { niveauModule, reserveAuxAdmins } from './acces'
 import { MODULES } from './modules'
 
 interface EtatAuth {
@@ -26,10 +26,13 @@ interface EtatAuth {
   peutEcrire: (module: ModuleId) => boolean
   /**
    * Peut ouvrir le module (menu, accueil, adresse) : `peutLire`, sauf un
-   * module caché à tous sauf les admins (`cacheSaufAdmins`, modules.ts). Ses
-   * données, elles, suivent `peutLire` (d'autres écrans les lisent).
+   * module caché à tous sauf les admins et le rôle Développeur
+   * (`cacheSaufAdmins`, modules.ts). Ses données, elles, suivent `peutLire`
+   * (d'autres écrans les lisent).
    */
   peutOuvrir: (module: ModuleId) => boolean
+  /** Seuls les admins (et le rôle Développeur) y ont accès : pastille « admins » du menu (`acces.ts`). */
+  reserveAuxAdmins: (module: ModuleId) => boolean
   deconnexion: () => Promise<void>
 }
 
@@ -62,21 +65,26 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     queryKey: ['droits', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const [profil, acces, roles, employe] = await Promise.all([
+      // `ajouts` : les ajouts personnels lisibles (tous pour la direction),
+      // pour la pastille « admins » seulement.
+      const [profil, acces, roles, employe, ajouts] = await Promise.all([
         supabase.schema('core').from('profils').select('*').eq('id', userId!).maybeSingle(),
         supabase.schema('core').from('acces_modules').select('*').eq('user_id', userId!),
         supabase.schema('core').from('acces_roles').select('*'),
         supabase.schema('temps').rpc('mon_employe'),
+        supabase.schema('core').from('acces_modules').select('module'),
       ])
       if (profil.error) throw profil.error
       if (acces.error) throw acces.error
       if (roles.error) throw roles.error
       if (employe.error) throw employe.error
+      if (ajouts.error) throw ajouts.error
       return {
         profil: profil.data as Profil | null,
         acces: (acces.data ?? []) as AccesModule[],
         roles: (roles.data ?? []) as AccesRole[],
         employeTemps: (employe.data as string | null) ?? null,
+        ajouts: (ajouts.data ?? []) as Pick<AccesModule, 'module'>[],
       }
     },
   })
@@ -101,8 +109,11 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     peutOuvrir: (m) => {
       const def = MODULES.find((d) => d.id === m)
       const acces = niveau(m) !== null || !!def?.ouvertAussiPar?.some((x) => niveau(x) !== null)
-      return acces && (estAdmin || !def?.cacheSaufAdmins)
+      // Le rôle Développeur a accès à tout (décision de Maxime du 2026-10-21).
+      return acces && (estAdmin || profil?.role === 'developpeur' || !def?.cacheSaufAdmins)
     },
+    // Droits gardés sur l'appareil d'avant la pastille : pas de `ajouts`.
+    reserveAuxAdmins: (m) => reserveAuxAdmins(droits?.roles ?? GRILLE_AVANT, droits?.ajouts ?? [], m),
     deconnexion: async () => {
       await viderCache()
       await supabase.auth.signOut({ scope: 'local' })

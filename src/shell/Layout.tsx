@@ -15,7 +15,7 @@ import { CoinPoke, FournisseurPoke } from './Poke'
 const CLE_REPLIE = 'menu-replie'
 
 export function Layout() {
-  const { profil, estAdmin, estDirection, peutOuvrir, deconnexion } = useAuth()
+  const { profil, estAdmin, estDirection, peutOuvrir, reserveAuxAdmins, deconnexion } = useAuth()
   const enAttente = useMutationState({ filters: { status: 'pending' } }).length
   const { pathname } = useLocation()
   const [ouvert, setOuvert] = useState(false)
@@ -91,6 +91,7 @@ export function Layout() {
       icone: m.icone,
       famille: m.famille,
       cache: !!m.cacheSaufAdmins,
+      admins: reserveAuxAdmins(m.id),
     })),
     ...(estDirection ? [{ chemin: '/referentiel', nom: 'Référentiel', icone: '🗂️', famille: 'bas' as const }] : []),
     ...(estAdmin ? [{ chemin: '/utilisateurs', nom: 'Utilisateurs', icone: '🔑', famille: 'bas' as const }] : []),

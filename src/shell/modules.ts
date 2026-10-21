@@ -36,8 +36,8 @@ export interface DefinitionModule {
   /** Réservé aux admins (avec `accesFixe` pour le texte de la grille). */
   adminsSeulement?: true
   /**
-   * Caché à tous sauf les admins (menu, accueil, adresse) ; le texte dit
-   * jusqu'à quand. Les droits ne changent pas : d'autres écrans (accueil,
+   * Caché à tous sauf les admins et le rôle Développeur (menu, accueil,
+   * adresse) ; le texte dit jusqu'à quand. Les droits ne changent pas : d'autres écrans (accueil,
    * Cuisine…) lisent encore ses données selon `peutLire` (`peutOuvrir` dans auth.tsx).
    */
   cacheSaufAdmins?: string

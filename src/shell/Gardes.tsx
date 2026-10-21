@@ -19,7 +19,7 @@ function AccesRefuse() {
   )
 }
 
-/** Module caché à tous sauf les admins (`cacheSaufAdmins`) : on le dit simplement. */
+/** Module caché à tous sauf les admins et le rôle Développeur (`cacheSaufAdmins`) : on le dit simplement. */
 function ModuleCache({ module }: { module: ModuleId }) {
   const def = MODULES.find((m) => m.id === module)
   return (

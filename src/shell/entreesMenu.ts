@@ -8,6 +8,8 @@ export interface Entree {
   famille: FamilleId
   /** Module caché à tous sauf les admins (`cacheSaufAdmins`) : grisé et marqué « admins ». */
   cache?: boolean
+  /** Seuls les admins (et le rôle Développeur) y ont accès : marqué « admins », pas grisé. */
+  admins?: boolean
 }
 
 /** Page ouverte dans ce module (ou une de ses sous-pages : Cuisine › Coût par assiette = Cuisine). */

@@ -29,3 +29,19 @@ export function niveauModule(
   if (niveaux.includes('ecriture')) return 'ecriture'
   return niveaux.length ? 'lecture' : null
 }
+
+/**
+ * Module réservé aux admins dans les faits (pastille « admins » du menu,
+ * demande de Maxime du 2026-10-21) : à part le rôle Développeur, qui a accès à
+ * tout, aucun rôle de la grille ni aucun ajout personnel n'y donne accès (ni à
+ * ses parties `ouvertAussiPar`). Un module à accès fixe (Feuilles de temps)
+ * n'en est pas un. `perso` = les ajouts personnels que la personne peut lire
+ * (tous pour la direction, les siens pour les autres).
+ */
+export function reserveAuxAdmins(roles: AccesRole[], perso: Pick<AccesModule, 'module'>[], m: ModuleId): boolean {
+  const def = definition(m)
+  if (def?.adminsSeulement) return true
+  if (def?.accesFixe) return false
+  const parties = [m, ...(def?.ouvertAussiPar ?? [])]
+  return !roles.some((r) => r.role !== 'developpeur' && parties.includes(r.module)) && !perso.some((a) => parties.includes(a.module))
+}

@@ -32,7 +32,7 @@ function grouper(entrees: Entree[]): Groupe[] {
   ].filter((g) => g.entrees.length)
 }
 
-const libelle = (e: Entree) => (e.cache ? `${e.nom} · admins seulement` : e.nom)
+const libelle = (e: Entree) => (e.cache || e.admins ? `${e.nom} · admins seulement` : e.nom)
 
 const focusVisible = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-foret-600'
 
@@ -169,7 +169,7 @@ function RangeeBas({ entrees, tiroir, bulle }: { entrees: Entree[]; tiroir: bool
   )
 }
 
-/** Une ligne : icône + nom (+ « admins » pour un module caché aux autres). */
+/** Une ligne : icône + nom (+ « admins » pour un module caché aux autres ou réservé aux admins). */
 function LigneModule({ entree: e, hauteur, onClick }: { entree: Entree; hauteur: string; onClick?: () => void }) {
   return (
     <NavLink to={e.chemin} onClick={onClick} aria-label={libelle(e)} className={({ isActive }) => classeLigne(isActive, hauteur, e.cache)}>
@@ -179,7 +179,7 @@ function LigneModule({ entree: e, hauteur, onClick }: { entree: Entree; hauteur:
       <span aria-hidden className="truncate">
         {e.nom}
       </span>
-      {e.cache && <MarqueAdmins />}
+      {(e.cache || e.admins) && <MarqueAdmins />}
     </NavLink>
   )
 }
