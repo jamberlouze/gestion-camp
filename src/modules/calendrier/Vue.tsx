@@ -4,7 +4,7 @@ import { messageErreur } from '@/lib/donnees'
 import { dateCourtePaie, dateVersementPaie, debutPeriodePaie, finPeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { BORDURES_PHASE, nombrePersonnes, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, usePhasesMasquees, useSejoursPlage } from './outils'
+import { nombrePersonnes, rangFonctionCuisine, TEINTES_PHASE, teinteSejour, useDateChoisie, useEvenementsPlage, usePhasesMasquees, useSejoursPlage } from './outils'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
@@ -189,7 +189,7 @@ export function Vue() {
         />
       )}
       <p className="mt-3 text-xs text-pierre-500">
-        Vert : Pavillon principal ; mauve : Vieille-France. Bordure pointillée : contrat pas encore signé. Cliquez sur un groupe pour afficher exactement ses jours.
+        Cliquez sur un groupe pour afficher exactement ses jours.
         {mode !== 'mois' && ecriture && " Direction : « + » ou glissez sur plusieurs jours (souris ou doigt) pour les remplir d'un coup."}
         {libre && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
@@ -278,16 +278,6 @@ function NavPeriode({
   )
 }
 
-/** Échantillon de chaque phase : couleur du bâtiment (gris s'il peut varier) et bordure de la phase. */
-const ECHANTILLONS: Record<Phase, string> = {
-  demande: `${TEINTE_AUTRE} ${BORDURES_PHASE.demande}`,
-  estime: `${TEINTE_AUTRE} ${BORDURES_PHASE.estime}`,
-  contrat: `${TEINTE_AUTRE} ${BORDURES_PHASE.contrat}`,
-  confirmee_pp: TEINTES_BATIMENT.PP,
-  confirmee_vf: TEINTES_BATIMENT.VF,
-  airbnb: TEINTES_BATIMENT.VF,
-}
-
 /** Afficher ou masquer chaque phase de vente (un calendrier Google chacune), choix gardé sur l'appareil. */
 function ChoixPhases({ masquees, basculer }: { masquees: ReadonlySet<Phase>; basculer: (p: Phase) => void }) {
   return (
@@ -303,7 +293,7 @@ function ChoixPhases({ masquees, basculer }: { masquees: ReadonlySet<Phase>; bas
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${affichee ? 'border-pierre-300 bg-white text-pierre-800 hover:bg-pierre-50' : 'border-pierre-200 bg-pierre-50 text-pierre-400 hover:text-pierre-600'}`}
             onClick={() => basculer(p.cle)}
           >
-            <span className={`inline-block h-3 w-5 rounded border ${affichee ? ECHANTILLONS[p.cle] : 'border-pierre-300'}`} aria-hidden />
+            <span className={`inline-block h-3 w-5 rounded border ${affichee ? TEINTES_PHASE[p.cle] : 'border-pierre-300'}`} aria-hidden />
             {p.libelle}
           </button>
         )
@@ -311,9 +301,6 @@ function ChoixPhases({ masquees, basculer }: { masquees: ReadonlySet<Phase>; bas
     </div>
   )
 }
-
-/** Couleur du bâtiment et bordure de la phase. */
-const classesSejour = (s: Sejour) => `${teinteSejour(s)} ${BORDURES_PHASE[s.phase]}`
 
 /** « 27-G-054 · École X — Classe nature (Contrat envoyé) · CH, CB ». */
 const descriptionSejour = (s: Sejour) =>
@@ -471,7 +458,7 @@ function GrilleJours({
                     <button
                       key={s.id}
                       style={{ gridColumn: `${a + 1} / ${b + 2}`, gridRow: i + 1 }}
-                      className={`mx-1 truncate rounded-md border px-2 py-1 text-left text-xs hover:brightness-95 ${classesSejour(s)}`}
+                      className={`mx-1 truncate rounded-md border px-2 py-1 text-left text-xs hover:brightness-95 ${teinteSejour(s)}`}
                       title={`${descriptionSejour(s)} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
                       onClick={() => cadrer(s)}
                     >
@@ -609,7 +596,7 @@ function GrilleMois({
                 {duJour.slice(0, 4).map((s) => (
                   <button
                     key={s.id}
-                    className={`block w-full truncate rounded border px-1 text-left text-[11px] leading-4 hover:brightness-95 ${classesSejour(s)}`}
+                    className={`block w-full truncate rounded border px-1 text-left text-[11px] leading-4 hover:brightness-95 ${teinteSejour(s)}`}
                     title={`${descriptionSejour(s)} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
                     onClick={() => cadrer(s)}
                   >

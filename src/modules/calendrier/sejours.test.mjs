@@ -47,7 +47,6 @@ test('en attente : gardée dans la phase de son étape (seules les perdues et an
   const s = sejourDe(ligne({ etape: 'estime_envoye', fermeture: 'en_attente' }))
   assert.equal(s.phase, 'estime')
   assert.equal(s.etat, 'Estimé envoyé · En attente')
-  assert.equal(s.confirme, false)
 })
 
 test('bâtiment : Vieille-France dès une section ou une salle de la VF, sinon Pavillon principal', () => {
@@ -62,7 +61,6 @@ test('séjour affiché : personnes, forfait, sections, repas', () => {
   assert.equal(s.nom_groupe, 'École Essai')
   assert.equal(s.type_sejour, 'Classe nature')
   assert.equal(s.etat, 'Confirmée')
-  assert.equal(s.confirme, true)
   assert.equal(s.nb_participants, 55)
   assert.deepEqual(s.sections, ['CH', 'SMB'])
   assert.equal(s.avec_repas, false)
@@ -70,10 +68,9 @@ test('séjour affiché : personnes, forfait, sections, repas', () => {
   assert.equal(sejourDe(ligne({ nb_participants: null, nb_accompagnateurs: 3 })).nb_participants, 3)
 })
 
-test('Airbnb : confirmée, « Airbnb »', () => {
+test('Airbnb : « Airbnb », à la Vieille-France', () => {
   const s = sejourDe(ligne({ origine: 'airbnb', nom: 'Airbnb — Vieille-France', forfait: 'accueil_groupe', etages: ['VFB', 'VFH'], nb_participants: null, nb_accompagnateurs: null }))
   assert.equal(s.phase, 'airbnb')
   assert.equal(s.etat, 'Airbnb')
-  assert.equal(s.confirme, true)
   assert.equal(s.batiment, 'VF')
 })

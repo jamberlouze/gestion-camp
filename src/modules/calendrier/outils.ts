@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { aujourdhui, estIso } from './dates'
 import { occurrences } from './recurrence'
 import { PHASES } from './sejours'
-import type { Batiment, Evenement, Phase, PresenceJour, Sejour } from './types'
+import type { Evenement, Phase, PresenceJour, Sejour } from './types'
 
 /**
  * Date affichée, gardée dans l'adresse (?date=AAAA-MM-JJ) : elle suit d'un
@@ -83,30 +83,24 @@ export function useEvenementsPlage(evenements: Evenement[] | undefined, debut: s
   }, [evenements, debut, fin])
 }
 
-/** Couleur d'un séjour d'après son bâtiment : vert pour le Pavillon principal, mauve pour Vieille-France. */
-export const TEINTES_BATIMENT: Record<Batiment, string> = {
-  PP: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-  VF: 'bg-violet-100 text-violet-900 border-violet-300',
+/**
+ * Couleur d'un séjour selon l'étape de la réservation (demande de Maxime) :
+ * demande orange, estimé jaune, contrat envoyé vert pâle, contrat signé bleu
+ * au Pavillon principal et mauve à la Vieille-France (Airbnb aussi).
+ */
+export const TEINTES_PHASE: Record<Phase, string> = {
+  demande: 'bg-orange-100 text-orange-900 border-orange-300',
+  estime: 'bg-yellow-100 text-yellow-900 border-yellow-300',
+  contrat: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+  confirmee_pp: 'bg-blue-100 text-blue-900 border-blue-300',
+  confirmee_vf: 'bg-violet-100 text-violet-900 border-violet-300',
+  airbnb: 'bg-violet-100 text-violet-900 border-violet-300',
 }
-export const TEINTE_AUTRE = 'bg-pierre-100 text-pierre-800 border-pierre-300'
 
-export const teinteSejour = (s: Sejour) => TEINTES_BATIMENT[s.batiment]
-
-/** Bordure d'une phase : de plus en plus pleine à mesure que la vente avance. */
-export const BORDURES_PHASE: Record<Phase, string> = {
-  demande: 'border-dotted opacity-60',
-  estime: 'border-dashed opacity-80',
-  contrat: 'border-dashed',
-  confirmee_pp: '',
-  confirmee_vf: '',
-  airbnb: '',
-}
+export const teinteSejour = (s: Sejour) => TEINTES_PHASE[s.phase]
 
 /** Personnes au travail : chacune une fois, même dans deux secteurs le même jour (direction et terrain). */
 export const nombrePersonnes = (liste: PresenceJour[]) => new Set(liste.map((p) => p.personnel_id)).size
-
-/** Réservation pas encore confirmée (contrat pas signé) : bordure pointillée. */
-export const nonConfirme = (s: Sejour) => !s.confirme
 
 const sansAccents = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 

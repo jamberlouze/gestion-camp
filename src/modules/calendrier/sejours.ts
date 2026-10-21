@@ -47,8 +47,6 @@ export interface Sejour {
   /** Étape lisible : « Estimé envoyé », « Confirmée · En attente », « Airbnb ». */
   etat: string
   phase: Phase
-  /** Contrat signé (ou plus loin), ou réservation Airbnb. */
-  confirme: boolean
   date_arrivee: string
   date_depart: string
   heure_arrivee: string | null
@@ -79,7 +77,6 @@ export function sejourDe(r: LigneReservation): Sejour {
     type_sejour: FORFAITS[r.forfait],
     etat: phase === 'airbnb' ? 'Airbnb' : `${LIBELLES_ETAPES[r.etape]}${r.fermeture ? ` · ${FERMETURES[r.fermeture]}` : ''}`,
     phase,
-    confirme: phase === 'confirmee_pp' || phase === 'confirmee_vf' || phase === 'airbnb',
     date_arrivee: r.date_arrivee,
     date_depart: r.date_depart,
     heure_arrivee: r.heure_arrivee,

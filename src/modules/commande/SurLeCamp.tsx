@@ -7,8 +7,11 @@ import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { dateCourte, ecartJours, heure } from '../calendrier/dates'
 import { useEvenements, useSejours } from '../calendrier/donnees'
-import { nonConfirme, teinteSejour, useEvenementsPlage, useSejoursPlage } from '../calendrier/outils'
-import { TYPES_EVENEMENT, type Sejour } from '../calendrier/types'
+import { teinteSejour, useEvenementsPlage, useSejoursPlage } from '../calendrier/outils'
+import { TYPES_EVENEMENT, type Phase, type Sejour } from '../calendrier/types'
+
+/** Seulement les contrats signés (demande de Maxime) : ni demandes, ni estimés, ni contrats envoyés, ni Airbnb (sans repas). */
+const HORS_CUISINE: ReadonlySet<Phase> = new Set(['demande', 'estime', 'contrat', 'airbnb'])
 
 /** Répartit les séjours sur des lignes sans chevauchement. */
 function enLignes(sejours: Sejour[]): Sejour[][] {
@@ -33,7 +36,7 @@ export function SurLeCamp({ jours }: { jours: string[] }) {
   const fin = jours[jours.length - 1]
   const sejours = useSejours()
   const evenements = useEvenements()
-  const visibles = useSejoursPlage(sejours.data, debut, fin)
+  const visibles = useSejoursPlage(sejours.data, debut, fin, HORS_CUISINE)
   const evParJour = useEvenementsPlage(evenements.data, debut, fin)
   const erreur = sejours.error ?? evenements.error
   const gabarit = { gridTemplateColumns: '18rem repeat(7, minmax(0, 1fr)) 7rem' }
@@ -82,7 +85,7 @@ export function SurLeCamp({ jours }: { jours: string[] }) {
                       <div
                         key={s.id}
                         style={{ gridColumn: `${a + 1} / ${b + 2}`, gridRow: i + 1 }}
-                        className={`mx-1 flex items-center gap-2 truncate rounded-md border px-2 py-1 text-xs ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
+                        className={`mx-1 flex items-center gap-2 truncate rounded-md border px-2 py-1 text-xs ${teinteSejour(s)}`}
                         title={`${s.nom_groupe}${s.type_sejour ? ` — ${s.type_sejour}` : ''}${s.etat ? ` (${s.etat})` : ''} : du ${dateCourte(s.date_arrivee)}${s.heure_arrivee ? ` ${heure(s.heure_arrivee)}` : ''} au ${dateCourte(s.date_depart)}${s.heure_depart ? ` ${heure(s.heure_depart)}` : ''}${s.avec_repas ? '' : ' — sans repas'}`}
                       >
                         {arrive && s.heure_arrivee && <span className="opacity-75">↘ {heure(s.heure_arrivee)}</span>}
