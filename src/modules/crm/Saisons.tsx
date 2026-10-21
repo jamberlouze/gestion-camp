@@ -104,8 +104,8 @@ export function Saisons() {
         {lignes.length === 0 && <p className="px-3 py-8 text-center text-sm text-pierre-500">Aucun séjour connu pour ces filtres.</p>}
       </div>
       <p className="text-xs text-pierre-500">
-        Chaque case montre l'année (« 25 » = 2025) des séjours qui ont commencé ce mois-là. En vert : prévu. Séjours = base de réservations Airtable et
-        visites ajoutées dans les fiches.
+        Chaque case montre l'année (« 25 » = 2025) des séjours qui ont commencé ce mois-là. En vert : prévu. Séjours = réservations au contrat signé
+        (module Réservations) et visites ajoutées dans les fiches.
       </p>
     </div>
   )

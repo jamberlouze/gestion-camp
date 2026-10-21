@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { RelanceAuto } from './calculs'
-import type { Conseiller, Contact, Echange, Organisation, Regle, Relance, Sejour, Visite } from './types'
+import type { Conseiller, Contact, Echange, Organisation, Regle, Relance, ReservationCrm, Visite } from './types'
 
 // Module en ligne seulement (networkMode « always »). Modifications
 // optimistes ; une modification refusée remet la ligne d'avant et va dans
@@ -44,14 +44,32 @@ export const useVisites = () => useTable<Visite>('visites', 'date_arrivee')
 export const useRelances = () => useTable<Relance>('relances', 'echeance')
 export const useRegles = () => useTable<Regle>('regles', 'created_at')
 
-/** Séjours de la base de réservations (copie Airtable du Calendrier, aux 15 min). */
-export function useSejours() {
+/**
+ * Réservations des organisations (module Réservations, lues sans copie par
+ * crm.reservations(), même sans accès à Réservations). Relues à chaque
+ * changement pour qui lit aussi Réservations (temps réel filtré par ses
+ * droits), sinon au retour sur l'onglet.
+ */
+export function useReservations() {
+  const client = useQueryClient()
+  useEffect(() => {
+    const canal = supabase
+      .channel(`crm.reservations-${crypto.randomUUID()}`)
+      .on('postgres_changes', { event: '*', schema: 'reservations', table: 'reservations' }, () =>
+        client.invalidateQueries({ queryKey: ['crm', 'reservations'] }),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(canal)
+    }
+  }, [client])
+
   return useQuery({
-    queryKey: ['crm', 'sejours'],
+    queryKey: ['crm', 'reservations'],
     queryFn: async () => {
-      const { data, error } = await db().rpc('sejours')
+      const { data, error } = await db().rpc('reservations')
       if (error) throw error
-      return data as Sejour[]
+      return data as ReservationCrm[]
     },
   })
 }

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Profil } from '@/lib/types'
 import type { Calcul } from './calculs'
-import type { Conseiller, Contact, Echange, Regle, Relance, Sejour, Visite } from './types'
+import type { Conseiller, Contact, Echange, Regle, Relance, ReservationCrm, Visite } from './types'
 
 // Données communes du module (chargées une fois par index.tsx).
 export interface Donnees {
@@ -13,7 +13,7 @@ export interface Donnees {
   visites: Visite[]
   relances: Relance[]
   regles: Regle[]
-  sejours: Sejour[]
+  reservations: ReservationCrm[]
   conseillers: Conseiller[]
   nomConseiller: (id: string | null) => string | null
   ecriture: boolean

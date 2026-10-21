@@ -52,8 +52,8 @@ export function Reglages() {
         <h2 className="mb-2 font-semibold text-pierre-900">Comment le statut est calculé</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong className="font-medium">Client</strong> : un séjour confirmé à venir, ou terminé depuis moins d'un an et demi (deux ans et demi s'il vient une
-            année sur deux).
+            <strong className="font-medium">Client</strong> : un séjour confirmé (contrat signé) à venir, ou terminé depuis moins d'un an et demi (deux ans et
+            demi s'il vient une année sur deux).
           </li>
           <li>
             <strong className="font-medium">Prospect</strong> : une demande de réservation en cours, ou contacté dans le démarchage.
@@ -66,7 +66,8 @@ export function Reglages() {
           </li>
         </ul>
         <p className="mt-2 text-pierre-500">
-          Les séjours viennent de la base de réservations Airtable (fiche › Informations › Client Airtable) et des visites passées ajoutées dans la fiche.
+          Les séjours sont les réservations reliées à l'organisation dans le module Réservations (perdues et annulées ne comptent pas) et les visites passées
+          ajoutées dans la fiche.
         </p>
       </section>
     </div>

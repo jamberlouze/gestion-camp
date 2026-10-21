@@ -1,3 +1,5 @@
+import type { Reservation } from '@/modules/reservations/types'
+
 export type Genre =
   | 'ecole_primaire'
   | 'ecole_secondaire'
@@ -32,7 +34,6 @@ export interface Organisation {
   etape: Etape | null
   prioritaire: boolean
   cycle_ans: number
-  airtable_client_id: string | null
   copper_id: string | null
   /** Statut noté dans Copper à l'import (seulement si l'app ne connaît aucun séjour). */
   statut_depart: 'client' | 'inactif' | null
@@ -99,18 +100,11 @@ export interface Regle {
   mois_avant: number
 }
 
-/** Séjour de la base de réservations Airtable (lu par crm.sejours()). */
-export interface Sejour {
-  id: string
-  airtable_client_id: string | null
-  nom_groupe: string
-  numero: string | null
-  type_sejour: string | null
-  etat: string | null
-  date_arrivee: string
-  date_depart: string
-  nb_participants: number | null
-}
+/** Réservation d'une organisation, lue par crm.reservations() (Airbnb exclu). */
+export type ReservationCrm = Pick<
+  Reservation,
+  'id' | 'numero' | 'nom' | 'forfait' | 'variante' | 'etape' | 'fermeture' | 'raison_perte' | 'origine' | 'date_arrivee' | 'date_depart' | 'nb_participants'
+> & { organisation_id: string }
 
 export interface Conseiller {
   id: string

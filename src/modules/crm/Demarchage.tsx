@@ -92,8 +92,8 @@ export function Demarchage() {
         })}
       </div>
       <p className="text-xs text-pierre-500">
-        Après « Conclusion », la demande de réservation arrive dans Airtable : l'organisation devient cliente et quitte le tableau. Moins de cibles, mieux
-        qualifiées : ⭐ marque les cibles « all-in ».
+        Après « Conclusion », la demande arrive dans Réservations : l'organisation devient cliente à la signature du contrat et quitte le tableau. Moins
+        de cibles, mieux qualifiées : ⭐ marque les cibles « all-in ».
       </p>
 
       {nouvelle && <NouvelleOrganisation etape="identification" fermer={() => setNouvelle(false)} />}

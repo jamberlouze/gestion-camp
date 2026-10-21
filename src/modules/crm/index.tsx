@@ -16,7 +16,7 @@ import {
   useOrganisations,
   useRegles,
   useRelances,
-  useSejours,
+  useReservations,
   useVisites,
 } from './donnees'
 import { Fiche } from './Fiche'
@@ -39,7 +39,7 @@ export default function ModuleCrm() {
   const visites = useVisites()
   const relances = useRelances()
   const regles = useRegles()
-  const sejours = useSejours()
+  const reservations = useReservations()
   const conseillers = useConseillers()
   const surFiche = useLocation().pathname.startsWith('/crm/o/')
   const auj = aujourdhui()
@@ -53,11 +53,11 @@ export default function ModuleCrm() {
       !visites.data ||
       !relances.data ||
       !regles.data ||
-      !sejours.data ||
+      !reservations.data ||
       !conseillers.data
     )
       return null
-    const d = { sejours: sejours.data, visites: visites.data, echanges: echanges.data, relances: relances.data }
+    const d = { reservations: reservations.data, visites: visites.data, echanges: echanges.data, relances: relances.data }
     const calculs = organisations.data.map((o) => calculer(o, d, auj))
     const noms = new Map(conseillers.data.map((c) => [c.id, c.nom]))
     return {
@@ -68,19 +68,19 @@ export default function ModuleCrm() {
       visites: visites.data,
       relances: relances.data,
       regles: regles.data,
-      sejours: sejours.data,
+      reservations: reservations.data,
       conseillers: conseillers.data,
       nomConseiller: (id) => (id ? (noms.get(id) ?? 'Ancien compte') : null),
       ecriture: peutEcrire('crm'),
       moi: profil,
       auj,
     }
-  }, [profil, organisations.data, contacts.data, echanges.data, visites.data, relances.data, regles.data, sejours.data, conseillers.data, peutEcrire, auj])
+  }, [profil, organisations.data, contacts.data, echanges.data, visites.data, relances.data, regles.data, reservations.data, conseillers.data, peutEcrire, auj])
 
   useRelancesAutomatiques(donnees)
 
   const erreur =
-    organisations.error ?? contacts.error ?? echanges.error ?? visites.error ?? relances.error ?? regles.error ?? sejours.error ?? conseillers.error
+    organisations.error ?? contacts.error ?? echanges.error ?? visites.error ?? relances.error ?? regles.error ?? reservations.error ?? conseillers.error
 
   return (
     <div>

@@ -1,4 +1,6 @@
-import type { Echange, Organisation, Regle, Relance, Saison, Sejour, Statut, Visite } from './types'
+import { estConfirmee } from '../reservations/disponibilite.ts'
+import { ETAPES, FERMETURES, FORFAITS, RAISONS_PERTE, VARIANTES } from '../reservations/types.ts'
+import type { Echange, Organisation, Regle, Relance, ReservationCrm, Saison, Statut, Visite } from './types'
 
 // ------------------------------------------------------------
 // Fonctions pures : statut, jours inactifs, saisons et relances
@@ -6,26 +8,33 @@ import type { Echange, Organisation, Regle, Relance, Saison, Sejour, Statut, Vis
 // Dates en texte AAAA-MM-JJ (jour de Montréal).
 // ------------------------------------------------------------
 
-/** Un séjour au camp : séjour de la base de réservations ou visite saisie/importée. */
+/** Un séjour au camp : réservation du module Réservations ou visite saisie/importée. */
 export interface Passage {
   cle: string
-  source: 'sejour' | 'visite'
+  source: 'reservation' | 'visite'
+  /** Réservation (lien vers sa fiche) ; null pour une visite. */
+  reservation_id: string | null
   arrivee: string
   depart: string
   participants: number | null
-  /** État de la réservation (séjours seulement). */
+  /** Étape de la réservation, ou sa fermeture (réservations seulement). */
   etat: string | null
   numero: string | null
   type: string | null
-  /** Confirmé (visite passée, ou séjour « Confirmée »). Sinon : demande en cours. */
+  /** Venu (visite passée, ou contrat signé et plus loin, jamais fermée : estConfirmee). Sinon : demande en cours. */
   confirme: boolean
+  /** Perdue (closed lost) ou annulée : hors calculs, montrée dans la fiche seulement. */
+  fermee: boolean
   saison: Saison
 }
 
 export interface Calcul {
   org: Organisation
   statut: Statut
+  /** Séjours qui comptent (sans les réservations perdues ou annulées). */
   passages: Passage[]
+  /** Réservations perdues ou annulées (fiche seulement). */
+  fermees: Passage[]
   /** Dernier séjour confirmé terminé. */
   derniere: Passage | null
   /** Prochain séjour confirmé (en cours ou à venir). */
@@ -78,22 +87,35 @@ export const ecartJours = (de: string, a: string) => Math.round((versDate(a).get
 
 const max = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b)
 
-/** Séjours et visites d'une organisation, du plus ancien au plus récent. */
-export function passagesDe(org: Organisation, sejours: Sejour[], visites: Visite[]): Passage[] {
+/** « Classe verte », « Accueil de groupe »… */
+export const typeReservation = (r: Pick<ReservationCrm, 'forfait' | 'variante'>) =>
+  (r.forfait === 'classe_nature' && VARIANTES.classe_nature.find((v) => v.valeur === r.variante)?.libelle) || FORFAITS[r.forfait] || r.forfait
+
+/** Étape de la réservation, ou sa fermeture (« Closed lost (Prix ou budget) »). */
+export function etatReservation(r: Pick<ReservationCrm, 'etape' | 'fermeture' | 'raison_perte'>) {
+  if (!r.fermeture) return ETAPES.find((e) => e.valeur === r.etape)?.libelle ?? r.etape
+  const raison = r.fermeture === 'closed_lost' && r.raison_perte ? ` (${RAISONS_PERTE[r.raison_perte]})` : ''
+  return FERMETURES[r.fermeture] + raison
+}
+
+/** Réservations et visites d'une organisation, du plus ancien au plus récent (perdues et annulées comprises). */
+export function passagesDe(org: Organisation, reservations: ReservationCrm[], visites: Visite[]): Passage[] {
   const liste: Passage[] = []
-  for (const s of sejours) {
-    if (!org.airtable_client_id || s.airtable_client_id !== org.airtable_client_id) continue
+  for (const r of reservations) {
+    if (r.organisation_id !== org.id) continue
     liste.push({
-      cle: `sejour:${s.id}`,
-      source: 'sejour',
-      arrivee: s.date_arrivee,
-      depart: s.date_depart,
-      participants: s.nb_participants,
-      etat: s.etat,
-      numero: s.numero,
-      type: s.type_sejour,
-      confirme: s.etat === 'Confirmée',
-      saison: saisonDe(s.date_arrivee),
+      cle: `reservation:${r.id}`,
+      source: 'reservation',
+      reservation_id: r.id,
+      arrivee: r.date_arrivee,
+      depart: r.date_depart,
+      participants: r.nb_participants,
+      etat: etatReservation(r),
+      numero: r.numero,
+      type: typeReservation(r),
+      confirme: estConfirmee(r),
+      fermee: r.fermeture === 'closed_lost' || r.fermeture === 'annulee',
+      saison: saisonDe(r.date_arrivee),
     })
   }
   for (const v of visites) {
@@ -101,6 +123,7 @@ export function passagesDe(org: Organisation, sejours: Sejour[], visites: Visite
     liste.push({
       cle: `visite:${v.id}`,
       source: 'visite',
+      reservation_id: null,
       arrivee: v.date_arrivee,
       depart: v.date_depart,
       participants: v.nb_participants,
@@ -108,6 +131,7 @@ export function passagesDe(org: Organisation, sejours: Sejour[], visites: Visite
       numero: null,
       type: v.note,
       confirme: true,
+      fermee: false,
       saison: saisonDe(v.date_arrivee),
     })
   }
@@ -136,10 +160,11 @@ export function statutDe(org: Organisation, derniere: Passage | null, prochaine:
 
 export function calculer(
   org: Organisation,
-  d: { sejours: Sejour[]; visites: Visite[]; echanges: Echange[]; relances: Relance[] },
+  d: { reservations: ReservationCrm[]; visites: Visite[]; echanges: Echange[]; relances: Relance[] },
   auj: string,
 ): Calcul {
-  const passages = passagesDe(org, d.sejours, d.visites)
+  const tous = passagesDe(org, d.reservations, d.visites)
+  const passages = tous.filter((p) => !p.fermee)
   const confirmes = passages.filter((p) => p.confirme)
   const derniere = confirmes.filter((p) => p.depart < auj).at(-1) ?? null
   const prochaine = confirmes.find((p) => p.depart >= auj) ?? null
@@ -155,6 +180,7 @@ export function calculer(
     org,
     statut: statutDe(org, derniere, prochaine, demandes, auj),
     passages,
+    fermees: tous.filter((p) => p.fermee),
     derniere,
     prochaine,
     demandes,

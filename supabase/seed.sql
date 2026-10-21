@@ -415,29 +415,36 @@ on conflict do nothing;
 update caisse.poches set profil_id = '00000000-0000-0000-0000-000000000001' where nom = 'Maxime';
 
 -- ------------------------------------------------------------
--- CRM : quelques clients et cibles d'essai, et leurs séjours dans la copie
--- Airtable du Calendrier (client lié par le champ fldPuFu1m9Qv53HkM).
+-- CRM : quelques clients et cibles d'essai ; leurs séjours sont des
+-- réservations d'essai (numéros 9xx), reliées par organisation_id.
 -- ------------------------------------------------------------
-insert into calendrier.sejours (airtable_record_id, numero, nom_groupe, type_sejour, etat, date_arrivee, date_depart, nb_participants, raw)
-values
-  ('recEssaiCit1', '26-G-12', 'École Citoyenne', 'Classe nature', 'Confirmée', '2026-05-12', '2026-05-14', 58, '{"fldPuFu1m9Qv53HkM": ["recCliCitoyenne"]}'),
-  ('recEssaiCit2', '27-G-03', 'École Citoyenne', 'Classe nature', 'Confirmée', '2027-05-11', '2027-05-13', 60, '{"fldPuFu1m9Qv53HkM": ["recCliCitoyenne"]}'),
-  ('recEssaiDaw1', '25-G-40', 'Cégep Dawson', 'Accueil de groupe', 'Confirmée', '2025-10-01', '2025-10-03', 45, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
-  ('recEssaiDaw2', '26-G-02', 'Cégep Dawson', 'Accueil de groupe', 'Confirmée', '2026-01-20', '2026-01-22', 40, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
-  ('recEssaiDaw3', '26-G-61', 'Cégep Dawson', 'Accueil de groupe', 'Estimé envoyé', '2026-10-20', '2026-10-22', 45, '{"fldPuFu1m9Qv53HkM": ["recCliDawson"]}'),
-  ('recEssaiSou1', '26-G-20', 'École du Sous-Bois', 'Classe nature', 'Confirmée', '2026-06-02', '2026-06-04', 72, '{"fldPuFu1m9Qv53HkM": ["recCliSousBois"]}'),
-  ('recEssaiNou1', '26-G-70', 'Collège Nouveau', 'Classe nature', 'Demande de réservation', '2027-03-15', '2027-03-17', 30, '{"fldPuFu1m9Qv53HkM": ["recCliNouveau"]}')
-on conflict (airtable_record_id) do nothing;
-
-insert into crm.organisations (id, nom, genre, ville, conseiller_id, etape, prioritaire, cycle_ans, airtable_client_id, notes) values
-  ('c0000000-0000-0000-0000-000000000001', 'École Citoyenne', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conclusion', true, 1, 'recCliCitoyenne', 'Convertie après 6 contacts et 2 appels Zoom ; le PDF PFEQ a fait la différence.'),
-  ('c0000000-0000-0000-0000-000000000002', 'Cégep Dawson', 'cegep', 'Montréal', '00000000-0000-0000-0000-000000000002', null, false, 1, 'recCliDawson', 'Cycles différents à l''automne et à l''hiver.'),
-  ('c0000000-0000-0000-0000-000000000003', 'Collège Stanislas', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conversation', true, 1, null, null),
-  ('c0000000-0000-0000-0000-000000000004', 'École des Explorateurs', 'ecole_primaire', 'Laval', '00000000-0000-0000-0000-000000000003', null, false, 1, null, null),
-  ('c0000000-0000-0000-0000-000000000005', 'École du Sous-Bois', 'ecole_primaire', 'Saint-Jérôme', '00000000-0000-0000-0000-000000000003', null, false, 2, 'recCliSousBois', 'Vient une année sur deux.'),
-  ('c0000000-0000-0000-0000-000000000006', 'École Les Trois-Sources', 'ecole_primaire', 'Blainville', null, 'identification', false, 1, null, null),
-  ('c0000000-0000-0000-0000-000000000007', 'Collège Nouveau', 'ecole_secondaire', 'Terrebonne', '00000000-0000-0000-0000-000000000003', 'contacte', false, 1, 'recCliNouveau', null)
+insert into crm.organisations (id, nom, genre, ville, conseiller_id, etape, prioritaire, cycle_ans, notes) values
+  ('c0000000-0000-0000-0000-000000000001', 'École Citoyenne', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conclusion', true, 1, 'Convertie après 6 contacts et 2 appels Zoom ; le PDF PFEQ a fait la différence.'),
+  ('c0000000-0000-0000-0000-000000000002', 'Cégep Dawson', 'cegep', 'Montréal', '00000000-0000-0000-0000-000000000002', null, false, 1, 'Cycles différents à l''automne et à l''hiver.'),
+  ('c0000000-0000-0000-0000-000000000003', 'Collège Stanislas', 'ecole_secondaire', 'Montréal', '00000000-0000-0000-0000-000000000002', 'conversation', true, 1, null),
+  ('c0000000-0000-0000-0000-000000000004', 'École des Explorateurs', 'ecole_primaire', 'Laval', '00000000-0000-0000-0000-000000000003', null, false, 1, null),
+  ('c0000000-0000-0000-0000-000000000005', 'École du Sous-Bois', 'ecole_primaire', 'Saint-Jérôme', '00000000-0000-0000-0000-000000000003', null, false, 2, 'Vient une année sur deux.'),
+  ('c0000000-0000-0000-0000-000000000006', 'École Les Trois-Sources', 'ecole_primaire', 'Blainville', null, 'identification', false, 1, null),
+  ('c0000000-0000-0000-0000-000000000007', 'Collège Nouveau', 'ecole_secondaire', 'Terrebonne', '00000000-0000-0000-0000-000000000003', 'contacte', false, 1, null)
 on conflict (id) do nothing;
+
+insert into reservations.reservations (numero, exercice, numero_seq, nom, compagnie_id, organisation_id, forfait, variante, date_arrivee, date_depart,
+  nb_participants, etape, fermeture, raison_perte, origine)
+select v.numero, v.exercice, v.seq, v.nom, e.id, v.org::uuid, v.forfait, v.variante, v.arrivee::date, v.depart::date, v.participants, v.etape,
+  v.fermeture, v.raison, 'import'
+from (values
+  ('26-G-941', 2026, 941, 'École Citoyenne', 'c0000000-0000-0000-0000-000000000001', 'classe_nature', 'verte', '2026-05-12', '2026-05-14', 58, 'soldee', null, null),
+  ('27-G-942', 2027, 942, 'École Citoyenne', 'c0000000-0000-0000-0000-000000000001', 'classe_nature', 'verte', '2027-05-11', '2027-05-13', 60, 'confirmee', null, null),
+  ('25-G-948', 2025, 948, 'Cégep Dawson', 'c0000000-0000-0000-0000-000000000002', 'accueil_groupe', null, '2025-02-10', '2025-02-12', 45, 'estime_envoye', 'closed_lost', 'prix'),
+  ('26-G-943', 2026, 943, 'Cégep Dawson', 'c0000000-0000-0000-0000-000000000002', 'accueil_groupe', null, '2025-10-01', '2025-10-03', 45, 'soldee', null, null),
+  ('26-G-944', 2026, 944, 'Cégep Dawson', 'c0000000-0000-0000-0000-000000000002', 'accueil_groupe', null, '2026-01-20', '2026-01-22', 40, 'soldee', null, null),
+  ('27-G-945', 2027, 945, 'Cégep Dawson', 'c0000000-0000-0000-0000-000000000002', 'accueil_groupe', null, '2026-10-20', '2026-10-22', 45, 'estime_envoye', null, null),
+  ('26-G-946', 2026, 946, 'École du Sous-Bois', 'c0000000-0000-0000-0000-000000000005', 'classe_nature', 'verte', '2026-06-02', '2026-06-04', 72, 'soldee', null, null),
+  ('27-G-947', 2027, 947, 'Collège Nouveau', 'c0000000-0000-0000-0000-000000000007', 'classe_nature', 'blanche', '2027-03-15', '2027-03-17', 30, 'nouvelle', null, null)
+) as v(numero, exercice, seq, nom, org, forfait, variante, arrivee, depart, participants, etape, fermeture, raison)
+cross join core.entreprises e
+where e.nom = 'GBPA+'
+on conflict (numero) do nothing;
 
 insert into crm.contacts (organisation_id, nom, fonction, courriel, telephone, principal) values
   ('c0000000-0000-0000-0000-000000000001', 'Vincent Lefebvre', 'Enseignant, 2e secondaire', 'vincent@citoyenne.test', '514 555-0101', true),

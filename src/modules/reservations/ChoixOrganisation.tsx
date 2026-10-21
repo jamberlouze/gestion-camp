@@ -69,7 +69,6 @@ export function ChoixOrganisation({
       etape: null,
       prioritaire: false,
       cycle_ans: 1,
-      airtable_client_id: null,
       copper_id: null,
       statut_depart: null,
       statut_depart_le: null,

@@ -7,6 +7,7 @@ import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
+import { useAuth } from '@/shell/auth'
 import { ajouterJours, dateCourte, depuis, moisAvant } from './calculs'
 import { ChoixConseiller, PucesSaisons, PuceStatut } from './commun'
 import { useDonnees } from './contexte'
@@ -102,7 +103,7 @@ function Contenu({ id }: { id: string }) {
               onClick={async () => {
                 const ok = await confirmer({
                   titre: `Supprimer « ${o.nom} » ?`,
-                  message: 'Ses contacts, échanges, relances et visites ajoutées seront effacés. Les séjours de la base de réservations restent.',
+                  message: 'Ses contacts, échanges, relances et visites ajoutées seront effacés. Ses réservations restent, sans client.',
                   libelleOk: 'Supprimer',
                 })
                 if (ok) supprimer.mutate(o.id, { onSuccess: () => naviguer('/crm/organisations') })
@@ -222,9 +223,6 @@ function FenetreFusion({ org, fermer }: { org: Organisation; fermer: () => void 
               « {retirer.nom} » sera supprimée. Ses contacts, échanges, relances, visites, règles et réservations passent à « {garder.nom} », dont les
               champs vides sont complétés ; ses notes y sont ajoutées. Irréversible.
             </p>
-            {garder.airtable_client_id && retirer.airtable_client_id && garder.airtable_client_id !== retirer.airtable_client_id && (
-              <p className="text-amber-700">Les séjours Airtable de « {retirer.nom} » ne seront plus comptés (un seul lien Airtable par organisation).</p>
-            )}
             {fusionner.error && <p className={ui.erreur}>{fusionner.error.message}</p>}
             <div className="flex justify-between gap-2">
               <button className={ui.boutonSecondaire} onClick={() => setAutreId(null)}>
@@ -507,14 +505,7 @@ function RelancesOrganisation({ id }: { id: string }) {
 // Informations
 // ------------------------------------------------------------
 function Infos({ org: o, changer }: { org: Organisation; changer: (c: Partial<Organisation>) => void }) {
-  const { ecriture, sejours, calculs } = useDonnees()
-  // Clients Airtable vus dans les séjours, pas encore liés à une autre organisation.
-  const clientsAirtable = useMemo(() => {
-    const lies = new Set(calculs.map((c) => c.org.airtable_client_id).filter((x) => x && x !== o.airtable_client_id))
-    const vus = new Map<string, string>()
-    for (const s of sejours) if (s.airtable_client_id && !lies.has(s.airtable_client_id)) vus.set(s.airtable_client_id, s.nom_groupe)
-    return [...vus].sort((a, b) => a[1].localeCompare(b[1], 'fr'))
-  }, [sejours, calculs, o.airtable_client_id])
+  const { ecriture } = useDonnees()
 
   const champ = 'w-full rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm disabled:bg-pierre-50'
   return (
@@ -555,25 +546,6 @@ function Infos({ org: o, changer }: { org: Organisation; changer: (c: Partial<Or
             <option value={1}>Chaque année</option>
             <option value={2}>Une année sur deux</option>
             <option value={3}>Aux 3 ans</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className={ui.etiquette}>Client Airtable</span>
-          <select
-            className={champ}
-            value={o.airtable_client_id ?? ''}
-            disabled={!ecriture}
-            onChange={(e) => changer({ airtable_client_id: e.target.value || null })}
-          >
-            <option value="">Pas lié</option>
-            {o.airtable_client_id && !clientsAirtable.some(([cid]) => cid === o.airtable_client_id) && (
-              <option value={o.airtable_client_id}>Client lié (aucun séjour)</option>
-            )}
-            {clientsAirtable.map(([cid, nom]) => (
-              <option key={cid} value={cid}>
-                {nom}
-              </option>
-            ))}
           </select>
         </label>
         <label className="block">
@@ -735,11 +707,14 @@ function FenetreContact({ organisationId, contact, fermer }: { organisationId: s
 }
 
 // ------------------------------------------------------------
-// Séjours (base de réservations) et visites ajoutées
+// Séjours (réservations du module Réservations) et visites ajoutées
 // ------------------------------------------------------------
 function Sejours({ id }: { id: string }) {
   const { parId, ecriture, auj } = useDonnees()
+  const lienReservation = useAuth().peutOuvrir('reservations')
   const c = parId.get(id)!
+  // Perdues et annulées aussi (en gris) : la fiche montre toutes ses réservations.
+  const liste = [...c.passages, ...c.fermees].sort((a, b) => b.arrivee.localeCompare(a.arrivee))
   const ajouter = useAjouterVisite()
   const supprimer = useSupprimerVisite()
   const [ouvert, setOuvert] = useState(false)
@@ -786,7 +761,7 @@ function Sejours({ id }: { id: string }) {
             creer()
           }}
         >
-          <p className="text-xs text-pierre-500">Pour l'historique d'avant la base de réservations (les séjours Airtable arrivent tout seuls).</p>
+          <p className="text-xs text-pierre-500">Pour l'historique d'avant le module Réservations (ses réservations arrivent toutes seules).</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className={ui.etiquette}>Arrivée</span>
@@ -815,21 +790,33 @@ function Sejours({ id }: { id: string }) {
           </div>
         </form>
       )}
-      {c.passages.length === 0 ? (
-        <p className="text-sm text-pierre-500">
-          Aucun séjour connu.{!c.org.airtable_client_id && ' Liez le client Airtable dans les informations pour voir ses réservations.'}
-        </p>
+      {liste.length === 0 ? (
+        <p className="text-sm text-pierre-500">Aucun séjour connu. Ses réservations arrivent ici dès qu'elles sont reliées à cette organisation dans Réservations.</p>
       ) : (
         <ul className="divide-y divide-pierre-100 text-sm">
-          {[...c.passages].reverse().map((p) => (
+          {liste.map((p) => (
             <li key={p.cle} className="group flex items-start justify-between gap-2 py-1.5">
-              <div>
-                <p className={p.depart >= auj ? 'font-medium text-foret-800' : 'text-pierre-800'}>
+              <div className={p.fermee ? 'text-pierre-400' : undefined}>
+                <p className={p.fermee ? 'line-through' : p.depart >= auj ? 'font-medium text-foret-800' : 'text-pierre-800'}>
                   {dateCourte(p.arrivee)} → {dateCourte(p.depart)}
-                  {p.participants != null && <span className="text-pierre-500"> · {p.participants} pers.</span>}
+                  {p.participants != null && <span className={p.fermee ? undefined : 'text-pierre-500'}> · {p.participants} pers.</span>}
                 </p>
-                <p className="text-xs text-pierre-500">
-                  {p.source === 'sejour' ? `Réservation ${p.numero ?? ''} · ${p.etat ?? 'état inconnu'}` : 'Visite ajoutée'}
+                <p className={`text-xs ${p.fermee ? '' : 'text-pierre-500'}`}>
+                  {p.source === 'reservation' ? (
+                    <>
+                      Réservation{' '}
+                      {lienReservation ? (
+                        <Link to={`/reservations/r/${p.reservation_id}`} className="underline hover:text-pierre-800">
+                          {p.numero}
+                        </Link>
+                      ) : (
+                        p.numero
+                      )}{' '}
+                      · {p.etat}
+                    </>
+                  ) : (
+                    'Visite ajoutée'
+                  )}
                   {p.type && ` · ${p.type}`} · {nomSaison(p.saison).toLowerCase()}
                 </p>
               </div>
