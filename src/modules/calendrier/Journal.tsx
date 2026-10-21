@@ -4,10 +4,11 @@ import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
 import { Chargement } from './commun'
 import { dateCourte, heure } from './dates'
-import { lireJournal, useNomsPersonnel, useSejours } from './donnees'
+import { lireJournal, useNomsPersonnel } from './donnees'
 import { META_SECTEUR, STATUTS_PRESENCE, type EntreeJournal, type Secteur, type StatutPresence } from './types'
 
 const TABLES: Record<string, string> = {
+  // Anciens séjours, d'avant les réservations de l'app : gardés pour l'historique.
   sejours: 'Séjours',
   evenements: 'Événements',
   presences_simples: 'Présences',
@@ -35,9 +36,6 @@ const CHAMPS: Record<string, string> = {
   lieu: 'lieu',
   notes: 'notes',
   description: 'note',
-  activite: 'activité',
-  preparation: 'préparation',
-  sejour_id: 'groupe',
   personnel_id: 'personne',
   date: 'date',
   secteur: 'secteur',
@@ -45,26 +43,12 @@ const CHAMPS: Record<string, string> = {
   secteur_principal: 'secteur',
   actif: 'actif',
   ordre: 'ordre',
-  nom_groupe: 'groupe',
-  numero: 'numéro',
-  type_sejour: 'type de séjour',
-  etat: 'état',
-  date_arrivee: 'arrivée',
-  date_depart: 'départ',
-  heure_arrivee: "heure d'arrivée",
-  heure_depart: 'heure de départ',
-  section_batiment: 'section',
-  batiment: 'bâtiment',
-  nb_participants: 'participants',
-  nb_animateurs: 'animateurs requis',
-  avec_animation: 'animation',
-  avec_repas: 'repas',
   statut: 'choix',
   courriel: 'courriel',
   personne_cuisine_id: 'horaire de cuisine',
 }
 const AUCUN_NOM = new Map<string, string>()
-const IGNORES = new Set(['id', 'created_at', 'updated_at', 'updated_by', 'deleted_at', 'synced_at', 'raw', 'airtable_record_id'])
+const IGNORES = new Set(['id', 'created_at', 'updated_at', 'updated_by', 'deleted_at'])
 
 const valeurLisible = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '∅'
@@ -81,7 +65,6 @@ export function Journal() {
   const [table, setTable] = useState('')
   // Personnes retirées comprises : leurs présences gardent leur nom.
   const noms = useNomsPersonnel().data ?? AUCUN_NOM
-  const sejours = useSejours()
   const journal = useInfiniteQuery({
     queryKey: ['calendrier', 'journal', table],
     queryFn: ({ pageParam }) => lireJournal(pageParam, table || null),
@@ -89,7 +72,6 @@ export function Journal() {
     getNextPageParam: (derniere) => (derniere.length === 100 ? derniere[derniere.length - 1].id : undefined),
   })
   const entrees = useMemo(() => journal.data?.pages.flat() ?? [], [journal.data])
-  const groupes = useMemo(() => new Map((sejours.data ?? []).map((s) => [s.id, s.nom_groupe])), [sejours.data])
 
   /** Ce que la ligne désigne : « Livraison Colabor », « Julie, 4 oct. »… */
   function sujet(e: EntreeJournal): string {
@@ -112,17 +94,13 @@ export function Journal() {
         const lisible = (v: unknown) =>
           k === 'personnel_id'
             ? (noms.get(String(v)) ?? '?')
-            : k === 'sejour_id'
-              ? v
-                ? (groupes.get(String(v)) ?? '?')
-                : '∅'
-              : k === 'statut' && typeof v === 'string' && v in STATUTS_PRESENCE
-                ? `${STATUTS_PRESENCE[v as StatutPresence].emoji} ${STATUTS_PRESENCE[v as StatutPresence].libelle}`
-                : k === 'personne_cuisine_id'
-                  ? v
-                    ? 'oui'
-                    : 'non'
-                  : valeurLisible(v)
+            : k === 'statut' && typeof v === 'string' && v in STATUTS_PRESENCE
+              ? `${STATUTS_PRESENCE[v as StatutPresence].emoji} ${STATUTS_PRESENCE[v as StatutPresence].libelle}`
+              : k === 'personne_cuisine_id'
+                ? v
+                  ? 'oui'
+                  : 'non'
+                : valeurLisible(v)
         return `${CHAMPS[k] ?? k} : ${lisible(avant[k])} → ${lisible(apres[k])}`
       })
   }
@@ -162,7 +140,7 @@ export function Journal() {
                   <span className="font-medium">{sujet(e)}</span>
                   {details.length > 0 && <span className="block text-xs text-pierre-600">{details.join(' ; ')}</span>}
                 </span>
-                <span className="shrink-0 text-pierre-600">{e.modifie_par_nom ?? (e.table_name === 'sejours' ? 'Synchro Airtable' : 'Système')}</span>
+                <span className="shrink-0 text-pierre-600">{e.modifie_par_nom ?? 'Système'}</span>
               </li>
             )
           })}

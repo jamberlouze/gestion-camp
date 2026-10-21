@@ -309,25 +309,13 @@ Journal affiche le coût de chaque recherche.
 npx supabase functions deploy vigie --no-verify-jwt --use-api
 ```
 
-### 10. Calendrier des opérations : synchro Airtable
+### 10. Calendrier des opérations : séjours
 
-Le Worker lit la base Airtable « Réservation Groupes » (table Réservations)
-toutes les 15 minutes et met à jour `calendrier.sejours` (sens unique : rien
-n'est jamais écrit dans Airtable). Une réservation retirée d'Airtable est
-marquée supprimée, pas effacée. Les champs sont lus par leur identifiant
-(`worker/calendrier/synchro.js`, `CHAMPS`) : renommer un champ dans Airtable ne
-casse rien ; en supprimer ou en remplacer un, oui.
-
-Secrets **Cloudflare** (même endroit qu'en 8) :
-
-| Secret | Où le trouver |
-|---|---|
-| `AIRTABLE_TOKEN` | [airtable.com/create/tokens](https://airtable.com/create/tokens) → **Create token** « Calendrier gestion-camp », portée `data.records:read` seulement, accès à la base « Réservation Groupes - GLITCH ». |
-| `SUPABASE_SECRET_KEY` | Le même qu'en 8 (déjà là si Subventions est configuré). |
-| `CALENDRIER_JETON_SYNCHRO` | Facultatif : une longue chaîne au hasard (ex. `openssl rand -hex 24`), pour qu'une automatisation Airtable demande une synchro immédiate (Calendrier → Réglages → « Mise à jour immédiate »). |
-
-**Vérifier** : app → Calendrier → Réglages → « Synchroniser maintenant » ; la
-liste « Dernières synchros » affiche le bilan (ou l'erreur).
+Les séjours du Calendrier sont les réservations du module Réservations, lues
+directement par la base (`calendrier.reservations()`) : aucun secret, aucune
+synchro. L'ancienne synchro Airtable et ses secrets (`AIRTABLE_TOKEN`,
+`CALENDRIER_JETON_SYNCHRO`) sont retirés ; s'ils sont encore dans Cloudflare,
+on peut les supprimer.
 
 ### 11. Réservations : formulaire public et page client
 

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { aujourdhui as jourCalendrier } from '@/modules/calendrier/dates'
 import { useEvenements, usePresenceJour, useSejours } from '@/modules/calendrier/donnees'
-import { nombrePersonnes, sejourDuJour, sejourVisible, useEvenementsPlage } from '@/modules/calendrier/outils'
+import { nombrePersonnes, sejourDuJour, useEvenementsPlage } from '@/modules/calendrier/outils'
 import type { Secteur } from '@/modules/calendrier/types'
 import { reunionsAVenir } from '@/modules/reunions/contexte'
 import { usePoints, useRecurrents, useReunions } from '@/modules/reunions/donnees'
@@ -57,7 +57,7 @@ function Sejours() {
   const { data } = useSejours()
   const lien = useLienCalendrier()
   const jour = jourCalendrier()
-  const duJour = (data ?? []).filter((s) => sejourVisible(s) && sejourDuJour(s, jour))
+  const duJour = (data ?? []).filter((s) => sejourDuJour(s, jour))
   return (
     <>
       {duJour.map((s) => (

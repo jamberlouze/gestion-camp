@@ -47,28 +47,8 @@ export const STATUTS_PRESENCE = {
 export type StatutPresence = keyof typeof STATUTS_PRESENCE
 export const LISTE_STATUTS = Object.keys(STATUTS_PRESENCE) as StatutPresence[]
 
-/** Séjour de groupe : copie en lecture seule d'Airtable. */
-export interface Sejour {
-  id: string
-  airtable_record_id: string
-  numero: string | null
-  nom_groupe: string
-  type_sejour: string | null
-  etat: string | null
-  date_arrivee: string
-  date_depart: string
-  heure_arrivee: string | null
-  heure_depart: string | null
-  section_batiment: string | null
-  batiment: string | null
-  nb_participants: number | null
-  nb_animateurs: number | null
-  avec_animation: boolean
-  avec_repas: boolean
-  notes: string | null
-  synced_at: string
-  deleted_at: string | null
-}
+/** Séjour = une réservation du module Réservations (voir sejours.ts). */
+export type { Batiment, Phase, Sejour } from './sejours'
 
 export const TYPES_EVENEMENT = {
   inspection: { libelle: 'Inspection', icone: '🔍' },
@@ -115,17 +95,6 @@ export interface PresenceJour {
   statut: StatutPresence | null
 }
 
-export interface Synchro {
-  id: number
-  debut: string
-  source: string
-  recus: number | null
-  ajoutes: number | null
-  modifies: number | null
-  retires: number | null
-  erreur: string | null
-}
-
 export interface EntreeJournal {
   id: number
   table_name: string
@@ -137,7 +106,3 @@ export interface EntreeJournal {
   modifie_par_nom: string | null
   modifie_le: string
 }
-
-/** États Airtable d'une réservation perdue : jamais affichée. */
-export const ETATS_MASQUES = new Set(['Closed lost'])
-export const ETAT_CONFIRME = 'Confirmée'

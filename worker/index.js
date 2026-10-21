@@ -1,7 +1,6 @@
 // Worker de la gestion du camp : sert l'application (fichiers statiques de
 // dist/, voir wrangler.jsonc), garde Supabase éveillé, fait la recherche
 // trimestrielle de la Vigie de subventions (voir subventions/pipeline.js),
-// la synchro des séjours Airtable du Calendrier (voir calendrier/synchro.js),
 // les routes publiques des Réservations (formulaire de demande, documents et
 // factures de la page client : reservations/api.js), celles du module RH
 // (candidature, intention de retour, dossier d'embauche, contrat signé en ligne,
@@ -19,9 +18,7 @@
 // Doublon volontaire : .github/workflows/supabase-eveil.yml fait la même
 // chose depuis GitHub Actions, au cas où le cron Cloudflare ne tournerait pas.
 
-import { routeCalendrier } from "./calendrier/api.js";
 import { copierVersDrive } from "./drive/copie.js";
-import { synchroConfiguree, synchroniser } from "./calendrier/synchro.js";
 import { routeReservations } from "./reservations/api.js";
 import { routeRh } from "./rh/api.js";
 import { preparerAutomatiques } from "./rh/courriels.js";
@@ -56,8 +53,6 @@ export default {
     // Vigie de subventions : agenda Google, échues expirées (une fois par jour) et
     // recherche du trimestre (début d'octobre, janvier, avril, juillet) : subventions/pipeline.js.
     ctx.waitUntil(passageSubventions(env, new Date(event.scheduledTime)).catch((e) => console.error("Subventions :", e)));
-    // Séjours Airtable → calendrier.sejours (rien tant que les secrets manquent).
-    if (synchroConfiguree(env)) ctx.waitUntil(synchroniser(env, "cron").catch(() => {}));
     // Factures et soldes de QuickBooks Online (rien tant que l'app Intuit n'est pas configurée).
     if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
     // Courriels aux clients des Réservations : préparés (et envoyés, pour les types en mode automatique).
@@ -83,8 +78,6 @@ export default {
     const url = new URL(request.url);
     const api = url.pathname.match(/^\/api\/subventions\/([a-z]+)$/);
     if (api) return routeSubventions(request, env, ctx, api[1]);
-    const cal = url.pathname.match(/^\/api\/calendrier\/([a-z]+)$/);
-    if (cal) return routeCalendrier(request, env, cal[1]);
     const res = url.pathname.match(/^\/api\/reservations\/([a-z]+)$/);
     if (res) return routeReservations(request, env, res[1]);
     const rh = url.pathname.match(/^\/api\/rh\/([a-z]+)$/);

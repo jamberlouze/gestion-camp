@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import { useAuth } from '@/shell/auth'
 import { supabase, type Schema } from '@/lib/supabase'
-import type { EntreeJournal, Evenement, Personne, PresenceJour, PresenceSimple, Sejour, StatutPresence, Synchro } from './types'
+import { sejourDe, type LigneReservation } from './sejours'
+import type { EntreeJournal, Evenement, Personne, PresenceJour, PresenceSimple, StatutPresence } from './types'
 
 // Module en ligne seulement (comme Mastertimeline et Cuisine) : mutations
 // networkMode « always », erreurs dans le bandeau du module (racine S).
@@ -125,15 +126,19 @@ export function useHoraireCuisineLie(debut: string, fin: string, actif = true) {
   })
 }
 
-/** Tous les séjours encore présents dans Airtable (quelques centaines par année). */
+/**
+ * Séjours = réservations du module Réservations, toutes années (quelques
+ * centaines par année), sauf perdues et annulées : lues par
+ * calendrier.reservations(), même sans accès au module Réservations. En
+ * direct : la base ajoute une ligne à signal_reservations à chaque changement.
+ */
 export function useSejours() {
-  useTempsReel(S, 'sejours', [[S, 'sejours'], [S, 'presence']])
+  // Pas [S, 'sejours'] : la copie d'Airtable gardée sur l'appareil n'a pas cette forme.
+  useTempsReel(S, 'signal_reservations', [[S, 'reservations']])
   return useQuery({
-    queryKey: [S, 'sejours'],
-    queryFn: () =>
-      toutLire<Sejour>((a, b) =>
-        db().from('sejours').select('*').is('deleted_at', null).order('date_arrivee').order('id').range(a, b),
-      ),
+    queryKey: [S, 'reservations'],
+    queryFn: async () =>
+      (await toutLire<LigneReservation>((a, b) => db().rpc('reservations').order('date_arrivee').order('id').range(a, b))).map(sejourDe),
   })
 }
 
@@ -169,18 +174,6 @@ export function usePresencesSimples(debut: string, fin: string) {
       toutLire<PresenceSimple>((a, b) =>
         db().from('presences_simples').select('*').is('deleted_at', null).gte('date', debut).lte('date', fin).order('date').range(a, b),
       ),
-  })
-}
-
-export function useSynchros() {
-  useTempsReel(S, 'synchros', [[S, 'synchros']])
-  return useQuery({
-    queryKey: [S, 'synchros'],
-    queryFn: async () => {
-      const { data, error } = await db().from('synchros').select('*').order('debut', { ascending: false }).limit(15)
-      if (error) throw error
-      return data as Synchro[]
-    },
   })
 }
 
@@ -384,27 +377,4 @@ export function usePresencesLot(debut: string, fin: string) {
       client.invalidateQueries({ queryKey: [S, 'horaire-cuisine-lie'] })
     },
   })
-}
-
-// ------------------------------------------------------------------
-// Worker (synchro Airtable)
-// ------------------------------------------------------------------
-
-/** Appel au Worker (/api/calendrier/…) avec le jeton de la session. */
-export async function appelerWorker(chemin: 'etat' | 'synchro', methode: 'GET' | 'POST') {
-  const { data } = await supabase.auth.getSession()
-  const jeton = data.session?.access_token
-  if (!jeton) throw new Error('Session expirée : reconnectez-vous.')
-  const res = await fetch(`/api/calendrier/${chemin}`, { method: methode, headers: { Authorization: `Bearer ${jeton}` } })
-  let corps: Record<string, unknown> | null = null
-  try {
-    corps = await res.json()
-  } catch {
-    /* pas du JSON */
-  }
-  if (!res.ok) {
-    if (corps?.erreur) throw new Error(String(corps.erreur))
-    throw new Error(res.status === 404 ? "Le Worker ne répond pas à cette adresse (l'app est-elle à jour ?)." : `Erreur ${res.status}.`)
-  }
-  return corps
 }

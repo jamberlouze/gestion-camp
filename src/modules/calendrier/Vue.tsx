@@ -4,16 +4,15 @@ import { messageErreur } from '@/lib/donnees'
 import { dateCourtePaie, dateVersementPaie, debutPeriodePaie, finPeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { ui } from '@/lib/ui'
 import { Chargement, NavDate } from './commun'
-import { nombrePersonnes, nonConfirme, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, useSejoursPlage } from './outils'
+import { BORDURES_PHASE, nombrePersonnes, rangFonctionCuisine, TEINTE_AUTRE, TEINTES_BATIMENT, teinteSejour, useDateChoisie, useEvenementsPlage, usePhasesMasquees, useSejoursPlage } from './outils'
 import { IconeChevron, IconePlus } from '@/lib/icones'
 import { ajouterJours, ajouterMois, aujourdhui, dateCourte, depuisIso, ecartJours, estIso, grilleMois, heure, jourCourt, joursEntre, lundiDe, semaine, titreMois, titreSemaine } from './dates'
 import { CellulePresence } from './CellulePresence'
 import { useEcriture, useEvenements, useMoi, useNomsPersonnel, usePersonnel, usePresence, usePresenceJour, usePresencesLot, usePresencesSimples, useSejours } from './donnees'
 import { FicheEvenement } from './FicheEvenement'
 import { RangeeDirection, type Annulable, type Ecrire } from './HoraireDirection'
-import { META_SECTEUR, TYPES_EVENEMENT, type Evenement, type Personne, type PresenceJour, type PresenceSimple, type Sejour, type Secteur } from './types'
-
-const SANS_SECTION = 'Section à préciser'
+import { BATIMENTS, PHASES } from './sejours'
+import { META_SECTEUR, TYPES_EVENEMENT, type Batiment, type Evenement, type Personne, type Phase, type PresenceJour, type PresenceSimple, type Sejour, type Secteur } from './types'
 
 type Mode = 'semaine' | 'mois' | 'periode'
 /** Période libre : au plus deux mois de colonnes. */
@@ -24,7 +23,7 @@ const AUCUN_NOM = new Map<string, string>()
  * Calendrier : semaine, mois ou période de paie (14 jours, du dimanche au
  * samedi, avec son numéro PP : src/lib/periodesPaie.ts). Un clic sur un
  * groupe cadre une période libre sur ses jours exacts (?du=…&au=…). Une
- * colonne par jour, une rangée par section du bâtiment.
+ * colonne par jour, une rangée de séjours par bâtiment.
  */
 export function Vue() {
   const [date, choisir] = useDateChoisie()
@@ -46,7 +45,8 @@ export function Vue() {
   const sejours = useSejours()
   const evenements = useEvenements()
   const presence = usePresenceJour(debut, fin)
-  const visibles = useSejoursPlage(sejours.data, debut, fin)
+  const [masquees, basculerPhase] = usePhasesMasquees()
+  const visibles = useSejoursPlage(sejours.data, debut, fin, masquees)
   const evParJour = useEvenementsPlage(evenements.data, debut, fin)
   const presenceParJour = useMemo(() => {
     const m = new Map<string, PresenceJour[]>()
@@ -166,6 +166,7 @@ export function Vue() {
         />
       )}
       {erreur && <p className={`${ui.erreur} mb-4`}>{messageErreur(erreur)}</p>}
+      <ChoixPhases masquees={masquees} basculer={basculerPhase} />
       {!sejours.data || !evenements.data ? (
         <Chargement />
       ) : mode === 'mois' ? (
@@ -187,20 +188,8 @@ export function Vue() {
           cadrer={cadrer}
         />
       )}
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-pierre-600">
-        {TEINTES_BATIMENT.map((t) => (
-          <span key={t.code} className="flex items-center gap-1.5">
-            <span className={`inline-block h-3 w-5 rounded border ${t.classes}`} aria-hidden />
-            {t.libelle}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className={`inline-block h-3 w-5 rounded border border-dashed ${TEINTE_AUTRE}`} aria-hidden />
-          Bordure pointillée : pas encore confirmée dans Airtable
-        </span>
-      </div>
-      <p className="mt-1 text-xs text-pierre-500">
-        Cliquez sur un groupe pour afficher exactement ses jours.
+      <p className="mt-3 text-xs text-pierre-500">
+        Vert : Pavillon principal ; mauve : Vieille-France. Bordure pointillée : contrat pas encore signé. Cliquez sur un groupe pour afficher exactement ses jours.
         {mode !== 'mois' && ecriture && " Direction : « + » ou glissez sur plusieurs jours (souris ou doigt) pour les remplir d'un coup."}
         {libre && nbJours >= MAX_JOURS && ` Une période compte au plus ${MAX_JOURS} jours.`}
       </p>
@@ -288,6 +277,47 @@ function NavPeriode({
     </div>
   )
 }
+
+/** Échantillon de chaque phase : couleur du bâtiment (gris s'il peut varier) et bordure de la phase. */
+const ECHANTILLONS: Record<Phase, string> = {
+  demande: `${TEINTE_AUTRE} ${BORDURES_PHASE.demande}`,
+  estime: `${TEINTE_AUTRE} ${BORDURES_PHASE.estime}`,
+  contrat: `${TEINTE_AUTRE} ${BORDURES_PHASE.contrat}`,
+  confirmee_pp: TEINTES_BATIMENT.PP,
+  confirmee_vf: TEINTES_BATIMENT.VF,
+  airbnb: TEINTES_BATIMENT.VF,
+}
+
+/** Afficher ou masquer chaque phase de vente (un calendrier Google chacune), choix gardé sur l'appareil. */
+function ChoixPhases({ masquees, basculer }: { masquees: ReadonlySet<Phase>; basculer: (p: Phase) => void }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs print:hidden">
+      <span className="mr-1 text-pierre-500">Réservations :</span>
+      {PHASES.map((p) => {
+        const affichee = !masquees.has(p.cle)
+        return (
+          <button
+            key={p.cle}
+            aria-pressed={affichee}
+            title={affichee ? `Masquer : ${p.libelle}` : `Afficher : ${p.libelle}`}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${affichee ? 'border-pierre-300 bg-white text-pierre-800 hover:bg-pierre-50' : 'border-pierre-200 bg-pierre-50 text-pierre-400 hover:text-pierre-600'}`}
+            onClick={() => basculer(p.cle)}
+          >
+            <span className={`inline-block h-3 w-5 rounded border ${affichee ? ECHANTILLONS[p.cle] : 'border-pierre-300'}`} aria-hidden />
+            {p.libelle}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Couleur du bâtiment et bordure de la phase. */
+const classesSejour = (s: Sejour) => `${teinteSejour(s)} ${BORDURES_PHASE[s.phase]}`
+
+/** « 27-G-054 · École X — Classe nature (Contrat envoyé) · CH, CB ». */
+const descriptionSejour = (s: Sejour) =>
+  `${s.numero} · ${s.nom_groupe} — ${s.type_sejour} (${s.etat})${s.sections.length ? ` · ${s.sections.join(', ')}` : ''}`
 
 /** Répartit les séjours sur des lignes sans chevauchement. */
 function enLignes(sejours: Sejour[]): Sejour[][] {
@@ -391,18 +421,15 @@ function GrilleJours({
 }) {
   const ecriture = useEcriture()
   const auj = aujourdhui()
-  const sections = useMemo(() => {
-    const m = new Map<string, Sejour[]>()
-    for (const s of sejours) {
-      const cle = s.section_batiment || s.batiment || SANS_SECTION
-      m.set(cle, [...(m.get(cle) ?? []), s])
-    }
-    return [...m.entries()].sort(([a], [b]) => (a === SANS_SECTION ? 1 : b === SANS_SECTION ? -1 : a.localeCompare(b, 'fr')))
+  const rangees = useMemo(() => {
+    const m = new Map<Batiment, Sejour[]>()
+    for (const s of sejours) m.set(s.batiment, [...(m.get(s.batiment) ?? []), s])
+    return (Object.keys(BATIMENTS) as Batiment[]).filter((b) => m.has(b)).map((b) => [b, m.get(b)!] as const)
   }, [sejours])
 
   const n = jours.length
   const dernier = jours[n - 1]
-  // Première colonne : sections ; puis une colonne par jour (6,5 rem au moins).
+  // Première colonne : bâtiments et secteurs ; puis une colonne par jour (6,5 rem au moins).
   const gabarit = { gridTemplateColumns: `var(--col-sections) repeat(${n}, minmax(6.5rem, 1fr))` }
   const colonnes = 'grid [--col-sections:7rem] sm:[--col-sections:9rem]'
   const cellule = 'border-b border-l border-pierre-200 p-1.5'
@@ -419,7 +446,7 @@ function GrilleJours({
           ))}
         </div>
 
-        {sections.length === 0 && (
+        {rangees.length === 0 && (
           <div className={colonnes} style={gabarit}>
             <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Séjours</div>
             <div className="border-b border-l border-pierre-200 p-2 text-sm text-pierre-500" style={{ gridColumn: `2 / ${n + 2}` }}>
@@ -427,9 +454,9 @@ function GrilleJours({
             </div>
           </div>
         )}
-        {sections.map(([section, liste]) => (
-          <div key={section} className={colonnes} style={gabarit}>
-            <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-sm font-medium">{section}</div>
+        {rangees.map(([batiment, liste]) => (
+          <div key={batiment} className={colonnes} style={gabarit}>
+            <div className="sticky left-0 z-10 border-b border-pierre-200 bg-white p-2 text-sm font-medium">{BATIMENTS[batiment]}</div>
             <div
               className="grid gap-y-1 border-b border-l border-pierre-200 py-1.5"
               style={{ gridColumn: `2 / ${n + 2}`, gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
@@ -444,8 +471,8 @@ function GrilleJours({
                     <button
                       key={s.id}
                       style={{ gridColumn: `${a + 1} / ${b + 2}`, gridRow: i + 1 }}
-                      className={`mx-1 truncate rounded-md border px-2 py-1 text-left text-xs hover:brightness-95 ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
-                      title={`${s.nom_groupe}${s.type_sejour ? ` — ${s.type_sejour}` : ''}${s.etat ? ` (${s.etat})` : ''} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
+                      className={`mx-1 truncate rounded-md border px-2 py-1 text-left text-xs hover:brightness-95 ${classesSejour(s)}`}
+                      title={`${descriptionSejour(s)} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
                       onClick={() => cadrer(s)}
                     >
                       {avant && '‹ '}
@@ -582,8 +609,8 @@ function GrilleMois({
                 {duJour.slice(0, 4).map((s) => (
                   <button
                     key={s.id}
-                    className={`block w-full truncate rounded border px-1 text-left text-[11px] leading-4 hover:brightness-95 ${teinteSejour(s)} ${nonConfirme(s) ? 'border-dashed' : ''}`}
-                    title={`${s.nom_groupe} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
+                    className={`block w-full truncate rounded border px-1 text-left text-[11px] leading-4 hover:brightness-95 ${classesSejour(s)}`}
+                    title={`${descriptionSejour(s)} : du ${dateCourte(s.date_arrivee)} au ${dateCourte(s.date_depart)}. Cliquer pour afficher tout le séjour.`}
                     onClick={() => cadrer(s)}
                   >
                     {s.date_arrivee === j ? '→ ' : ''}
