@@ -30,7 +30,8 @@ export default function ModuleTravaux() {
 
   return (
     <ContexteFenetre.Provider value={setFenetre}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Sur papier : seulement la liste imprimée de l'onglet Tâches (Impression.tsx). */}
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <h1 className="text-2xl font-semibold">Travaux</h1>
         <div className="flex items-center gap-2">
           <EtatSynchro />
@@ -47,7 +48,7 @@ export default function ModuleTravaux() {
         </div>
       </div>
       {/* Adresses absolues : voir Embarcations. */}
-      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/travaux" end className={onglet}>
           Tâches
           {aTrier > 0 && (

@@ -37,6 +37,27 @@ export function comparer(a: Tache, b: Tache) {
 /** Terminées : la plus récente d'abord. */
 export const comparerFaites = (a: Tache, b: Tache) => (b.fait_le ?? '').localeCompare(a.fait_le ?? '')
 
+/** Ordre des tâches à faire dans chaque groupe (choix gardé sur l'appareil). */
+export type Tri = 'urgence' | 'echeance' | 'recentes' | 'anciennes'
+
+export const TRIS: Record<Tri, string> = {
+  urgence: 'Urgence',
+  echeance: 'Échéance',
+  recentes: 'Plus récentes',
+  anciennes: 'Plus anciennes',
+}
+
+const COMPARER: Record<Tri, (a: Tache, b: Tache) => number> = {
+  urgence: comparer,
+  /** L'échéance la plus proche d'abord (en retard en tête), sans échéance à la fin ; puis l'urgence. */
+  echeance: (a, b) => (a.echeance ?? '9999').localeCompare(b.echeance ?? '9999') || comparer(a, b),
+  /** Selon la date d'ajout (ou de signalement). */
+  recentes: (a, b) => b.created_at.localeCompare(a.created_at),
+  anciennes: (a, b) => a.created_at.localeCompare(b.created_at),
+}
+
+export const trier = (taches: Tache[], tri: Tri) => [...taches].sort(COMPARER[tri] ?? comparer)
+
 export interface Filtres {
   lieu: string
   categorie: string
@@ -45,10 +66,12 @@ export interface Filtres {
   chantier: string
   /** '1', '2', '3' ou '' (toutes). */
   priorite: string
+  /** Étiquettes allumées : tâches qui portent l'une d'elles ; vide = toutes (comme Mastertimeline). */
+  etiquettes: string[]
   texte: string
 }
 
-export const FILTRES_VIDES: Filtres = { lieu: '', categorie: '', personne: '', chantier: '', priorite: '', texte: '' }
+export const FILTRES_VIDES: Filtres = { lieu: '', categorie: '', personne: '', chantier: '', priorite: '', etiquettes: [], texte: '' }
 
 const sansAccents = (s: string) =>
   s
@@ -65,6 +88,7 @@ export function filtrer(taches: Tache[], f: Filtres) {
       (!f.personne || (f.personne === 'libre' ? !t.assigne_a : t.assigne_a === f.personne)) &&
       (!f.chantier || t.chantier_id === f.chantier) &&
       (!f.priorite || t.priorite === Number(f.priorite)) &&
+      (!f.etiquettes.length || f.etiquettes.some((e) => t.etiquette_ids.includes(e))) &&
       (!texte || sansAccents(`${t.titre} ${t.description ?? ''}`).includes(texte)),
   )
 }
