@@ -7,6 +7,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeFermer, IconeSemaine } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
+import type { PersonneModule } from '@/lib/types'
 import { useAuth } from '@/shell/auth'
 import {
   argent,
@@ -17,6 +18,7 @@ import {
   useEntreprises,
   useFournisseurs,
   useModifierAchat,
+  useResponsables,
   useSupprimerAchat,
 } from './donnees'
 import {
@@ -75,6 +77,7 @@ export default function ModuleAchats() {
   const achats = useAchats()
   const entreprises = useEntreprises()
   const fournisseurs = useFournisseurs()
+  const responsables = useResponsables()
   const ajouter = useAjouterAchat()
   // ?cible : seulement les achats à commander bientôt (compteur du haut,
   // lien de l'accueil : LIEN_A_COMMANDER_BIENTOT).
@@ -83,6 +86,8 @@ export default function ModuleAchats() {
   const [vue, setVue] = useState<Vue>('en_cours')
   const [tri, setTri] = useState<Tri>(() => (cible ? 'date' : 'statut'))
   const [entreprise, setEntreprise] = useState('')
+  /** id d'un compte, '' (tous) ou 'aucun' (sans responsable). */
+  const [responsable, setResponsable] = useState('')
   const [ajout, setAjout] = useState(false)
   const jour = jourAujourdhui()
 
@@ -98,7 +103,11 @@ export default function ModuleAchats() {
     )
 
   const donnees = useMemo(() => {
-    const tous = (achats.data ?? []).filter((a) => !entreprise || a.entreprise_id === entreprise)
+    const tous = (achats.data ?? []).filter(
+      (a) =>
+        (!entreprise || a.entreprise_id === entreprise) &&
+        (!responsable || (responsable === 'aucun' ? !a.responsable_id : a.responsable_id === responsable)),
+    )
     const compte = (v: Vue) => tous.filter((a) => garde(v, a)).length
     const bientot = aCommanderBientot(tous, jour)
     const liste = (cible ? [...bientot.enRetard, ...bientot.aVenir] : tous.filter((a) => garde(vue, a))).sort(
@@ -112,11 +121,11 @@ export default function ModuleAchats() {
       total: totaux.reduce<number>((n, t) => n + (t ?? 0), 0),
       sansPrix: totaux.filter((t) => t == null).length,
     }
-  }, [achats.data, vue, entreprise, cible, tri, jour])
+  }, [achats.data, vue, entreprise, responsable, cible, tri, jour])
 
-  const erreur = achats.error ?? entreprises.error ?? fournisseurs.error
+  const erreur = achats.error ?? entreprises.error ?? fournisseurs.error ?? responsables.error
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
-  if (!achats.data || !entreprises.data || !fournisseurs.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  if (!achats.data || !entreprises.data || !fournisseurs.data || !responsables.data) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
   const { liste, compte, bientot, total, sansPrix } = donnees
 
@@ -153,6 +162,7 @@ export default function ModuleAchats() {
               prix_unitaire: null,
               entreprise_id: entreprise || null,
               fournisseur_id: null,
+              responsable_id: responsable && responsable !== 'aucun' ? responsable : null,
               note: null,
               date_cible,
               created_at: new Date().toISOString(),
@@ -198,6 +208,22 @@ export default function ModuleAchats() {
           ))}
         </select>
         <select
+          aria-label="Responsable"
+          className="rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800"
+          value={responsable}
+          onChange={(e) => setResponsable(e.target.value)}
+        >
+          <option value="">Tous les responsables</option>
+          {responsables.data
+            .filter((r) => r.peut_assigner || r.id === responsable)
+            .map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nom}
+              </option>
+            ))}
+          <option value="aucun">Sans responsable</option>
+        </select>
+        <select
           aria-label="Tri"
           className="rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800"
           value={tri}
@@ -218,8 +244,8 @@ export default function ModuleAchats() {
       </div>
 
       <div className={`${ui.carte} overflow-x-auto`}>
-        {/* L'item prend ce qui reste ; en dessous de 70rem, on défile. */}
-        <table className="w-full min-w-[70rem] table-fixed text-sm">
+        {/* L'item prend ce qui reste ; en dessous de 79rem, on défile. */}
+        <table className="w-full min-w-[79rem] table-fixed text-sm">
           <colgroup>
             <col className="w-32" />
             <col />
@@ -229,6 +255,7 @@ export default function ModuleAchats() {
             <col className="w-24" />
             <col className="w-28" />
             <col className="w-32" />
+            <col className="w-36" />
             <col className="w-40" />
             <col className="w-9" />
           </colgroup>
@@ -242,13 +269,22 @@ export default function ModuleAchats() {
               <th className="px-3 py-2 text-right">Total</th>
               <th className="px-3 py-2">Entreprise</th>
               <th className="px-3 py-2">Fournisseur</th>
+              <th className="px-3 py-2">Responsable</th>
               <th className="px-3 py-2">Note</th>
               <th />
             </tr>
           </thead>
           <tbody className="divide-y divide-pierre-100">
             {liste.map((a) => (
-              <Rangee key={a.id} achat={a} jour={jour} ecriture={ecriture} entreprises={entreprises.data} fournisseurs={fournisseurs.data} />
+              <Rangee
+                key={a.id}
+                achat={a}
+                jour={jour}
+                ecriture={ecriture}
+                entreprises={entreprises.data}
+                fournisseurs={fournisseurs.data}
+                responsables={responsables.data}
+              />
             ))}
           </tbody>
         </table>
@@ -278,12 +314,14 @@ function Rangee({
   ecriture,
   entreprises,
   fournisseurs,
+  responsables,
 }: {
   achat: Achat
   jour: string
   ecriture: boolean
   entreprises: Entreprise[]
   fournisseurs: { id: string; nom: string }[]
+  responsables: PersonneModule[]
 }) {
   const modifier = useModifierAchat()
   const supprimer = useSupprimerAchat()
@@ -361,6 +399,15 @@ function Rangee({
       </td>
       <td className="px-2 py-1.5">
         <Choix libelle="Fournisseur" valeur={a.fournisseur_id} options={fournisseurs} desactive={!ecriture} changer={(fournisseur_id) => changer({ fournisseur_id })} />
+      </td>
+      <td className="px-2 py-1.5">
+        <Choix
+          libelle="Responsable"
+          valeur={a.responsable_id}
+          options={responsables.filter((r) => r.peut_assigner || r.id === a.responsable_id)}
+          desactive={!ecriture}
+          changer={(responsable_id) => changer({ responsable_id })}
+        />
       </td>
       <td className="px-2 py-1.5">
         <ChampTexte aria-label="Note" className={cellule} valeur={a.note ?? ''} disabled={!ecriture} enregistrer={(note) => changer({ note: note || null })} />

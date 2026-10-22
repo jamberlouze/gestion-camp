@@ -91,14 +91,7 @@ insert into mastertimeline.projets (id, nom, couleur, ordre, entreprise_ids) val
   ('efdc5f8b-4e55-5f97-9390-874ef8ee20c9', 'Entretien bâtiment', '#a29e93', 13, '{d2aebea0-e2b0-59ed-b584-40052859f4fb,d5c57473-f9b8-58b9-8312-11c3e45fb07a}'),
   ('f79c8456-1c6f-550c-8745-852d594838b5', 'Site web et logiciels', '#2b8cc4', 14, '{635cb5aa-a46d-551f-a54e-de440410c09f,b057c513-f0d2-5299-8620-7749ee2047a7,d5c57473-f9b8-58b9-8312-11c3e45fb07a,f6a2d2eb-e4ea-52ff-8bd5-075e1b6e2950}');
 
-insert into mastertimeline.responsables (id, nom) values
-  ('89d4006b-3c2b-5d9a-8a70-55369ac5f8dc', 'Charlotte'),
-  ('23f068f7-b8ad-5075-bbce-0b91b8201927', 'Dom'),
-  ('19ed3a04-bf2f-56c2-9f57-a45a1da87c97', 'Frédérique'),
-  ('d8d44ea6-dc57-50ce-b096-b4135b2ccfc7', 'Marco'),
-  ('90694972-8e8c-553f-89ec-622a194979d7', 'Maxime'),
-  ('4abf2561-1f38-54f8-9347-b1f5e698c68a', 'Sylvie'),
-  ('25f23b3c-4df1-5719-99a1-99bc1c24cfb7', 'Vickie');
+-- Responsables des tâches = les comptes de l'app (core.personnes_module), plus de liste propre au module.
 
 insert into mastertimeline.fournisseurs (nom, service, telephone) values
   ('Quincaillerie (test)', 'Matériaux', '819-555-0101'),

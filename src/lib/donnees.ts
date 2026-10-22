@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase, type Schema } from './supabase'
-import { COLONNES_EMPLOYE, type Employe } from './types'
+import { COLONNES_EMPLOYE, type Employe, type PersonneModule } from './types'
 
 /** Ce que useListe lit : certaines colonnes seulement, ou une fonction qui rend les lignes de la table. */
 export interface SourceListe {
@@ -47,6 +47,23 @@ export function useListe<T>(schema: Schema, table: string, tri: string, { colonn
  * core.employes : la direction et le RH les lisent par core.employes_complets).
  */
 export const useEmployes = () => useListe<Employe>('core', 'employes', 'surnom', { colonnes: COLONNES_EMPLOYE })
+
+/**
+ * Responsables possibles d'un module : les comptes de l'app, même liste pour
+ * Mastertimeline, Travaux, Achats et Subventions. Seul un compte qui écrit
+ * dans le module se choisit (`peut_assigner` ; Mastertimeline : qui le lit) ;
+ * les autres gardent leur nom à l'écran.
+ */
+export function usePersonnesModule(module: string) {
+  return useQuery({
+    queryKey: ['core', 'personnes_module', module],
+    queryFn: async () => {
+      const { data, error } = await supabase.schema('core').rpc('personnes_module', { p_module: module })
+      if (error) throw error
+      return data as PersonneModule[]
+    },
+  })
+}
 
 /** Ajoute ou modifie une ligne (selon la présence d'un id). */
 export function useEnregistrer<T extends { id?: string }>(schema: Schema, table: string) {

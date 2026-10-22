@@ -20,6 +20,15 @@ export interface Profil {
   woofing: boolean
 }
 
+/** Un compte, nom seulement (core.personnes_module) : responsables possibles d'un module. */
+export interface PersonneModule {
+  id: string
+  nom: string
+  actif: boolean
+  /** Compte actif qui écrit dans le module (Mastertimeline : qui le lit) : peut recevoir une tâche ou un achat. */
+  peut_assigner: boolean
+}
+
 export interface AccesModule {
   user_id: string
   module: ModuleId

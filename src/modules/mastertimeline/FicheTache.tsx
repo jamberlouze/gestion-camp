@@ -21,7 +21,7 @@ import {
   UNIQUE,
   cleCoche,
 } from './calendrier'
-import { offertPour, useEcriture, type DemandeFiche } from './outils'
+import { offertPour, useEcriture, usePeutCocher, type DemandeFiche } from './outils'
 import { ajouterFichier, retirerFichier, useAdresseFichier, useCocher, useCoches, useProfils, useReferences } from './donnees'
 import type { Fichier, Statut, Tache } from './types'
 
@@ -48,6 +48,7 @@ const VIDE: Brouillon = {
 
 export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer: () => void }) {
   const ecriture = useEcriture()
+  const peutCocher = usePeutCocher()
   const refs = useReferences()
   const enregistrer = useEnregistrer<Tache>('mastertimeline', 'taches')
   const cocher = useCocher()
@@ -72,6 +73,8 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
   const [noteAnnee, setNoteAnnee] = useState<string | undefined>(undefined)
   const statutAffiche = statut === undefined ? (coche?.statut ?? null) : statut
   const noteAffichee = noteAnnee === undefined ? (coche?.note ?? '') : noteAnnee
+  // Le responsable coche son passage même en lecture ; la tâche elle-même reste à qui écrit.
+  const passageModifiable = !!periode && !!demande.tache && peutCocher(demande.tache)
 
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -89,8 +92,8 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
       echeance: null,
     }
     try {
-      await enregistrer.mutateAsync(ligne)
-      if (periode && demande.tache && (statut !== undefined || noteAnnee !== undefined)) {
+      if (ecriture) await enregistrer.mutateAsync(ligne)
+      if (periode && demande.tache && passageModifiable && (statut !== undefined || noteAnnee !== undefined)) {
         const note = noteAffichee.trim() || null
         const changeStatut = statutAffiche !== (coche?.statut ?? null)
         cocher.mutate({
@@ -153,7 +156,7 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
                 <button
                   key={nom}
                   type="button"
-                  disabled={!ecriture}
+                  disabled={!passageModifiable}
                   className={`rounded-md px-2.5 py-1 ${statutAffiche === s ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`}
                   onClick={() => setStatut(s)}
                 >
@@ -174,7 +177,7 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
               id="note-annee"
               className={ui.champ}
               rows={2}
-              disabled={!ecriture}
+              disabled={!passageModifiable}
               value={noteAffichee}
               onChange={(e) => setNoteAnnee(e.target.value)}
             />
@@ -207,7 +210,7 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
             changer={(v) => changer({ projet_id: v })}
             desactive={!ecriture}
           />
-          <Choix libelle="Responsable" valeur={b.responsable_id} options={refs.responsables.filter((r) => r.actif || r.id === b.responsable_id)} changer={(v) => changer({ responsable_id: v })} desactive={!ecriture} />
+          <Choix libelle="Responsable" valeur={b.responsable_id} options={refs.responsables.filter((r) => r.peut_assigner || r.id === b.responsable_id)} changer={(v) => changer({ responsable_id: v })} desactive={!ecriture} />
           <Choix libelle="Fournisseur" valeur={b.fournisseur_id} options={refs.fournisseurs} changer={(v) => changer({ fournisseur_id: v })} desactive={!ecriture} />
         </div>
 
@@ -269,6 +272,15 @@ export function FicheTache({ demande, fermer }: { demande: DemandeFiche; fermer:
                   Supprimer la tâche
                 </BoutonSupprimer>
               )}
+            </>
+          ) : passageModifiable ? (
+            <>
+              <button type="submit" className={ui.bouton}>
+                Enregistrer
+              </button>
+              <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
+                Annuler
+              </button>
             </>
           ) : (
             <button type="button" className={ui.boutonSecondaire} onClick={fermer}>

@@ -105,7 +105,7 @@ export function Annualiser({ tache: t, retour, fermer }: { tache: Tache; retour:
             <select className={ui.champ} value={responsable} onChange={(e) => setResponsable(e.target.value)}>
               <option value="">—</option>
               {refs.responsables
-                .filter((r) => r.actif)
+                .filter((r) => r.peut_assigner)
                 .map((x) => (
                   <option key={x.id} value={x.id}>
                     {x.nom}

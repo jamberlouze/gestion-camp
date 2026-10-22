@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { useListe } from '@/lib/donnees'
+import { useListe, usePersonnesModule } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import { aCommanderBientot, HORIZON_JOURS, jourAujourdhui } from './outils'
 import type { Achat, Entreprise, Fournisseur } from './types'
@@ -17,6 +17,8 @@ export const useAchats = () => useListe<Achat>('achats', 'achats', 'created_at')
 /** Entreprises et fournisseurs : ceux de Mastertimeline (modifiés là-bas). */
 export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
 export const useFournisseurs = () => useListe<Fournisseur>('mastertimeline', 'fournisseurs', 'nom')
+/** Les comptes de l'app ; ne se choisit qu'un compte qui écrit dans Achats (`peut_assigner`). */
+export const useResponsables = () => usePersonnesModule('achats')
 
 /** Adresse du module filtrée sur les achats à commander bientôt (compteur du haut). */
 export const LIEN_A_COMMANDER_BIENTOT = '/achats?cible=30'

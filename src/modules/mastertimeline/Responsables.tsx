@@ -40,7 +40,9 @@ export function Responsables() {
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!taches.data || !coches.pret || !refs.pret) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const personnes = [...refs.responsables.filter((r) => r.actif || parPersonne.get(r.id)?.aVenir.length), { id: AUCUN, nom: 'Sans responsable', actif: true }]
+  // Ceux qu'on peut assigner, plus quiconque a encore des tâches (compte désactivé, sans accès au module).
+  const aDesTaches = new Set(taches.data.map((t) => t.responsable_id))
+  const personnes = [...refs.responsables.filter((r) => r.peut_assigner || aDesTaches.has(r.id)), { id: AUCUN, nom: 'Sans responsable' }]
   const actif = choisi ?? personnes[0]?.id
   const donnees = actif ? parPersonne.get(actif) : undefined
   const nom = personnes.find((p) => p.id === actif)?.nom ?? ''
@@ -98,7 +100,7 @@ export function Responsables() {
               <select aria-label="Réassigner à" className={`${ui.champ} w-auto`} value={vers} onChange={(e) => setVers(e.target.value)}>
                 <option value="">Tout réassigner à…</option>
                 {refs.responsables
-                  .filter((r) => r.id !== actif && r.actif)
+                  .filter((r) => r.id !== actif && r.peut_assigner)
                   .map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.nom}

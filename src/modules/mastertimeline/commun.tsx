@@ -5,7 +5,7 @@ import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
-import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, type Filtres, type Montrer, type Regroupement } from './outils'
+import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, usePeutCocher, type Filtres, type Montrer, type Regroupement } from './outils'
 import { PRIORITES, type Coche, type Tache } from './types'
 
 const menu = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-1.5 text-sm text-pierre-800'
@@ -22,7 +22,7 @@ export function BarreFiltres({
   /** Filtres à ne pas montrer (ex. le responsable dans la vue par responsable). */
   sans?: (keyof Filtres)[]
 }) {
-  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquettes.length > 0
+  const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquettes.length > 0 || filtres.texte
   // Choix gardé sur l'appareil mais supprimé depuis (ex. compagnie en double
   // fusionnée) : le filtre tombe, sinon il cache tout en affichant « Toutes ».
   const disparus: Partial<Filtres> = {}
@@ -40,6 +40,14 @@ export function BarreFiltres({
   }, [cleDisparus, changer])
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="search"
+        className={`${menu} w-44`}
+        placeholder="Chercher…"
+        aria-label="Chercher une tâche"
+        value={filtres.texte}
+        onChange={(e) => changer({ texte: e.target.value })}
+      />
       {!sans?.includes('entreprise') && (
         <select
           aria-label="Entreprise"
@@ -73,11 +81,13 @@ export function BarreFiltres({
       {!sans?.includes('responsable') && (
         <select aria-label="Responsable" className={menu} value={filtres.responsable} onChange={(e) => changer({ responsable: e.target.value })}>
           <option value="">Tous les responsables</option>
-          {refs.responsables.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.nom}
-            </option>
-          ))}
+          {refs.responsables
+            .filter((r) => r.peut_assigner || r.id === filtres.responsable)
+            .map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nom}
+              </option>
+            ))}
           <option value="aucun">Sans responsable</option>
         </select>
       )}
@@ -172,6 +182,7 @@ export function LigneTache({
   montrer?: Montrer
 }) {
   const ecriture = useEcriture()
+  const peutCocher = usePeutCocher()
   const basculer = useBasculer()
   const ouvrir = useOuvrirFiche()
   const entreprise = t.entreprise_id ? refs.entreprise.get(t.entreprise_id) : null
@@ -187,7 +198,7 @@ export function LigneTache({
   // au clavier, le titre (un bouton).
   return (
     <li className={`flex items-start gap-3 px-3 py-2.5 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
-      <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!ecriture} />
+      <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!peutCocher(t)} />
       <div className="min-w-0 flex-1">
         <button
           type="button"
@@ -240,7 +251,7 @@ export function ChoixResponsable({ tache: t, refs }: { tache: Tache; refs: Refer
     >
       <option value="">{actuel ? 'Personne' : 'Responsable…'}</option>
       {refs.responsables
-        .filter((r) => r.actif || r.id === actuel)
+        .filter((r) => r.peut_assigner || r.id === actuel)
         .map((r) => (
           <option key={r.id} value={r.id}>
             {r.nom}

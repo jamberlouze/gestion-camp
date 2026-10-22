@@ -5,7 +5,7 @@ import { FenetreImportLot, type ConfigImport } from '@/lib/FenetreImportLot'
 import { lireMois } from '@/lib/importLot'
 import { ui } from '@/lib/ui'
 import { cleAujourdhui, exerciceDeCle, libelleFrequence, MOIS_EXERCICE, NOMS_MOIS_COURTS } from './calendrier'
-import { ajouterALaListe, creerTaches, useReferences, useTaches } from './donnees'
+import { ajouterProjet, creerTaches, useReferences, useTaches } from './donnees'
 
 /** Bouton « Importer » (à côté de « Nouvelle tâche ») : plusieurs tâches annuelles d'un coup. */
 export function BoutonImporter({ defauts }: { defauts?: Record<string, string> }) {
@@ -27,6 +27,10 @@ function Fenetre({ defauts, fermer }: { defauts?: Record<string, string>; fermer
 
   const config = useMemo<ConfigImport>(() => {
     let ordreProjet = Math.max(0, ...refs.projets.map((p) => p.ordre))
+    // Responsables = comptes qui écrivent dans le module ; le prénom seul suffit s'il est unique.
+    const responsables = refs.responsables.filter((r) => r.peut_assigner)
+    const prenom = (nom: string) => nom.split(' ')[0]
+    const prenomUnique = (nom: string) => responsables.filter((r) => prenom(r.nom) === prenom(nom)).length === 1
     return {
       nomGabarit: 'gabarit-mastertimeline.xlsx',
       titresExistants: (taches ?? []).map((t) => t.titre),
@@ -56,7 +60,7 @@ function Fenetre({ defauts, fermer }: { defauts?: Record<string, string>; fermer
           entete: 'Projet',
           type: 'liste',
           options: refs.projets.map((p) => ({ id: p.id, nom: p.nom })),
-          creer: (nom) => ajouterALaListe('projets', { nom, ordre: ++ordreProjet }),
+          creer: (nom) => ajouterProjet({ nom, ordre: ++ordreProjet }),
           lot: true,
           aide: 'Un projet de la feuille Listes. Un nouveau nom peut être ajouté à la liste au moment de l’import.',
           exemple: refs.projets[0]?.nom,
@@ -79,11 +83,10 @@ function Fenetre({ defauts, fermer }: { defauts?: Record<string, string>; fermer
           cle: 'responsable',
           entete: 'Responsable',
           type: 'liste',
-          options: refs.responsables.map((r) => ({ id: r.id, nom: r.nom })),
-          creer: (nom) => ajouterALaListe('responsables', { nom }),
+          options: responsables.map((r) => ({ id: r.id, nom: r.nom, alias: prenomUnique(r.nom) ? [prenom(r.nom)] : [] })),
           lot: true,
-          aide: 'Un responsable de la feuille Listes. Un nouveau nom peut être ajouté à la liste au moment de l’import.',
-          exemple: refs.responsables.find((r) => r.actif)?.nom,
+          aide: 'Un compte de l’app qui écrit dans Mastertimeline (feuille Listes) : nom complet, ou prénom s’il est unique.',
+          exemple: responsables[0]?.nom,
         },
         {
           cle: 'etiquettes',

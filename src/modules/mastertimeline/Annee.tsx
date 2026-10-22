@@ -22,7 +22,7 @@ import {
   type Etat,
 } from './calendrier'
 import { BarreFiltres, ChoixRegroupement, Pastille, PucesEtiquettes } from './commun'
-import { garder, regrouper, useBasculer, useEcriture, useFiltres, useOuvrirFiche, type Regroupement } from './outils'
+import { garder, regrouper, useBasculer, useEcriture, useFiltres, useOuvrirFiche, usePeutCocher, type Regroupement } from './outils'
 import { useCoches, useReferences, useTaches } from './donnees'
 import type { Coche, Tache } from './types'
 import { BoutonImporter } from './Importer'
@@ -51,6 +51,7 @@ const LIBELLE: Record<Etat, string> = {
 
 export function Annee() {
   const ecriture = useEcriture()
+  const peutCocher = usePeutCocher()
   const ouvrir = useOuvrirFiche()
   const basculer = useBasculer()
   const refs = useReferences()
@@ -192,9 +193,9 @@ export function Annee() {
                           <td key={cles[i]} className="px-1 py-1 text-center">
                             <button
                               className={`h-7 w-9 rounded-md border-2 text-xs font-bold disabled:cursor-default ${STYLE_CASE[c.etat]}`}
-                              title={`${libelleMois(cles[i])} : ${LIBELLE[c.etat]}${ecriture ? ' — cliquer pour cocher ou décocher' : ''}`}
+                              title={`${libelleMois(cles[i])} : ${LIBELLE[c.etat]}${peutCocher(t) ? ' — cliquer pour cocher ou décocher' : ''}`}
                               aria-label={`${t.titre}, ${libelleMois(cles[i])} : ${LIBELLE[c.etat]}`}
-                              disabled={!ecriture}
+                              disabled={!peutCocher(t)}
                               onClick={() => basculer(t, c.periode, c.coche, 'faite')}
                             >
                               {SYMBOLE[c.etat]}

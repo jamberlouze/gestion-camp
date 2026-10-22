@@ -3,7 +3,7 @@ import { confirmer } from '@/lib/Confirmation'
 import { codePeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { cleAujourdhui, cleCoche, exerciceDeCle, libelleMois } from '@/modules/mastertimeline/calendrier'
 import { CaseCoche } from '@/modules/mastertimeline/commun'
-import { useCoches, useResponsables, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
+import { useCoches, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
 import { FILTRES_VIDES, passagesDuMois, retards, trierPassages, useBasculer, type Passage } from '@/modules/mastertimeline/outils'
 import { actionsDe } from '@/modules/reservations/actions'
 import { useReservations as useReservationsGroupes, useSignauxActions } from '@/modules/reservations/donnees'
@@ -36,7 +36,7 @@ export function AFaire() {
     <Carte titre="À faire pour moi" vide="Rien ne t'attend pour l'instant.">
       {reservations && <Reservations />}
       {temps && <FeuillesDeTemps userId={profil.id} estAdmin={estAdmin} />}
-      {mastertimeline && <MesTachesAnnuelles courriel={profil.courriel} nom={profil.nom} />}
+      {mastertimeline && <MesTachesAnnuelles moi={profil.id} />}
       {travaux && <MesTravaux moi={profil.id} />}
     </Carte>
   )
@@ -235,34 +235,21 @@ const nomDuMois = (cle: string) => libelleMois(cle).split(' ')[0].toLowerCase()
 
 /**
  * Passages de Mastertimeline (ce mois-ci et en retard) dont la personne est
- * responsable. Les responsables sont une liste propre au module : on les
- * relie au compte par le courriel (Mastertimeline › Réglages › Responsables),
- * sinon par le nom s'il est unique.
+ * responsable (le responsable d'une tâche est un compte de l'app).
  */
-function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string | null }) {
-  const { peutEcrire } = useAuth()
-  const responsables = useResponsables()
+function MesTachesAnnuelles({ moi }: { moi: string }) {
   const taches = useTachesMt()
   const cle = cleAujourdhui()
   const index = useCoches(exerciceDeCle(cle))
-  const moi = useMemo(() => {
-    const actifs = (responsables.data ?? []).filter((r) => r.actif)
-    const parCourriel = actifs.find((r) => r.courriel?.toLowerCase() === courriel.toLowerCase())
-    if (parCourriel) return parCourriel
-    // Responsable sans courriel : son nom (ou prénom) s'il est le seul à le porter.
-    const noms = [nom, nom?.split(' ')[0]].filter(Boolean).map((n) => n!.toLowerCase())
-    const parNom = actifs.filter((r) => !r.courriel && noms.includes(r.nom.toLowerCase()))
-    return parNom.length === 1 ? parNom[0] : undefined
-  }, [responsables.data, courriel, nom])
 
-  const ecriture = peutEcrire('mastertimeline')
+  // Ses propres tâches : le responsable les coche, même s'il ne fait que lire le module.
   const basculer = useBasculer()
   // Passages cochés pendant cette visite : restent affichés (barrés), pour pouvoir décocher.
   const [cochees, setCochees] = useState<Passage[]>([])
 
   const { enRetard, duMois, faits } = useMemo(() => {
-    if (!moi || !taches.data || !index.pret) return { enRetard: [], duMois: [], faits: [] }
-    const filtres = { ...FILTRES_VIDES, responsable: moi.id }
+    if (!taches.data || !index.pret) return { enRetard: [], duMois: [], faits: [] }
+    const filtres = { ...FILTRES_VIDES, responsable: moi }
     const enRetard = trierPassages(retards(taches.data, index.index, filtres))
     const duMois = trierPassages(passagesDuMois(taches.data, cle, index.index, filtres)).filter(
       (p) => p.etat !== 'faite' && p.etat !== 'sautee',
@@ -298,7 +285,7 @@ function MesTachesAnnuelles({ courriel, nom }: { courriel: string; nom: string |
           <Ligne
             key={cleCoche(p.tache.id, p.periode)}
             to="/mastertimeline"
-            caseACocher={<CaseCoche etat={p.etat} basculer={() => cocher(p)} desactivee={!ecriture} />}
+            caseACocher={<CaseCoche etat={p.etat} basculer={() => cocher(p)} />}
             faite={faite}
             titre={p.tache.titre}
             detail={

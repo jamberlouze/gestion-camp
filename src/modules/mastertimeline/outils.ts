@@ -23,6 +23,18 @@ import type { Coche, Projet, Statut, Tache } from './types'
 
 export const useEcriture = () => useAuth().peutEcrire('mastertimeline')
 
+/**
+ * Cocher un passage (statut et note de l'année) : qui écrit dans le module,
+ * ou le responsable de la tâche, même en lecture (politique « Responsable :
+ * cocher ses tâches » de mastertimeline.coches).
+ */
+export function usePeutCocher() {
+  const { peutEcrire, session } = useAuth()
+  const ecriture = peutEcrire('mastertimeline')
+  const moi = session?.user.id
+  return (t: Pick<Tache, 'responsable_id'>) => ecriture || (!!moi && t.responsable_id === moi)
+}
+
 // ------------------------------------------------------------ fiche ---
 // La fiche d'une tâche (dialogue) s'ouvre depuis toutes les vues.
 
@@ -47,28 +59,34 @@ export interface Filtres {
   responsable: string
   /** Étiquettes allumées : tâches qui portent l'une d'elles ; vide = toutes les tâches. */
   etiquettes: string[]
+  /** Recherche dans le titre et la note permanente (sans casse ni accents). */
+  texte: string
 }
 
 const CLE_FILTRES = 'mastertimeline-filtres'
-export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', etiquettes: [] }
+export const FILTRES_VIDES: Filtres = { entreprise: '', projet: '', responsable: '', etiquettes: [], texte: '' }
 
-/** Filtres gardés sur l'appareil (préférence personnelle). */
+/** Recherche en cours : suit d'un onglet à l'autre, jamais gardée sur l'appareil (oubliée au rechargement). */
+let texteEnCours = ''
+
+/** Filtres gardés sur l'appareil (préférence personnelle), sauf la recherche. */
 export function useFiltres() {
   const [filtres, setFiltres] = useState<Filtres>(() => {
     try {
       // Avant le 2026-10-07 : une seule étiquette (`etiquette`, texte).
       const { etiquette, etiquettes, ...reste } = JSON.parse(localStorage.getItem(CLE_FILTRES) ?? '{}')
       const liste = Array.isArray(etiquettes) ? etiquettes : etiquette ? [etiquette] : []
-      return { ...FILTRES_VIDES, ...reste, etiquettes: liste.filter((x: unknown) => typeof x === 'string') }
+      return { ...FILTRES_VIDES, ...reste, etiquettes: liste.filter((x: unknown) => typeof x === 'string'), texte: texteEnCours }
     } catch {
-      return FILTRES_VIDES
+      return { ...FILTRES_VIDES, texte: texteEnCours }
     }
   })
   const changer = (champs: Partial<Filtres>) =>
     setFiltres((f) => {
       const nouveaux = { ...f, ...champs }
+      texteEnCours = nouveaux.texte
       try {
-        localStorage.setItem(CLE_FILTRES, JSON.stringify(nouveaux))
+        localStorage.setItem(CLE_FILTRES, JSON.stringify({ ...nouveaux, texte: undefined }))
       } catch {
         /* préférence non conservée */
       }
@@ -76,6 +94,12 @@ export function useFiltres() {
     })
   return [filtres, changer] as const
 }
+
+const sansAccents = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
 
 /** Le projet est-il offert pour cette entreprise ? (aucune entreprise choisie, ou projet sans entreprise : oui) */
 export function offertPour(p: Pick<Projet, 'entreprise_ids'>, entrepriseId: string | null) {
@@ -87,6 +111,8 @@ export function garder(t: Tache, f: Filtres) {
   if (f.projet && t.projet_id !== f.projet) return false
   if (f.responsable === 'aucun' ? !!t.responsable_id : f.responsable && t.responsable_id !== f.responsable) return false
   if (f.etiquettes.length && !f.etiquettes.some((id) => t.etiquette_ids.includes(id))) return false
+  const texte = sansAccents(f.texte.trim())
+  if (texte && !sansAccents(`${t.titre} ${t.note ?? ''}`).includes(texte)) return false
   return true
 }
 

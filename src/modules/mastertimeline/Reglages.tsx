@@ -2,7 +2,7 @@ import { Link, NavLink, Navigate, Route, Routes } from 'react-router'
 import { TableauReferentiel } from '@/core/TableauReferentiel'
 import { useAuth } from '@/shell/auth'
 import { useEntreprises } from './donnees'
-import type { Etiquette, Fournisseur, Projet, Responsable } from './types'
+import type { Etiquette, Fournisseur, Projet } from './types'
 
 // Même apparence que le Référentiel (demande de Maxime du 2026-10-14) : mêmes
 // tableaux (TableauReferentiel), mêmes boutons Modifier / Supprimer, mêmes
@@ -13,21 +13,20 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 const note = 'mb-4 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700'
 
 /**
- * Listes du module : responsables, fournisseurs, projets, étiquettes. Les
- * compagnies ne se gèrent qu'à un endroit : Référentiel › Compagnies
- * (l'onglet Entreprises d'ici est retiré, son adresse y mène).
+ * Listes du module : fournisseurs, projets, étiquettes. Les compagnies ne se
+ * gèrent qu'à un endroit : Référentiel › Compagnies (l'onglet Entreprises
+ * d'ici est retiré, son adresse y mène) ; les responsables sont les comptes
+ * de l'app qui écrivent dans le module (page Utilisateurs), comme dans
+ * Travaux et Achats.
  */
 export function Reglages() {
-  const { estDirection } = useAuth()
+  const { estAdmin, estDirection } = useAuth()
   const entreprises = useEntreprises()
   const optionsEntreprises = (entreprises.data ?? []).map((e) => ({ id: e.id, libelle: e.nom, court: e.abreviation, couleur: e.couleur }))
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         <nav className="sans-barre inline-flex max-w-full overflow-x-auto rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" aria-label="Listes du module">
-          <NavLink to="/mastertimeline/reglages/responsables" className={onglet}>
-            Responsables
-          </NavLink>
           <NavLink to="/mastertimeline/reglages/fournisseurs" className={onglet}>
             Fournisseurs
           </NavLink>
@@ -47,33 +46,21 @@ export function Reglages() {
           ) : (
             'Référentiel › Compagnies (direction)'
           )}
+          {' · '}Responsables : les comptes qui écrivent dans Mastertimeline (
+          {estAdmin ? (
+            <Link to="/utilisateurs" className="text-foret-700 underline">
+              Utilisateurs
+            </Link>
+          ) : (
+            'Utilisateurs, admins'
+          )}
+          )
         </p>
       </div>
       <Routes>
-        <Route index element={<Navigate to="responsables" replace />} />
-        <Route
-          path="responsables"
-          element={
-            <>
-              <p className={note}>
-                Les personnes qui reçoivent des tâches. Le courriel servira au rappel du 1er du mois. Pour passer toutes les tâches
-                de quelqu'un à une autre personne, utilisez l'onglet Responsables du module.
-              </p>
-              <TableauReferentiel<Responsable>
-                schema="mastertimeline"
-                table="responsables"
-                tri="nom"
-                nomLigne={(r) => r.nom}
-                valeursDefaut={{ actif: true }}
-                colonnes={[
-                  { champ: 'nom', libelle: 'Nom', type: 'texte', requis: true },
-                  { champ: 'courriel', libelle: 'Courriel', type: 'texte' },
-                  { champ: 'actif', libelle: 'Actif', type: 'booleen' },
-                ]}
-              />
-            </>
-          }
-        />
+        <Route index element={<Navigate to="fournisseurs" replace />} />
+        {/* Ancienne liste du module : les responsables sont les comptes de l'app. */}
+        <Route path="responsables" element={<Navigate to="/mastertimeline/responsables" replace />} />
         <Route
           path="fournisseurs"
           element={
@@ -101,7 +88,7 @@ export function Reglages() {
           }
         />
         {/* Ancien onglet Entreprises : les compagnies sont dans le référentiel commun. */}
-        <Route path="entreprises" element={estDirection ? <Navigate to="/referentiel/compagnies" replace /> : <Navigate to="/mastertimeline/reglages/responsables" replace />} />
+        <Route path="entreprises" element={estDirection ? <Navigate to="/referentiel/compagnies" replace /> : <Navigate to="/mastertimeline/reglages/fournisseurs" replace />} />
         <Route
           path="projets"
           element={

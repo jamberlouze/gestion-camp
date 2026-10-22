@@ -4,7 +4,7 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { dateCourte, estAnnuelle, moisCourt } from './calendrier'
 import { CaseCoche, ChoixResponsable, Pastille, Puce, PucesEtiquettes } from './commun'
 import type { References } from './donnees'
-import { useBasculer, useEcriture, useOuvrirFiche, type Passage } from './outils'
+import { useBasculer, useEcriture, useOuvrirFiche, usePeutCocher, type Passage } from './outils'
 import { PRIORITES } from './types'
 
 /** Colonnes du tableau, selon le regroupement (inutile de répéter l'entreprise du groupe). */
@@ -55,6 +55,7 @@ export function TableauPassages({ passages, refs, colonnes }: { passages: Passag
 
 function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }: { passage: Passage; refs: References; colonnes: Colonnes }) {
   const ecriture = useEcriture()
+  const peutCocher = usePeutCocher()
   const basculer = useBasculer()
   const ouvrir = useOuvrirFiche()
   const ouvrirFiche = () => ouvrir({ tache: t, periode })
@@ -70,7 +71,7 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
   return (
     <tr className={`align-top ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <td className="px-3 py-2">
-        <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!ecriture} />
+        <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!peutCocher(t)} />
       </td>
       <td className="px-2 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

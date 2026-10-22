@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
-import { useListe } from '@/lib/donnees'
+import { useListe, usePersonnesModule } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import type { FichierJoint } from '@/lib/photos'
 import type { Profil } from '@/lib/types'
 import { bornesExercice, exerciceDeCle, indexer, UNIQUE } from './calendrier'
-import type { Coche, Entreprise, Etiquette, Fichier, Fournisseur, Projet, Responsable, Tache } from './types'
+import type { Coche, Entreprise, Etiquette, Fichier, Fournisseur, Projet, Tache } from './types'
 
 // Module en ligne seulement (pas de file d'attente hors ligne, contrairement
 // à Embarcations) : sans réseau, une modification échoue tout de suite
@@ -17,7 +17,8 @@ const db = () => supabase.schema(S)
 // Compagnies : liste commune du référentiel (core.entreprises), gérée dans Référentiel › Compagnies.
 export const useEntreprises = () => useListe<Entreprise>('core', 'entreprises', 'ordre')
 export const useProjets = () => useListe<Projet>(S, 'projets', 'ordre')
-export const useResponsables = () => useListe<Responsable>(S, 'responsables', 'nom')
+/** Les comptes de l'app ; se choisit tout compte qui lit Mastertimeline (`peut_assigner`). */
+export const useResponsables = () => usePersonnesModule(S)
 export const useFournisseurs = () => useListe<Fournisseur>(S, 'fournisseurs', 'nom')
 export const useEtiquettes = () => useListe<Etiquette>(S, 'etiquettes', 'ordre')
 export const useFichiers = () => useListe<Fichier>(S, 'fichiers', 'created_at')
@@ -169,9 +170,9 @@ export async function creerTaches(lignes: Partial<Tache>[]) {
   if (error) throw error
 }
 
-/** Ajoute un projet ou un responsable (nom seulement) ; renvoie son id (import en lot). */
-export async function ajouterALaListe(table: 'projets' | 'responsables', champs: { nom: string; ordre?: number }) {
-  const { data, error } = await db().from(table).insert(champs).select('id').single()
+/** Ajoute un projet (nom seulement) ; renvoie son id (import en lot). */
+export async function ajouterProjet(champs: { nom: string; ordre?: number }) {
+  const { data, error } = await db().from('projets').insert(champs).select('id').single()
   if (error) throw error
   return (data as { id: string }).id
 }
@@ -198,6 +199,7 @@ export function useReferences() {
     return {
       entreprises: entreprises.data ?? [],
       projets: (projets.data ?? []).filter((p) => !p.archive),
+      /** Tous les comptes (noms à l'écran) ; dans les menus, seulement `peut_assigner`. */
       responsables: responsables.data ?? [],
       fournisseurs: fournisseurs.data ?? [],
       etiquettes: etiquettes.data ?? [],

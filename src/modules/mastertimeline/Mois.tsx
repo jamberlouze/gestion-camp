@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconePlus } from '@/lib/icones'
+import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
+import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
-import { cleAujourdhui, decalerMois, exerciceDeCle, libelleExercice, libelleMois, majuscule } from './calendrier'
+import { cleAujourdhui, dateCourte, decalerMois, estAnnuelle, exerciceDeCle, libelleExercice, libelleFrequence, libelleMois, majuscule } from './calendrier'
 import { useMediaQuery } from '@/lib/useMediaQuery'
-import { BarreFiltres, ChoixRegroupement, EnTeteGroupe, LigneTache } from './commun'
+import { BarreFiltres, ChoixRegroupement, EnTeteGroupe, LigneTache, Puce, PucesEtiquettes } from './commun'
 import { useCoches, useReferences, useTaches, type References } from './donnees'
-import { passagesDuMois, regrouper, retards, trierPassages, useEcriture, useFiltres, useOuvrirFiche, type Passage, type Regroupement } from './outils'
+import { garder, passagesDuMois, regrouper, retards, trierPassages, useEcriture, useFiltres, useOuvrirFiche, type Passage, type Regroupement } from './outils'
+import type { Tache } from './types'
 import { TableauPassages, type Colonnes } from './TableauPassages'
 import { BoutonImporter } from './Importer'
 
@@ -46,14 +49,19 @@ export function Mois() {
     const enRetard = courant ? trierPassages(retards(liste, cochesCourantes.index, filtres)) : []
     const groupes = regrouper(trierPassages(duMois), (p) => p.tache, par, refs)
     const faites = duMois.filter((p) => p.etat === 'faite' || p.etat === 'sautee').length
-    return { duMois, enRetard, groupes, faites }
+    // Recherche : les tâches trouvées qui ne passent pas ce mois-ci, pour ne pas les croire absentes.
+    const ici = new Set([...duMois, ...enRetard].map((p) => p.tache.id))
+    const ailleurs = filtres.texte.trim()
+      ? liste.filter((t) => !ici.has(t.id) && garder(t, filtres)).sort((a, b) => a.titre.localeCompare(b.titre, 'fr'))
+      : []
+    return { duMois, enRetard, groupes, faites, ailleurs }
   }, [taches.data, cle, coches.index, cochesCourantes.index, filtres, par, refs, courant])
 
   const erreur = taches.error ?? coches.erreur ?? refs.erreur
   if (erreur) return <p className={ui.erreur}>{messageErreur(erreur)}</p>
   if (!taches.data || !coches.pret || !refs.pret) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
 
-  const { duMois, enRetard, groupes, faites } = donnees
+  const { duMois, enRetard, groupes, faites, ailleurs } = donnees
 
   return (
     <div className="space-y-4">
@@ -126,7 +134,42 @@ export function Mois() {
           </section>
         ))}
       </div>
+
+      {ailleurs.length > 0 && <Ailleurs taches={ailleurs} refs={refs} />}
     </div>
+  )
+}
+
+/** Tâches trouvées par la recherche qui reviennent d'autres mois : un clic ouvre la fiche. */
+function Ailleurs({ taches, refs }: { taches: Tache[]; refs: References }) {
+  const ouvrir = useOuvrirFiche()
+  return (
+    <section className={ui.carte}>
+      <div className="flex items-center gap-2 border-b border-pierre-100 px-3 py-2">
+        <h3 className="text-sm font-semibold text-pierre-800">Dans les autres mois</h3>
+        <span className="text-xs text-pierre-500">
+          {taches.length} tâche{taches.length > 1 ? 's' : ''} trouvée{taches.length > 1 ? 's' : ''}
+        </span>
+      </div>
+      <ul className="divide-y divide-pierre-100">
+        {taches.map((t) => {
+          const entreprise = t.entreprise_id ? refs.entreprise.get(t.entreprise_id) : null
+          const responsable = t.responsable_id ? refs.responsable.get(t.responsable_id) : null
+          const ouvrirFiche = () => ouvrir({ tache: t })
+          return (
+            <li key={t.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
+              <button type="button" className="text-left text-pierre-900 decoration-pierre-300 hover:underline" onClick={ouvrirFiche}>
+                {t.titre}
+              </button>
+              <Puce>{estAnnuelle(t) ? libelleFrequence(t) : t.echeance ? dateCourte(t.echeance) : 'Sans date'}</Puce>
+              {entreprise && <PuceCompagnie compagnie={entreprise} className="font-normal" />}
+              {responsable && <Puce>{responsable.nom}</Puce>}
+              <PucesEtiquettes tache={t} refs={refs} />
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 

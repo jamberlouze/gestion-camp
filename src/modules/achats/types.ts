@@ -17,6 +17,8 @@ export interface Achat {
   prix_unitaire: number | null
   entreprise_id: string | null
   fournisseur_id: string | null
+  /** Compte responsable de l'achat (même liste que Mastertimeline et Travaux) ; null = personne. */
+  responsable_id: string | null
   note: string | null
   /** Commander au plus tard ce jour-là (AAAA-MM-JJ) ; null = pas de date. */
   date_cible: string | null

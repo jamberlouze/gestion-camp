@@ -38,12 +38,8 @@ export interface Etiquette {
   ordre: number
 }
 
-export interface Responsable {
-  id: string
-  nom: string
-  courriel: string | null
-  actif: boolean
-}
+/** Responsable d'une tâche : un compte de l'app (core.personnes_module), comme dans Travaux et Achats. */
+export type { PersonneModule as Responsable } from '@/lib/types'
 
 export interface Fournisseur {
   id: string
