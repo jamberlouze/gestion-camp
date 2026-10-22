@@ -3,6 +3,7 @@ import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Et
 import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { useAuth } from '@/shell/auth'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
 import { FILTRES_VIDES, offertPour, useBasculer, useEcriture, useOuvrirFiche, usePeutCocher, type Filtres, type Montrer, type Regroupement } from './outils'
@@ -22,10 +23,13 @@ export function BarreFiltres({
   /** Filtres à ne pas montrer (ex. le responsable dans la vue par responsable). */
   sans?: (keyof Filtres)[]
 }) {
+  // Terrain ne voit que ses tâches : pas de filtre par responsable.
+  const { estTerrain } = useAuth()
   const actifs = filtres.entreprise || filtres.projet || filtres.responsable || filtres.etiquettes.length > 0 || filtres.texte
   // Choix gardé sur l'appareil mais supprimé depuis (ex. compagnie en double
   // fusionnée) : le filtre tombe, sinon il cache tout en affichant « Toutes ».
   const disparus: Partial<Filtres> = {}
+  if (estTerrain && filtres.responsable) disparus.responsable = ''
   if (refs.pret) {
     if (filtres.entreprise && !refs.entreprise.has(filtres.entreprise)) disparus.entreprise = ''
     if (filtres.projet && !refs.projet.has(filtres.projet)) disparus.projet = ''
@@ -78,7 +82,7 @@ export function BarreFiltres({
             ))}
         </select>
       )}
-      {!sans?.includes('responsable') && (
+      {!sans?.includes('responsable') && !estTerrain && (
         <select aria-label="Responsable" className={menu} value={filtres.responsable} onChange={(e) => changer({ responsable: e.target.value })}>
           <option value="">Tous les responsables</option>
           {refs.responsables

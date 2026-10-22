@@ -150,13 +150,15 @@ export function filtrer(taches: Tache[], f: Filtres) {
  * les politiques RLS ; ceci ne sert qu'à l'affichage).
  */
 export function useDroits() {
-  const { profil, estDirection, peutEcrire } = useAuth()
+  const { profil, estDirection, estTerrain, peutEcrire } = useAuth()
   const ecriture = peutEcrire('travaux')
   const trieur = estDirection && ecriture
   const moi = profil?.id ?? null
   return {
     moi,
     ecriture,
+    /** Terrain : ne voit que les tâches qui lui sont assignées (rien d'autre). */
+    terrain: estTerrain,
     /** Direction : trie, assigne, modifie tout, gère les listes. */
     trieur,
     /** Peut envoyer une tâche dans Mastertimeline. */
@@ -167,8 +169,9 @@ export function useDroits() {
     cocher: (t: Tache) => ecriture && t.statut !== 'a_trier' && !t.annualisee_vers,
     /** Retirer : rejet par la direction, ou son propre signalement pas encore trié. */
     supprimer: (t: Tache) => trieur || (ecriture && t.statut === 'a_trier' && t.signale_par === moi),
-    prendre: (t: Tache) => ecriture && !trieur && t.statut === 'a_faire' && !t.assigne_a,
-    laisser: (t: Tache) => ecriture && !trieur && t.statut === 'a_faire' && !!moi && t.assigne_a === moi,
+    /** Terrain ne voit ni les tâches libres ni une tâche laissée : seule la direction assigne. */
+    prendre: (t: Tache) => ecriture && !trieur && !estTerrain && t.statut === 'a_faire' && !t.assigne_a,
+    laisser: (t: Tache) => ecriture && !trieur && !estTerrain && t.statut === 'a_faire' && !!moi && t.assigne_a === moi,
   }
 }
 

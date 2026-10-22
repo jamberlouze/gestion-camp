@@ -7,7 +7,7 @@ import { BandeauATrier } from './BandeauATrier'
 import { ChoixRegroupement, Section, type Montrer } from './commun'
 import type { Donnees } from './donnees'
 import { colonnesPour, decrireFiltres, FenetreImpression, ListeImprimee, pageParGroupeParDefaut, type ChoixImpression } from './Impression'
-import { comparerFaites, filtrer, FILTRES_VIDES, jourAujourdhui, regrouper, REGROUPEMENTS, trier, TRIS, type Filtres, type Regroupement, type Tri } from './outils'
+import { comparerFaites, filtrer, FILTRES_VIDES, jourAujourdhui, regrouper, REGROUPEMENTS, trier, TRIS, useDroits, type Filtres, type Regroupement, type Tri } from './outils'
 import { PRIORITES } from './types'
 
 const CLE = 'travaux-taches'
@@ -34,6 +34,7 @@ function lireChoix(): { regroupement: Regroupement; tri: Tri; filtres: Filtres }
  * « Imprimer » met sur papier les tâches affichées, groupes au choix.
  */
 export function Taches({ d }: { d: Donnees }) {
+  const droits = useDroits()
   const [choix, setChoix] = useState(lireChoix)
   const [voirFaites, setVoirFaites] = useState(false)
   const [fenetreImpression, setFenetreImpression] = useState(false)
@@ -52,13 +53,15 @@ export function Taches({ d }: { d: Donnees }) {
 
   // Une étiquette retirée de la liste de Mastertimeline ne filtre plus rien.
   const etiquettes = useMemo(() => filtres.etiquettes.filter((id) => d.etiquettes.some((e) => e.id === id)), [filtres.etiquettes, d.etiquettes])
-  const filtrees = useMemo(() => filtrer(d.taches, { ...filtres, etiquettes }), [d.taches, filtres, etiquettes])
+  // Terrain ne voit que ses tâches : le filtre par personne ne sert pas (un choix gardé d'avant tombe).
+  const personne = droits.terrain ? '' : filtres.personne
+  const filtrees = useMemo(() => filtrer(d.taches, { ...filtres, personne, etiquettes }), [d.taches, filtres, personne, etiquettes])
   const ouvertes = useMemo(() => trier(filtrees.filter((t) => t.statut === 'a_faire'), tri), [filtrees, tri])
   const faites = filtrees.filter((t) => t.statut === 'terminee').sort(comparerFaites)
 
   const groupes = useMemo(() => regrouper(ouvertes, regroupement, d, etiquettes), [ouvertes, regroupement, d, etiquettes])
   const montrer: Montrer = { lieu: regroupement !== 'lieu', categorie: regroupement !== 'categorie', chantier: true, personne: regroupement !== 'personne' }
-  const actifs = filtres.lieu || filtres.categorie || filtres.personne || filtres.chantier || filtres.priorite || etiquettes.length > 0 || filtres.texte
+  const actifs = filtres.lieu || filtres.categorie || personne || filtres.chantier || filtres.priorite || etiquettes.length > 0 || filtres.texte
 
   // Impression : les groupes cochés dans la fenêtre ; ⌘P sans la fenêtre = ce qui est affiché.
   const imprime: ChoixImpression = aImprimer ?? {
@@ -71,7 +74,7 @@ export function Taches({ d }: { d: Donnees }) {
     () => (aImprimer ? regrouper(ouvertes, aImprimer.regroupement, d, etiquettes).filter((g) => aImprimer.cles.includes(g.cle)) : groupes),
     [aImprimer, ouvertes, d, etiquettes, groupes],
   )
-  const portee = decrireFiltres({ ...filtres, etiquettes }, d)
+  const portee = decrireFiltres({ ...filtres, personne, etiquettes }, d)
   // Nom du PDF : le groupe s'il n'y en a qu'un (« Travaux - Léa - 2026-10-22 »).
   const sujet = imprime.regroupement !== 'aucun' && groupesImprimes.length === 1 ? groupesImprimes[0].nom : portee || 'tâches à faire'
   useTitreImpression(`Travaux - ${sujet} - ${jourAujourdhui()}`)
@@ -116,17 +119,19 @@ export function Taches({ d }: { d: Donnees }) {
             ))}
             <option value="aucune">Sans catégorie</option>
           </select>
-          <select aria-label="Personne" className={menu} value={filtres.personne} onChange={(e) => changerFiltres({ personne: e.target.value })}>
-            <option value="">Tout le monde</option>
-            <option value="libre">À assigner</option>
-            {d.personnes
-              .filter((p) => p.peut_assigner || p.id === filtres.personne)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nom}
-                </option>
-              ))}
-          </select>
+          {!droits.terrain && (
+            <select aria-label="Personne" className={menu} value={filtres.personne} onChange={(e) => changerFiltres({ personne: e.target.value })}>
+              <option value="">Tout le monde</option>
+              <option value="libre">À assigner</option>
+              {d.personnes
+                .filter((p) => p.peut_assigner || p.id === filtres.personne)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nom}
+                  </option>
+                ))}
+            </select>
+          )}
           <select aria-label="Priorité" className={menu} value={filtres.priorite} onChange={(e) => changerFiltres({ priorite: e.target.value })}>
             <option value="">Toutes les priorités</option>
             {Object.entries(PRIORITES).map(([n, nom]) => (
@@ -158,6 +163,7 @@ export function Taches({ d }: { d: Donnees }) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-sm text-pierre-500">
             {ouvertes.length} tâche{ouvertes.length > 1 ? 's' : ''} à faire
+            {droits.terrain ? (ouvertes.length > 1 ? ' assignées à toi' : ' assignée à toi') : ''}
             {actifs ? ' (filtrées)' : ''}.
           </p>
           <label className="ml-auto flex items-center gap-1.5 text-sm text-pierre-500">
@@ -183,7 +189,9 @@ export function Taches({ d }: { d: Donnees }) {
             <Section key={g.cle} titre={g.nom} couleur={g.couleur} taches={g.taches} d={d} montrer={montrer} />
           ))}
         </div>
-        {ouvertes.length === 0 && <p className="py-6 text-center text-sm text-pierre-500">Aucune tâche à faire.</p>}
+        {ouvertes.length === 0 && (
+          <p className="py-6 text-center text-sm text-pierre-500">{droits.terrain && !actifs ? "Aucune tâche ne t'est assignée pour l'instant." : 'Aucune tâche à faire.'}</p>
+        )}
 
         {faites.length > 0 && (
           <div>

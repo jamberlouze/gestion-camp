@@ -257,8 +257,15 @@ export type NouveauCommentaire = Pick<Commentaire, 'id' | 'tache_id' | 'texte' |
 // `nom` facultatif : un envoi mis en attente avant les PDF (2026-10-07) ne l'a pas.
 export type NouvellePhoto = Pick<Photo, 'id' | 'tache_id' | 'chemin' | 'ajoutee_par'> & { nom?: string | null }
 
-/** Ligne déjà en base (envoi refait après une coupure) : rien à faire. */
-const sansDoublon = { onConflict: 'id', ignoreDuplicates: true }
+/**
+ * Ajoute une ligne ; déjà en base (envoi refait après une coupure) : rien à
+ * faire. Pas d'« on conflict » : il demande de pouvoir relire la ligne, ce
+ * que Terrain ne peut pas une fois son signalement envoyé.
+ */
+async function inserer(table: string, ligne: object) {
+  const { error } = await db().from(table).insert(ligne)
+  if (error && error.code !== '23505') throw error
+}
 
 export function enregistrerMutationsTravaux(client: QueryClient) {
   const communes = {
@@ -299,7 +306,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
 
   client.setMutationDefaults(CLES.creerTache, {
     ...communes,
-    mutationFn: (t: NouvelleTache) => executer(db().from('taches').upsert(t, sansDoublon)),
+    mutationFn: (t: NouvelleTache) => inserer('taches', t),
     onMutate: (t: NouvelleTache) =>
       optimiste<Tache>(CLES.taches, t.id, () => ({
         description: null,
@@ -348,7 +355,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
 
   client.setMutationDefaults(CLES.ajouterCommentaire, {
     ...communes,
-    mutationFn: (c: NouveauCommentaire) => executer(db().from('commentaires').upsert(c, sansDoublon)),
+    mutationFn: (c: NouveauCommentaire) => inserer('commentaires', c),
     onMutate: (c: NouveauCommentaire) =>
       optimiste<Commentaire>(CLES.commentaires, c.id, () => ({ created_at: maintenant(), ...c }))(),
     onError: annuler,
@@ -376,7 +383,7 @@ export function enregistrerMutationsTravaux(client: QueryClient) {
       }
       // Sans fichier sur l'appareil, il a déjà été envoyé (ligne en base ou
       // à créer) ; s'il manque aussi dans le seau, l'image restera vide.
-      await executer(db().from('photos').upsert(p, sansDoublon))
+      await inserer('photos', p)
       await oublierPhoto(p.id)
     },
     onMutate: (p: NouvellePhoto) => optimiste<Photo>(CLES.photos, p.id, () => ({ created_at: maintenant(), ...p, nom: p.nom ?? null }))(),

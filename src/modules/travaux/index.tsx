@@ -57,9 +57,12 @@ export default function ModuleTravaux() {
             </span>
           )}
         </NavLink>
-        <NavLink to="/travaux/chantiers" className={onglet}>
-          Chantiers
-        </NavLink>
+        {/* Terrain : seulement ses tâches, dans l'onglet Tâches. */}
+        {!droits.terrain && (
+          <NavLink to="/travaux/chantiers" className={onglet}>
+            Chantiers
+          </NavLink>
+        )}
         {droits.trieur && (
           <NavLink to="/travaux/reglages" className={onglet}>
             Réglages
@@ -77,8 +80,8 @@ export default function ModuleTravaux() {
           {/* Anciennes adresses (onglets Tableau et À trier, retirés le 2026-10-06). */}
           <Route path="tableau" element={<Navigate to="/travaux" replace />} />
           <Route path="a-trier" element={<Navigate to="/travaux" replace />} />
-          <Route path="chantiers" element={<Chantiers d={d} />} />
-          <Route path="chantiers/:id" element={<Chantiers d={d} />} />
+          <Route path="chantiers" element={droits.terrain ? <Navigate to="/travaux" replace /> : <Chantiers d={d} />} />
+          <Route path="chantiers/:id" element={droits.terrain ? <Navigate to="/travaux" replace /> : <Chantiers d={d} />} />
           <Route path="reglages" element={<Reglages d={d} />} />
         </Routes>
       )}

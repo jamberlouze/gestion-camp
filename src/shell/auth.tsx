@@ -17,6 +17,11 @@ interface EtatAuth {
   estAdmin: boolean
   estDirection: boolean
   /**
+   * Rôle Terrain : dans Travaux et Mastertimeline, seulement ses tâches
+   * (la base l'impose, core.est_terrain) ; les écrans cachent le reste.
+   */
+  estTerrain: boolean
+  /**
    * Employé du référentiel qui remplit sa propre feuille de temps (courriel
    * de sa fiche = celui du compte) ; null sinon. Sa seule porte d'entrée
    * dans les Feuilles de temps (temps.mon_employe en base).
@@ -92,6 +97,7 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
   const profil = droits?.profil?.actif ? droits.profil : null
   const estAdmin = profil?.role === 'admin'
   const estDirection = estAdmin || profil?.role === 'direction'
+  const estTerrain = profil?.role === 'terrain'
   const employeTemps = (profil && droits?.employeTemps) || null
   const niveau = (m: ModuleId) =>
     niveauModule(profil?.role, droits?.roles ?? GRILLE_AVANT, droits?.acces ?? [], m, !!employeTemps)
@@ -103,6 +109,7 @@ export function FournisseurAuth({ children }: { children: ReactNode }) {
     erreurProfil: !!userId && !droits && isError,
     estAdmin,
     estDirection,
+    estTerrain,
     employeTemps,
     peutLire: (m) => niveau(m) !== null,
     peutEcrire: (m) => niveau(m) === 'ecriture',

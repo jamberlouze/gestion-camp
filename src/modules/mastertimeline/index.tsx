@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate, NavLink, Route, Routes } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
+import { useAuth } from '@/shell/auth'
 import { Annee } from './Annee'
 import { useEtiquettes } from './donnees'
 import { ContexteFiche, type DemandeFiche } from './outils'
@@ -18,8 +19,11 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 
 export default function ModuleMastertimeline() {
   const [fiche, setFiche] = useState<DemandeFiche | null>(null)
+  // Terrain : seulement ses tâches (Mois, Année, Projets) ; rien d'autre.
+  const { estTerrain } = useAuth()
   // Un onglet par étiquette (Corvée, Woofing…) : Mastertimeline + Travaux.
   const etiquettes = useEtiquettes().data ?? []
+  const versMois = <Navigate to="/mastertimeline" replace />
   return (
     <ContexteFiche.Provider value={setFiche}>
       <h1 className="text-2xl font-semibold">Mastertimeline</h1>
@@ -34,17 +38,21 @@ export default function ModuleMastertimeline() {
         <NavLink to="/mastertimeline/projets" className={onglet}>
           Projets
         </NavLink>
-        <NavLink to="/mastertimeline/responsables" className={onglet}>
-          Responsables
-        </NavLink>
-        {etiquettes.map((e) => (
-          <NavLink key={e.id} to={`/mastertimeline/etiquette/${e.id}`} className={onglet}>
-            {e.nom}
-          </NavLink>
-        ))}
-        <NavLink to="/mastertimeline/reglages" className={onglet}>
-          Réglages
-        </NavLink>
+        {!estTerrain && (
+          <>
+            <NavLink to="/mastertimeline/responsables" className={onglet}>
+              Responsables
+            </NavLink>
+            {etiquettes.map((e) => (
+              <NavLink key={e.id} to={`/mastertimeline/etiquette/${e.id}`} className={onglet}>
+                {e.nom}
+              </NavLink>
+            ))}
+            <NavLink to="/mastertimeline/reglages" className={onglet}>
+              Réglages
+            </NavLink>
+          </>
+        )}
       </nav>
       <BandeauErreurs racine="mastertimeline" />
       <Routes>
@@ -52,9 +60,9 @@ export default function ModuleMastertimeline() {
         <Route path="annee" element={<Annee />} />
         <Route path="projets" element={<Projets />} />
         <Route path="projets/:id" element={<Projets />} />
-        <Route path="responsables" element={<Responsables />} />
-        <Route path="etiquette/:id" element={<VueEtiquette />} />
-        <Route path="reglages/*" element={<Reglages />} />
+        <Route path="responsables" element={estTerrain ? versMois : <Responsables />} />
+        <Route path="etiquette/:id" element={estTerrain ? versMois : <VueEtiquette />} />
+        <Route path="reglages/*" element={estTerrain ? versMois : <Reglages />} />
         {/* Les achats ont leur propre module depuis le 2026-10-06. */}
         <Route path="achats" element={<Navigate to="/achats" replace />} />
       </Routes>

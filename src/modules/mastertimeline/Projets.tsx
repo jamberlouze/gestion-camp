@@ -40,7 +40,7 @@ export function Projets() {
 }
 
 function ListeProjets() {
-  const { peutLire } = useAuth()
+  const { peutLire, estTerrain } = useAuth()
   const refs = useReferences()
   const taches = useTaches()
   const exercice = exerciceDeCle(cleAujourdhui())
@@ -59,6 +59,8 @@ function ListeProjets() {
 
   if (taches.error || refs.erreur) return <p className={ui.erreur}>{messageErreur(taches.error ?? refs.erreur)}</p>
   if (!taches.data || !coches.pret || !refs.pret) return <p className="py-8 text-center text-sm text-pierre-500">Chargement…</p>
+  // Terrain : seulement les projets où il a des tâches.
+  const projets = estTerrain ? refs.projets.filter((p) => stats.has(p.id)) : refs.projets
 
   return (
     <div className="space-y-6">
@@ -66,23 +68,26 @@ function ListeProjets() {
         <h2 className="font-semibold">Projets de l'année</h2>
         <p className="text-sm text-pierre-500">Avancement de l'exercice {libelleExercice(exercice)}.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {refs.projets.map((p) => (
+          {projets.map((p) => (
             <CarteProjet key={p.id} projet={p} passages={stats.get(p.id) ?? []} />
           ))}
+          {projets.length === 0 && <p className="text-sm text-pierre-500">Aucune tâche de projet ne t'est assignée.</p>}
         </div>
       </section>
-      <p className="text-sm text-pierre-500">
-        Les chantiers ponctuels (Trembloc, rénovations…) sont dans le module Travaux
-        {peutLire('travaux') && (
-          <>
-            {' '}:{' '}
-            <Link className="text-foret-700 underline" to="/travaux/chantiers">
-              voir les chantiers
-            </Link>
-          </>
-        )}
-        .
-      </p>
+      {!estTerrain && (
+        <p className="text-sm text-pierre-500">
+          Les chantiers ponctuels (Trembloc, rénovations…) sont dans le module Travaux
+          {peutLire('travaux') && (
+            <>
+              {' '}:{' '}
+              <Link className="text-foret-700 underline" to="/travaux/chantiers">
+                voir les chantiers
+              </Link>
+            </>
+          )}
+          .
+        </p>
+      )}
     </div>
   )
 }
