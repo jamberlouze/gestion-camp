@@ -28,11 +28,14 @@ import {
 } from './donnees'
 import { LigneRelance } from './Relances'
 import {
+  CIVILITES,
   ETAPES,
   GENRES,
   GENRES_ECHANGE,
+  nomContact,
   nomSaison,
   SAISONS,
+  type Civilite,
   type Contact,
   type Etape,
   type Genre,
@@ -632,7 +635,9 @@ function FenetreContact({ organisationId, contact, fermer }: { organisationId: s
   const modifier = useModifierContact()
   const supprimer = useSupprimerContact()
   const [v, setV] = useState({
-    nom: contact?.nom ?? '',
+    civilite: contact?.civilite ?? '',
+    prenom: contact ? (contact.prenom ?? (contact.nom_famille ? '' : contact.nom)) : '',
+    nom_famille: contact?.nom_famille ?? '',
     fonction: contact?.fonction ?? '',
     courriel: contact?.courriel ?? '',
     telephone: contact?.telephone ?? '',
@@ -645,10 +650,14 @@ function FenetreContact({ organisationId, contact, fermer }: { organisationId: s
       <input type={type} className={ui.champ} value={String(v[cle])} onChange={(e) => setV({ ...v, [cle]: e.target.value })} />
     </label>
   )
+  const nom = nomContact(v.prenom, v.nom_famille)
   const enregistrer = () => {
-    if (!v.nom.trim()) return
+    if (!nom) return
     const champs = {
-      nom: v.nom.trim(),
+      nom,
+      civilite: (v.civilite || null) as Civilite | null,
+      prenom: v.prenom.trim() || null,
+      nom_famille: v.nom_famille.trim() || null,
       fonction: v.fonction.trim() || null,
       courriel: v.courriel.trim() || null,
       telephone: v.telephone.trim() || null,
@@ -668,7 +677,22 @@ function FenetreContact({ organisationId, contact, fermer }: { organisationId: s
           enregistrer()
         }}
       >
-        {champ('nom', 'Nom')}
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,2fr)] gap-3">
+          <label className="block">
+            <span className={ui.etiquette}>Civilité</span>
+            <select className={ui.champ} value={v.civilite} onChange={(e) => setV({ ...v, civilite: e.target.value })}>
+              <option value="">—</option>
+              {CIVILITES.map((c) => (
+                <option key={c.valeur} value={c.valeur}>
+                  {c.libelle}
+                </option>
+              ))}
+            </select>
+          </label>
+          {champ('prenom', 'Prénom')}
+          {champ('nom_famille', 'Nom de famille')}
+        </div>
+        <p className="-mt-1 text-xs text-pierre-500">Pour les courriels : « Bonjour Isabelle » ou « Bonjour Mme Chassagne ».</p>
         {champ('fonction', 'Fonction (enseignante de 6e, direction…)')}
         <div className="grid grid-cols-2 gap-3">
           {champ('courriel', 'Courriel', 'email')}
@@ -696,7 +720,7 @@ function FenetreContact({ organisationId, contact, fermer }: { organisationId: s
             <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
               Annuler
             </button>
-            <button className={ui.bouton} disabled={!v.nom.trim()}>
+            <button className={ui.bouton} disabled={!nom}>
               Enregistrer
             </button>
           </div>

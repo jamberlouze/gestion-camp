@@ -67,7 +67,9 @@ export const NOMS_COURRIEL = Object.fromEntries(TYPES_COURRIEL.map((t) => [t.gen
 
 /** Champs offerts dans les modèles (aide de l'onglet Courriels). */
 export const CHAMPS_COURRIEL: [string, string][] = [
-  ['responsable', 'Nom du responsable de la réservation'],
+  ['responsable', 'Nom complet du destinataire (responsable de la réservation, ou de la facturation pour une facture)'],
+  ['prenom', 'Prénom du destinataire : « Bonjour {{prenom}}, » → « Bonjour Isabelle, »'],
+  ['civilite_nom', 'Civilité et nom de famille : « Bonjour {{civilite_nom}}, » → « Bonjour Mme Chassagne, » (nom complet si la civilité n\'est pas connue)'],
   ['groupe', 'Nom du groupe'],
   ['numero', 'Numéro de réservation'],
   ['forfait', 'Forfait'],
@@ -101,6 +103,9 @@ export interface ContactCourriel {
   id?: string
   nom: string
   courriel: string | null
+  prenom?: string | null
+  nom_famille?: string | null
+  civilite?: 'mme' | 'm' | null
 }
 
 export interface EtatCourriels {
@@ -126,7 +131,7 @@ export interface EtatCourriels {
   }
   contact_reservation: ContactCourriel | null
   contact_facturation: ContactCourriel | null
-  demande: { id: string; recue_le: string; langue: string | null; courriel: string | null; nom: string | null } | null
+  demande: { id: string; recue_le: string; langue: string | null; courriel: string | null; nom: string | null; prenom?: string | null; nom_famille?: string | null } | null
   estimes: { id: string; version: number; statut: string; envoye_le: string | null; total: number | string }[]
   signatures: { id: string; statut: string; envoye_le: string; echeance: string; jeton: string }[]
   factures: {
@@ -307,17 +312,43 @@ const unique = (liste: (string | null | undefined)[]) => {
 export function destinataires(e: EtatCourriels, genre: GenreCourriel): { a: string[]; cc: string[]; nom: string } {
   const resa = e.contact_reservation
   const fact = e.contact_facturation
+  const nom = destinataire(e, genre)?.nom ?? ''
   if (genre === 'accuse') {
     const a = unique([e.demande?.courriel, resa?.courriel])
-    return { a: a.slice(0, 1), cc: [], nom: e.demande?.nom || resa?.nom || '' }
+    return { a: a.slice(0, 1), cc: [], nom }
   }
   if (genre === 'facture' || genre === 'facture_finale' || genre === 'rappel_paiement') {
     const a = unique([fact?.courriel ?? resa?.courriel])
-    return { a, cc: unique([resa?.courriel]).filter((c) => !a.some((x) => x.toLowerCase() === c.toLowerCase())), nom: (fact?.courriel ? fact.nom : resa?.nom) ?? '' }
+    return { a, cc: unique([resa?.courriel]).filter((c) => !a.some((x) => x.toLowerCase() === c.toLowerCase())), nom }
   }
   const a = unique([resa?.courriel ?? fact?.courriel])
   const cc = genre === 'contrat' || genre === 'rappel_signature' ? unique([e.r.courriel_direction]).filter((c) => !a.some((x) => x.toLowerCase() === c.toLowerCase())) : []
-  return { a, cc, nom: resa?.nom ?? fact?.nom ?? '' }
+  return { a, cc, nom }
+}
+
+/** La personne à qui le courriel s'adresse (mêmes règles que `destinataires`). */
+function destinataire(e: EtatCourriels, genre: GenreCourriel): Omit<ContactCourriel, 'courriel'> | null {
+  const resa = e.contact_reservation
+  const fact = e.contact_facturation
+  if (genre === 'accuse') return e.demande?.nom ? { nom: e.demande.nom, prenom: e.demande.prenom, nom_famille: e.demande.nom_famille } : (resa ?? null)
+  if (genre === 'facture' || genre === 'facture_finale' || genre === 'rappel_paiement') return (fact?.courriel ? fact : resa) ?? null
+  return resa ?? fact ?? null
+}
+
+const CIVILITES: Record<'mme' | 'm', [string, string]> = { mme: ['Mme', 'Ms.'], m: ['M.', 'Mr.'] }
+
+/**
+ * Comment saluer le destinataire : `prenom` (« Isabelle », sinon le nom
+ * complet) et `civilite_nom` (« Mme Chassagne » ; nom complet si la civilité
+ * ou le nom de famille n'est pas connu).
+ */
+export function appellations(p: Omit<ContactCourriel, 'courriel'> | null, l: LangueCourriel): { prenom: string; civilite_nom: string } {
+  if (!p) return { prenom: '', civilite_nom: '' }
+  const civilite = p.civilite ? CIVILITES[p.civilite]?.[l === 'en' ? 1 : 0] : undefined
+  return {
+    prenom: p.prenom?.trim() || p.nom,
+    civilite_nom: civilite && p.nom_famille?.trim() ? `${civilite} ${p.nom_famille.trim()}` : p.nom,
+  }
 }
 
 const FORFAITS_EN: Record<Forfait, [string, string]> = {
@@ -371,8 +402,10 @@ export function champsCourriel(e: EtatCourriels, p: { genre: GenreCourriel; ref:
   const facture = e.factures.find((f) => f.id === p.ref)
   const estime = e.estimes.find((x) => x.id === p.ref) ?? [...e.estimes].reverse().find((x) => x.statut === 'accepte' || x.statut === 'envoye')
   const echeance = facture ? echeanceFacture(e, facture) : null
+  const dest = destinataire(e, p.genre)
   return {
-    responsable: destinataires(e, p.genre).nom,
+    responsable: dest?.nom ?? '',
+    ...appellations(dest, l),
     groupe: r.nom,
     numero: r.numero,
     forfait: FORFAITS_EN[r.forfait][l === 'en' ? 1 : 0],
@@ -427,15 +460,37 @@ export function rendreCourriel(m: ModeleCourriel, langue: LangueCourriel, champs
 
 const echapper = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-/** Texte du courriel → HTML simple : paragraphes, sauts de ligne, liens, **gras**. */
-export function versHtml(texte: string): string {
+/**
+ * Liens qui deviennent des boutons dans le courriel (demande de Maxime du
+ * 2026-10-22) : la page du client et la signature du contrat, reconnues à
+ * leur chemin (`/client/<jeton>`, `/signer/<jeton>`). Le texte brut garde
+ * l'adresse.
+ */
+const BOUTONS: [RegExp, [string, string]][] = [
+  [/\/client\/[0-9a-f]{20,}/, ['Voir ma page de réservation', 'View my booking page']],
+  [/\/signer\/[0-9a-f]{20,}/, ['Signer le contrat', 'Sign the contract']],
+]
+
+const STYLE_BOUTON =
+  'display:inline-block;margin:6px 0;background:#0f5132;color:#ffffff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;line-height:1.2'
+
+/** Texte du courriel → HTML simple : paragraphes, sauts de ligne, liens (boutons pour la page client et la signature), **gras**. */
+export function versHtml(texte: string, langue: LangueCourriel = 'fr'): string {
+  const lien = (u: string) => {
+    const bouton = BOUTONS.find(([motif]) => motif.test(u))
+    return bouton
+      ? `<a href="${u}" style="${STYLE_BOUTON}">${echapper(bouton[1][langue === 'en' ? 1 : 0])}</a>`
+      : `<a href="${u}">${u}</a>`
+  }
   const paragraphes = texte
     .trim()
     .split(/\n\s*\n/)
     .map((p) =>
       echapper(p)
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, (u) => `<a href="${u}">${u}</a>`)
+        .replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, lien)
+        // Un bouton au milieu d'une ligne passe à la ligne suivante, avec un peu d'air.
+        .replace(/([^\n>])\s*(<a href="[^"]+" style="display:inline-block)/g, '$1<br>$2')
         .replace(/\n/g, '<br>'),
     )
     .map((p) => `<p style="margin:0 0 14px">${p}</p>`)

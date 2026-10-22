@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import {
   aPreparer,
+  appellations,
   champsCourriel,
   destinataires,
   echeanceFacture,
@@ -145,9 +146,33 @@ test('rendu : champs dans la langue du courriel, {{#si}}, HTML échappé et lien
   assert.deepEqual([en.dates, en.facture_montant, en.lien_client, en.forfait], ['from May 19 to 21, 2027', '$141.93', 'https://groupes.test/client/jc?lang=en', 'Nature class'])
   const m = { genre: 'facture', mode: 'approuver', sujet_fr: 'Facture {{facture_numero}}', corps_fr: 'Payable {{#si facture_sur_reception}}sur réception{{/si}}.\n\n\n\nLien : {{lien_client}}', sujet_en: 'x', corps_en: 'y' }
   assert.deepEqual(rendreCourriel(m, 'fr', fr), { sujet: 'Facture 1041', corps: 'Payable sur réception.\n\nLien : https://groupes.test/client/jc' })
-  const html = versHtml('Bonjour <b>toi</b> & **vous**\nligne 2\n\nVoir https://groupes.test/client/jc.')
+  const html = versHtml('Bonjour <b>toi</b> & **vous**\nligne 2\n\nVoir https://groupes.test/autre/jc.')
   assert.match(html, /Bonjour &lt;b&gt;toi&lt;\/b&gt; &amp; <strong>vous<\/strong><br>ligne 2/)
-  assert.match(html, /<a href="https:\/\/groupes.test\/client\/jc">https:\/\/groupes.test\/client\/jc<\/a>\./)
+  assert.match(html, /<a href="https:\/\/groupes.test\/autre\/jc">https:\/\/groupes.test\/autre\/jc<\/a>\./)
+})
+
+test('page client et signature : des boutons dans le HTML, l’adresse dans le texte', () => {
+  const jeton = 'ab12'.repeat(12)
+  const fr = versHtml(`Votre page :\nhttps://groupes.test/client/${jeton}\n\nSignez ici : https://groupes.test/signer/${jeton} merci`)
+  assert.match(fr, new RegExp(`Votre page :<br><a href="https://groupes.test/client/${jeton}" style="display:inline-block[^"]*">Voir ma page de réservation</a>`))
+  assert.match(fr, new RegExp(`Signez ici :<br><a href="https://groupes.test/signer/${jeton}" style="[^"]*">Signer le contrat</a> merci`))
+  const en = versHtml(`Your page:\nhttps://groupes.test/client/${jeton}?lang=en`, 'en')
+  assert.match(en, new RegExp(`<a href="https://groupes.test/client/${jeton}\\?lang=en" style="[^"]*">View my booking page</a>`))
+  // Le lien des fiches reste une adresse à transmettre aux parents.
+  assert.match(versHtml(`https://groupes.test/fiches/${jeton}`), new RegExp(`>https://groupes.test/fiches/${jeton}</a>`))
+})
+
+test('salutation : prénom, ou civilité et nom de famille', () => {
+  const isabelle = { nom: 'Isabelle Chassagne', prenom: 'Isabelle', nom_famille: 'Chassagne', civilite: 'mme' }
+  assert.deepEqual(appellations(isabelle, 'fr'), { prenom: 'Isabelle', civilite_nom: 'Mme Chassagne' })
+  assert.deepEqual(appellations({ ...isabelle, civilite: 'm', prenom: 'Jean' }, 'en'), { prenom: 'Jean', civilite_nom: 'Mr. Chassagne' })
+  // Civilité pas connue : le nom complet ; prénom pas connu : le nom complet aussi.
+  assert.deepEqual(appellations({ ...isabelle, civilite: null }, 'fr'), { prenom: 'Isabelle', civilite_nom: 'Isabelle Chassagne' })
+  assert.deepEqual(appellations({ nom: 'Mme Roussel', prenom: null, nom_famille: 'Roussel', civilite: 'mme' }, 'fr'), { prenom: 'Mme Roussel', civilite_nom: 'Mme Roussel' })
+  const e = etat({ contact_reservation: { id: 'c1', ...isabelle, courriel: 'i@ecole.test' } })
+  const compagnie = { raison_sociale: 'GBPA+ inc.', nom_court: 'GBPA+', courriel: 'x@y.test', telephone: '', reponse_interac: '' }
+  const champs = champsCourriel(e, { genre: 'estime', ref: null, langue: 'fr', compagnie, racine: 'https://groupes.test' })
+  assert.deepEqual([champs.responsable, champs.prenom, champs.civilite_nom], ['Isabelle Chassagne', 'Isabelle', 'Mme Chassagne'])
 })
 
 // ------------------------------------------------------------------

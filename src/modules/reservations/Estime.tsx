@@ -523,8 +523,7 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
           piece={{ nom: envoi.nom, taille: envoi.octets.length, ouvrir: () => ouvrirPdf(envoi.octets) }}
           avant={
             <>
-              Quand le courriel sera parti, l'estimé v{estime.version} deviendra « envoyé » : figé, visible sur la page du client (pour l'accepter en ligne), son PDF
-              gardé dans les documents. Si l'envoi échoue, il reste un brouillon.
+              À l'envoi, l'estimé v{estime.version} devient « envoyé » : figé et visible sur la page du client. Si l'envoi échoue, il reste un brouillon.
             </>
           }
           envoyer={(v) => expedier.mutateAsync({ reservation: r.id, genre: 'estime', ref: estime.id, ...v, piece: envoi })}

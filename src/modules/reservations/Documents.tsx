@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
-import { Section } from './commun'
+import { Section, ZoneTexte } from './commun'
 import { useDonnees } from './contexte'
 import { garderDocument, garderEstime, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
 import { cleFenetre, jourMontreal } from './courriels'
 import { conflitsAirbnbDe } from './disponibilite'
-import { brouillonCourriel, useCourriels, useDocuments, useEstimes, useExpedierCourriel, useModeEnvoi, useSignatures } from './donnees'
+import { brouillonCourriel, useCourriels, useDocuments, useEstimes, useExpedierCourriel, useModeEnvoi, useModifierReservation, useSignatures } from './donnees'
 import { FenetreCourriel } from './FenetreCourriel'
 import { dateCourte, dateLongue } from './format'
 import type { Reservation } from './types'
@@ -31,6 +31,7 @@ export function Documents({ r }: { r: Reservation }) {
   const [copie, setCopie] = useState(false)
   const courriels = useCourriels(r.id)
   const expedier = useExpedierCourriel()
+  const modifier = useModifierReservation()
   const modeEnvoi = useModeEnvoi()
   const refusEnvoi = modeEnvoi.error ? messageErreur(modeEnvoi.error) : (modeEnvoi.data?.refus ?? null)
   // Fenêtre « Envoyer le contrat… » : la demande de signature visée.
@@ -213,6 +214,32 @@ export function Documents({ r }: { r: Reservation }) {
               )}
             </div>
           )}
+          {/* Ce que le contrat imprime en plus, et le dépôt de sécurité qu'il prévoit. */}
+          <div className="mt-3 grid gap-x-6 gap-y-3 border-t border-pierre-100 pt-3 lg:grid-cols-2">
+            <ZoneTexte
+              libelle="Notes au contrat"
+              valeur={r.notes_contrat}
+              aide="Imprimées sur le contrat : clause particulière, n° de bon de commande…"
+              disabled={!ecriture}
+              enregistrer={(v) => modifier.mutate({ id: r.id, champs: { notes_contrat: v } })}
+            />
+            {(r.forfait === 'accueil_groupe' || r.forfait === 'location_salle') && (
+              <label className="block min-w-0">
+                <span className={ui.etiquette}>Dépôt de sécurité ({r.forfait === 'accueil_groupe' ? '2 000' : '1 000'} $ par carte)</span>
+                <select
+                  className={ui.champ}
+                  disabled={!ecriture}
+                  value={r.depot_securite ?? ''}
+                  onChange={(e) => modifier.mutate({ id: r.id, champs: { depot_securite: (e.target.value || null) as Reservation['depot_securite'] } })}
+                >
+                  <option value="">— Pas encore pris</option>
+                  <option value="pris">Pris à l'arrivée</option>
+                  <option value="relache">Relâché</option>
+                  <option value="encaisse">Encaissé (dommages)</option>
+                </select>
+              </label>
+            )}
+          </div>
         </div>
 
         {/* Pré-arrivée */}
@@ -252,8 +279,7 @@ export function Documents({ r }: { r: Reservation }) {
             charger={() => brouillonCourriel({ reservation: r.id, genre: 'contrat', ref: envoiContrat })}
             avant={
               <>
-                Quand le courriel sera parti, la réservation passera « Contrat envoyé » et le délai de signature de 7 jours commencera. Le lien de signature est dans
-                le texte.
+                À l'envoi, la réservation passe « Contrat envoyé » et le délai de signature de 7 jours commence.
               </>
             }
             envoyer={(v) => expedier.mutateAsync({ reservation: r.id, genre: 'contrat', ref: envoiContrat, ...v })}

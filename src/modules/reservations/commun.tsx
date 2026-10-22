@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ui } from '@/lib/ui'
 import { nomEtape } from './format'
 import { FERMETURES, type Reservation } from './types'
@@ -43,6 +43,42 @@ export function Section({ titre, action, children, className = '' }: { titre: st
   )
 }
 
+
+/** Texte de la réservation sur plusieurs lignes, enregistré en quittant le champ. */
+export function ZoneTexte({
+  libelle,
+  valeur,
+  enregistrer,
+  aide,
+  disabled,
+}: {
+  libelle: string
+  valeur: string | null
+  enregistrer: (v: string | null) => void
+  aide?: string
+  disabled?: boolean
+}) {
+  const [texte, setTexte] = useState(valeur ?? '')
+  const [base, setBase] = useState(valeur ?? '')
+  if ((valeur ?? '') !== base) {
+    setBase(valeur ?? '')
+    setTexte(valeur ?? '')
+  }
+  return (
+    <label className="block min-w-0">
+      <span className={ui.etiquette}>{libelle}</span>
+      <textarea
+        rows={3}
+        className={ui.champ}
+        disabled={disabled}
+        value={texte}
+        placeholder={aide}
+        onChange={(e) => setTexte(e.target.value)}
+        onBlur={() => texte.trim() !== (valeur ?? '') && enregistrer(texte.trim() || null)}
+      />
+    </label>
+  )
+}
 
 /** Puces de choix (une seule allumée). */
 export function Puces<T extends string>({

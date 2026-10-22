@@ -339,7 +339,7 @@ export async function envoyerCourriel(env, id, auteur, options = {}) {
       cc: c.cc ?? [],
       sujet,
       texte: c.corps,
-      html: versHtml(c.corps),
+      html: versHtml(c.corps, c.langue === 'en' ? 'en' : 'fr'),
       pieces,
       enTetes: enTetesFil(filActif),
       threadId: filActif?.thread_id ?? null,

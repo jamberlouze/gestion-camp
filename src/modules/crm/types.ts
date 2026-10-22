@@ -41,10 +41,24 @@ export interface Organisation {
   created_at: string
 }
 
+export type Civilite = 'mme' | 'm'
+export const CIVILITES: { valeur: Civilite; libelle: string }[] = [
+  { valeur: 'mme', libelle: 'Mme' },
+  { valeur: 'm', libelle: 'M.' },
+]
+
+/** « Prénom Nom », comme la base (crm.poser_nom_contact) : pour l'affichage tout de suite. */
+export const nomContact = (prenom: string, nomFamille: string) => [prenom.trim(), nomFamille.trim()].filter(Boolean).join(' ')
+
 export interface Contact {
   id: string
   organisation_id: string
+  /** « Prénom Nom », refait par la base à partir du prénom et du nom de famille (crm.poser_nom_contact). */
   nom: string
+  /** Mme ou M., pour « Bonjour Mme Chassagne » dans les courriels ; null = pas connue. */
+  civilite: Civilite | null
+  prenom: string | null
+  nom_famille: string | null
   fonction: string | null
   courriel: string | null
   telephone: string | null

@@ -8,7 +8,7 @@ import { Dialogue } from '@/lib/Dialogue'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, useModifierRelance, useRelances } from '@/modules/crm/donnees'
-import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
+import { CIVILITES, GENRES_ECHANGE, nomContact, type Civilite, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
 import { AvisReservation } from './AvisDisponibilite'
 import { BandeauEstime } from './BandeauEstime'
@@ -17,7 +17,7 @@ import { ChangementAuSejour, ConfirmationsSejour } from './ConfirmationSejour'
 import { CourrielsReservation } from './CourrielsClients'
 import { DemandeRecue } from './DemandeRecue'
 import { EspaceClient } from './EspaceClient'
-import { PuceEtape, Section } from './commun'
+import { PuceEtape, Section, ZoneTexte } from './commun'
 import { useDonnees } from './contexte'
 import { heuresNormales } from './parametres'
 import { champPetit, dateCourte, dateLongue, heure, nomEtape } from './format'
@@ -120,27 +120,24 @@ function Contenu({ r }: { r: Reservation }) {
       {/* Notes de l'équipe, en haut (même sans organisation reliée). */}
       <NotesEquipe r={r} />
 
-      {/* Le séjour d'abord, sur toute la largeur : c'est lui qui fait l'estimé. */}
-      <Sejour r={r} changer={changer} />
-
-      {/* minmax(0, …) : le tableau de l'estimé défile dans sa carte au lieu d'élargir la page (téléphone). */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-5">
-          {/* Cible du bouton du bandeau de l'estimé. */}
-          <div id="estime" className="scroll-mt-4">
-            <Estime r={r} />
-          </div>
-          <Facturation r={r} />
-          <Documents r={r} />
-          <CourrielsReservation r={r} />
-          <EspaceClient r={r} />
-          <ConfirmationsSejour r={r} />
-          <Suivi r={r} />
+      {/*
+        Une seule colonne (demande de Maxime : chaque section se lit au complet), dans l'ordre du
+        dossier : qui (client), quoi (séjour), puis estimé, facturation, contrat et documents…
+        minmax(0, …) : le tableau de l'estimé défile dans sa carte au lieu d'élargir la page (téléphone).
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+        <Client r={r} changer={changer} demandeAValider={!!demande && !demande.validee_le} />
+        <Sejour r={r} changer={changer} />
+        {/* Cible du bouton du bandeau de l'estimé. */}
+        <div id="estime" className="scroll-mt-4">
+          <Estime r={r} />
         </div>
-        <div className="space-y-5">
-          <Client r={r} changer={changer} demandeAValider={!!demande && !demande.validee_le} />
-          <Notes r={r} changer={changer} />
-        </div>
+        <Facturation r={r} />
+        <Documents r={r} />
+        <CourrielsReservation r={r} />
+        <EspaceClient r={r} />
+        <ConfirmationsSejour r={r} />
+        <Suivi r={r} />
       </div>
     </div>
   )
@@ -279,36 +276,52 @@ function ClientLecture({ r, demandeAValider, relier }: { r: Reservation; demande
   const compagnie = compagnies.find((c) => c.id === r.compagnie_id)
   const adresse = org ? [org.adresse, org.ville, [org.province, org.code_postal].filter(Boolean).join(' ')].filter(Boolean).join(', ') : ''
 
+  // Pleine largeur : l'organisation, les deux responsables et le reste côte à côte (une colonne au téléphone).
   return (
     <div className="space-y-4 text-sm">
-      {org ? (
-        <div>
-          <Link to={`/crm/o/${org.id}`} className="font-medium text-foret-800 hover:underline">
-            {org.nom}
-          </Link>
-          {adresse && <p className="text-pierre-500">{adresse}</p>}
-        </div>
-      ) : demandeAValider ? (
-        <p className="text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
-      ) : (
-        <p className="text-amber-700">
-          Aucune organisation du CRM.{' '}
-          {ecriture && (
-            <button className="underline hover:text-amber-900" onClick={relier}>
-              Relier au CRM
-            </button>
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0">
+          <p className={ui.etiquette}>Organisation</p>
+          {org ? (
+            <>
+              <Link to={`/crm/o/${org.id}`} className="font-medium text-foret-800 hover:underline">
+                {org.nom}
+              </Link>
+              {adresse && <p className="text-pierre-500">{adresse}</p>}
+            </>
+          ) : demandeAValider ? (
+            <p className="text-amber-700">À valider : reliez la demande du formulaire au CRM (en haut de la fiche).</p>
+          ) : (
+            <p className="text-amber-700">
+              Aucune organisation du CRM.{' '}
+              {ecriture && (
+                <button className="underline hover:text-amber-900" onClick={relier}>
+                  Relier au CRM
+                </button>
+              )}
+            </p>
           )}
-        </p>
-      )}
-
-      {org && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Personne libelle="Responsable de la réservation" contact={resp} />
-          <Personne libelle="Responsable de la facturation" contact={fact} vide={resp ? 'Le même' : '—'} />
         </div>
-      )}
+        {org && <Personne libelle="Responsable de la réservation" contact={resp} />}
+        {org && <Personne libelle="Responsable de la facturation" contact={fact} vide={resp ? 'Le même' : '—'} />}
+        <Infos r={r} compagnie={compagnie} nomResponsable={nomResponsable} />
+      </div>
       {org && <LienOrganisation organisationId={org.id} />}
+    </div>
+  )
+}
 
+function Infos({
+  r,
+  compagnie,
+  nomResponsable,
+}: {
+  r: Reservation
+  compagnie: ReturnType<typeof useDonnees>['compagnies'][number] | undefined
+  nomResponsable: ReturnType<typeof useDonnees>['nomResponsable']
+}) {
+  return (
+    <div className="min-w-0">
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5">
         {r.courriel_direction && (
           <>
@@ -373,7 +386,7 @@ function ClientEdition({ r, changer, demandeAValider }: { r: Reservation; change
   const sesContacts = r.organisation_id ? contacts.filter((c) => c.organisation_id === r.organisation_id) : []
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-x-6 gap-y-3 lg:grid-cols-2">
       <div>
         <span className={ui.etiquette}>Organisation</span>
         {demandeAValider && !r.organisation_id ? (
@@ -476,7 +489,19 @@ function ChoixContact({
           creer={(c) => {
             const id = crypto.randomUUID()
             ajouter.mutate(
-              { id, organisation_id: r.organisation_id!, nom: c.nom, courriel: c.courriel || null, telephone: c.telephone || null, fonction: null, notes: null, principal: false },
+              {
+                id,
+                organisation_id: r.organisation_id!,
+                nom: nomContact(c.prenom, c.nom_famille),
+                civilite: c.civilite || null,
+                prenom: c.prenom || null,
+                nom_famille: c.nom_famille || null,
+                courriel: c.courriel || null,
+                telephone: c.telephone || null,
+                fonction: null,
+                notes: null,
+                principal: false,
+              },
               { onSuccess: () => changer(id) },
             )
           }}
@@ -486,27 +511,41 @@ function ChoixContact({
   )
 }
 
-function NouveauContact({ fermer, creer }: { fermer: () => void; creer: (c: { nom: string; courriel: string; telephone: string }) => void }) {
-  const [c, setC] = useState({ nom: '', courriel: '', telephone: '' })
+type ContactNouveau = { civilite: Civilite | ''; prenom: string; nom_famille: string; courriel: string; telephone: string }
+
+function NouveauContact({ fermer, creer }: { fermer: () => void; creer: (c: ContactNouveau) => void }) {
+  const [c, setC] = useState<ContactNouveau>({ civilite: '', prenom: '', nom_famille: '', courriel: '', telephone: '' })
+  const nom = nomContact(c.prenom, c.nom_famille)
   return (
     <Dialogue titre="Nouveau contact" fermer={fermer}>
       <form
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
-          if (!c.nom.trim()) return
-          creer({ nom: c.nom.trim(), courriel: c.courriel.trim(), telephone: c.telephone.trim() })
+          if (!nom) return
+          creer({ ...c, prenom: c.prenom.trim(), nom_famille: c.nom_famille.trim(), courriel: c.courriel.trim(), telephone: c.telephone.trim() })
           fermer()
         }}
       >
-        <input autoFocus className={ui.champ} placeholder="Prénom et nom" value={c.nom} onChange={(e) => setC({ ...c, nom: e.target.value })} />
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,2fr)] gap-2">
+          <select aria-label="Civilité" className={ui.champ} value={c.civilite} onChange={(e) => setC({ ...c, civilite: e.target.value as Civilite | '' })}>
+            <option value="">—</option>
+            {CIVILITES.map((x) => (
+              <option key={x.valeur} value={x.valeur}>
+                {x.libelle}
+              </option>
+            ))}
+          </select>
+          <input autoFocus className={ui.champ} placeholder="Prénom" value={c.prenom} onChange={(e) => setC({ ...c, prenom: e.target.value })} />
+          <input className={ui.champ} placeholder="Nom de famille" value={c.nom_famille} onChange={(e) => setC({ ...c, nom_famille: e.target.value })} />
+        </div>
         <input className={ui.champ} type="email" placeholder="Courriel" value={c.courriel} onChange={(e) => setC({ ...c, courriel: e.target.value })} />
         <input className={ui.champ} placeholder="Téléphone" value={c.telephone} onChange={(e) => setC({ ...c, telephone: e.target.value })} />
         <div className="flex justify-end gap-2">
           <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
             Annuler
           </button>
-          <button className={ui.bouton} disabled={!c.nom.trim()}>
+          <button className={ui.bouton} disabled={!nom}>
             Ajouter
           </button>
         </div>
@@ -789,56 +828,12 @@ function Sejour({ r, changer }: { r: Reservation; changer: Changer }) {
           </Bloc>
         )}
       </div>
-    </Section>
-  )
-}
 
-// ------------------------------------------------------------
-// Notes
-// ------------------------------------------------------------
-function Zone({ libelle, valeur, enregistrer, aide }: { libelle: string; valeur: string | null; enregistrer: (v: string | null) => void; aide?: string }) {
-  const { ecriture } = useDonnees()
-  const [texte, setTexte] = useState(valeur ?? '')
-  const [base, setBase] = useState(valeur ?? '')
-  if ((valeur ?? '') !== base) {
-    setBase(valeur ?? '')
-    setTexte(valeur ?? '')
-  }
-  return (
-    <label className="block">
-      <span className={ui.etiquette}>{libelle}</span>
-      <textarea
-        rows={3}
-        className={ui.champ}
-        disabled={!ecriture}
-        value={texte}
-        placeholder={aide}
-        onChange={(e) => setTexte(e.target.value)}
-        onBlur={() => texte.trim() !== (valeur ?? '') && enregistrer(texte.trim() || null)}
-      />
-    </label>
-  )
-}
-
-function Notes({ r, changer }: { r: Reservation; changer: Changer }) {
-  const { ecriture } = useDonnees()
-  return (
-    <Section titre="Description et contrat">
-      <div className="space-y-3">
-        <Zone libelle="Description du groupe" valeur={r.description} enregistrer={(v) => changer({ description: v })} />
-        <Zone libelle="Commentaires du client" valeur={r.commentaires_client} enregistrer={(v) => changer({ commentaires_client: v })} />
-        <Zone libelle="Notes au contrat" valeur={r.notes_contrat} aide="Imprimées sur le contrat : clause particulière, n° de bon de commande…" enregistrer={(v) => changer({ notes_contrat: v })} />
-        {(r.forfait === 'accueil_groupe' || r.forfait === 'location_salle') && (
-          <Champ libelle={`Dépôt de sécurité (${r.forfait === 'accueil_groupe' ? '2 000' : '1 000'} $ par carte)`}>
-            <select className={ui.champ} disabled={!ecriture} value={r.depot_securite ?? ''} onChange={(e) => changer({ depot_securite: (e.target.value || null) as Reservation['depot_securite'] })}>
-              <option value="">— Pas encore pris</option>
-              <option value="pris">Pris à l'arrivée</option>
-              <option value="relache">Relâché</option>
-              <option value="encaisse">Encaissé (dommages)</option>
-            </select>
-          </Champ>
-        )}
-        <Zone libelle="Rétroaction après le séjour" valeur={r.retroaction} enregistrer={(v) => changer({ retroaction: v })} />
+      {/* Ce que le client et l'équipe disent du groupe (les notes au contrat sont dans Documents › Contrat). */}
+      <div className="mt-5 grid gap-x-6 gap-y-3 border-t border-pierre-100 pt-4 lg:grid-cols-3">
+        <ZoneTexte libelle="Description du groupe" valeur={r.description} disabled={d} enregistrer={(v) => changer({ description: v })} />
+        <ZoneTexte libelle="Commentaires du client" valeur={r.commentaires_client} disabled={d} enregistrer={(v) => changer({ commentaires_client: v })} />
+        <ZoneTexte libelle="Rétroaction après le séjour" valeur={r.retroaction} disabled={d} enregistrer={(v) => changer({ retroaction: v })} />
       </div>
     </Section>
   )

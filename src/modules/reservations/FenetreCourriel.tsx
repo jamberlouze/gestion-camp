@@ -5,7 +5,7 @@
 // (Mailpit en DEV). Sert à l'estimé et au contrat (fiche), et aux
 // courriels de la file « À approuver ».
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { ui } from '@/lib/ui'
@@ -71,6 +71,7 @@ export function FenetreCourriel({
   const [erreur, setErreur] = useState<string | null>(null)
   const [occupe, setOccupe] = useState<'envoi' | 'enregistrement' | null>(null)
   const [enregistre, setEnregistre] = useState(false)
+  const idFormulaire = useId()
 
   useEffect(() => {
     let fini = false
@@ -123,8 +124,33 @@ export function FenetreCourriel({
   }
 
   const refus = depart?.refus ?? null
+  // Boutons hors de la partie qui défile : ils ne cachent jamais le texte (dont « ce qui arrive à l'envoi »).
+  const pied = depart && (
+    <div className="space-y-2">
+      {avant && <div className="text-xs text-pierre-600">{avant}</div>}
+      {erreur && (
+        <p className={ui.erreur} role="alert">
+          {erreur}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {enregistre && <span className="mr-auto text-xs text-foret-700">Enregistré ✓</span>}
+        <button type="button" className={ui.boutonSecondaire} disabled={occupe !== null} onClick={fermer}>
+          Annuler
+        </button>
+        {enregistrer && (
+          <button type="button" className={ui.boutonSecondaire} disabled={occupe !== null} onClick={() => void agir('enregistrement')}>
+            {occupe === 'enregistrement' ? 'Enregistrement…' : 'Enregistrer sans envoyer'}
+          </button>
+        )}
+        <button type="submit" form={idFormulaire} className={ui.bouton} disabled={occupe !== null || !!refus} title={refus ?? undefined}>
+          {occupe === 'envoi' ? 'Envoi…' : libelleEnvoyer}
+        </button>
+      </div>
+    </div>
+  )
   return (
-    <Dialogue titre={titre} fermer={() => occupe === null && fermer()} large>
+    <Dialogue titre={titre} fermer={() => occupe === null && fermer()} large pied={pied || undefined}>
       {!depart && !erreur && <p className="text-sm text-pierre-500">Préparation du courriel…</p>}
       {!depart && erreur && (
         <div className="space-y-3">
@@ -138,6 +164,7 @@ export function FenetreCourriel({
       )}
       {depart && (
         <form
+          id={idFormulaire}
           className="space-y-3 text-sm"
           onSubmit={(e) => {
             e.preventDefault()
@@ -174,6 +201,7 @@ export function FenetreCourriel({
           <label className="block">
             <span className={ui.etiquette}>Texte {depart.langue === 'en' && '(anglais)'}</span>
             <textarea className={`${ui.champ} min-h-64 font-sans text-base sm:text-sm`} value={v.corps} onChange={champ('corps')} />
+            <span className="mt-1 block text-xs text-pierre-500">Dans le courriel, le lien de la page du client et celui de la signature deviennent des boutons.</span>
           </label>
           {piece && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -189,27 +217,6 @@ export function FenetreCourriel({
               {piece.note && <span className="text-xs text-pierre-500">{piece.note}</span>}
             </div>
           )}
-          {avant && <div className="text-xs text-pierre-600">{avant}</div>}
-          <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center justify-end gap-2 border-t border-pierre-200 bg-white px-5 py-3">
-            {/* Toujours visible, même si le texte est long. */}
-            {erreur && (
-              <p className={`${ui.erreur} w-full`} role="alert">
-                {erreur}
-              </p>
-            )}
-            {enregistre && <span className="mr-auto text-xs text-foret-700">Enregistré ✓</span>}
-            <button type="button" className={ui.boutonSecondaire} disabled={occupe !== null} onClick={fermer}>
-              Annuler
-            </button>
-            {enregistrer && (
-              <button type="button" className={ui.boutonSecondaire} disabled={occupe !== null} onClick={() => void agir('enregistrement')}>
-                {occupe === 'enregistrement' ? 'Enregistrement…' : 'Enregistrer sans envoyer'}
-              </button>
-            )}
-            <button type="submit" className={ui.bouton} disabled={occupe !== null || !!refus} title={refus ?? undefined}>
-              {occupe === 'envoi' ? 'Envoi…' : libelleEnvoyer}
-            </button>
-          </div>
         </form>
       )}
     </Dialogue>
