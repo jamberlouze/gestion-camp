@@ -233,12 +233,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
           </fieldset>
         )}
 
-        {!droits.trieur && (
-          <p className="text-xs text-pierre-500">
-            La direction recevra ton signalement dans « À trier ».
-            {droits.terrain && ' Il paraîtra dans ta liste si la tâche t’est assignée.'}
-          </p>
-        )}
+        {!droits.trieur && <p className="text-xs text-pierre-500">La direction recevra ton signalement dans « À trier ».</p>}
         {erreur && <p className={ui.erreur}>{erreur}</p>}
         <BarreActions>
           <button type="submit" className={ui.bouton} disabled={lecture}>

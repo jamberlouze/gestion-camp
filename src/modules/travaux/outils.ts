@@ -157,7 +157,7 @@ export function useDroits() {
   return {
     moi,
     ecriture,
-    /** Terrain : ne voit que les tâches qui lui sont assignées (rien d'autre). */
+    /** Terrain : ne voit que ses tâches assignées et ses signalements. */
     terrain: estTerrain,
     /** Direction : trie, assigne, modifie tout, gère les listes. */
     trieur,
@@ -165,11 +165,11 @@ export function useDroits() {
     annualiser: trieur && peutEcrire('mastertimeline'),
     /** Champs de base (titre, description, lieu, catégorie). */
     modifierBase: (t: Tache) => trieur || (ecriture && t.statut === 'a_trier' && t.signale_par === moi),
-    /** Cocher / décocher. */
-    cocher: (t: Tache) => ecriture && t.statut !== 'a_trier' && !t.annualisee_vers,
+    /** Cocher / décocher. Terrain : seulement une tâche qui lui est assignée (pas son signalement trié pour un autre). */
+    cocher: (t: Tache) => ecriture && t.statut !== 'a_trier' && !t.annualisee_vers && (!estTerrain || (!!moi && t.assigne_a === moi)),
     /** Retirer : rejet par la direction, ou son propre signalement pas encore trié. */
     supprimer: (t: Tache) => trieur || (ecriture && t.statut === 'a_trier' && t.signale_par === moi),
-    /** Terrain ne voit ni les tâches libres ni une tâche laissée : seule la direction assigne. */
+    /** Terrain : seule la direction assigne (ni prendre ni laisser). */
     prendre: (t: Tache) => ecriture && !trieur && !estTerrain && t.statut === 'a_faire' && !t.assigne_a,
     laisser: (t: Tache) => ecriture && !trieur && !estTerrain && t.statut === 'a_faire' && !!moi && t.assigne_a === moi,
   }

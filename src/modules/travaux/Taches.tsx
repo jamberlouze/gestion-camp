@@ -53,7 +53,7 @@ export function Taches({ d }: { d: Donnees }) {
 
   // Une étiquette retirée de la liste de Mastertimeline ne filtre plus rien.
   const etiquettes = useMemo(() => filtres.etiquettes.filter((id) => d.etiquettes.some((e) => e.id === id)), [filtres.etiquettes, d.etiquettes])
-  // Terrain ne voit que ses tâches : le filtre par personne ne sert pas (un choix gardé d'avant tombe).
+  // Terrain ne voit que ses tâches et ses signalements : pas de filtre par personne (un choix gardé d'avant tombe).
   const personne = droits.terrain ? '' : filtres.personne
   const filtrees = useMemo(() => filtrer(d.taches, { ...filtres, personne, etiquettes }), [d.taches, filtres, personne, etiquettes])
   const ouvertes = useMemo(() => trier(filtrees.filter((t) => t.statut === 'a_faire'), tri), [filtrees, tri])
@@ -163,7 +163,6 @@ export function Taches({ d }: { d: Donnees }) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-sm text-pierre-500">
             {ouvertes.length} tâche{ouvertes.length > 1 ? 's' : ''} à faire
-            {droits.terrain ? (ouvertes.length > 1 ? ' assignées à toi' : ' assignée à toi') : ''}
             {actifs ? ' (filtrées)' : ''}.
           </p>
           <label className="ml-auto flex items-center gap-1.5 text-sm text-pierre-500">
@@ -190,7 +189,7 @@ export function Taches({ d }: { d: Donnees }) {
           ))}
         </div>
         {ouvertes.length === 0 && (
-          <p className="py-6 text-center text-sm text-pierre-500">{droits.terrain && !actifs ? "Aucune tâche ne t'est assignée pour l'instant." : 'Aucune tâche à faire.'}</p>
+          <p className="py-6 text-center text-sm text-pierre-500">{droits.terrain && !actifs ? "Rien à faire pour toi pour l'instant." : 'Aucune tâche à faire.'}</p>
         )}
 
         {faites.length > 0 && (

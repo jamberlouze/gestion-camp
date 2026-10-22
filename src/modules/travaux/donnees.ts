@@ -260,7 +260,7 @@ export type NouvellePhoto = Pick<Photo, 'id' | 'tache_id' | 'chemin' | 'ajoutee_
 /**
  * Ajoute une ligne ; déjà en base (envoi refait après une coupure) : rien à
  * faire. Pas d'« on conflict » : il demande de pouvoir relire la ligne, ce
- * que Terrain ne peut pas une fois son signalement envoyé.
+ * que Terrain ne peut pas pour une tâche qui n'est plus la sienne.
  */
 async function inserer(table: string, ligne: object) {
   const { error } = await db().from(table).insert(ligne)
