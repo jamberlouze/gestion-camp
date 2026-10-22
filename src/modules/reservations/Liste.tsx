@@ -9,10 +9,11 @@ import { PuceEtape, Puces } from './commun'
 import { useDonnees } from './contexte'
 import { heuresNormales } from './parametres'
 import { argent, champPetit, nomForfait, normaliser, periode } from './format'
-import { useAjouterReservation, useAlertesPaiement, useChangementsATraiter } from './donnees'
+import { actionsDe, type Signaux } from './actions'
+import { useAjouterReservation, useSignauxActions } from './donnees'
 import { ETAPES, FORFAITS, type Forfait, type Reservation } from './types'
 
-type Vue = 'nouvelles' | 'actives' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
+type Vue = 'nouvelles' | 'a_traiter' | 'actives' | 'non_confirmees' | 'confirmees' | 'a_facturer' | 'closed_lost' | 'toutes'
 type Tri = 'arrivee' | 'arrivee_desc' | 'estime' | 'estime_desc'
 
 const rang = (r: Reservation) => ETAPES.findIndex((e) => e.valeur === r.etape)
@@ -22,8 +23,10 @@ const RANG_TERMINEE = ETAPES.findIndex((e) => e.valeur === 'terminee')
 // Les vues filtrées des Sheets (INFOS Demandes), en puces. Les demandes du
 // formulaire pas encore reliées au CRM sont des nouvelles demandes (étiquette
 // « Organisation à valider » dans la rangée) : pas de vue à part.
-const VUES: { id: Vue; nom: string; garde: (r: Reservation) => boolean }[] = [
+const VUES: { id: Vue; nom: string; garde: (r: Reservation, s: Signaux) => boolean }[] = [
   { id: 'nouvelles', nom: 'Nouvelles demandes', garde: (r) => !r.fermeture && r.etape === 'nouvelle' },
+  // Réunion du 2026-10-21 : tout ce qui a un point rouge (actions.ts).
+  { id: 'a_traiter', nom: 'À traiter', garde: (r, s) => actionsDe(r, s).length > 0 },
   { id: 'actives', nom: 'Actives', garde: (r) => !r.fermeture && rang(r) < RANG_TERMINEE },
   { id: 'non_confirmees', nom: 'Non confirmées', garde: (r) => !r.fermeture && rang(r) < RANG_CONFIRMEE },
   { id: 'confirmees', nom: 'Confirmées', garde: (r) => !r.fermeture && rang(r) >= RANG_CONFIRMEE },
@@ -58,8 +61,7 @@ const comparer = (tri: Tri) => (a: Reservation, b: Reservation) => {
 export function Liste() {
   const { reservations, orgParId, responsables, nomResponsable, ecriture, auj } = useDonnees()
   const naviguer = useNavigate()
-  const sansPaiement = useAlertesPaiement(auj)
-  const changements = useChangementsATraiter()
+  const signaux = useSignauxActions(auj)
   const [params, setParams] = useSearchParams()
   const vue = (VUES.some((v) => v.id === params.get('vue')) ? params.get('vue') : 'nouvelles') as Vue
   const exercice = params.get('exercice') ?? String(exerciceDe(auj))
@@ -89,7 +91,7 @@ export function Liste() {
   )
   const q = normaliser(recherche)
   const affichees = deLExercice
-    .filter(VUES.find((v) => v.id === vue)!.garde)
+    .filter((r) => VUES.find((v) => v.id === vue)!.garde(r, signaux))
     .filter(
       (r) =>
         !q ||
@@ -118,7 +120,7 @@ export function Liste() {
   return (
     <div className="space-y-4">
       <BandeauConflitsAirbnb />
-      <Puces options={VUES} valeur={vue} changer={(v) => changer('vue', v === 'nouvelles' ? '' : v)} compte={(id) => deLExercice.filter(VUES.find((v) => v.id === id)!.garde).length} />
+      <Puces options={VUES} valeur={vue} changer={(v) => changer('vue', v === 'nouvelles' ? '' : v)} compte={(id) => deLExercice.filter((r) => VUES.find((v) => v.id === id)!.garde(r, signaux)).length} />
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
@@ -185,9 +187,21 @@ export function Liste() {
             <tbody className="divide-y divide-pierre-100">
               {affichees.map((r) => {
                 const org = r.organisation_id ? orgParId.get(r.organisation_id) : undefined
+                // Point rouge : la réservation demande une action (actions.ts).
+                const actions = actionsDe(r, signaux)
                 return (
                   <tr key={r.id} className="cursor-pointer hover:bg-pierre-50" onClick={() => naviguer(`/reservations/r/${r.id}`)}>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-pierre-600">{r.numero}</td>
+                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-pierre-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          aria-hidden
+                          title={actions.map((a) => a.texte).join(' · ') || undefined}
+                          className={`size-2 shrink-0 rounded-full ${actions.length ? 'bg-red-600' : 'bg-transparent'}`}
+                        />
+                        {actions.length > 0 && <span className="sr-only">Action à prendre : </span>}
+                        {r.numero}
+                      </span>
+                    </td>
                     <td className="px-3 py-2">
                       <div className="font-medium text-pierre-900">{r.nom}</div>
                       {org && org.nom !== r.nom && <div className="text-xs text-pierre-500">{org.nom}</div>}
@@ -196,8 +210,13 @@ export function Liste() {
                       ) : (
                         !r.organisation_id && <div className="text-xs text-amber-700">Organisation à valider</div>
                       )}
-                      {sansPaiement.has(r.id) && <div className="text-xs text-rose-700">Aucun paiement reçu</div>}
-                      {changements.has(r.id) && <div className="text-xs text-amber-700">Changement du client à traiter</div>}
+                      {actions
+                        .filter((a) => a.code !== 'nouvelle')
+                        .map((a) => (
+                          <div key={a.code} className={`text-xs ${a.urgent ? 'text-rose-700' : 'text-amber-700'}`}>
+                            {a.texte}
+                          </div>
+                        ))}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{nomForfait(r)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-pierre-700">{periode(r)}</td>

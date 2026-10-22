@@ -117,7 +117,10 @@ export function Facturation({ r }: { r: Reservation }) {
                 ? 'Pas encore de devis.'
                 : annulee
                   ? "Réservation annulée : voir les frais d'annulation ci-dessous."
-                  : (raisonDevis ?? 'Créé à partir de l’estimé accepté, avec le contrat signé et le spécimen de chèque joints.')}
+                  : (raisonDevis ??
+                    (r.signe_le
+                      ? 'Créé à partir de l’estimé accepté, avec le contrat signé et le spécimen de chèque joints.'
+                      : 'Créé à partir de l’estimé accepté, avec le spécimen de chèque joint ; le contrat signé y sera joint à la signature (synchro aux 15 minutes).'))}
             </p>
           ) : (
             <div className="mt-1 space-y-1">
@@ -168,32 +171,34 @@ export function Facturation({ r }: { r: Reservation }) {
                 </button>
               )}
             </div>
-            <table className="w-full">
-              <tbody className="divide-y divide-pierre-100">
-                {etapes.map((e) => {
-                  const fait = e.cle === 'finale' ? d && factureProgressif >= d.total - 0.01 && auj > r.date_depart : total && factureProgressif >= e.cumul * total - 1
-                  return (
-                    <tr key={e.cle} className="align-top">
-                      <td className="py-1.5 pr-2">
-                        {e.libelle}
-                        {e.note && <div className="text-xs text-pierre-500">{e.note}</div>}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{e.montant !== null ? argent(e.montant) : '—'}</td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-pierre-600">
-                        {fait ? (
-                          <span className="text-foret-700">✓ Facturé</span>
-                        ) : (
-                          <span className={e.facturer_le <= auj ? 'font-medium text-amber-700' : ''}>
-                            À facturer {e.facturer_le <= auj ? 'maintenant' : `le ${dateCourte(e.facturer_le, auj)}`}
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap py-1.5 pl-2 text-right text-pierre-500">{e.echeance ? `dû le ${dateCourte(e.echeance, auj)}` : 'sur réception'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <tbody className="divide-y divide-pierre-100">
+                  {etapes.map((e) => {
+                    const fait = e.cle === 'finale' ? d && factureProgressif >= d.total - 0.01 && auj > r.date_depart : total && factureProgressif >= e.cumul * total - 1
+                    return (
+                      <tr key={e.cle} className="align-top">
+                        <td className="py-1.5 pr-2">
+                          {e.libelle}
+                          {e.note && <div className="text-xs text-pierre-500">{e.note}</div>}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{e.montant !== null ? argent(e.montant) : '—'}</td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-pierre-600">
+                          {fait ? (
+                            <span className="text-foret-700">✓ Facturé</span>
+                          ) : (
+                            <span className={e.facturer_le <= auj ? 'font-medium text-amber-700' : ''}>
+                              À facturer {e.facturer_le <= auj ? 'maintenant' : `le ${dateCourte(e.facturer_le, auj)}`}
+                            </span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap py-1.5 pl-2 text-right text-pierre-500">{e.echeance ? `dû le ${dateCourte(e.echeance, auj)}` : 'sur réception'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -214,13 +219,15 @@ export function Facturation({ r }: { r: Reservation }) {
         {liste.length > 0 && (
           <div>
             <p className={ui.etiquette}>Factures (QuickBooks)</p>
-            <table className="w-full">
-              <tbody className="divide-y divide-pierre-100">
-                {liste.map((f) => (
-                  <LigneFacture key={f.id} f={f} auj={auj} environnement={connexion?.environnement ?? null} />
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <tbody className="divide-y divide-pierre-100">
+                  {liste.map((f) => (
+                    <LigneFacture key={f.id} f={f} auj={auj} environnement={connexion?.environnement ?? null} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-2 flex flex-wrap gap-x-4 text-pierre-600">
               <span>Facturé : {argent(facture)}</span>
               <span>Payé : {argent(paye)}</span>

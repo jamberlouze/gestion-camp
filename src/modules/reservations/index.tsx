@@ -20,7 +20,9 @@ import {
   useReglages,
   useReservations,
   useResponsables,
+  useSignauxActions,
 } from './donnees'
+import { nombreAAgir } from './actions'
 import { Fiche } from './Fiche'
 import { Liste } from './Liste'
 import { Modeles } from './Modeles'
@@ -49,6 +51,8 @@ export default function ModuleReservations() {
   const modeles = useModeles()
   const surFiche = useLocation().pathname.startsWith('/reservations/r/')
   const auj = aujourdhui()
+  const signaux = useSignauxActions(auj)
+  const aAgir = nombreAAgir(reservations.data ?? [], signaux)
 
   const donnees = useMemo<Donnees | null>(() => {
     if (
@@ -145,6 +149,12 @@ export default function ModuleReservations() {
       <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/reservations" end className={(p) => onglet({ isActive: p.isActive || surFiche })}>
           Réservations
+          {/* Réservations qui demandent une action (point rouge de la liste, vue « À traiter »). */}
+          {aAgir > 0 && (
+            <span className="ml-1.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[0.7rem] font-semibold tabular-nums text-white" title="Réservations à traiter">
+              {aAgir}
+            </span>
+          )}
         </NavLink>
         <NavLink to="/reservations/catalogue" className={onglet}>
           Catalogue et prix

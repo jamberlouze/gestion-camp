@@ -16,7 +16,7 @@ import {
 } from '../../src/modules/reservations/facturation.ts'
 import { chiffrer, dechiffrer, signer, verifier } from './chiffre.js'
 import { routeQbo } from './api.js'
-import { lireCdc, normaliser } from './operations.js'
+import { lireCdc, normaliser, rattraperDevisSignes } from './operations.js'
 
 const CLE = btoa(String.fromCharCode(...new Uint8Array(32).map((_, i) => i + 1)))
 const env = {
@@ -391,4 +391,63 @@ test('sans session de l’équipe : refusé', async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ ok: false }), { status: 200 })
   const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
   assert.equal(res.status, 403)
+})
+
+// ------------------------------------------------------------------
+// Devis créé avant la signature (relance dès l'estimé accepté, 2026-10-21)
+// ------------------------------------------------------------------
+
+/** Réseau simulé + la liste des réservations signées que lit le rattrapage. */
+async function simulerRattrapage(devis, signees = [{ id: R1, fermeture: null }]) {
+  const appels = await simuler({ pieces: true, devisExistant: devis })
+  const suite = globalThis.fetch
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes('/rest/v1/reservations?id=in.')) {
+      appels.push({ u: String(url), m: init.method ?? 'GET', corps: init.body })
+      return new Response(JSON.stringify(signees), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    return suite(url, init)
+  }
+  return appels
+}
+
+test('rattrapage : devis fait avant la signature → échéancier posé et contrat signé joint', async () => {
+  const appels = await simulerRattrapage({ reservation_id: R1, qbo_id: '12', total: 15553.02, echeancier: [], contrat_joint: false })
+  assert.equal(await rattraperDevisSignes(env, 'c1'), 1)
+  const patchs = appels.filter((a) => a.u.includes('/qbo_devis?') && a.m === 'PATCH').map((a) => JSON.parse(a.corps))
+  assert.ok(patchs.some((p) => Array.isArray(p.echeancier) && p.echeancier.length === 3))
+  assert.ok(patchs.some((p) => p.contrat_joint === true))
+  assert.ok(appels.some((a) => a.u.endsWith('/rpc/qbo_taches')))
+  const envois = appels.filter((a) => a.u.includes('/upload'))
+  assert.equal(envois.length, 1)
+  assert.ok(new TextDecoder().decode(envois[0].corps).includes('filename="Contrat 27-G-592 signé.pdf"'))
+})
+
+test('rattrapage : rien pour un devis complet, ni pour une réservation pas encore signée', async () => {
+  let appels = await simulerRattrapage({ reservation_id: R1, qbo_id: '12', total: 1, echeancier: [{ cle: 'finale' }], contrat_joint: true })
+  assert.equal(await rattraperDevisSignes(env, 'c1'), 0)
+  assert.ok(!appels.some((a) => a.m !== 'GET'))
+  appels = await simulerRattrapage({ reservation_id: R1, qbo_id: '12', total: 1, echeancier: [], contrat_joint: false }, [])
+  assert.equal(await rattraperDevisSignes(env, 'c1'), 0)
+  assert.ok(!appels.some((a) => a.m !== 'GET' || a.u.includes('/upload')))
+})
+
+test('mettre le devis à jour : la dernière version acceptée (ex. 40 → 42 élèves), lue par la base dans l’ordre des versions', async () => {
+  const appels = await simuler({ lien: { qbo_id: '55', nom: 'École' }, devisExistant: { qbo_id: '12', estime_version: 1 } })
+  const suite = globalThis.fetch
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes('/rest/v1/estimes?')) {
+      appels.push({ u: String(url), m: init.method ?? 'GET' })
+      return new Response(JSON.stringify([{ id: 'e2', version: 2, sous_total: 11385, total: 13090.11, accepte_par: 'Sophie', accepte_le: '2027-04-20T12:00:00Z' }]), { status: 200 })
+    }
+    return suite(url, init)
+  }
+  const res = await routeQbo(requete('devis', { reservation: R1 }), env, 'devis')
+  assert.equal(res.status, 200)
+  const lecture = appels.find((a) => a.u.includes('/rest/v1/estimes?'))
+  assert.match(lecture.u, /statut=eq\.accepte/)
+  assert.match(lecture.u, /order=version\.desc&limit=1/)
+  const ligne = JSON.parse(appels.find((a) => a.u.includes('/qbo_devis?') && a.m === 'PATCH').corps)
+  assert.deepEqual([ligne.estime_id, ligne.estime_version], ['e2', 2])
+  assert.ok(appels.some((a) => a.u.includes('/rest/v1/lignes?estime_id=eq.e2')))
 })

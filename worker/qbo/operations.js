@@ -224,20 +224,69 @@ async function envoyerDevis(env, ctx, { lignes, estime, totalApp, annulation, ch
   const avertissements = []
   if (creation) {
     // Contrat signé et spécimens de chèque joints au devis (SOP).
-    const signe = un(await db.lire(`documents?reservation_id=eq.${r.id}&genre=eq.contrat_signe&select=titre,chemin&order=cree_le.desc&limit=1`))
-    const fichiers = [...(signe ? [{ titre: signe.titre, chemin: signe.chemin }] : []), ...(compagnie.annexes ?? [])]
-    if (!signe) avertissements.push("Pas de contrat signé gardé dans l'app : rien n'a été joint pour le contrat.")
+    const signe = await contratSigne(db, r.id)
+    const fichiers = [...(signe ? [{ titre: signe.titre, chemin: signe.chemin, contrat: true }] : []), ...(compagnie.annexes ?? [])]
+    if (!signe) avertissements.push("Pas encore de contrat signé : il sera joint au devis dès la signature (synchro aux 15 minutes).")
     for (const f of fichiers) {
       try {
-        const { octets, type } = await telecharger(env, f.chemin)
-        const ext = type.includes('pdf') ? 'pdf' : type.includes('png') ? 'png' : 'jpg'
-        await qbo.joindre('Estimate', resultat.Id, `${f.titre}.${ext}`.replace(/[\\/]/g, '-'), type, octets)
+        await joindreAuDevis(env, qbo, resultat.Id, f)
+        if (f.contrat) await db.modifier('qbo_devis', `reservation_id=eq.${r.id}`, { contrat_joint: true })
       } catch (e) {
         avertissements.push(`Pièce jointe « ${f.titre} » non ajoutée : ${e.message}`)
       }
     }
   }
   return { qbo, ligneDevis, avertissements }
+}
+
+const contratSigne = async (db, reservationId) =>
+  un(await db.lire(`documents?reservation_id=eq.${reservationId}&genre=eq.contrat_signe&select=titre,chemin&order=cree_le.desc&limit=1`))
+
+/** Un fichier du seau des réservations joint à un devis QBO. */
+async function joindreAuDevis(env, qbo, devisQboId, f) {
+  const { octets, type } = await telecharger(env, f.chemin)
+  const ext = type.includes('pdf') ? 'pdf' : type.includes('png') ? 'png' : 'jpg'
+  await qbo.joindre('Estimate', devisQboId, `${f.titre}.${ext}`.replace(/[\\/]/g, '-'), type, octets)
+}
+
+/**
+ * Devis créé avant la signature (la relance « créer le devis QBO » est posée
+ * dès l'estimé accepté, réunion du 2026-10-21) : à la signature, ses relances
+ * de l'échéancier n'avaient pas pu être posées (il faut la date de
+ * signature) ni le contrat signé joint. Rattrapé à la synchro de la
+ * compagnie (cron aux 15 minutes, bouton « Mettre à jour depuis QBO »), au
+ * plus `max` devis par passage. Rend le nombre de devis rattrapés.
+ */
+export async function rattraperDevisSignes(env, compagnieId, max = 5) {
+  const db = base(env, 'reservations')
+  const devis = (await db.lire(`qbo_devis?compagnie_id=eq.${compagnieId}&annulation=is.false&select=reservation_id,echeancier,contrat_joint`)).filter(
+    (d) => !d.contrat_joint || !(d.echeancier ?? []).length,
+  )
+  if (!devis.length) return 0
+  const signees = new Map(
+    (await db.lire(`reservations?id=in.(${devis.map((d) => d.reservation_id).join(',')})&signe_le=not.is.null&select=id,fermeture`))
+      .filter((r) => r.fermeture !== 'annulee')
+      .map((r) => [r.id, r]),
+  )
+  let faits = 0
+  for (const d of devis.filter((x) => signees.has(x.reservation_id)).slice(0, max)) {
+    const ctx = await contexteReservation(env, d.reservation_id)
+    let fait = false
+    if (!(d.echeancier ?? []).length) {
+      await poserEcheancier(ctx.db, ctx.r, Number(ctx.devis.total))
+      fait = true
+    }
+    if (!d.contrat_joint) {
+      const signe = await contratSigne(ctx.db, ctx.r.id)
+      if (signe) {
+        await joindreAuDevis(env, await clientQbo(env, ctx.r.compagnie_id), ctx.devis.qbo_id, signe)
+        await ctx.db.modifier('qbo_devis', `reservation_id=eq.${ctx.r.id}`, { contrat_joint: true })
+        fait = true
+      }
+    }
+    if (fait) faits++
+  }
+  return faits
 }
 
 /** Relances de l'échéancier et seuils gardés avec le devis (montants d'après son total). */
@@ -442,7 +491,12 @@ export async function synchroniserCompagnie(env, compagnieId) {
       })
     }
     await db.modifier('qbo_connexions', `compagnie_id=eq.${compagnieId}`, { derniere_synchro: debut.toISOString(), erreur: null })
-    return { compagnie: compagnieId, factures: recues, devis: (changes.Estimate ?? []).length }
+    // Devis faits avant la signature : échéancier et contrat signé (une erreur ici n'arrête pas la synchro).
+    const rattrapes = await rattraperDevisSignes(env, compagnieId).catch((e) => {
+      console.error('Rattrapage des devis signés :', e.message)
+      return 0
+    })
+    return { compagnie: compagnieId, factures: recues, devis: (changes.Estimate ?? []).length, rattrapes }
   } catch (e) {
     await db.modifier('qbo_connexions', `compagnie_id=eq.${compagnieId}`, { erreur: e.message.slice(0, 500) }).catch(() => {})
     throw e

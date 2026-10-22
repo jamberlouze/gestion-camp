@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRelances } from '@/modules/crm/donnees'
+import type { Signaux } from './actions'
 import type { CleCalendrier } from './agenda'
+import type { Decisions } from './confirmation'
 import type {
   Compagnie,
   ConfirmationClient,
@@ -18,6 +20,7 @@ import type {
   Ligne,
   Modele,
   ModeleCourriel,
+  NoteReservation,
   Prix,
   Produit,
   QboConnexion,
@@ -869,6 +872,95 @@ export function useTraiterChangement() {
       Promise.all(
         [['reservations', 'confirmations'], ['reservations', 'reservations'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey })),
       ),
+  })
+}
+
+/**
+ * Décision ligne par ligne (réunion du 2026-10-21) : seuls les champs
+ * acceptés vont au séjour ; un refus = message et appel au client. Erreurs
+ * affichées sur place.
+ */
+export function useDeciderChangement() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'confirmations', 'decider'],
+    networkMode: 'always',
+    mutationFn: async (v: { id: string; decisions: Decisions; reponse: string; clientAppele: boolean | null }) => {
+      const { error } = await db().rpc('decider_changement', {
+        p_confirmation: v.id,
+        p_decisions: v.decisions,
+        p_reponse: v.reponse,
+        p_client_appele: v.clientAppele,
+      })
+      if (error) throw error
+    },
+    onSettled: () =>
+      Promise.all(
+        [['reservations', 'confirmations'], ['reservations', 'reservations'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey })),
+      ),
+  })
+}
+
+/** Ce qui demande une action (point rouge de la liste, compte de l'onglet, accueil). */
+export function useSignauxActions(auj: string): Signaux {
+  const relances = useRelances()
+  // Changement refusé : la relance « appeler le client » (decider_changement) tant qu'elle n'est pas faite.
+  const appels = new Set(
+    (relances.data ?? []).filter((x) => x.reservation_id && x.statut === 'a_faire' && x.source_cle?.startsWith('appel:')).map((x) => x.reservation_id!),
+  )
+  return { changements: useChangementsATraiter(), sansPaiement: useAlertesPaiement(auj), appels }
+}
+
+// ------------------------------------------------------------------
+// Notes de l'équipe (haut de la fiche)
+// ------------------------------------------------------------------
+
+/** Notes d'une réservation, les plus récentes d'abord. */
+export function useNotesReservation(reservationId: string) {
+  const cle = ['reservations', 'notes', reservationId]
+  useTempsReel('notes', cle, `reservation_id=eq.${reservationId}`)
+  return useQuery({
+    queryKey: cle,
+    queryFn: async () => {
+      const { data, error } = await db().from('notes').select('*').eq('reservation_id', reservationId).order('cree_le', { ascending: false })
+      if (error) throw error
+      return data as NoteReservation[]
+    },
+  })
+}
+
+/** Ajout d'une note : affichée tout de suite, signée et datée par la base. */
+export function useAjouterNote() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations', 'notes', 'ajouter'],
+    networkMode: 'always',
+    mutationFn: async (n: NoteReservation) => {
+      const { error } = await db().from('notes').insert({ id: n.id, reservation_id: n.reservation_id, texte: n.texte })
+      if (error) throw error
+    },
+    onMutate: async (n) => {
+      const cle = ['reservations', 'notes', n.reservation_id]
+      await client.cancelQueries({ queryKey: cle })
+      client.setQueryData<NoteReservation[]>(cle, (l) => (l ? [n, ...l] : l))
+    },
+    onError: (_e, n) => client.setQueryData<NoteReservation[]>(['reservations', 'notes', n.reservation_id], (l) => l?.filter((x) => x.id !== n.id)),
+    onSettled: (_d, _e, n) => client.invalidateQueries({ queryKey: ['reservations', 'notes', n.reservation_id] }),
+  })
+}
+
+export const useModifierNote = () => useModifier<NoteReservation>('notes', ['reservations', 'notes'])
+
+export function useRetirerNote() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations', 'notes', 'retirer'],
+    networkMode: 'always',
+    mutationFn: async (n: Pick<NoteReservation, 'id' | 'reservation_id'>) => {
+      const { error } = await db().from('notes').delete().eq('id', n.id)
+      if (error) throw error
+    },
+    onSettled: (_d, _e, n) => client.invalidateQueries({ queryKey: ['reservations', 'notes', n.reservation_id] }),
   })
 }
 

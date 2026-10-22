@@ -11,6 +11,7 @@ import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, u
 import { GENRES_ECHANGE, type GenreEchange } from '@/modules/crm/types'
 import { animateursRequis, gratuites, litsDe, nuitsEntre, repasProposes, varianteProposee } from './calcul'
 import { AvisReservation } from './AvisDisponibilite'
+import { BandeauEstime } from './BandeauEstime'
 import { ChoixOrganisation } from './ChoixOrganisation'
 import { ChangementAuSejour, ConfirmationsSejour } from './ConfirmationSejour'
 import { CourrielsReservation } from './CourrielsClients'
@@ -25,6 +26,8 @@ import { Documents } from './Documents'
 import { Estime } from './Estime'
 import { Facturation } from './FacturationQbo'
 import { LienOrganisation } from './LienOrganisation'
+import { estNoteEquipe } from './notes'
+import { NotesEquipe } from './NotesEquipe'
 import {
   ETAGES,
   ETAPES,
@@ -104,19 +107,29 @@ function Contenu({ r }: { r: Reservation }) {
 
       <AvisReservation r={r} />
 
+      {/* Le séjour ne correspond plus à l'estimé accepté : nouvel estimé, ou estimé final. */}
+      <BandeauEstime r={r} />
+
       {demande && <DemandeRecue demande={demande} />}
 
       <Parcours r={r} changer={changer} />
 
-      {/* Changement proposé par le client sur sa page : à accepter ou refuser. */}
+      {/* Changement proposé par le client sur sa page : à décider ligne par ligne. */}
       <ChangementAuSejour r={r} />
+
+      {/* Notes de l'équipe, en haut (même sans organisation reliée). */}
+      <NotesEquipe r={r} />
 
       {/* Le séjour d'abord, sur toute la largeur : c'est lui qui fait l'estimé. */}
       <Sejour r={r} changer={changer} />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      {/* minmax(0, …) : le tableau de l'estimé défile dans sa carte au lieu d'élargir la page (téléphone). */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
-          <Estime r={r} />
+          {/* Cible du bouton du bandeau de l'estimé. */}
+          <div id="estime" className="scroll-mt-4">
+            <Estime r={r} />
+          </div>
           <Facturation r={r} />
           <Documents r={r} />
           <CourrielsReservation r={r} />
@@ -810,7 +823,7 @@ function Zone({ libelle, valeur, enregistrer, aide }: { libelle: string; valeur:
 function Notes({ r, changer }: { r: Reservation; changer: Changer }) {
   const { ecriture } = useDonnees()
   return (
-    <Section titre="Notes">
+    <Section titre="Description et contrat">
       <div className="space-y-3">
         <Zone libelle="Description du groupe" valeur={r.description} enregistrer={(v) => changer({ description: v })} />
         <Zone libelle="Commentaires du client" valeur={r.commentaires_client} enregistrer={(v) => changer({ commentaires_client: v })} />
@@ -847,7 +860,8 @@ function Suivi({ r }: { r: Reservation }) {
   const [texte, setTexte] = useState('')
   const [action, setAction] = useState({ titre: '', echeance: '', assigne_a: moi.id })
 
-  const siens = (echanges.data ?? []).filter((e) => e.reservation_id === r.id)
+  // Les notes de l'équipe sont en haut de la fiche (NotesEquipe), pas ici.
+  const siens = (echanges.data ?? []).filter((e) => e.reservation_id === r.id && !estNoteEquipe(e))
   const actions = (relances.data ?? []).filter((x) => x.reservation_id === r.id && x.statut === 'a_faire')
   const fil = [
     ...siens.map((e) => ({ id: e.id, quand: `${e.jour}T12:00`, icone: GENRES_ECHANGE.find((g) => g.id === e.genre)?.icone ?? '•', texte: e.texte, qui: e.auteur_nom, jour: e.jour })),
@@ -872,7 +886,7 @@ function Suivi({ r }: { r: Reservation }) {
           >
             <div className="flex flex-wrap gap-2">
               <select aria-label="Canal" className={champPetit} value={genre} onChange={(e) => setGenre(e.target.value as GenreEchange)} disabled={sansOrg}>
-                {GENRES_ECHANGE.map((g) => (
+                {GENRES_ECHANGE.filter((g) => g.id !== 'note').map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.icone} {g.nom}
                   </option>

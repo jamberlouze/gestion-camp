@@ -180,6 +180,45 @@ export function evaluer(forfait: Forfait, actuel: InfosSejour, propose: InfosSej
   return { dansRegles: raisons.length === 0, raisons, automne }
 }
 
+/**
+ * Verdict d'un seul changement (décision ligne par ligne, réunion du
+ * 2026-10-21) : les mêmes règles que `evaluer`, comme si le client n'avait
+ * changé que ce champ (séjour d'un jour : le départ suit la date).
+ */
+export function evaluerChamp(forfait: Forfait, actuel: InfosSejour, propose: InfosSejour, jour: string, champ: ChampSejour): Verdict {
+  const seul: InfosSejour = { ...actuel, [champ]: propose[champ] }
+  if (champ === 'date_arrivee' && estUnJour(forfait)) seul.date_depart = propose.date_depart
+  return evaluer(forfait, actuel, seul, jour)
+}
+
+/** Décision de l'équipe sur chaque champ changé : true = accepté, false = refusé (reservations.confirmations.decisions). */
+export type Decisions = Partial<Record<ChampSejour, boolean>>
+
+/** Changements acceptés et refusés d'une décision (champs sans décision : ni l'un ni l'autre). */
+export function partager(diffs: Difference[], decisions: Decisions) {
+  return {
+    acceptes: diffs.filter((d) => decisions[d.champ] === true),
+    refuses: diffs.filter((d) => decisions[d.champ] === false),
+  }
+}
+
+/**
+ * Réponse affichée au client sur sa page (`confirmations.reponse`) :
+ * accepté en partie, ce qui l'est et ce qui ne l'est pas (la page montre le
+ * séjour réduit aux champs acceptés), puis le message de l'équipe ; sinon
+ * le message seul (la page dit déjà « accepté » ou « pas accepté »).
+ */
+export function reponseDecision(diffs: Difference[], decisions: Decisions, forfait: Forfait, message: string, langue: Langue = 'fr') {
+  const { acceptes, refuses } = partager(diffs, decisions)
+  const t = langue === 'en' ? { oui: 'Accepted', non: 'Not accepted' } : { oui: 'Accepté', non: 'Pas accepté' }
+  const deuxPoints = langue === 'en' ? ':' : ' :'
+  const detail =
+    acceptes.length && refuses.length
+      ? `${t.oui}${deuxPoints} ${resumeChangement(acceptes, forfait, langue)}.\n${t.non}${deuxPoints} ${resumeChangement(refuses, forfait, langue)}.`
+      : ''
+  return [detail, message.trim()].filter(Boolean).join('\n\n')
+}
+
 // ------------------------------------------------------------------
 // Textes (français pour l'équipe, langue du client sur sa page)
 // ------------------------------------------------------------------

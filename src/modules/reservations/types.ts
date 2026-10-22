@@ -1,6 +1,7 @@
 // Types du module Réservations (tables du schéma `reservations`).
 
-import type { InfosSejour } from './confirmation'
+import type { Decisions, InfosSejour } from './confirmation'
+import type { SejourEstime } from './ecartEstime'
 import type { GenreCourriel, ModeleCourriel } from './courriels'
 import type { Reponses } from './demande'
 
@@ -117,6 +118,8 @@ export interface Estime {
   accepte_ip: string | null
   /** Prix provisoires utilisés (code → exercice du prix pris), figés avec l'estimé. */
   prix_provisoires: Record<string, number>
+  /** Séjour quand il a quitté le brouillon (null : figé avant le 2026-10-21) ; voir ecartEstime.ts. */
+  sejour: SejourEstime | null
   created_at: string
   updated_at: string
 }
@@ -628,6 +631,21 @@ export interface ConfirmationClient {
   reponse: string | null
   traitee_le: string | null
   traitee_par_nom: string | null
+  /** Décision ligne par ligne (champ → accepté) ; null = décidée en bloc (avant le 2026-10-21). */
+  decisions: Decisions | null
+  /** Au moins un refus : le client avait-il déjà été appelé ? */
+  client_appele: boolean | null
+}
+
+/** Note de l'équipe en haut de la fiche (datée et signée par la base). */
+export interface NoteReservation {
+  id: string
+  reservation_id: string
+  texte: string
+  auteur: string | null
+  auteur_nom: string | null
+  cree_le: string
+  modifie_le: string | null
 }
 
 /** Lien du formulaire propre à une organisation (/demande?lien=<jeton>). */

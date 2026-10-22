@@ -746,3 +746,68 @@ from (values
 ) as f(numero, genre, prenom, nom, groupe, sante, allergies, problemes, epipen, diete, autre, medic, jours, consent)
 join reservations.reservations r on r.numero = f.numero
 where not exists (select 1 from reservations.fiches x where x.reservation_id = r.id);
+
+-- ------------------------------------------------------------
+-- Réservations › Portail côté équipe (réunion du 2026-10-21) : 986 contrat
+-- signé, estimé v1 accepté pour 40 élèves, séjour passé à 42, et une demande
+-- de changement du client à décider ligne par ligne (48 élèves, départ +1
+-- jour, arrivée à 11 h) ; 987 estimé accepté pour 30, séjour passé à 32
+-- (pas signé : « faire un nouvel estimé », contrat à préparer) ; 988
+-- demande sans organisation (notes sans organisation reliée).
+-- ------------------------------------------------------------
+insert into crm.organisations (id, nom, genre, ville, telephone) values
+  ('e0000000-0000-4000-8000-000000000001', 'Essai Équipe Claude (DEV)', 'ecole_primaire', 'Laval', '450 555-0100')
+on conflict (id) do nothing;
+
+insert into crm.contacts (id, organisation_id, nom, fonction, courriel, telephone, principal) values
+  ('e0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000001', 'Prof Équipe', 'Enseignante', 'prof.equipe@camp.test', '450 555-0101', true)
+on conflict (id) do nothing;
+
+insert into reservations.reservations (id, numero, exercice, numero_seq, nom, compagnie_id, organisation_id, contact_reservation_id, forfait, variante,
+  date_arrivee, date_depart, heure_arrivee, heure_depart, nb_participants, nb_accompagnateurs, ratio, service_repas, nb_dejeuners, nb_diners, nb_soupers,
+  responsable_id, origine, etape)
+select v.id::uuid, v.numero, 2027, v.seq, v.nom, e.id, v.org::uuid, v.contact::uuid, v.forfait, v.variante, v.arrivee::date, v.depart::date,
+  v.ha::time, v.hd::time, v.p, v.a, v.ratio, v.repas, v.dej, v.din, v.soup, '00000000-0000-0000-0000-000000000001', v.origine, 'estime_envoye'
+from (values
+  ('e0000000-0000-4000-8000-0000000000a1', '27-G-986', 986, 'Équipe A — contrat signé (DEV)', 'e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002',
+    'classe_nature', 'blanche', '2027-02-10', '2027-02-12', '10:00', '14:00', 40, 4, '1:15', true, 2, 3, 2, 'app'),
+  ('e0000000-0000-4000-8000-0000000000b1', '27-G-987', 987, 'Équipe B — estimé accepté (DEV)', 'e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002',
+    'classe_nature', 'verte', '2027-05-12', '2027-05-14', '10:00', '14:00', 30, 3, '1:15', true, 2, 3, 2, 'app'),
+  ('e0000000-0000-4000-8000-0000000000c1', '27-G-988', 988, 'Équipe C — sans organisation (DEV)', null, null,
+    'journee_plein_air', null, '2027-06-03', '2027-06-03', null, null, 55, null, null, false, 0, 0, 0, 'formulaire')
+) as v(id, numero, seq, nom, org, contact, forfait, variante, arrivee, depart, ha, hd, p, a, ratio, repas, dej, din, soup, origine)
+cross join core.entreprises e
+where e.nom = 'GBPA+'
+on conflict (numero) do nothing;
+
+update reservations.reservations set etape = 'nouvelle' where id = 'e0000000-0000-4000-8000-0000000000c1' and etape = 'estime_envoye';
+
+-- Estimés v1 : brouillon + ligne, puis envoyé (la base fige le séjour : 40 et 30) et accepté.
+insert into reservations.estimes (id, reservation_id, version, exercice_prix, sous_total, tps, tvq, total) values
+  ('e0000000-0000-4000-8000-0000000000e1', 'e0000000-0000-4000-8000-0000000000a1', 1, 2027, 10000, 500, 997.50, 11497.50),
+  ('e0000000-0000-4000-8000-0000000000e2', 'e0000000-0000-4000-8000-0000000000b1', 1, 2027, 7500, 375, 748.13, 8623.13)
+on conflict (id) do nothing;
+
+insert into reservations.lignes (estime_id, ordre, description, quantite, prix_unitaire, montant, auto)
+select e.id, 0, 'Forfait Classe nature (ratio d''animation 1:15) | 2 nuits, 3 jours, 7 repas', e.sous_total / 250, 250, e.sous_total, true
+from reservations.estimes e
+where e.id in ('e0000000-0000-4000-8000-0000000000e1', 'e0000000-0000-4000-8000-0000000000e2') and e.statut = 'brouillon'
+  and not exists (select 1 from reservations.lignes x where x.estime_id = e.id);
+
+update reservations.estimes set statut = 'envoye', envoye_le = now()
+where id in ('e0000000-0000-4000-8000-0000000000e1', 'e0000000-0000-4000-8000-0000000000e2') and statut = 'brouillon';
+update reservations.estimes set statut = 'accepte', accepte_le = now()
+where id in ('e0000000-0000-4000-8000-0000000000e1', 'e0000000-0000-4000-8000-0000000000e2') and statut = 'envoye';
+
+-- Puis le séjour change (40 → 42, 30 → 32) ; 986 est signé, 987 attend son contrat.
+update reservations.reservations set etape = 'confirmee', signe_le = '2026-10-21', nb_participants = 42
+where id = 'e0000000-0000-4000-8000-0000000000a1' and signe_le is null;
+update reservations.reservations set etape = 'estime_accepte', nb_participants = 32
+where id = 'e0000000-0000-4000-8000-0000000000b1' and etape = 'estime_envoye';
+
+-- Le client de 986 propose un changement sur sa page (une seule demande ouverte à la fois).
+select reservations.proposer_changement_client(r.jeton_client, 'Prof Équipe',
+  '{"nb_participants": 48, "date_depart": "2027-02-13", "heure_arrivee": "11:00"}', 'Deux classes de plus se joignent à nous.')
+from reservations.reservations r
+where r.id = 'e0000000-0000-4000-8000-0000000000a1'
+  and not exists (select 1 from reservations.confirmations c where c.reservation_id = r.id);

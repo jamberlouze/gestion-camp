@@ -5,6 +5,8 @@ import { cleAujourdhui, cleCoche, exerciceDeCle, libelleMois } from '@/modules/m
 import { CaseCoche } from '@/modules/mastertimeline/commun'
 import { useCoches, useResponsables, useTaches as useTachesMt } from '@/modules/mastertimeline/donnees'
 import { FILTRES_VIDES, passagesDuMois, retards, trierPassages, useBasculer, type Passage } from '@/modules/mastertimeline/outils'
+import { actionsDe } from '@/modules/reservations/actions'
+import { useReservations as useReservationsGroupes, useSignauxActions } from '@/modules/reservations/donnees'
 import { useAApprouver, useDossiersAFermer, useFeuille, useFermerDossier, type DossierAFermer } from '@/modules/temps/donnees'
 import { echeancePassee, echeanceSoumission, libelleEcheance } from '@/modules/temps/echeance'
 import { periodePrecedente, PREMIERE_PERIODE } from '@/modules/temps/periodes'
@@ -28,9 +30,11 @@ export function AFaire() {
   const temps = peutLire('temps') && estDirection
   const travaux = peutLire('travaux')
   const mastertimeline = peutLire('mastertimeline')
-  if (!profil || !(temps || travaux || mastertimeline)) return null
+  const reservations = peutLire('reservations')
+  if (!profil || !(temps || travaux || mastertimeline || reservations)) return null
   return (
     <Carte titre="À faire pour moi" vide="Rien ne t'attend pour l'instant.">
+      {reservations && <Reservations />}
       {temps && <FeuillesDeTemps userId={profil.id} estAdmin={estAdmin} />}
       {mastertimeline && <MesTachesAnnuelles courriel={profil.courriel} nom={profil.nom} />}
       {travaux && <MesTravaux moi={profil.id} />}
@@ -118,6 +122,54 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
       ))}
       <Autres n={releves.length - MAX_PAR_SOURCE} to="/temps/employes" />
       {erreur && <li className="px-4 py-1.5 text-xs text-red-700">{erreur}</li>}
+    </Groupe>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Réservations : nouvelles demandes et actions à prendre (réunion du
+// 2026-10-21) — mêmes règles que le point rouge de la liste (actions.ts).
+
+function Reservations() {
+  const { data } = useReservationsGroupes()
+  const signaux = useSignauxActions(jourAujourdhui())
+  const { nouvelles, autres } = useMemo(() => {
+    const avec = (data ?? []).map((r) => ({ r, actions: actionsDe(r, signaux) })).filter((x) => x.actions.length)
+    const parArrivee = (a: (typeof avec)[number], b: (typeof avec)[number]) => a.r.date_arrivee.localeCompare(b.r.date_arrivee)
+    return {
+      nouvelles: avec.filter((x) => x.actions.some((a) => a.code === 'nouvelle')).sort(parArrivee),
+      // Le reste : urgent d'abord (changement du client, aucun paiement), puis par arrivée.
+      autres: avec
+        .map((x) => ({ ...x, actions: x.actions.filter((a) => a.code !== 'nouvelle') }))
+        .filter((x) => x.actions.length)
+        .sort((a, b) => Number(b.actions.some((x) => x.urgent)) - Number(a.actions.some((x) => x.urgent)) || parArrivee(a, b)),
+    }
+  }, [data, signaux])
+  if (!nouvelles.length && !autres.length) return null
+  const total = new Set([...nouvelles, ...autres].map((x) => x.r.id)).size
+
+  return (
+    <Groupe icone="📒" titre="Réservations · à traiter" resume={pluriel(total, 'réservation')}>
+      {nouvelles.length > 0 && (
+        <Ligne
+          to="/reservations"
+          titre={nouvelles.length > 1 ? `${nouvelles.length} nouvelles demandes` : 'Nouvelle demande'}
+          detail={nouvelles
+            .slice(0, 3)
+            .map((x) => `${x.r.numero} ${x.r.nom}`)
+            .join(' · ')}
+        />
+      )}
+      {autres.slice(0, MAX_PAR_SOURCE).map((x) => (
+        <Ligne
+          key={x.r.id}
+          to={`/reservations/r/${x.r.id}`}
+          titre={`${x.r.numero} · ${x.r.nom}`}
+          detail={x.actions.map((a) => a.texte).join(' · ')}
+          alerte={x.actions.some((a) => a.urgent)}
+        />
+      ))}
+      <Autres n={autres.length - MAX_PAR_SOURCE} to="/reservations?vue=a_traiter" />
     </Groupe>
   )
 }
