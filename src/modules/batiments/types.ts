@@ -66,12 +66,13 @@ export interface Valve {
 
 export type ChampsValve = Pick<Valve, 'id' | 'batiment_id' | 'coupe' | 'eau' | 'emplacement' | 'a_verifier' | 'note' | 'ordre'>
 
-/** Photo ou PDF d'un panneau (carte de la porte) ou d'une valve (où elle est). */
+/** Photo ou PDF d'un panneau (carte de la porte), d'une valve (où elle est) ou d'un incident. */
 export interface Fichier {
   id: string
   panneau_id: string | null
   valve_id: string | null
-  /** Chemin dans le seau : <panneau ou valve>/<id>.jpg ou .pdf */
+  incident_id: string | null
+  /** Chemin dans le seau : <panneau, valve ou incident>/<id>.jpg ou .pdf */
   chemin: string
   /** Nom d'origine d'un PDF (null pour une photo). */
   nom: string | null
@@ -82,4 +83,62 @@ export const EAUX: { id: Eau; libelle: string }[] = [
   { id: 'chaude', libelle: 'Eau chaude' },
   { id: 'froide', libelle: 'Eau froide' },
   { id: 'les_deux', libelle: 'Chaude et froide' },
+]
+
+export type GenreIncident = 'feu' | 'bris' | 'vol' | 'degat_eau' | 'vandalisme' | 'intrusion' | 'autre'
+export type Gravite = 'mineur' | 'important' | 'majeur'
+export type Avise = 'pompiers' | 'police' | 'ambulance' | 'assureur'
+
+/** Rapport d'incident (feu, bris, vol…) et son suivi ; `regle_le` null = dossier ouvert. */
+export interface Incident {
+  id: string
+  /** Résumé d'une ligne. */
+  titre: string
+  genre: GenreIncident
+  gravite: Gravite
+  survenu_le: string
+  batiment_id: string | null
+  /** Où exactement. */
+  lieu: string | null
+  description: string | null
+  /** Ce qui a été fait sur le moment. */
+  mesures: string | null
+  /** Personnes impliquées et témoins. */
+  personnes: string | null
+  avises: Avise[]
+  dossier_police: string | null
+  dossier_assureur: string | null
+  cout_estime: number | null
+  suivi: string | null
+  regle_le: string | null
+  /** Tâche de réparation dans Travaux. */
+  tache_id: string | null
+  redige_par: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ChampsIncident = Omit<Incident, 'tache_id' | 'redige_par' | 'created_at' | 'updated_at'>
+
+export const GENRES: { id: GenreIncident; libelle: string; icone: string }[] = [
+  { id: 'feu', libelle: 'Feu', icone: '🔥' },
+  { id: 'bris', libelle: 'Bris', icone: '🔨' },
+  { id: 'vol', libelle: 'Vol', icone: '🕵️' },
+  { id: 'degat_eau', libelle: "Dégât d'eau", icone: '💧' },
+  { id: 'vandalisme', libelle: 'Vandalisme', icone: '🖍️' },
+  { id: 'intrusion', libelle: 'Intrusion', icone: '🚪' },
+  { id: 'autre', libelle: 'Autre', icone: '⚠️' },
+]
+
+export const GRAVITES: { id: Gravite; libelle: string }[] = [
+  { id: 'mineur', libelle: 'Mineur' },
+  { id: 'important', libelle: 'Important' },
+  { id: 'majeur', libelle: 'Majeur' },
+]
+
+export const AVISES: { id: Avise; libelle: string }[] = [
+  { id: 'pompiers', libelle: 'Pompiers' },
+  { id: 'police', libelle: 'Police' },
+  { id: 'ambulance', libelle: 'Ambulance' },
+  { id: 'assureur', libelle: 'Assureur' },
 ]

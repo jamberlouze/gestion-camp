@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { onlineManager } from '@tanstack/react-query'
-import { Navigate, NavLink, Route, Routes } from 'react-router'
+import { Navigate, NavLink, Route, Routes, useSearchParams } from 'react-router'
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
@@ -27,6 +27,15 @@ export default function ModuleTravaux() {
   const [fenetre, setFenetre] = useState<Fenetre | null>(null)
   const aTrier = d.taches.filter((t) => t.statut === 'a_trier').length
   const signaler = () => setFenetre({ type: 'signaler' })
+
+  // Lien direct vers une tâche (`/travaux?tache=<id>`, ex. depuis un rapport d'incident de Bâtiments).
+  const [parametres, setParametres] = useSearchParams()
+  const tacheDemandee = parametres.get('tache')
+  const ouverte: Fenetre | null = fenetre ?? (tacheDemandee ? { type: 'fiche', id: tacheDemandee } : null)
+  function fermer() {
+    setFenetre(null)
+    if (tacheDemandee) setParametres((p) => (p.delete('tache'), p), { replace: true })
+  }
 
   return (
     <ContexteFenetre.Provider value={setFenetre}>
@@ -98,8 +107,8 @@ export default function ModuleTravaux() {
         </button>
       )}
 
-      {d.pret && fenetre?.type === 'fiche' && <Fiche key={fenetre.id} id={fenetre.id} d={d} fermer={() => setFenetre(null)} />}
-      {d.pret && fenetre?.type === 'signaler' && <Signaler d={d} defauts={fenetre.defauts} fermer={() => setFenetre(null)} />}
+      {d.pret && ouverte?.type === 'fiche' && <Fiche key={ouverte.id} id={ouverte.id} d={d} fermer={fermer} />}
+      {d.pret && ouverte?.type === 'signaler' && <Signaler d={d} defauts={ouverte.defauts} fermer={fermer} />}
     </ContexteFenetre.Provider>
   )
 }

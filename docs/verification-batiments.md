@@ -75,3 +75,17 @@ http://localhost:54324) : `julie@camp.test` (direction), `sarah@camp.test`
 - [ ] `dev` porte aussi Réservations et RH (pas prêts) : publier Bâtiments **seul** par-dessus `origin/main` (comme Inventaire), migration `20261013161144_batiments` appliquée seule (`db query --linked -f` + `migration repair`).
 - [ ] Exposer le schéma `batiments` (PATCH `db_schema`), vérifier avec une requête anonyme (« permission denied for schema batiments »).
 - [ ] Les migrations de Réservations et de RH (pas en PROD) listent maintenant `batiments` dans `module in (…)` : rien à faire de plus.
+
+## 10. Rapports d'incidents (demande de Maxime du 2026-10-22)
+
+> **Passée par Claude en DEV le 2026-10-22** (migration `20261022193113_batiments_incidents`). Choix de Maxime : direction seulement ; bouton « Créer une tâche » vers Travaux. Rapport d'essai laissé en DEV : « Feu de poubelle derrière la cuisine » (Vieille-France) et sa tâche Travaux « Réparer le revêtement du mur (feu de poubelle) ».
+
+- [x] Onglet « Incidents » entre Valves et Réglages ; pastille ambre = nombre de dossiers ouverts.
+- [x] « + Rapport d'incident » : résumé, type, gravité, quand (pas dans le futur), bâtiment, où exactement, ce qui s'est passé, mesures prises, personnes impliquées, avisés (n° de dossier de police et de réclamation seulement si coché), coût estimé, dossier réglé le, suivi. Formulaire lisible à la largeur d'un téléphone.
+- [x] Enregistrer un nouveau rapport : la fiche reste ouverte, « Photo ou PDF » et « Créer une tâche dans Travaux » apparaissent, « Rédigé par … le … » en bas.
+- [x] Carte de la liste : type, gravité, 🛠️ statut de la tâche Travaux, compteur de photos, date et heure, bâtiment · lieu ; un incident majeur ouvert a un contour rouge ; réglés repliés sous « Dossiers réglés ».
+- [x] « Créer une tâche dans Travaux » : lieu de Travaux du même nom que le bâtiment proposé (Vieille-France), priorité selon la gravité (Important → Prioritaire), description reprise du rapport ; la tâche est « À faire », reliée au rapport (titre, statut, « Ouvrir dans Travaux »).
+- [x] « Ouvrir dans Travaux » (`/travaux?tache=…`) ouvre la fiche de la tâche ; la fermer remet l'adresse à `/travaux`.
+- [x] Tests SQL (transaction annulée) : direction crée et lit, `redige_par` posé ; coordo et terrain ne lisent rien et ne peuvent rien écrire (ni créer de tâche par `creer_tache`) ; avisé inconnu refusé ; fichier à la fois d'un incident et d'une valve refusé ; deuxième tâche pour le même rapport refusée ; tâche supprimée dans Travaux = lien vidé ; rapport supprimé = ses fichiers aussi (cascade) ; copie Drive : Bâtiments › Incidents › « 2026-10-22 – Feu de poubelle ».
+- [ ] Ajouter une vraie photo à un rapport (seau privé). — à Maxime
+- [ ] Mise en ligne : la migration seule suffit (pas de nouveau schéma à exposer) ; elle touche `batiments.fichiers` (contrainte) et `batiments.drive_documents()`.

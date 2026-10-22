@@ -4,7 +4,7 @@ import type { FichierJoint } from '@/lib/photos'
 import { supabase } from '@/lib/supabase'
 import { estErreurReseau } from '@/modules/embarcations/donnees'
 import { ordreDisjoncteurs } from './outils'
-import type { Batiment, ChampsDisjoncteur, ChampsValve, Disjoncteur, Fichier, Panneau, Valve } from './types'
+import type { Batiment, ChampsDisjoncteur, ChampsIncident, ChampsValve, Disjoncteur, Fichier, Incident, Panneau, Valve } from './types'
 
 // ------------------------------------------------------------------
 // Fonctionnement hors ligne (comme l'Inventaire, voir CLAUDE.md)
@@ -17,7 +17,8 @@ import type { Batiment, ChampsDisjoncteur, ChampsValve, Disjoncteur, Fichier, Pa
 // Une fiche s'enregistre au complet (upsert) : la dernière enregistrée
 // l'emporte.
 //
-// Bâtiments, panneaux et fichiers : en ligne seulement, erreurs sur place.
+// Bâtiments, panneaux, fichiers et incidents : en ligne seulement, erreurs
+// sur place (les incidents se lisent quand même sans réseau).
 // ------------------------------------------------------------------
 
 const RACINE = 'batiments'
@@ -30,6 +31,7 @@ export const CLES = {
   disjoncteurs: [RACINE, 'disjoncteurs'],
   valves: [RACINE, 'valves'],
   fichiers: [RACINE, 'fichiers'],
+  incidents: [RACINE, 'incidents'],
   enregistrerDisjoncteur: [RACINE, 'enregistrer-disjoncteur'],
   supprimerDisjoncteur: [RACINE, 'supprimer-disjoncteur'],
   enregistrerValve: [RACINE, 'enregistrer-valve'],
@@ -58,6 +60,7 @@ const usePanneaux = () => useQuery({ queryKey: CLES.panneaux, queryFn: lister<Pa
 const useDisjoncteurs = () => useQuery({ queryKey: CLES.disjoncteurs, queryFn: lister<Disjoncteur>('disjoncteurs', 'position') })
 const useValves = () => useQuery({ queryKey: CLES.valves, queryFn: lister<Valve>('valves', 'ordre') })
 const useFichiers = () => useQuery({ queryKey: CLES.fichiers, queryFn: lister<Fichier>('fichiers', 'created_at') })
+const useIncidents = () => useQuery({ queryKey: CLES.incidents, queryFn: lister<Incident>('incidents', 'survenu_le') })
 
 /** Recharge le module quand quelqu'un d'autre modifie quelque chose. */
 export function useTempsReel() {
@@ -69,7 +72,7 @@ export function useTempsReel() {
       if (client.isMutating({ mutationKey: [RACINE] }) === 0) client.invalidateQueries({ queryKey: [RACINE] })
     }
     let canal = supabase.channel(`batiments-${crypto.randomUUID()}`)
-    for (const table of ['batiments', 'panneaux', 'disjoncteurs', 'valves', 'fichiers']) {
+    for (const table of ['batiments', 'panneaux', 'disjoncteurs', 'valves', 'fichiers', 'incidents']) {
       canal = canal.on('postgres_changes', { event: '*', schema: 'batiments', table }, recharger)
     }
     canal.subscribe()
@@ -88,6 +91,7 @@ export function useDonnees() {
   const disjoncteurs = useDisjoncteurs().data
   const valves = useValves().data
   const fichiers = useFichiers().data
+  const incidents = useIncidents().data
   const erreur = useQueryClient()
     .getQueryCache()
     .findAll({ queryKey: [RACINE] })
@@ -108,11 +112,16 @@ export function useDonnees() {
       disjoncteur: parId(d),
       /** Disjoncteurs d'un panneau, par emplacement. */
       duPanneau: (id: string) => d.filter((x) => x.panneau_id === id),
-      /** Photos et PDF d'un panneau ou d'une valve. */
-      fichiersDe: (id: string) => f.filter((x) => x.panneau_id === id || x.valve_id === id),
+      /** Photos et PDF d'un panneau, d'une valve ou d'un incident. */
+      fichiersDe: (id: string) => f.filter((x) => x.panneau_id === id || x.valve_id === id || x.incident_id === id),
+      /** Le plus récent d'abord. */
+      incidents: [...(incidents ?? [])].reverse(),
+      // Pas dans `pret` : une copie d'avant les incidents doit encore ouvrir
+      // les panneaux sans réseau (sous-sols).
+      incidentsPrets: !!incidents,
       pret: !!(batiments && panneaux && disjoncteurs && valves && fichiers),
     }
-  }, [batiments, panneaux, disjoncteurs, valves, fichiers])
+  }, [batiments, panneaux, disjoncteurs, valves, fichiers, incidents])
   return useMemo(() => ({ ...donnees, erreur: erreur ?? null }), [donnees, erreur])
 }
 
@@ -267,10 +276,12 @@ export function useAdresseFichier(f: Pick<Fichier, 'chemin'>) {
   )
 }
 
-/** Envoie une photo (déjà réduite) ou un PDF, puis l'inscrit sur son panneau ou sa valve. */
-export async function ajouterFichier(cible: { panneau_id: string } | { valve_id: string }, { fichier, extension, nom }: FichierJoint) {
+export type CibleFichier = { panneau_id: string } | { valve_id: string } | { incident_id: string }
+
+/** Envoie une photo (déjà réduite) ou un PDF, puis l'inscrit sur son panneau, sa valve ou son incident. */
+export async function ajouterFichier(cible: CibleFichier, { fichier, extension, nom }: FichierJoint) {
   const id = crypto.randomUUID()
-  const chemin = `${'panneau_id' in cible ? cible.panneau_id : cible.valve_id}/${id}.${extension}`
+  const chemin = `${Object.values(cible)[0]}/${id}.${extension}`
   const envoi = await supabase.storage.from(SEAU).upload(chemin, fichier, { contentType: extension === 'pdf' ? 'application/pdf' : 'image/jpeg' })
   if (envoi.error) throw envoi.error
   const { error } = await db()
@@ -285,4 +296,77 @@ export async function ajouterFichier(cible: { panneau_id: string } | { valve_id:
 export async function retirerFichier(f: Pick<Fichier, 'id' | 'chemin'>) {
   await executer(db().from('fichiers').delete().eq('id', f.id))
   await supabase.storage.from(SEAU).remove([f.chemin])
+}
+
+// ------------------------------------------------------------------
+// Incidents (en ligne seulement)
+// ------------------------------------------------------------------
+
+/** Ajoute ou modifie un rapport au complet. */
+export async function enregistrerIncident(champs: ChampsIncident) {
+  await executer(db().from('incidents').upsert(champs))
+}
+
+/** Supprime un rapport, ses fichiers (cascade) et ceux du seau. Sa tâche dans Travaux reste. */
+export async function supprimerIncident(id: string, fichiers: Fichier[]) {
+  await executer(db().from('incidents').delete().eq('id', id))
+  if (fichiers.length) await supabase.storage.from(SEAU).remove(fichiers.map((f) => f.chemin))
+}
+
+/** Tâche de Travaux reliée à un rapport (titre et statut ; rien sans accès à Travaux). */
+export interface TacheTravaux {
+  id: string
+  titre: string
+  statut: 'a_trier' | 'a_faire' | 'terminee'
+}
+
+/** Tâches de Travaux des rapports, par id. */
+export function useTachesTravaux(ids: string[], actif: boolean) {
+  const tries = [...new Set(ids)].sort()
+  const { data } = useQuery({
+    queryKey: [RACINE, 'taches-travaux', tries],
+    enabled: actif && tries.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.schema('travaux').from('taches').select('id, titre, statut').in('id', tries)
+      if (error) throw error
+      return data as TacheTravaux[]
+    },
+  })
+  return useMemo(() => new Map((data ?? []).map((t) => [t.id, t])), [data])
+}
+
+/** Lieux de Travaux, pour la tâche de réparation. */
+export function useLieuxTravaux() {
+  return useQuery({
+    queryKey: [RACINE, 'lieux-travaux'],
+    queryFn: async () => {
+      const { data, error } = await supabase.schema('travaux').from('lieux').select('id, nom').order('ordre')
+      if (error) throw error
+      return data as { id: string; nom: string }[]
+    },
+  }).data
+}
+
+export interface NouvelleTacheTravaux {
+  incident: string
+  titre: string
+  description: string
+  lieu: string | null
+  priorite: 1 | 2 | 3
+}
+
+/** Crée la tâche de réparation dans Travaux et la relie au rapport (une transaction). */
+export function useCreerTacheTravaux() {
+  const client = useQueryClient()
+  return async (t: NouvelleTacheTravaux) => {
+    const { error } = await db().rpc('creer_tache', {
+      p_incident: t.incident,
+      p_titre: t.titre,
+      p_description: t.description,
+      p_lieu: t.lieu,
+      p_priorite: t.priorite,
+    })
+    if (error) throw error
+    await Promise.all([client.invalidateQueries({ queryKey: [RACINE] }), client.invalidateQueries({ queryKey: ['travaux'] })])
+  }
 }

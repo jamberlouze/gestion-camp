@@ -7,6 +7,7 @@ import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
 import { Disjoncteurs } from './Disjoncteurs'
+import { Incidents } from './Incidents'
 import { Reglages } from './Reglages'
 import { Valves } from './Valves'
 
@@ -19,6 +20,7 @@ export default function ModuleBatiments() {
   useTempsReel()
   const d = useDonnees()
   const ecriture = useAuth().peutEcrire('batiments')
+  const ouverts = d.incidents.filter((i) => !i.regle_le).length
 
   return (
     <div>
@@ -33,6 +35,14 @@ export default function ModuleBatiments() {
         </NavLink>
         <NavLink to="/batiments/valves" className={onglet}>
           Valves
+        </NavLink>
+        <NavLink to="/batiments/incidents" className={onglet}>
+          Incidents
+          {ouverts > 0 && (
+            <span className="rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white" title={`${ouverts} dossier${ouverts > 1 ? 's' : ''} ouvert${ouverts > 1 ? 's' : ''}`}>
+              {ouverts}
+            </span>
+          )}
         </NavLink>
         {ecriture && (
           <NavLink to="/batiments/reglages" className={onglet}>
@@ -49,6 +59,7 @@ export default function ModuleBatiments() {
         <Routes>
           <Route index element={<Disjoncteurs d={d} ecriture={ecriture} />} />
           <Route path="valves" element={<Valves d={d} ecriture={ecriture} />} />
+          <Route path="incidents" element={<Incidents d={d} ecriture={ecriture} />} />
           <Route path="reglages" element={<Reglages d={d} ecriture={ecriture} />} />
         </Routes>
       )}

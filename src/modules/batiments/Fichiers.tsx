@@ -3,12 +3,12 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { BoutonAjouterPiece, GaleriePieces } from '@/lib/PiecesJointes'
 import { preparerFichier } from '@/lib/photos'
-import { ajouterFichier, retirerFichier, useAdresseFichier, useRelire } from './donnees'
+import { ajouterFichier, retirerFichier, useAdresseFichier, useRelire, type CibleFichier } from './donnees'
 import type { Fichier } from './types'
 
 /**
- * Photos et PDF d'un panneau (la carte de la porte) ou d'une valve (où
- * elle est), envoyés tout de suite. En ligne seulement.
+ * Photos et PDF d'un panneau (la carte de la porte), d'une valve (où
+ * elle est) ou d'un incident, envoyés tout de suite. En ligne seulement.
  */
 export function Fichiers({
   cible,
@@ -16,7 +16,7 @@ export function Fichiers({
   ecriture,
   vide = 'Aucune photo.',
 }: {
-  cible: { panneau_id: string } | { valve_id: string }
+  cible: CibleFichier
   fichiers: Fichier[]
   ecriture: boolean
   vide?: string

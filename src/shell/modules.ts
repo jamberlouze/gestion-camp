@@ -150,7 +150,7 @@ export const MODULES: DefinitionModule[] = [
   {
     id: 'batiments',
     nom: 'Bâtiments',
-    description: 'Disjoncteurs et valves d’eau de chaque bâtiment',
+    description: 'Disjoncteurs, valves d’eau et rapports d’incidents',
     icone: '🏘️',
     chemin: '/batiments',
     famille: 'batiment',
