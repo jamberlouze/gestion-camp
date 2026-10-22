@@ -14,3 +14,7 @@ export const dollars = (n: number | string | null | undefined, langue: Langue) =
 /** Date longue selon la langue (jour civil, sans fuseau). */
 export const dateLisible = (jour: string, langue: Langue) =>
   new Intl.DateTimeFormat(langue === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${jour}T00:00:00Z`))
+
+/** Jour civil à Montréal d'un horodatage de la base (« …T00:30:00+00:00 » le 22 → le 21 au soir). */
+export const jourMontreal = (horodatage: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(horodatage))

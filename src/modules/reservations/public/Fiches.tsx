@@ -9,7 +9,9 @@ import { TEXTES_PUBLICS } from './textes'
 // Fiches participants (/fiches/<jeton>) : une fiche par élève et par
 // adulte, remplie par les parents ou les adultes eux-mêmes. Données de
 // santé (Loi 25) : envoyées par reservations.ajouter_fiche, jamais relues
-// ici, effacées 3 mois après le séjour.
+// ici, effacées 3 mois après le séjour. Case de consentement obligatoire
+// (vérifiée aussi par la base) : les allergies et la diète sont montrées
+// au responsable du groupe sur sa page client.
 
 interface Infos {
   numero: string
@@ -38,6 +40,7 @@ interface Fiche {
   medicaments: OuiNon
   courriel: string
   nouvelles: boolean
+  consentement: boolean
 }
 
 const VIDE: Fiche = {
@@ -55,6 +58,7 @@ const VIDE: Fiche = {
   medicaments: '',
   courriel: '',
   nouvelles: false,
+  consentement: false,
 }
 
 const DIETES = ['reguliere', 'vegetarienne', 'sans_porc', 'halal', 'sans_lactose', 'sans_gluten', 'autre']
@@ -102,6 +106,7 @@ export default function Fiches() {
   if (!f.diete) manque.diete = t.obligatoire
   if (f.diete === 'autre' && !f.diete_autre.trim()) manque.diete_autre = t.obligatoire
   if (!f.medicaments) manque.medicaments = t.obligatoire
+  if (!f.consentement) manque.consentement = t.consentement_requis
   const err = tente ? manque : {}
   const changer = <K extends keyof Fiche>(cle: K, valeur: Fiche[K]) => setF((x) => ({ ...x, [cle]: valeur }))
   const ouiNon = (cle: 'sante' | 'epipen' | 'medicaments') => (
@@ -141,6 +146,7 @@ export default function Fiches() {
         medicaments: f.medicaments === 'oui',
         courriel: f.courriel,
         nouvelles: f.nouvelles && !!f.courriel.trim(),
+        consentement: f.consentement,
         langue,
       },
     })
@@ -153,8 +159,9 @@ export default function Fiches() {
     window.scrollTo(0, 0)
   }
 
-  // Une autre fiche : le groupe, le courriel et le consentement restent
-  // (un parent qui a deux enfants dans le groupe).
+  // Une autre fiche : le groupe, le courriel et le consentement aux
+  // nouvelles restent (un parent qui a deux enfants dans le groupe) ; la
+  // case de consentement est cochée de nouveau pour chaque fiche.
   const autre = () => {
     setF({ ...VIDE, genre: f.genre, groupe: f.groupe, courriel: f.courriel, nouvelles: f.nouvelles })
     setTente(false)
@@ -261,6 +268,15 @@ export default function Fiches() {
             <label className="mt-2 flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-0.5" checked={f.nouvelles} onChange={(e) => changer('nouvelles', e.target.checked)} />
               <span>{t.nouvelles}</span>
+            </label>
+          </Question>
+          <Question libelle="" erreur={err.consentement}>
+            <label className="flex items-start gap-2 rounded-lg border border-pierre-200 bg-pierre-50 p-3 text-sm text-pierre-900">
+              <input type="checkbox" className="mt-0.5" checked={f.consentement} onChange={(e) => changer('consentement', e.target.checked)} />
+              <span>
+                {enfant ? t.consentement_enfant : t.consentement_adulte}
+                <span className="text-red-600"> *</span>
+              </span>
             </label>
           </Question>
           {erreur && <p className={ui.erreur}>{erreur}</p>}

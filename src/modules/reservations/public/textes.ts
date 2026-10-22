@@ -52,6 +52,7 @@ const FR = {
   contrat_a_signer: 'Votre contrat est prêt : lisez-le et signez-le en ligne, au plus tard le {d}.',
   signer: 'Lire et signer le contrat',
   contrat_signe: '✓ Contrat signé par {n} le {d}. Votre réservation est confirmée.',
+  contrat_signe_seul: '✓ Contrat signé. Votre réservation est confirmée.',
   documents: 'Vos documents',
   ouvrir: 'Ouvrir',
   factures: 'Vos factures',
@@ -67,15 +68,24 @@ const FR = {
   fiches: 'Fiches participants',
   fiches_aide:
     'Chaque élève et chaque adulte du groupe doit avoir sa fiche (allergies, diète, médicaments). Transmettez ce lien aux parents et aux accompagnateurs :',
-  fiches_recues: '{r} fiche(s) reçue(s) sur {a} attendue(s).',
+  fiches_recues: '{r} fiche(s) reçue(s) sur {a} attendue(s)',
+  fiches_manquantes: '{n} manquante(s)',
+  fiches_completes: 'toutes reçues ✓',
+  fiches_liste: 'Fiches reçues',
+  fiches_liste_aide:
+    'Pour la sortie et les repas : les allergies et la diète de chaque fiche reçue. Les autres renseignements de santé restent réservés à notre équipe. Tout est effacé 3 mois après le séjour.',
+  fiches_resume: '{a} avec allergies · {d} avec une diète particulière',
+  fiches_toutes: 'Toutes',
+  fiches_a_savoir: 'Allergies ou diète',
+  fiches_aucune: 'Aucune fiche reçue pour l’instant.',
+  fiches_rien_a_signaler: 'Aucune allergie ni diète particulière.',
+  fiche_adulte: 'adulte',
+  fiche_allergies: 'Allergies : {a}',
+  fiche_diete: 'Diète : {d}',
+  fiche_non_partagee: 'Allergies et diète non communiquées (fiche reçue avant le consentement).',
   copier: 'Copier le lien',
   copie: 'Copié ✓',
-  question: 'Une question, un changement ?',
-  question_aide: 'Écrivez-nous ici ; la personne responsable de votre dossier vous répondra.',
-  message: 'Votre message',
-  envoyer: 'Envoyer',
-  envoi: 'Envoi…',
-  message_envoye: 'Message envoyé. Nous vous répondrons sous peu.',
+  question: 'Une question ? Écrivez-nous à',
 
   // Fiches participants
   fiche_titre: 'Fiche participant',
@@ -117,6 +127,12 @@ const FR = {
   courriel: 'Votre courriel',
   courriel_aide: 'Facultatif.',
   nouvelles: "J'accepte de recevoir des nouvelles de la Base de plein air Mont-Tremblant.",
+  // Case de consentement (obligatoire) : texte à faire relire (Loi 25).
+  consentement_enfant:
+    "J'accepte que ces renseignements servent à la sécurité et aux repas de mon enfant pendant le séjour, et que ses allergies et sa diète soient communiquées au responsable du groupe (enseignant·e et accompagnateurs).",
+  consentement_adulte:
+    "J'accepte que ces renseignements servent à ma sécurité et à mes repas pendant le séjour, et que mes allergies et ma diète soient communiquées au responsable du groupe (enseignant·e et accompagnateurs).",
+  consentement_requis: 'Cochez cette case pour envoyer la fiche.',
   envoyer_fiche: 'Envoyer la fiche',
   fiche_recue: 'Merci ! La fiche de {n} est reçue.',
   autre_fiche: 'Remplir une autre fiche',
@@ -124,7 +140,7 @@ const FR = {
   obligatoire: 'Ce champ est obligatoire.',
   a_corriger: 'Quelques champs sont à compléter.',
   confidentialite:
-    'Vos renseignements sont protégés (Loi 25) : seules les personnes responsables de la sécurité et des repas y ont accès, et ils sont effacés 3 mois après le séjour. Seul le courriel est gardé, si vous acceptez de recevoir nos nouvelles.',
+    'Vos renseignements sont protégés (Loi 25) : seule notre équipe responsable de la sécurité et des repas voit la fiche complète ; le responsable du groupe voit seulement le nom, la classe, les allergies et la diète. Tout est effacé 3 mois après le séjour ; seul le courriel est gardé, si vous acceptez de recevoir nos nouvelles.',
 
   // Confirmation des informations du séjour (pré-arrivée)
   confirmation: {
@@ -210,6 +226,7 @@ const EN: Textes = {
   contrat_a_signer: 'Your contract is ready: read it and sign it online, no later than {d}.',
   signer: 'Read and sign the contract',
   contrat_signe: '✓ Contract signed by {n} on {d}. Your reservation is confirmed.',
+  contrat_signe_seul: '✓ Contract signed. Your reservation is confirmed.',
   documents: 'Your documents',
   ouvrir: 'Open',
   factures: 'Your invoices',
@@ -224,15 +241,24 @@ const EN: Textes = {
   genre_doc: { contrat_signe: 'Signed contract', pre_arrivee: 'Pre-arrival information' },
   fiches: 'Participant forms',
   fiches_aide: 'Each student and each adult in the group needs a form (allergies, diet, medication). Share this link with parents and chaperones:',
-  fiches_recues: '{r} form(s) received out of {a} expected.',
+  fiches_recues: '{r} form(s) received out of {a} expected',
+  fiches_manquantes: '{n} missing',
+  fiches_completes: 'all received ✓',
+  fiches_liste: 'Forms received',
+  fiches_liste_aide:
+    'For outings and meals: the allergies and diet from each form received. Other health information is only seen by our team. Everything is deleted 3 months after the stay.',
+  fiches_resume: '{a} with allergies · {d} with a special diet',
+  fiches_toutes: 'All',
+  fiches_a_savoir: 'Allergies or diet',
+  fiches_aucune: 'No forms received yet.',
+  fiches_rien_a_signaler: 'No allergies or special diets.',
+  fiche_adulte: 'adult',
+  fiche_allergies: 'Allergies: {a}',
+  fiche_diete: 'Diet: {d}',
+  fiche_non_partagee: 'Allergies and diet not shared (form received before the consent).',
   copier: 'Copy link',
   copie: 'Copied ✓',
-  question: 'A question, a change?',
-  question_aide: 'Write to us here; the person in charge of your file will get back to you.',
-  message: 'Your message',
-  envoyer: 'Send',
-  envoi: 'Sending…',
-  message_envoye: 'Message sent. We will get back to you shortly.',
+  question: 'A question? Write to us at',
 
   fiche_titre: 'Participant form',
   fiche_intro:
@@ -272,6 +298,11 @@ const EN: Textes = {
   courriel: 'Your email',
   courriel_aide: 'Optional.',
   nouvelles: 'I agree to receive news from Base de plein air Mont-Tremblant.',
+  consentement_enfant:
+    'I agree that this information be used for my child’s safety and meals during the stay, and that their allergies and diet be shared with the person in charge of the group (teacher and chaperones).',
+  consentement_adulte:
+    'I agree that this information be used for my safety and meals during the stay, and that my allergies and diet be shared with the person in charge of the group (teacher and chaperones).',
+  consentement_requis: 'Check this box to send the form.',
   envoyer_fiche: 'Send the form',
   fiche_recue: 'Thank you! The form for {n} has been received.',
   autre_fiche: 'Fill out another form',
@@ -279,7 +310,7 @@ const EN: Textes = {
   obligatoire: 'This field is required.',
   a_corriger: 'Some fields need to be completed.',
   confidentialite:
-    'Your information is protected (Quebec Law 25): only the people responsible for safety and meals can see it, and it is deleted 3 months after the stay. Only your email is kept, if you agree to receive our news.',
+    'Your information is protected (Quebec Law 25): only our team responsible for safety and meals sees the full form; the person in charge of the group only sees the name, class, allergies and diet. Everything is deleted 3 months after the stay. Only your email is kept, if you agree to receive our news.',
 
   confirmation: {
     titre: 'Your stay information',

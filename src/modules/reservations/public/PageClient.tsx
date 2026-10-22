@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CourrielCopiable } from '@/lib/CourrielCopiable'
 import { ui } from '@/lib/ui'
 import { exerciceDe, libelleExercice, ligneProvisoire } from '../calcul'
 import { heureLisible, remplacer } from '../demande'
 import { bilanFactures } from '../facturation'
+import { aDesAllergies, dieteParticuliere, fichesManquantes, nomFiche, type FicheAllergies } from '../fiches'
 import type { Forfait } from '../types'
 import { db, messageDe } from './client'
 import { Entete, Page, Pied } from './commun'
 import { ConfirmationInfos } from './ConfirmationClient'
-import { dateLisible, dollars, langueDuGroupe, useLangue } from './outils'
+import { dateLisible, dollars, jourMontreal, langueDuGroupe, useLangue } from './outils'
 import { TEXTES_PUBLICS } from './textes'
 
-// Page client sans compte (/client/<jeton>) : le séjour, l'estimé à
-// accepter, le contrat à signer, les informations du séjour à confirmer
-// (pré-arrivée, ConfirmationClient.tsx), les documents, le lien des fiches
-// participants et un message à l'équipe. Lit reservations.page_client.
+// Page client sans compte (/client/<jeton>), une seule colonne, dans
+// l'ordre du déroulement : le séjour, l'estimé à accepter, le contrat à
+// signer (seulement une fois l'estimé accepté), puis, après la signature,
+// les informations du séjour à confirmer (pré-arrivée, ConfirmationClient.tsx)
+// et les fiches participants (lien + fiches reçues avec allergies et diète :
+// page_client ne les donne qu'à partir de la signature), les documents et
+// les factures. Pas de message à l'équipe sur la page (réunion du
+// 2026-10-21 : tout passe par courriel) : une ligne avec le courriel de la
+// compagnie. Lit reservations.page_client.
 
 interface Ligne {
   code?: string | null
@@ -60,8 +67,15 @@ interface Infos {
   } | null
   signature: { statut: 'en_attente' | 'signe'; jeton: string | null; echeance: string; signe_le: string | null; nom_signataire: string | null } | null
   documents: { id: string; genre: string; titre: string; cree_le: string }[]
-  fiches: { jeton: string; recues: number; attendues: number } | null
+  /** À partir de la signature seulement ; `jeton` null une fois les fiches fermées (départ passé). */
+  fiches: { jeton: string | null; recues: number; attendues: number; liste: FicheRecue[] } | null
 }
+
+/** Fiche reçue telle que le responsable du groupe la voit (allergies et diète seulement). */
+type FicheRecue = FicheAllergies & { recue_le: string; partage: boolean }
+
+/** Étapes d'un contrat signé (même liste que `fichesSurPageClient` et page_client). */
+const ETAPES_SIGNEES = ['confirmee', 'pre_arrivee', 'terminee', 'facture_finale', 'soldee']
 
 const lienDocument = (jeton: string, id: string) => `/api/reservations/document?jeton=${jeton}&id=${id}`
 
@@ -148,9 +162,10 @@ export default function PageClient() {
         </dl>
       </section>
 
-      <ConfirmationInfos jeton={jeton} forfait={infos.forfait} langue={langue} ferme={!!infos.fermeture} />
       <Estime infos={infos} jeton={jeton} langue={langue} relire={relire} />
       <Contrat infos={infos} langue={langue} />
+      <ConfirmationInfos jeton={jeton} forfait={infos.forfait} langue={langue} ferme={!!infos.fermeture} />
+      {infos.fiches && <FichesClient fiches={infos.fiches} langue={langue} />}
 
       {infos.documents.length > 0 && (
         <section className={`${ui.carte} p-5`}>
@@ -160,7 +175,7 @@ export default function PageClient() {
               <li key={d.id} className="flex items-center justify-between gap-2 py-2">
                 <span>
                   {t.genre_doc[d.genre] ?? d.titre}
-                  <span className="ml-2 text-xs text-pierre-400">{dateLisible(d.cree_le.slice(0, 10), langue)}</span>
+                  <span className="ml-2 text-xs text-pierre-400">{dateLisible(jourMontreal(d.cree_le), langue)}</span>
                 </span>
                 <a className="text-foret-700 underline" href={lienDocument(jeton, d.id)} target="_blank" rel="noreferrer">
                   {t.ouvrir}
@@ -172,8 +187,9 @@ export default function PageClient() {
       )}
 
       <Factures jeton={jeton} langue={langue} version={version} />
-      {infos.fiches && <LienFiches fiches={infos.fiches} langue={langue} />}
-      {!infos.fermeture && <Message jeton={jeton} langue={langue} />}
+      <p className="text-center text-sm text-pierre-600">
+        {t.question} <CourrielCopiable courriel={infos.compagnie?.courriel ?? 'inscriptions@camptremblant.com'} className="font-medium text-foret-700 underline" />
+      </p>
       <Pied compagnie={infos.compagnie} />
     </Page>
   )
@@ -276,8 +292,8 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
           {!e.accepte_le
             ? t.estime_accepte_seul
             : e.accepte_par
-              ? remplacer(t.estime_accepte, { n: e.accepte_par, d: dateLisible(e.accepte_le.slice(0, 10), langue) })
-              : remplacer(t.estime_accepte_court, { d: dateLisible(e.accepte_le.slice(0, 10), langue) })}
+              ? remplacer(t.estime_accepte, { n: e.accepte_par, d: dateLisible(jourMontreal(e.accepte_le), langue) })
+              : remplacer(t.estime_accepte_court, { d: dateLisible(jourMontreal(e.accepte_le), langue) })}
         </p>
       ) : (
         !infos.fermeture && (
@@ -303,11 +319,14 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
 function Contrat({ infos, langue }: { infos: Infos; langue: 'fr' | 'en' }) {
   const t = TEXTES_PUBLICS[langue]
   const s = infos.signature
-  if (!s && infos.estime?.statut !== 'accepte') return null
+  // Contrat signé à la main ou importé : pas de signature en ligne, mais l'étape le dit.
+  const signeSansLigne = !s && ETAPES_SIGNEES.includes(infos.etape)
+  if (!s && !signeSansLigne && infos.estime?.statut !== 'accepte') return null
   return (
     <section className={`${ui.carte} p-5`}>
       <h2 className="mb-2 text-lg font-semibold">{t.contrat}</h2>
-      {!s && <p className="text-sm text-pierre-600">{t.contrat_a_venir}</p>}
+      {signeSansLigne && <p className="text-sm font-medium text-foret-800">{t.contrat_signe_seul}</p>}
+      {!s && !signeSansLigne && <p className="text-sm text-pierre-600">{t.contrat_a_venir}</p>}
       {s?.statut === 'en_attente' && s.jeton && (
         <div className="space-y-3">
           <p className="text-sm text-pierre-700">{remplacer(t.contrat_a_signer, { d: dateLisible(s.echeance, langue) })}</p>
@@ -318,7 +337,7 @@ function Contrat({ infos, langue }: { infos: Infos; langue: 'fr' | 'en' }) {
       )}
       {s?.statut === 'signe' && (
         <p className="text-sm font-medium text-foret-800">
-          {remplacer(t.contrat_signe, { n: s.nom_signataire ?? '', d: dateLisible((s.signe_le ?? '').slice(0, 10), langue) })}
+          {remplacer(t.contrat_signe, { n: s.nom_signataire ?? '', d: s.signe_le ? dateLisible(jourMontreal(s.signe_le), langue) : '' })}
         </p>
       )}
     </section>
@@ -386,69 +405,109 @@ function Factures({ jeton, langue, version }: { jeton: string; langue: 'fr' | 'e
   )
 }
 
-function LienFiches({ fiches, langue }: { fiches: NonNullable<Infos['fiches']>; langue: 'fr' | 'en' }) {
+/**
+ * Fiches participants, à partir de la signature : le lien à transmettre
+ * aux parents (tant qu'on peut en remplir), le compte et, pour relancer
+ * les parents et savoir qui a quoi en sortie, chaque fiche reçue avec ses
+ * allergies et sa diète (décision de Maxime ; rien d'autre de la santé).
+ */
+function FichesClient({ fiches, langue }: { fiches: NonNullable<Infos['fiches']>; langue: 'fr' | 'en' }) {
   const t = TEXTES_PUBLICS[langue]
   const [copie, setCopie] = useState(false)
-  const lien = `${window.location.origin}/fiches/${fiches.jeton}${langue === 'en' ? '?lang=en' : ''}`
+  const [filtre, setFiltre] = useState<'toutes' | 'a_savoir'>('toutes')
+  const lien = fiches.jeton ? `${window.location.origin}/fiches/${fiches.jeton}${langue === 'en' ? '?lang=en' : ''}` : null
+  const manquantes = fichesManquantes(fiches.recues, fiches.attendues)
+  const aSavoir = (f: FicheRecue) => aDesAllergies(f) || dieteParticuliere(f)
+  const nbASavoir = fiches.liste.filter(aSavoir).length
+  const affichees = filtre === 'a_savoir' ? fiches.liste.filter(aSavoir) : fiches.liste
+  const diete = (f: FicheRecue) => (!f.diete ? '' : f.diete === 'autre' ? f.diete_autre?.trim() || t.dietes.autre : t.dietes[f.diete])
+
   return (
-    <section className={`${ui.carte} space-y-3 p-5`}>
+    <section className={`${ui.carte} space-y-4 p-5`}>
       <h2 className="text-lg font-semibold">{t.fiches}</h2>
-      <p className="text-sm text-pierre-700">{t.fiches_aide}</p>
-      <div className="flex flex-wrap gap-2">
-        <input readOnly className={`${ui.champ} min-w-0 flex-1 text-xs`} value={lien} onFocus={(e) => e.currentTarget.select()} />
-        <button
-          className={ui.boutonSecondaire}
-          onClick={async () => {
-            await navigator.clipboard.writeText(lien)
-            setCopie(true)
-            setTimeout(() => setCopie(false), 2000)
-          }}
-        >
-          {copie ? t.copie : t.copier}
-        </button>
-      </div>
-      <p className="text-sm text-pierre-500">{remplacer(t.fiches_recues, { r: String(fiches.recues), a: String(fiches.attendues) })}</p>
-    </section>
-  )
-}
-
-function Message({ jeton, langue }: { jeton: string; langue: 'fr' | 'en' }) {
-  const t = TEXTES_PUBLICS[langue]
-  const [nom, setNom] = useState('')
-  const [texte, setTexte] = useState('')
-  const [envoi, setEnvoi] = useState(false)
-  const [envoye, setEnvoye] = useState(false)
-  const [erreur, setErreur] = useState<string | null>(null)
-
-  const envoyer = async () => {
-    setEnvoi(true)
-    setErreur(null)
-    const { error } = await db().rpc('message_client', { p_jeton: jeton, p_nom: nom, p_texte: texte })
-    if (error) setErreur(messageDe(error, 'Erreur'))
-    else {
-      setEnvoye(true)
-      setTexte('')
-    }
-    setEnvoi(false)
-  }
-
-  return (
-    <section className={`${ui.carte} space-y-3 p-5`}>
-      <div>
-        <h2 className="text-lg font-semibold">{t.question}</h2>
-        <p className="text-sm text-pierre-600">{t.question_aide}</p>
-      </div>
-      {envoye ? (
-        <p className="text-sm font-medium text-foret-800">{t.message_envoye}</p>
+      {lien ? (
+        <div className="space-y-2">
+          <p className="text-sm text-pierre-700">{t.fiches_aide}</p>
+          <div className="flex flex-wrap gap-2">
+            <input readOnly className={`${ui.champ} min-w-0 flex-1 text-xs`} value={lien} onFocus={(e) => e.currentTarget.select()} />
+            <button
+              className={ui.boutonSecondaire}
+              onClick={async () => {
+                await navigator.clipboard.writeText(lien)
+                setCopie(true)
+                setTimeout(() => setCopie(false), 2000)
+              }}
+            >
+              {copie ? t.copie : t.copier}
+            </button>
+          </div>
+        </div>
       ) : (
-        <>
-          <input className={ui.champ} placeholder={t.votre_nom} aria-label={t.votre_nom} value={nom} autoComplete="name" onChange={(e) => setNom(e.target.value)} />
-          <textarea rows={3} className={ui.champ} placeholder={t.message} aria-label={t.message} value={texte} onChange={(e) => setTexte(e.target.value)} />
-          {erreur && <p className={ui.erreur}>{erreur}</p>}
-          <button className={ui.bouton} disabled={!texte.trim() || envoi} onClick={envoyer}>
-            {envoi ? t.envoi : t.envoyer}
-          </button>
-        </>
+        <p className="text-sm text-pierre-600">{t.fiches_fermees}</p>
+      )}
+      <p className="text-sm font-medium text-pierre-800">
+        {remplacer(t.fiches_recues, { r: String(fiches.recues), a: String(fiches.attendues) })}
+        {' · '}
+        <span className={manquantes > 0 ? 'text-amber-800' : 'text-foret-700'}>
+          {manquantes > 0 ? remplacer(t.fiches_manquantes, { n: String(manquantes) }) : t.fiches_completes}
+        </span>
+      </p>
+
+      {fiches.liste.length === 0 ? (
+        <p className="text-sm text-pierre-500">{t.fiches_aucune}</p>
+      ) : (
+        <div className="space-y-2 border-t border-pierre-100 pt-4">
+          <h3 className="font-semibold">{t.fiches_liste}</h3>
+          <p className="text-xs text-pierre-500">{t.fiches_liste_aide}</p>
+          <p className="text-sm text-pierre-700">
+            {remplacer(t.fiches_resume, { a: String(fiches.liste.filter(aDesAllergies).length), d: String(fiches.liste.filter(dieteParticuliere).length) })}
+          </p>
+          <div className="inline-flex rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" role="group">
+            {(
+              [
+                ['toutes', t.fiches_toutes, fiches.liste.length],
+                ['a_savoir', t.fiches_a_savoir, nbASavoir],
+              ] as const
+            ).map(([cle, libelle, n]) => (
+              <button
+                key={cle}
+                type="button"
+                aria-pressed={filtre === cle}
+                className={`rounded-md px-2.5 py-1 ${filtre === cle ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`}
+                onClick={() => setFiltre(cle)}
+              >
+                {libelle} <span className="tabular-nums text-pierre-400">{n}</span>
+              </button>
+            ))}
+          </div>
+          {affichees.length === 0 ? (
+            <p className="text-sm text-pierre-500">{t.fiches_rien_a_signaler}</p>
+          ) : (
+            <ul className="divide-y divide-pierre-100 text-sm">
+              {affichees.map((f, i) => (
+                <li key={i} className="py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="font-medium text-pierre-900">
+                      {nomFiche(f)}
+                      {f.genre === 'adulte' && <span className="ml-1 font-normal text-pierre-500">({t.fiche_adulte})</span>}
+                    </span>
+                    <span className="text-xs text-pierre-500">
+                      {[f.groupe, dateLisible(jourMontreal(f.recue_le), langue)].filter(Boolean).join(' · ')}
+                    </span>
+                  </div>
+                  {!f.partage ? (
+                    <p className="text-xs italic text-pierre-500">{t.fiche_non_partagee}</p>
+                  ) : (
+                    <>
+                      {aDesAllergies(f) && <p className="text-amber-800">{remplacer(t.fiche_allergies, { a: f.allergies ?? '' })}</p>}
+                      {dieteParticuliere(f) && <p className="text-foret-800">{remplacer(t.fiche_diete, { d: diete(f) })}</p>}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   )

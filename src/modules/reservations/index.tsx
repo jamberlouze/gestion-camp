@@ -25,6 +25,7 @@ import { Fiche } from './Fiche'
 import { Liste } from './Liste'
 import { Modeles } from './Modeles'
 import { OngletRapports } from './OngletRapports'
+import { RapportAllergies } from './RapportAllergies'
 import { Reglages } from './Reglages'
 
 const onglet = ({ isActive }: { isActive: boolean }) =>
@@ -139,9 +140,9 @@ export default function ModuleReservations() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Réservations</h1>
+      <h1 className="text-2xl font-semibold print:hidden">Réservations</h1>
       {/* Adresses absolues : voir Embarcations. */}
-      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/reservations" end className={(p) => onglet({ isActive: p.isActive || surFiche })}>
           Réservations
         </NavLink>
@@ -172,6 +173,7 @@ export default function ModuleReservations() {
           <Routes>
             <Route index element={<Liste />} />
             <Route path="r/:id" element={<Fiche />} />
+            <Route path="r/:id/allergies" element={<RapportAllergies />} />
             <Route path="catalogue" element={<Catalogue />} />
             <Route path="courriels" element={<OngletCourriels />} />
             <Route path="rapports" element={<OngletRapports />} />

@@ -675,3 +675,74 @@ select '28-G-901', 2028, 901, 'ESSAI Liste de prix (classe nature 27-28)', e.id,
 from core.entreprises e
 where e.nom = 'GBPA+'
 on conflict (numero) do nothing;
+
+-- ------------------------------------------------------------
+-- Réservations › Portail client (réunion du 2026-10-21) : la page client à
+-- chaque étape (981 demande, 982 estimé envoyé, 983 estimé accepté, 984
+-- contrat signé avec des fiches fictives, 985 séjour passé : fiches fermées,
+-- pas encore effacées). La fiche de 983 ne doit jamais paraître sur sa page.
+-- ------------------------------------------------------------
+insert into reservations.reservations (numero, exercice, numero_seq, nom, compagnie_id, forfait, variante, date_arrivee, date_depart,
+  heure_arrivee, heure_depart, nb_participants, nb_accompagnateurs, ratio, langue, etape, signe_le, description)
+select v.numero, v.exercice, v.seq, v.nom, e.id, 'classe_nature', 'verte', v.arrivee::date, v.depart::date, '10:00', '14:00', v.p, v.a, '1:15',
+  'Français', v.etape, v.signe::date, 'Réservation d''essai : page client par étape (2026-10-21).'
+from (values
+  ('27-G-981', 2027, 981, 'ESSAI Page client 1 — demande', '2027-05-03', '2027-05-05', 30, 3, 'nouvelle', null),
+  ('27-G-982', 2027, 982, 'ESSAI Page client 2 — estimé envoyé', '2027-05-05', '2027-05-07', 40, 4, 'estime_envoye', null),
+  ('27-G-983', 2027, 983, 'ESSAI Page client 3 — estimé accepté', '2027-05-10', '2027-05-12', 44, 4, 'estime_accepte', null),
+  ('27-G-984', 2027, 984, 'ESSAI Page client 4 — contrat signé', '2027-05-12', '2027-05-14', 24, 3, 'confirmee', '2026-10-20'),
+  ('27-G-985', 2027, 985, 'ESSAI Page client 5 — séjour passé', '2026-10-05', '2026-10-07', 20, 2, 'terminee', '2026-09-15')
+) as v(numero, exercice, seq, nom, arrivee, depart, p, a, etape, signe)
+cross join core.entreprises e
+where e.nom = 'GBPA+'
+on conflict (numero) do nothing;
+
+-- Estimés : brouillon + lignes, puis envoyé ou accepté (un estimé non brouillon est figé).
+insert into reservations.estimes (reservation_id, version, exercice_prix, sous_total, tps, tvq, total)
+select r.id, 1, 2027, 10090, 504.50, 1006.48, 11600.98
+from reservations.reservations r
+where r.numero in ('27-G-982', '27-G-983', '27-G-984', '27-G-985')
+on conflict (reservation_id, version) do nothing;
+
+insert into reservations.lignes (estime_id, ordre, description, quantite, prix_unitaire, montant)
+select e.id, l.ordre, l.description, l.quantite, l.prix, l.montant
+from reservations.estimes e
+join reservations.reservations r on r.id = e.reservation_id
+cross join (values
+  (1, 'Classe nature verte, 3 jours / 2 nuits (élèves)', 44, 210, 9240),
+  (2, 'Transport en autobus scolaire', 1, 850, 850)
+) as l(ordre, description, quantite, prix, montant)
+where r.numero in ('27-G-982', '27-G-983', '27-G-984', '27-G-985') and e.version = 1 and e.statut = 'brouillon'
+  and not exists (select 1 from reservations.lignes x where x.estime_id = e.id);
+
+update reservations.estimes e set
+  statut = case when r.numero = '27-G-982' then 'envoye' else 'accepte' end,
+  envoye_le = now() - interval '3 days',
+  accepte_le = case when r.numero <> '27-G-982' then now() - interval '2 days' end,
+  accepte_par = case when r.numero <> '27-G-982' then 'Sophie Enseignante' end
+from reservations.reservations r
+where r.id = e.reservation_id and r.numero in ('27-G-982', '27-G-983', '27-G-984', '27-G-985') and e.statut = 'brouillon';
+
+-- Fiches fictives (insérées directement : ajouter_fiche refuse un séjour passé).
+-- Fortin : reçue avant la case de consentement (consentement_le null).
+insert into reservations.fiches (reservation_id, genre, prenom, nom, groupe, sante, allergies, problemes_sante, epipen, diete, diete_autre,
+  medicaments, langue, recue_le, consentement_le)
+select r.id, f.genre, f.prenom, f.nom, f.groupe, f.sante, f.allergies, f.problemes, f.epipen, f.diete, f.autre, f.medic, 'fr',
+  now() - (f.jours || ' days')::interval, case when f.consent then now() - (f.jours || ' days')::interval end
+from (values
+  ('27-G-984', 'participant', 'Léa', 'Tremblay', '5e A', true, 'Arachides et noix', null, true, 'reguliere', null, true, 6, true),
+  ('27-G-984', 'participant', 'Noah', 'Gagnon', '5e A', false, null, null, null, 'vegetarienne', null, true, 6, true),
+  ('27-G-984', 'participant', 'Emma', 'Roy', '5e B', true, 'Lactose', null, false, 'sans_lactose', null, true, 5, true),
+  ('27-G-984', 'participant', 'Liam', 'Côté', '5e B', false, null, null, null, 'autre', 'Sans œufs', true, 5, true),
+  ('27-G-984', 'participant', 'Mia', 'Bouchard', '5e A', true, null, 'Asthme (pompe dans son sac)', false, 'halal', null, true, 4, true),
+  ('27-G-984', 'participant', 'Zack', 'Morin', '5e B', false, null, null, null, 'reguliere', null, true, 4, true),
+  ('27-G-984', 'participant', 'Chloé', 'Lavoie', '5e A', false, null, null, null, 'reguliere', null, false, 3, true),
+  ('27-G-984', 'adulte', 'Marc', 'Pelletier', 'Enseignant 5e A', true, 'Crustacés', null, false, 'sans_gluten', null, true, 3, true),
+  ('27-G-984', 'participant', 'Jade', 'Fortin', '5e B', true, 'Pénicilline', null, false, 'sans_porc', null, true, 9, false),
+  ('27-G-984', 'participant', 'Olivier', 'Bélanger', '5e B', false, null, null, null, 'reguliere', null, true, 2, true),
+  ('27-G-983', 'participant', 'Ne-doit-pas', 'Paraître', 'Avant la signature', true, 'Kiwi', null, false, 'reguliere', null, true, 1, true),
+  ('27-G-985', 'participant', 'Rose', 'Dubois', '3e', true, 'Sésame', null, true, 'reguliere', null, true, 30, true),
+  ('27-G-985', 'participant', 'Félix', 'Girard', '3e', false, null, null, null, 'vegetarienne', null, true, 30, true)
+) as f(numero, genre, prenom, nom, groupe, sante, allergies, problemes, epipen, diete, autre, medic, jours, consent)
+join reservations.reservations r on r.numero = f.numero
+where not exists (select 1 from reservations.fiches x where x.reservation_id = r.id);

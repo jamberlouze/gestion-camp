@@ -498,6 +498,8 @@ export interface FicheParticipant {
   langue: 'fr' | 'en'
   recue_le: string
   effacee_le: string | null
+  /** Case de consentement du formulaire (allergies et diète montrées au responsable du groupe) ; null = fiche d'avant la case. */
+  consentement_le: string | null
 }
 
 /** Totaux des fiches, sans nom (reservations.totaux_fiches). */
@@ -506,6 +508,10 @@ export interface TotauxFiches {
   participants: number
   adultes: number
   sante: number
+  /** Fiches avec des allergies écrites. */
+  allergies: number
+  /** Fiches avec des problèmes de santé écrits. */
+  problemes: number
   epipen: number
   sans_medicaments: number
   effacees: number

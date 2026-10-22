@@ -3,7 +3,7 @@ import { Chargement } from '@/shell/Gardes'
 
 // Pages publiques (clients sans compte), chargées à part de l'app :
 //   /demande          formulaire de demande (remplace Jotform)
-//   /client/<jeton>   page client (estimé, contrat, documents, fiches, message)
+//   /client/<jeton>   page client (estimé, contrat, documents, fiches, factures)
 //   /signer/<jeton>   signature du contrat
 //   /fiches/<jeton>   fiches participants
 // Sur le sous-domaine public, toute autre adresse mène au formulaire.
