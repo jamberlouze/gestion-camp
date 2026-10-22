@@ -6,13 +6,15 @@ import {
   destinataires,
   echeanceFacture,
   encoreUtile,
+  enTetesFil,
   joursRappelsPaiement,
   remplirCourriel,
   rendreCourriel,
   versHtml,
 } from '../../src/modules/reservations/courriels.ts'
 import { chiffrer } from '../qbo/chiffre.js'
-import { envoyerCourriel, messageMime, modeEnvoi, preparerCourriels } from './courriels.js'
+import { envoyerGmailFil } from '../commun/courriel.js'
+import { brouillonCourriel, envoyerCourriel, expedierFenetre, messageMime, modeEnvoi, preparerCourriels } from './courriels.js'
 
 const DEPUIS = '2026-10-10'
 
@@ -55,7 +57,7 @@ function etat(modif = {}) {
 }
 const cles = (l) => l.map((x) => x.cle)
 
-test('accusé, estimé, contrat : un par événement, à partir de la mise en service seulement', () => {
+test('accusé : un par événement ; estimé et contrat jamais dans la file (fenêtre) ; rappel de signature 5 jours après l’envoi réel du contrat', () => {
   const e = etat({
     demande: { id: 'd1', recue_le: '2026-10-11T14:00:00Z', langue: 'fr', courriel: 'prof@ecole.ca', nom: 'Prof' },
     estimes: [
@@ -64,13 +66,19 @@ test('accusé, estimé, contrat : un par événement, à partir de la mise en se
     ],
     signatures: [{ id: 's1', statut: 'en_attente', envoye_le: '2026-10-12T15:00:00Z', echeance: '2026-10-19', jeton: 'js' }],
   })
-  assert.deepEqual(cles(aPreparer(e, '2026-10-12', DEPUIS)), ['accuse:d1', 'estime:e1', 'contrat:s1'])
-  // Rappel de signature au 5e jour, pas avant.
-  assert.ok(!cles(aPreparer(e, '2026-10-16', DEPUIS)).includes('rappel_signature:s1'))
-  assert.ok(cles(aPreparer(e, '2026-10-17', DEPUIS)).includes('rappel_signature:s1'))
+  assert.deepEqual(cles(aPreparer(e, '2026-10-12', DEPUIS)), ['accuse:d1'])
+  // Contrat préparé mais pas encore envoyé : pas de rappel.
+  assert.ok(!cles(aPreparer(e, '2026-10-17', DEPUIS)).includes('rappel_signature:s1'))
+  // Envoyé par la fenêtre : rappel au 5e jour, pas avant.
+  const parti = { ...e, courriels: [{ id: 'k', cle: 'contrat:s1', genre: 'contrat', statut: 'envoye', ref: 's1' }] }
+  assert.ok(!cles(aPreparer(parti, '2026-10-16', DEPUIS)).includes('rappel_signature:s1'))
+  assert.ok(cles(aPreparer(parti, '2026-10-17', DEPUIS)).includes('rappel_signature:s1'))
   // Déjà préparés (même annulés) : jamais deux fois.
-  const deja = { ...e, courriels: [{ id: 'x', cle: 'estime:e1', genre: 'estime', statut: 'annule', ref: 'e1' }] }
-  assert.ok(!cles(aPreparer(deja, '2026-10-12', DEPUIS)).includes('estime:e1'))
+  const deja = { ...e, courriels: [{ id: 'x', cle: 'accuse:d1', genre: 'accuse', statut: 'annule', ref: null }] }
+  assert.ok(!cles(aPreparer(deja, '2026-10-12', DEPUIS)).includes('accuse:d1'))
+  // Courriel de la fenêtre en cours d'envoi (estimé encore brouillon) : pas annulé par la file.
+  const brouillon = etat({ estimes: [{ id: 'e2', version: 3, statut: 'brouillon', envoye_le: null, total: 10 }] })
+  assert.equal(encoreUtile({ genre: 'estime', ref: 'e2' }, brouillon), true)
 })
 
 test('factures : acompte, facture finale, rappels de paiement (sur réception : 7 jours ; acompte 2 : 21 jours avant l’arrivée)', () => {
@@ -162,7 +170,7 @@ afterEach(() => {
 
 const MODELE = { genre: 'facture', mode: 'approuver', sujet_fr: 'Facture {{facture_numero}} — {{groupe}}', corps_fr: 'Bonjour {{responsable}},\n\n{{facture_montant}} : {{lien_client}}', sujet_en: 'Invoice', corps_en: 'Hello' }
 
-async function simuler({ e = etat(), courriel = null } = {}) {
+async function simuler({ e = etat(), courriel = null, fil = null } = {}) {
   const jetons = await chiffrer(ENV, { access: 'AT', refresh: 'RT', access_expire: Date.now() + 3_600_000 })
   const appels = []
   const rep = (corps, status = 200) => (corps === null ? new Response(null, { status }) : new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json' } }))
@@ -175,11 +183,14 @@ async function simuler({ e = etat(), courriel = null } = {}) {
     if (u.includes('/modeles_courriels?')) return rep([MODELE])
     if (u.includes('/compagnies?')) return rep([{ entreprise_id: 'c1', raison_sociale: 'GBPA+ inc.', nom_court: 'GBPA+', courriel: 'inscriptions@camptremblant.com', telephone: '819', reponse_interac: 'BPAMT' }])
     if (u.includes('/reglages?')) return rep([{ valeur: DEPUIS }])
+    if (u.includes('/fils_courriel?')) return rep(fil ? [fil] : [])
+    if (u.endsWith('/rpc/courriel_parti')) return rep(null, 204)
     if (u.includes('/courriels?id=eq.') && m === 'GET') return rep(courriel ? [courriel] : [])
     if (u.includes('/courriels?') && m === 'PATCH') return rep(null, 204)
     if (u.includes('/qbo_connexions?')) return rep([{ compagnie_id: 'c1', realm_id: '9', environnement: 'sandbox', jetons }])
     if (u.includes('sandbox-quickbooks.api.intuit.com') && u.includes('/invoice/41/pdf')) return new Response(new TextEncoder().encode('%PDF-facture'), { headers: { 'content-type': 'application/pdf' } })
     if (u === 'http://mailpit.test/api/v1/send') return rep({ ID: 'mp1' })
+    if (u === 'http://mailpit.test/api/v1/message/mp1/headers') return rep({ 'Message-Id': ['<mp1@mailpit>'], Subject: ['x'] })
     if (u.endsWith('/rest/v1/journal') || u.endsWith('/rest/v1/echanges')) return rep([{}], 201)
     throw new Error(`Appel inattendu : ${m} ${u}`)
   }
@@ -197,18 +208,35 @@ test('préparer : courriel rendu avec son modèle, destinataires, clé', async (
   assert.equal(ajout.corps, 'Bonjour Secrétariat,\n\n141,93\u00a0$ : https://app.test/client/jc')
 })
 
-test('envoyer (DEV) : Mailpit, PDF de QBO joint, journal et CRM', async () => {
+test('envoyer (DEV) : Mailpit, PDF de QBO joint ; premier courriel = début du fil, noté d’un coup (courriel_parti)', async () => {
   const c = { id: 'c9', reservation_id: 'r1', genre: 'facture', cle: 'facture:f1', ref: 'f1', statut: 'prepare', a: ['compta@ecole.ca'], cc: ['sophie@ecole.ca'], sujet: 'Facture 1041', corps: 'Bonjour https://app.test/x' }
   const appels = await simuler({ e: etat({ factures: [facture] }), courriel: c })
-  assert.deepEqual(await envoyerCourriel(ENV, 'c9', 'Adjointe'), { ok: true, mode: 'mailpit' })
+  assert.deepEqual(await envoyerCourriel(ENV, 'c9', 'Adjointe'), { ok: true, mode: 'mailpit', fil: false })
   const envoi = appels.find((a) => a.u === 'http://mailpit.test/api/v1/send').corps
-  assert.deepEqual([envoi.From.Email, envoi.To[0].Email, envoi.Cc[0].Email], ['inscriptions@camptremblant.com', 'compta@ecole.ca', 'sophie@ecole.ca'])
+  assert.deepEqual([envoi.From.Email, envoi.To[0].Email, envoi.Cc[0].Email, envoi.Subject], ['inscriptions@camptremblant.com', 'compta@ecole.ca', 'sophie@ecole.ca', 'Facture 1041'])
+  assert.equal(envoi.Headers, undefined)
   assert.equal(Buffer.from(envoi.Attachments[0].Content, 'base64').toString(), '%PDF-facture')
   assert.equal(envoi.Attachments[0].Filename, 'Facture 1041.pdf')
-  const statut = appels.filter((a) => a.u.includes('/courriels?id=eq.c9') && a.m === 'PATCH').map((a) => a.corps)
-  assert.deepEqual([statut[0].statut, statut[0].envoye_par_nom, statut[0].message_id], ['envoye', 'Adjointe', 'mp1'])
-  assert.match(appels.find((a) => a.u.endsWith('/rest/v1/journal')).corps.texte, /« Facture 1041 » envoyé à compta@ecole.ca, sophie@ecole.ca \(DEV : Mailpit\)/)
-  assert.equal(appels.find((a) => a.u.endsWith('/rest/v1/echanges')).corps.genre, 'courriel')
+  const p = appels.find((a) => a.u.endsWith('/rpc/courriel_parti')).corps.p
+  assert.deepEqual(
+    [p.courriel_id, p.sujet, p.auteur, p.transport, p.message_id, p.thread_id, p.message_rfc, p.nom_genre, p.document],
+    ['c9', 'Facture 1041', 'Adjointe', 'mailpit', 'mp1', null, '<mp1@mailpit>', 'Facture (acompte, facture séparée)', null],
+  )
+  assert.ok(!appels.some((a) => a.m === 'PATCH' && a.u.includes('/courriels?')))
+})
+
+test('fil (DEV) : les suivants gardent le sujet du fil, In-Reply-To et References', async () => {
+  const c = { id: 'c9', reservation_id: 'r1', genre: 'facture', cle: 'facture:f1', ref: 'f1', statut: 'prepare', a: ['compta@ecole.ca'], cc: [], sujet: 'Facture 1041', corps: 'Bonjour' }
+  const fil = { reservation_id: 'r1', transport: 'mailpit', thread_id: null, sujet: 'Réservation 27-G-592 · École des Érables', premier_message_id: '<a@mailpit>', dernier_message_id: '<b@mailpit>', courriels: 2 }
+  const appels = await simuler({ e: etat({ factures: [facture] }), courriel: c, fil })
+  assert.equal((await envoyerCourriel(ENV, 'c9', 'Adjointe')).fil, true)
+  const envoi = appels.find((a) => a.u === 'http://mailpit.test/api/v1/send').corps
+  assert.equal(envoi.Subject, 'Réservation 27-G-592 · École des Érables')
+  assert.deepEqual(envoi.Headers, { 'In-Reply-To': '<b@mailpit>', References: '<a@mailpit> <b@mailpit>' })
+  assert.equal(appels.find((a) => a.u.endsWith('/rpc/courriel_parti')).corps.p.sujet, 'Réservation 27-G-592 · École des Érables')
+  // Un fil Mailpit n'est jamais repris par Gmail (et l'inverse).
+  assert.deepEqual(enTetesFil(null), null)
+  assert.deepEqual(enTetesFil({ premier_message_id: '<a@x>', dernier_message_id: '<a@x>' }), { 'In-Reply-To': '<a@x>', References: '<a@x>' })
 })
 
 test('envoyer : refusé sur une base locale sans Mailpit ; rappel d’une facture payée annulé', async () => {
@@ -240,4 +268,172 @@ test('MIME de Gmail : texte, HTML et pièce jointe, en-têtes encodés', () => {
   assert.match(mime, /multipart\/mixed/)
   assert.match(mime, /Content-Disposition: attachment/)
   assert.ok(mime.includes(Buffer.from('%PDF').toString('base64')))
+})
+
+test('MIME : en-têtes du fil (In-Reply-To, References), sans saut de ligne injecté', () => {
+  const raw = messageMime({
+    de: 'inscriptions@camptremblant.com',
+    a: ['a@x.ca'],
+    sujet: 'Réservation 27-G-083 · École',
+    texte: 'x',
+    html: '<p>x</p>',
+    enTetes: { 'In-Reply-To': '<b@mail.gmail.com>', References: '<a@mail.gmail.com> <b@mail.gmail.com>\r\nBcc: pirate@x.ca' },
+  })
+  const mime = Buffer.from(raw.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
+  assert.match(mime, /\r\nIn-Reply-To: <b@mail\.gmail\.com>\r\n/)
+  assert.match(mime, /\r\nReferences: <a@mail\.gmail\.com> <b@mail\.gmail\.com> Bcc: pirate@x\.ca\r\n/)
+  assert.ok(!/\r\nBcc:/.test(mime))
+})
+
+test('Gmail : threadId dans l’envoi, Message-ID relu par messages.get (metadata) ; fil retiré de la boîte = nouveau fil', async () => {
+  const appels = []
+  let fois = 0
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url)
+    appels.push({ u, m: init.method ?? 'GET', corps: init.body && typeof init.body === 'string' && init.body.startsWith('{') ? JSON.parse(init.body) : null })
+    if (u === 'https://oauth2.googleapis.com/token') return new Response(JSON.stringify({ access_token: 'AT' }))
+    if (u.endsWith('/messages/send')) {
+      fois++
+      if (JSON.parse(init.body).threadId === 'mort') return new Response('{"error":{"code":404,"message":"Requested entity was not found."}}', { status: 404 })
+      return new Response(JSON.stringify({ id: `m${fois}`, threadId: JSON.parse(init.body).threadId ?? 't-nouveau', labelIds: ['SENT'] }))
+    }
+    if (u.includes('/messages/m') && u.includes('format=metadata')) {
+      assert.match(u, /metadataHeaders=Message-ID/)
+      return new Response(JSON.stringify({ id: 'm', payload: { headers: [{ name: 'Message-Id', value: '<CAxyz@mail.gmail.com>' }] } }))
+    }
+    throw new Error(`Appel inattendu : ${u}`)
+  }
+  const env = { GMAIL_CLIENT_ID: 'i', GMAIL_CLIENT_SECRET: 's' }
+  const m = { de: 'inscriptions@camptremblant.com', a: ['a@x.ca'], sujet: 'S', texte: 't', html: '<p>t</p>', threadId: 't1', enTetes: { 'In-Reply-To': '<a@x>', References: '<a@x>' } }
+  assert.deepEqual(await envoyerGmailFil(env, m, 'RT'), { id: 'm1', threadId: 't1', messageId: '<CAxyz@mail.gmail.com>' })
+  assert.equal(appels.find((a) => a.u.endsWith('/messages/send')).corps.threadId, 't1')
+  // Fil introuvable : un seul nouvel envoi, sans threadId.
+  const r = await envoyerGmailFil(env, { ...m, threadId: 'mort' }, 'RT')
+  assert.deepEqual([r.threadId, r.messageId], ['t-nouveau', '<CAxyz@mail.gmail.com>'])
+  assert.equal(appels.filter((a) => a.u.endsWith('/messages/send')).length, 3)
+})
+
+// ------------------------------------------------------------------
+// Fenêtre d'envoi (estimé, contrat)
+// ------------------------------------------------------------------
+
+const MODELE_ESTIME = { genre: 'estime', mode: 'approuver', sujet_fr: 'Réservation {{numero}} · {{groupe}}', corps_fr: 'Bonjour {{responsable}},\n\nTotal : {{total}}\n{{lien_client}}', sujet_en: 'Reservation {{numero}} · {{groupe}}', corps_en: 'Hello {{responsable}}' }
+const MODELE_CONTRAT = { genre: 'contrat', mode: 'approuver', sujet_fr: 'Réservation {{numero}} · {{groupe}}', corps_fr: 'Signez d’ici le {{echeance_signature}} : {{lien_signature}}', sujet_en: 'x', corps_en: 'y' }
+const PDF = Buffer.from('%PDF-1.7 estimé').toString('base64')
+
+function simulerFenetre({ e, fil = null, mailpitRefuse = false, courriels = [] }) {
+  const appels = []
+  const rep = (corps, status = 200) => (corps === null ? new Response(null, { status }) : new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json' } }))
+  const lignes = new Map(courriels.map((c) => [c.id, c]))
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url)
+    const m = init.method ?? 'GET'
+    appels.push({ u, m, corps: typeof init.body === 'string' ? JSON.parse(init.body) : init.body ?? null })
+    if (u.endsWith('/rpc/courriels_etat')) return rep([e])
+    if (u.includes('/modeles_courriels?genre=eq.estime')) return rep([MODELE_ESTIME])
+    if (u.includes('/modeles_courriels?genre=eq.contrat')) return rep([MODELE_CONTRAT])
+    if (u.includes('/compagnies?')) return rep([{ entreprise_id: 'c1', raison_sociale: 'GBPA+ inc.', nom_court: 'GBPA+', courriel: 'inscriptions@camptremblant.com', telephone: '819', reponse_interac: 'BPAMT' }])
+    if (u.includes('/fils_courriel?')) return rep(fil ? [fil] : [])
+    if (u.endsWith('/rpc/courriel_fenetre')) {
+      const p = JSON.parse(init.body).p
+      lignes.set('cf', { id: 'cf', reservation_id: p.reservation_id, genre: p.genre, cle: p.cle, ref: p.ref, statut: 'prepare', a: p.a, cc: p.cc, sujet: p.sujet, corps: p.corps })
+      return rep({ id: 'cf', nouveau: true })
+    }
+    if (u.includes('/courriels?id=eq.') && m === 'GET') return rep([lignes.get(u.match(/id=eq\.([^&]+)/)[1])].filter(Boolean))
+    if (u.includes('/courriels?') && (m === 'PATCH' || m === 'DELETE')) return rep(null, 204)
+    if (u.includes('/storage/v1/object/reservations-documents/r1/estime-') && m === 'POST') return rep({ Key: 'x' })
+    if (u.endsWith('/storage/v1/object/reservations-documents') && m === 'DELETE') return rep([])
+    if (u === 'http://mailpit.test/api/v1/send') return mailpitRefuse ? new Response('panne', { status: 500 }) : rep({ ID: 'mp7' })
+    if (u === 'http://mailpit.test/api/v1/message/mp7/headers') return rep({ 'Message-Id': ['<mp7@mailpit>'] })
+    if (u.endsWith('/rpc/courriel_parti')) return rep(null, 204)
+    throw new Error(`Appel inattendu : ${m} ${u}`)
+  }
+  return appels
+}
+
+const etatFenetre = (modif = {}) =>
+  etat({
+    r: { signe_le: null },
+    estimes: [{ id: '11111111-1111-4111-8111-111111111111', version: 2, statut: 'brouillon', envoye_le: null, total: 15553.02 }],
+    signatures: [{ id: '22222222-2222-4222-8222-222222222222', statut: 'en_attente', envoye_le: '2026-10-01T12:00:00Z', echeance: '2026-10-08', jeton: 'js' }],
+    ...modif,
+  })
+const E2 = '11111111-1111-4111-8111-111111111111'
+const S1 = '22222222-2222-4222-8222-222222222222'
+
+test('fenêtre : brouillon du modèle (langue, destinataires), contrat à signer d’ici l’envoi + 7 jours, sujet du fil', async () => {
+  simulerFenetre({ e: etatFenetre() })
+  const b = await brouillonCourriel(ENV, { reservation: 'r1', genre: 'estime', ref: E2 })
+  assert.deepEqual([b.a, b.cc, b.sujet, b.fil, b.envoi, b.refus], [['sophie@ecole.ca'], [], 'Réservation 27-G-592 · École des Érables', null, 'mailpit', null])
+  assert.match(b.corps, /^Bonjour Sophie Tremblay,\n\nTotal : 15 553,02 \$/)
+  const fil = { reservation_id: 'r1', transport: 'mailpit', thread_id: null, sujet: 'Sujet du fil', premier_message_id: '<a@m>', dernier_message_id: '<a@m>', courriels: 1 }
+  simulerFenetre({ e: etatFenetre(), fil })
+  const c = await brouillonCourriel(ENV, { reservation: 'r1', genre: 'contrat', ref: S1 })
+  assert.deepEqual([c.a, c.cc, c.sujet, c.fil], [['sophie@ecole.ca'], ['direction@ecole.ca'], 'Sujet du fil', { sujet: 'Sujet du fil', courriels: 1 }])
+  const dans7 = new Date(Date.now() + 7 * 86_400_000)
+  assert.ok(c.corps.includes(String(new Intl.DateTimeFormat('fr-CA', { day: 'numeric', timeZone: 'America/Toronto' }).format(dans7))))
+  // Refus : estimé déjà envoyé, contrat déjà parti.
+  simulerFenetre({ e: etatFenetre({ estimes: [{ id: E2, version: 2, statut: 'envoye', envoye_le: '2026-10-12T00:00:00Z', total: 1 }] }) })
+  await assert.rejects(brouillonCourriel(ENV, { reservation: 'r1', genre: 'estime', ref: E2 }), /Seul un brouillon/)
+  simulerFenetre({ e: etatFenetre({ courriels: [{ id: 'k', cle: `contrat:${S1}`, genre: 'contrat', statut: 'envoye', ref: S1 }] }) })
+  await assert.rejects(brouillonCourriel(ENV, { reservation: 'r1', genre: 'contrat', ref: S1 }), /déjà envoyé/)
+})
+
+test('fenêtre : l’estimé part avec son PDF ; gardé et « envoyé » seulement une fois le courriel parti', async () => {
+  const appels = simulerFenetre({ e: etatFenetre() })
+  const res = await expedierFenetre(
+    ENV,
+    { reservation: 'r1', genre: 'estime', ref: E2, a: 'sophie@ecole.ca, Sophie@ecole.ca', cc: ['prof@ecole.ca'], sujet: ' Réservation  27-G-592 ', corps: 'Allô Sophie, contente de savoir que vous revenez !', piece: { nom: 'Estimé 27-G-592 v2.pdf', contenu: PDF } },
+    'Coordo',
+  )
+  assert.deepEqual(res, { ok: true, mode: 'mailpit', fil: false })
+  const fen = appels.find((a) => a.u.endsWith('/rpc/courriel_fenetre')).corps.p
+  assert.deepEqual([fen.cle, fen.a, fen.cc, fen.sujet, fen.langue], [`estime:${E2}`, ['sophie@ecole.ca'], ['prof@ecole.ca'], 'Réservation 27-G-592', 'fr'])
+  const ordre = appels.map((a) => (a.u.includes('/storage/') ? 'pdf' : a.u.includes('/api/v1/send') ? 'envoi' : a.u.endsWith('/rpc/courriel_parti') ? 'note' : null)).filter(Boolean)
+  assert.deepEqual(ordre, ['pdf', 'envoi', 'note'])
+  const envoi = appels.find((a) => a.u.endsWith('/api/v1/send')).corps
+  assert.equal(envoi.Text, 'Allô Sophie, contente de savoir que vous revenez !')
+  assert.deepEqual([envoi.Attachments[0].Filename, Buffer.from(envoi.Attachments[0].Content, 'base64').toString()], ['Estimé 27-G-592 v2.pdf', '%PDF-1.7 estimé'])
+  const p = appels.find((a) => a.u.endsWith('/rpc/courriel_parti')).corps.p
+  assert.deepEqual([p.courriel_id, p.auteur, p.nom_genre, p.message_rfc, p.document.titre, p.document.estime_id], ['cf', 'Coordo', 'Estimé', '<mp7@mailpit>', 'Estimé 27-G-592 v2', E2])
+  assert.match(p.document.chemin, /^r1\/estime-.*\.pdf$/)
+  assert.match(p.document.empreinte, /^[0-9a-f]{64}$/)
+})
+
+test('fenêtre : envoi raté = rien ne change (PDF retiré, courriel de la fenêtre retiré, rien de noté) ; refus avant tout envoi', async () => {
+  const appels = simulerFenetre({ e: etatFenetre(), mailpitRefuse: true })
+  const corps = { reservation: 'r1', genre: 'estime', ref: E2, a: 'sophie@ecole.ca', cc: '', sujet: 'S', corps: 'Texte', piece: { nom: 'E.pdf', contenu: PDF } }
+  await assert.rejects(expedierFenetre(ENV, corps, 'Coordo'), /Mailpit a refusé/)
+  assert.ok(appels.some((a) => a.m === 'DELETE' && a.u.endsWith('/storage/v1/object/reservations-documents')))
+  assert.ok(appels.some((a) => a.m === 'DELETE' && a.u.includes('/courriels?id=eq.cf')))
+  assert.ok(!appels.some((a) => a.u.endsWith('/rpc/courriel_parti')))
+  // Adresse invalide, sans PDF, Gmail pas configuré : refusés avant d'écrire quoi que ce soit.
+  for (const [modif, env, motif] of [
+    [{ a: 'pas-un-courriel' }, ENV, /Adresse invalide/],
+    [{ piece: { nom: 'E.pdf', contenu: Buffer.from('pas un pdf').toString('base64') } }, ENV, /PDF de l'estimé manque/],
+    [{}, { ...ENV, COURRIELS_MAILPIT: '', SUPABASE_URL: 'https://x.supabase.co' }, /Gmail n’est pas configuré/],
+  ]) {
+    const a2 = simulerFenetre({ e: etatFenetre() })
+    await assert.rejects(expedierFenetre(env, { ...corps, ...modif }, 'Coordo'), motif)
+    assert.ok(!a2.some((a) => a.u.endsWith('/rpc/courriel_fenetre') || a.u.includes('/storage/')))
+  }
+})
+
+test('fenêtre : le contrat part sans pièce jointe, dans le fil existant', async () => {
+  const fil = { reservation_id: 'r1', transport: 'mailpit', thread_id: null, sujet: 'Réservation 27-G-592 · École des Érables', premier_message_id: '<a@m>', dernier_message_id: '<b@m>', courriels: 2 }
+  const appels = simulerFenetre({ e: etatFenetre(), fil })
+  await expedierFenetre(ENV, { reservation: 'r1', genre: 'contrat', ref: S1, a: 'sophie@ecole.ca', cc: 'direction@ecole.ca', sujet: 'ignoré (fil)', corps: 'Signez ici' }, 'Coordo')
+  const envoi = appels.find((a) => a.u.endsWith('/api/v1/send')).corps
+  assert.deepEqual([envoi.Subject, envoi.Attachments, envoi.Headers['In-Reply-To']], ['Réservation 27-G-592 · École des Érables', [], '<b@m>'])
+  assert.ok(!appels.some((a) => a.u.includes('/storage/')))
+  assert.equal(appels.find((a) => a.u.endsWith('/rpc/courriel_parti')).corps.p.document, null)
+})
+
+test('champ {{fiches_participants}} : seulement pour les séjours scolaires (phrase des fiches dans le contrat)', () => {
+  const compagnie = { raison_sociale: 'GBPA+ inc.', nom_court: 'GBPA+', courriel: 'x@y.ca', telephone: '1', reponse_interac: 'R' }
+  const corps = '{{#si fiches_participants}}Une fois le contrat signé, le lien des fiches participants paraîtra aussi sur votre page.\n\n{{/si}}La réservation est confirmée.'
+  const pour = (forfait) => remplirCourriel(corps, champsCourriel(etat({ r: { forfait } }), { genre: 'contrat', ref: null, langue: 'fr', compagnie, racine: 'https://g.test' }))
+  assert.match(pour('classe_nature'), /^Une fois le contrat signé/)
+  assert.match(pour('journee_plein_air'), /^Une fois le contrat signé/)
+  assert.equal(pour('accueil_groupe'), 'La réservation est confirmée.')
 })

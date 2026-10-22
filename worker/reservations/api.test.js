@@ -152,7 +152,7 @@ function simuler({ turnstile = true } = {}) {
     if (u.includes('/rest/v1/rpc/recevoir_demande')) return Response.json({ id: 'x', numero: '27-G-200', deja: false })
     // Accusé de réception préparé tout de suite (phase 5) : rien à préparer ici.
     if (u.includes('/rest/v1/rpc/courriels_etat')) return Response.json([])
-    if (u.includes('/rest/v1/modeles_courriels') || u.includes('/rest/v1/compagnies') || u.includes('/rest/v1/reglages')) return Response.json([])
+    if (u.includes('/rest/v1/modeles_courriels') || u.includes('/rest/v1/compagnies') || u.includes('/rest/v1/reglages') || u.includes('/rest/v1/fils_courriel')) return Response.json([])
     throw new Error(`Appel inattendu : ${u}`)
   }
   return appels
@@ -204,4 +204,38 @@ test('formulaire public : aucun prix dans les textes (décision de Maxime du 202
     assert.doesNotMatch(textes, /\{prix\}/, `${langue} : champ {prix}`)
     assert.doesNotMatch(textes, /\d\s?\$|\$\s?\d/, `${langue} : montant en dollars`)
   }
+})
+
+test('demande : avis à l’équipe (inscriptions@) tout de suite après l’enregistrement', async () => {
+  const appels = simuler()
+  const envoyes = []
+  const avant = globalThis.fetch
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url)
+    if (u.includes('/rest/v1/rpc/avis_prendre')) {
+      appels.push({ url: u, init })
+      return Response.json({
+        demandes: [{ id: 'd1', langue: 'fr', par_lien: false, reponses: {}, r: { id: 'x', numero: '27-G-200', nom: 'École des Érables', forfait: 'classe_nature', date_arrivee: '2099-05-12', date_depart: '2099-05-14' } }],
+        changements: [],
+      })
+    }
+    if (u === 'http://mailpit.test/api/v1/send') {
+      envoyes.push(JSON.parse(init.body))
+      return Response.json({ ID: 'm1' })
+    }
+    if (u.startsWith('http://mailpit.test/api/v1/message/')) return Response.json({})
+    return avant(url, init)
+  }
+  const res = await routeReservations(
+    requete({ cle: crypto.randomUUID(), langue: 'fr', turnstile: 'jeton', reponses: { ...classeNature, arrivee: '2099-05-12', depart: '2099-05-14' } }),
+    { ...env, COURRIELS_MAILPIT: 'http://mailpit.test', APP_URL: 'https://admin.test' },
+    'demande',
+  )
+  assert.equal(res.status, 200)
+  assert.ok(appels.some((a) => a.url.includes('avis_prendre')))
+  assert.deepEqual(
+    envoyes.map((e) => [e.To[0].Email, e.Subject]),
+    [['inscriptions@camptremblant.com', 'Nouvelle demande · 27-G-200 · École des Érables']],
+  )
+  assert.match(envoyes[0].Text, /Fiche : https:\/\/admin\.test\/reservations\/r\/x$/)
 })

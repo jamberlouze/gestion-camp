@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRelances } from '@/modules/crm/donnees'
 import type { Signaux } from './actions'
 import type { CleCalendrier } from './agenda'
+import type { FilCourriel, GenreFenetre } from './courriels'
 import type { Decisions } from './confirmation'
 import type {
   Compagnie,
@@ -378,13 +379,17 @@ export function useEnregistrerEstime() {
   })
 }
 
-/** Envoyer, accepter, refuser un estimé, ou en faire une nouvelle version (renvoie l'id de l'estimé). */
+/**
+ * Refuser un estimé, ou en faire une nouvelle version (renvoie l'id de
+ * l'estimé). L'envoi passe par la fenêtre (useExpedierCourriel),
+ * l'acceptation par la preuve écrite (useAccepterEstime).
+ */
 export function useChangerEstime() {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['reservations', 'estimes', 'changer'],
     networkMode: 'always',
-    mutationFn: async (v: { estime: Estime; action: 'envoyer' | 'accepter' | 'refuser' | 'nouvelle_version' }) => {
+    mutationFn: async (v: { estime: Estime; action: 'refuser' | 'nouvelle_version' }) => {
       const { data, error } = await db().rpc('changer_estime', { p_estime: v.estime.id, p_action: v.action })
       if (error) throw error
       return data as string
@@ -710,7 +715,107 @@ export function useEnvoyerCourriel() {
     networkMode: 'always',
     mutationFn: (id: string) => appelerWorker<{ ok: boolean; mode: ModeEnvoi }>('/api/reservations/envoyer', { courriel: id }),
     onSettled: () =>
-      Promise.all([['reservations', 'courriels'], ['reservations', 'journal'], ['crm']].map((queryKey) => client.invalidateQueries({ queryKey }))),
+      Promise.all(
+        [['reservations', 'courriels'], ['reservations', 'journal'], ['reservations', 'fils_courriel'], ['reservations', 'documents'], ['crm']].map((queryKey) =>
+          client.invalidateQueries({ queryKey }),
+        ),
+      ),
+  })
+}
+
+// ------------------------------------------------------------------
+// Fenêtre d'envoi (estimé, contrat) et fil Gmail (réunion du 2026-10-21)
+// ------------------------------------------------------------------
+
+/** Mode d'envoi du Worker (Mailpit, Gmail, pas configuré) et la raison du refus. */
+export function useModeEnvoi() {
+  return useQuery({
+    queryKey: ['reservations-envoi'],
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => appelerWorker<{ envoi: ModeEnvoi; refus: string | null }>('/api/reservations/envoi'),
+  })
+}
+
+/** Fil Gmail de la réservation (sujet constant), s'il y en a un. */
+export function useFilCourriel(reservationId: string) {
+  return useQuery({
+    queryKey: ['reservations', 'fils_courriel', reservationId],
+    queryFn: async () => {
+      const { data, error } = await db().from('fils_courriel').select('*').eq('reservation_id', reservationId).maybeSingle()
+      if (error) throw error
+      return data as FilCourriel | null
+    },
+  })
+}
+
+export interface BrouillonCourriel {
+  genre: GenreFenetre
+  ref: string
+  langue: 'fr' | 'en'
+  a: string[]
+  cc: string[]
+  sujet: string
+  corps: string
+  /** Fil existant : le sujet ne change plus. */
+  fil: { sujet: string; courriels: number } | null
+  envoi: ModeEnvoi
+  refus: string | null
+}
+
+/** Courriel du modèle pour la fenêtre (rendu par le Worker, comme la file). */
+export const brouillonCourriel = (v: { reservation: string; genre: GenreFenetre; ref: string }) => appelerWorker<BrouillonCourriel>('/api/reservations/brouillon', v)
+
+/** Octets → base64 (pièce jointe envoyée au Worker). */
+export function enBase64(octets: Uint8Array) {
+  let binaire = ''
+  for (let i = 0; i < octets.length; i += 0x8000) binaire += String.fromCharCode(...octets.subarray(i, i + 0x8000))
+  return btoa(binaire)
+}
+
+/** Envoi du courriel de la fenêtre ; l'estimé (ou le contrat) ne change qu'une fois le courriel parti. */
+export function useExpedierCourriel() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'courriels', 'expedier'],
+    networkMode: 'always',
+    mutationFn: (v: { reservation: string; genre: GenreFenetre; ref: string; a: string; cc: string; sujet: string; corps: string; piece?: { nom: string; octets: Uint8Array } | null }) =>
+      appelerWorker<{ ok: boolean; mode: ModeEnvoi }>('/api/reservations/expedier', {
+        ...v,
+        piece: v.piece ? { nom: v.piece.nom, contenu: enBase64(v.piece.octets) } : undefined,
+      }),
+    onSettled: (_d, _e, v) =>
+      Promise.all(
+        [
+          ['reservations', 'courriels'],
+          ['reservations', 'estimes', v.reservation],
+          ['reservations', 'signatures', v.reservation],
+          ['reservations', 'documents', v.reservation],
+          ['reservations', 'journal', v.reservation],
+          ['reservations', 'fils_courriel', v.reservation],
+          ['reservations', 'reservations'],
+          ['crm'],
+        ].map((queryKey) => client.invalidateQueries({ queryKey })),
+      ),
+  })
+}
+
+/** « Accepté par le client » : preuve écrite obligatoire (date + texte du courriel du client). */
+export function useAccepterEstime() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationKey: ['reservations-local', 'estimes', 'accepter'],
+    networkMode: 'always',
+    mutationFn: async (v: { estime: Estime; date: string; texte: string }) => {
+      const { error } = await db().rpc('accepter_estime_equipe', { p_estime: v.estime.id, p_courriel_le: v.date, p_texte: v.texte })
+      if (error) throw error
+    },
+    onSettled: (_d, _e, v) =>
+      Promise.all(
+        [['reservations', 'estimes', v.estime.reservation_id], ['reservations', 'reservations'], ['reservations', 'journal', v.estime.reservation_id], ['crm']].map((queryKey) =>
+          client.invalidateQueries({ queryKey }),
+        ),
+      ),
   })
 }
 

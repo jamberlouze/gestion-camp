@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { confirmer } from '@/lib/Confirmation'
+import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille } from '@/lib/icones'
 import { ui } from '@/lib/ui'
@@ -15,9 +15,20 @@ import {
 } from './calcul'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
-import { garderEstime, ouvrirPdf, pdfDeLEstime } from './productionPdf'
+import { ouvrirPdf, pdfDeLEstime } from './productionPdf'
 import { argent, champPetit, dateLongue } from './format'
-import { preparerCourriels, useChangerEstime, useEnregistrerEstime, useEstimes, useLignes, type LigneAEcrire } from './donnees'
+import {
+  brouillonCourriel,
+  useAccepterEstime,
+  useChangerEstime,
+  useEnregistrerEstime,
+  useEstimes,
+  useExpedierCourriel,
+  useLignes,
+  useModeEnvoi,
+  type LigneAEcrire,
+} from './donnees'
+import { FenetreCourriel } from './FenetreCourriel'
 import { CODE_MINIMUM, estimeDeReference, minimum90 } from './facturation'
 import { CATEGORIES, UNITES, type Estime as TEstime, type Reservation, type StatutEstime } from './types'
 
@@ -108,6 +119,13 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
   const lignesDb = useLignes(estime.id)
   const enregistrer = useEnregistrerEstime()
   const changerEtat = useChangerEstime()
+  const expedier = useExpedierCourriel()
+  const modeEnvoi = useModeEnvoi()
+  // Fenêtre d'envoi : PDF de cette version, produit à l'ouverture (montré et joint).
+  const [envoi, setEnvoi] = useState<{ nom: string; octets: Uint8Array } | null>(null)
+  const [preparation, setPreparation] = useState(false)
+  const [acceptation, setAcceptation] = useState(false)
+  const refusEnvoi = modeEnvoi.error ? messageErreur(modeEnvoi.error) : (modeEnvoi.data?.refus ?? null)
   const modifiable = ecriture && estime.statut === 'brouillon'
   const [lignes, setLignes] = useState<LigneEdit[] | null>(null)
   const [sale, setSale] = useState(false)
@@ -168,52 +186,42 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
     maj([...calcul.lignes.map(versLigne), ...manuelles])
   }
 
+  const aEnregistrer = () => ({
+    estime: { id: estime.id, reservation_id: r.id, version: estime.version, exercice_prix: calcul.exercice, notes: estime.notes, ...t },
+    lignes: avecMontants.map((l, i) => ({ ...l, ordre: i })),
+    prix_provisoires: provisoires,
+  })
   const sauver = (apres?: () => void) =>
-    enregistrer.mutate(
-      {
-        estime: { id: estime.id, reservation_id: r.id, version: estime.version, exercice_prix: calcul.exercice, notes: estime.notes, ...t },
-        lignes: avecMontants.map((l, i) => ({ ...l, ordre: i })),
-        prix_provisoires: provisoires,
+    enregistrer.mutate(aEnregistrer(), {
+      onSuccess: () => {
+        setSale(false)
+        apres?.()
       },
-      {
-        onSuccess: () => {
-          setSale(false)
-          apres?.()
-        },
-      },
-    )
+    })
 
-  const action = async (a: 'envoyer' | 'accepter' | 'refuser' | 'nouvelle_version') => {
-    if (a === 'envoyer') {
-      const ok = await confirmer({
-        titre: `Marquer l'estimé v${estime.version} comme envoyé ?`,
-        message: "Il sera figé et son PDF gardé dans les documents : pour le changer ensuite, on en fait une nouvelle version. Le courriel au client (PDF joint, lien pour l'accepter en ligne) se prépare dans Courriels, plus bas.",
-        libelleOk: 'Marquer envoyé',
-        danger: false,
-      })
-      if (!ok) return
+  // « Envoyer l'estimé… » : enregistré d'abord, puis son PDF (lignes de la
+  // base, comme l'aperçu) est montré dans la fenêtre et joint au courriel.
+  // L'estimé ne devient « envoyé » que quand le courriel est parti (Worker).
+  const ouvrirEnvoi = async () => {
+    setPdf(null)
+    setPreparation(true)
+    try {
+      const pour = sale && modifiable ? { ...estime, ...t, exercice_prix: calcul.exercice, prix_provisoires: provisoires } : estime
+      if (sale && modifiable) {
+        await enregistrer.mutateAsync(aEnregistrer())
+        setSale(false)
+      }
+      const octets = await pdfDeLEstime(sources(r), pour)
+      setEnvoi({ nom: `Estimé ${r.numero}${estime.version > 1 ? ` v${estime.version}` : ''}.pdf`, octets })
+    } catch (e) {
+      setPdf(messageErreur(e))
+    } finally {
+      setPreparation(false)
     }
-    const go = () =>
-      changerEtat.mutate(
-        { estime, action: a },
-        {
-          onSuccess: (id) => {
-            if (a === 'nouvelle_version') choisir(id)
-            // L'estimé envoyé est gardé en PDF (preuve de ce que le client a reçu).
-            if (a === 'envoyer')
-              // Prix provisoires du PDF : ceux qu'on vient d'enregistrer, sinon ceux gardés avec l'estimé.
-              garderEstime(sources(r), { ...estime, ...t, statut: 'envoye', prix_provisoires: sale ? provisoires : (estime.prix_provisoires ?? {}) })
-                // Le courriel de l'estimé, tout de suite (sans attendre le passage aux 15 minutes).
-                .then(() => preparerCourriels(r.id).catch(() => {}))
-                .catch((e) =>
-                  setPdf(`Estimé marqué envoyé, mais son PDF n'a pas été gardé (${messageErreur(e)}) : refaites-le avec « Garder le PDF » dans Documents.`),
-                )
-          },
-        },
-      )
-    if (sale && modifiable) sauver(go)
-    else go()
   }
+
+  const action = (a: 'refuser' | 'nouvelle_version') =>
+    changerEtat.mutate({ estime, action: a }, { onSuccess: (id) => a === 'nouvelle_version' && choisir(id) })
 
   const extras = produits.filter((p) => p.extra && p.actif && (!p.forfaits.length || p.forfaits.includes(r.forfait)))
   const ajouterExtra = (code: string) => {
@@ -237,8 +245,16 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
           {estime.envoye_le && ` · envoyé le ${dateLongue(estime.envoye_le)}`}
           {estime.accepte_le && ` · accepté le ${dateLongue(estime.accepte_le)}`}
           {estime.accepte_par && ` en ligne par ${estime.accepte_par}`}
+          {estime.preuve_courriel_le &&
+            ` par courriel du client (${dateLongue(estime.preuve_courriel_le)})${estime.preuve_saisie_par_nom ? `, preuve saisie par ${estime.preuve_saisie_par_nom}` : ''}`}
         </span>
       </div>
+      {estime.preuve_texte && (
+        <details className="rounded-lg border border-pierre-200 bg-pierre-50 px-3 py-2 text-sm">
+          <summary className="cursor-pointer text-pierre-700">Courriel du client (preuve de l'acceptation)</summary>
+          <p className="mt-2 whitespace-pre-wrap text-pierre-700">{estime.preuve_texte}</p>
+        </details>
+      )}
 
       {decale && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -310,7 +326,8 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
         </p>
       )}
 
-      <div className="overflow-x-auto">
+      {/* w-0 min-w-full : le tableau défile dans sa carte au lieu d'élargir la fiche (téléphone). */}
+      <div className="w-0 min-w-full overflow-x-auto">
         <table className="w-full min-w-[34rem] table-fixed text-sm">
           <thead className="border-b border-pierre-200 text-left text-xs uppercase tracking-wide text-pierre-500">
             <tr>
@@ -443,8 +460,13 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
               <button className={ui.bouton} disabled={!sale || enregistrer.isPending} onClick={() => sauver()}>
                 {enregistrer.isPending ? 'Enregistrement…' : sale ? 'Enregistrer' : 'Enregistré'}
               </button>
-              <button className={ui.boutonSecondaire} disabled={changerEtat.isPending || avecMontants.length === 0} onClick={() => action('envoyer')}>
-                Marquer envoyé
+              <button
+                className={ui.boutonSecondaire}
+                disabled={preparation || enregistrer.isPending || avecMontants.length === 0 || !!refusEnvoi || modeEnvoi.isLoading}
+                title={refusEnvoi ?? "Courriel au client avec le PDF : l'estimé devient « envoyé » quand le courriel part"}
+                onClick={ouvrirEnvoi}
+              >
+                {preparation ? 'Préparation…' : "Envoyer l'estimé…"}
               </button>
             </>
           )}
@@ -465,8 +487,8 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
           </button>
           {ecriture && estime.statut === 'envoye' && (
             <>
-              <button className={ui.bouton} onClick={() => action('accepter')}>
-                Accepté par le client
+              <button className={ui.bouton} onClick={() => setAcceptation(true)}>
+                Accepté par le client…
               </button>
               <button className={ui.boutonSecondaire} onClick={() => action('refuser')}>
                 Refusé
@@ -491,7 +513,90 @@ function Editeur({ r, estime, choisir, reference }: { r: Reservation; estime: TE
         </dl>
       </div>
       {modifiable && sale && <p className="text-xs text-amber-700">Modifications non enregistrées.</p>}
+      {modifiable && refusEnvoi && <p className="text-xs text-amber-700">Envoi de l'estimé impossible : {refusEnvoi}</p>}
       {pdf && <p className={ui.erreur}>{pdf}</p>}
+
+      {envoi && (
+        <FenetreCourriel
+          titre={`Envoyer l'estimé v${estime.version}`}
+          charger={() => brouillonCourriel({ reservation: r.id, genre: 'estime', ref: estime.id })}
+          piece={{ nom: envoi.nom, taille: envoi.octets.length, ouvrir: () => ouvrirPdf(envoi.octets) }}
+          avant={
+            <>
+              Quand le courriel sera parti, l'estimé v{estime.version} deviendra « envoyé » : figé, visible sur la page du client (pour l'accepter en ligne), son PDF
+              gardé dans les documents. Si l'envoi échoue, il reste un brouillon.
+            </>
+          }
+          envoyer={(v) => expedier.mutateAsync({ reservation: r.id, genre: 'estime', ref: estime.id, ...v, piece: envoi })}
+          fermer={() => setEnvoi(null)}
+        />
+      )}
+      {acceptation && <FenetreAcceptation estime={estime} fermer={() => setAcceptation(false)} />}
     </div>
+  )
+}
+
+/**
+ * « Accepté par le client » : la preuve écrite est obligatoire (règle de
+ * l'équipe, que l'app exige) — date du courriel du client et son texte
+ * collé, gardés sur l'estimé, au journal et dans les échanges du CRM.
+ */
+function FenetreAcceptation({ estime, fermer }: { estime: TEstime; fermer: () => void }) {
+  const { auj } = useDonnees()
+  const accepter = useAccepterEstime()
+  const [date, setDate] = useState(auj)
+  const [texte, setTexte] = useState('')
+  const [erreur, setErreur] = useState<string | null>(null)
+  const complet = !!date && texte.trim().length >= 10
+  const confirmerAcceptation = async () => {
+    setErreur(null)
+    if (!date) return setErreur('La date du courriel du client est obligatoire.')
+    if (date > auj) return setErreur('La date du courriel ne peut pas être dans le futur.')
+    if (texte.trim().length < 10) return setErreur("Collez le texte du courriel où le client accepte l'estimé.")
+    try {
+      await accepter.mutateAsync({ estime, date, texte })
+      fermer()
+    } catch (e) {
+      setErreur(messageErreur(e))
+    }
+  }
+  return (
+    <Dialogue titre={`Estimé v${estime.version} accepté par le client`} fermer={() => !accepter.isPending && fermer()}>
+      <form
+        className="space-y-3 text-sm"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void confirmerAcceptation()
+        }}
+      >
+        <p className="text-pierre-600">
+          Une acceptation se prouve par écrit : collez le courriel où le client accepte l'estimé. Il est gardé avec l'estimé, au journal de la réservation et dans les
+          échanges du CRM, à votre nom. La relance « préparer le contrat » est créée pour le responsable.
+        </p>
+        <label className="block">
+          <span className={ui.etiquette}>Date du courriel du client</span>
+          <input type="date" className={`${ui.champ} text-base sm:w-48 sm:text-sm`} value={date} max={auj} onChange={(e) => setDate(e.target.value)} required />
+        </label>
+        <label className="block">
+          <span className={ui.etiquette}>Texte du courriel du client</span>
+          <textarea
+            className={`${ui.champ} min-h-48 font-sans text-base sm:text-sm`}
+            value={texte}
+            onChange={(e) => setTexte(e.target.value)}
+            placeholder="Collez ici le courriel du client (de qui, quand, ce qu'il écrit)…"
+            required
+          />
+        </label>
+        {erreur && <p className={ui.erreur}>{erreur}</p>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" className={ui.boutonSecondaire} disabled={accepter.isPending} onClick={fermer}>
+            Annuler
+          </button>
+          <button type="submit" className={ui.bouton} disabled={!complet || accepter.isPending}>
+            {accepter.isPending ? 'Enregistrement…' : "Confirmer l'acceptation"}
+          </button>
+        </div>
+      </form>
+    </Dialogue>
   )
 }

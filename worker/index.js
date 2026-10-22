@@ -25,6 +25,7 @@ import { preparerAutomatiques } from "./rh/courriels.js";
 import { synchroniserAgenda } from "./reservations/agenda.js";
 import { airbnbConfigure, importerAirbnb } from "./reservations/airbnb.js";
 import { preparerCourriels } from "./reservations/courriels.js";
+import { envoyerAvis } from "./reservations/avis.js";
 import { routeQbo } from "./qbo/api.js";
 import { qboConfigure } from "./qbo/oauth.js";
 import { synchroniserTout as synchroQbo } from "./qbo/operations.js";
@@ -57,6 +58,8 @@ export default {
     if (qboConfigure(env)) ctx.waitUntil(synchroQbo(env).catch(() => {}));
     // Courriels aux clients des Réservations : préparés (et envoyés, pour les types en mode automatique).
     ctx.waitUntil(preparerCourriels(env).catch((e) => console.error("Courriels non préparés :", e)));
+    // Avis à l'équipe (inscriptions@) : nouvelles demandes et changements demandés par un client.
+    ctx.waitUntil(envoyerAvis(env).catch((e) => console.error("Avis à l'équipe :", e)));
     // RH : rappels de dossier dus et résumé quotidien à la direction (rh/courriels.js).
     ctx.waitUntil(preparerAutomatiques(env, new Date(event.scheduledTime)).catch((e) => console.error("Courriels RH :", e)));
     // Copie des documents vers les Drive partagés (rien tant que les secrets DRIVE_* manquent).

@@ -396,8 +396,12 @@ reconnecter les compagnies.
 Les courriels aux groupes (accusé, estimé, contrat, factures, rappels,
 pré-arrivée, suivi : plan des réservations, §9) partent de
 **inscriptions@camptremblant.com** par l'API Gmail : ils apparaissent dans
-ses « Envoyés ». Le Worker les prépare aux 15 minutes ; par défaut, chacun
-attend un clic (Réservations › Courriels, ou la fiche).
+ses « Envoyés ». L'estimé et le contrat partent par une fenêtre de la fiche
+(« Envoyer l'estimé… », « Envoyer le contrat… ») ; les autres, le Worker les
+prépare aux 15 minutes et, par défaut, chacun attend un clic (Réservations ›
+Courriels, ou la fiche). Tous ceux d'une réservation sont dans **un seul fil**
+(même sujet). Les avis à l'équipe (nouvelle demande, changement demandé par
+un client) vont à inscriptions@ même.
 
 - **DEV** : `COURRIELS_MAILPIT=http://127.0.0.1:54324` dans `.dev.vars`. Tout
   arrive dans Mailpit (http://localhost:54324), jamais chez un client (les
@@ -407,8 +411,13 @@ attend un clic (Réservations › Courriels, ou la fiche).
   1. le client OAuth « interne » de la section 8 sert aussi ici
      (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`) ;
   2. [OAuth Playground](https://developers.google.com/oauthplayground), comme à
-     l'étape 5 de la section 8, mais **connecté avec inscriptions@** →
-     **Refresh token** → secret Cloudflare `GMAIL_INSCRIPTIONS_REFRESH_TOKEN` ;
+     l'étape 5 de la section 8, mais **connecté avec inscriptions@** et avec
+     **deux portées** : `https://www.googleapis.com/auth/gmail.send` **et**
+     `https://www.googleapis.com/auth/gmail.metadata` (un seul fil Gmail par
+     réservation : après chaque envoi, le Worker relit l'en-tête Message-ID du
+     courriel envoyé pour que les suivants restent dans le fil ; sans
+     `gmail.metadata`, les courriels partent quand même, mais le fil peut se
+     couper) → **Refresh token** → secret Cloudflare `GMAIL_INSCRIPTIONS_REFRESH_TOKEN` ;
   3. `wrangler.jsonc` : `COURRIELS_EXPEDITEUR` (déjà inscriptions@) ; ajouter
      `HOTE_PUBLIC` (sous-domaine des pages publiques, section 11) pour que les
      liens des courriels y mènent, sinon ils pointent vers `APP_URL`.

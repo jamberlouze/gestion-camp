@@ -106,7 +106,9 @@ export async function garderEstime(s: Sources, estime: Estime) {
 /**
  * Contrat : pré-signé par la direction, avec l'estimé accepté en annexe ;
  * gardé, puis une demande de signature est ouverte (lien secret). La
- * demande précédente, s'il y en a une, est annulée. Étape → Contrat envoyé.
+ * demande précédente, s'il y en a une, est annulée. L'étape « Contrat
+ * envoyé » se pose à l'envoi réel du courriel (« Envoyer le contrat… »,
+ * reservations.courriel_parti), pas ici.
  */
 export async function preparerContrat(s: Sources, estime: Estime, modele: Modele): Promise<Signature> {
   const ctx = contexte(s, estime)
@@ -126,9 +128,6 @@ export async function preparerContrat(s: Sources, estime: Estime, modele: Modele
   if (e2) throw e2
   const { data, error } = await db().from('signatures').insert({ reservation_id: s.r.id, document_id: doc.id, adresse_pdf: url.signedUrl }).select().single()
   if (error) throw error
-  if (['nouvelle', 'contact', 'estime_envoye', 'estime_accepte'].includes(s.r.etape)) {
-    await db().from('reservations').update({ etape: 'contrat_envoye' }).eq('id', s.r.id)
-  }
   return data as Signature
 }
 

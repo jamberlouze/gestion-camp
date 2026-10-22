@@ -18,6 +18,12 @@
 //   POST /api/reservations/preparer {reservation} : courriels dus préparés
 //        tout de suite (sans attendre le cron) ; renvoie aussi le mode d'envoi ;
 //   POST /api/reservations/envoyer {courriel} : envoie un courriel préparé ;
+//   GET  /api/reservations/envoi : mode d'envoi (Mailpit, Gmail, pas configuré) ;
+//   POST /api/reservations/brouillon {reservation, genre, ref} : courriel du
+//        modèle pour la fenêtre d'envoi (estimé, contrat), sujet du fil ;
+//   POST /api/reservations/expedier {reservation, genre, ref, a, cc, sujet,
+//        corps, piece?} : envoie le courriel de la fenêtre ; l'estimé devient
+//        « envoyé » (PDF gardé) ou le contrat « envoyé » seulement s'il part ;
 //   POST /api/reservations/agenda {reservation?} : Google Agenda à jour tout de suite ;
 //   POST /api/reservations/airbnb : lit les iCal d'Airbnb tout de suite.
 //
@@ -33,7 +39,8 @@ import { base } from '../subventions/base.js'
 import { synchroniserAgenda } from './agenda.js'
 import { importerAirbnb } from './airbnb.js'
 import { adresseContratSigne, ErreurContrat, produireContratSigne } from './contratSigne.js'
-import { envoyerCourriel, ErreurCourriel, modeEnvoi, preparerCourriels } from './courriels.js'
+import { envoyerAvis } from './avis.js'
+import { brouillonCourriel, envoyerCourriel, ErreurCourriel, expedierFenetre, modeEnvoi, preparerCourriels, refusEnvoi } from './courriels.js'
 
 const json = (corps, status = 200) =>
   new Response(JSON.stringify(corps), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
@@ -81,8 +88,12 @@ async function recevoirDemande(request, env) {
       p_reservation: versReservation(reponses, reglages),
       p_demande: { cle, langue, reponses, adresse_ip: ip, navigateur: request.headers.get('User-Agent') ?? '', ...(lien ? { lien } : {}) },
     })
-    // Accusé de réception préparé tout de suite (envoyé seul s'il est en mode automatique).
-    if (res.id && !res.deja) await preparerCourriels(env, res.id).catch((e) => console.error('Accusé non préparé :', e))
+    // Accusé de réception préparé tout de suite (envoyé seul s'il est en mode automatique),
+    // puis l'avis à l'équipe (inscriptions@).
+    if (res.id && !res.deja) {
+      await preparerCourriels(env, res.id).catch((e) => console.error('Accusé non préparé :', e))
+      await envoyerAvis(env).catch((e) => console.error('Avis à l’équipe :', e))
+    }
     return json({ ok: true, numero: res.numero })
   } catch (e) {
     console.error('Demande de réservation non enregistrée :', e)
@@ -163,7 +174,12 @@ export async function routeReservations(request, env, chemin) {
   if (chemin === 'document' && request.method === 'GET') return documentClient(url, env)
   if (chemin === 'facture' && request.method === 'GET') return factureClient(url, env)
   if (chemin === 'contrat') return contratSigne(request, url, env)
-  if (['preparer', 'envoyer', 'agenda', 'airbnb'].includes(chemin) && request.method === 'POST') return routeCourriels(request, env, chemin)
+  if (['preparer', 'envoyer', 'brouillon', 'expedier', 'agenda', 'airbnb'].includes(chemin) && request.method === 'POST') return routeCourriels(request, env, chemin)
+  if (chemin === 'envoi' && request.method === 'GET') {
+    if (!(await session(request, env))) return json({ erreur: 'Accès refusé.' }, 403)
+    const mode = modeEnvoi(env)
+    return json({ envoi: mode, refus: refusEnvoi(mode) })
+  }
   return json({ erreur: 'introuvable' }, 404)
 }
 
@@ -185,7 +201,13 @@ async function routeCourriels(request, env, chemin) {
     if (chemin === 'airbnb') return json(await importerAirbnb(env))
     if (chemin === 'preparer') {
       if (corps.reservation !== undefined && !uuid(corps.reservation)) return json({ erreur: 'Réservation inconnue.' }, 400)
+      // Avis à l'équipe dus (changements demandés par un client) : aussi ici, sans attendre le cron.
+      await envoyerAvis(env).catch((e) => console.error('Avis à l’équipe :', e))
       return json({ ...(await preparerCourriels(env, corps.reservation ?? null)), envoi: modeEnvoi(env) })
+    }
+    if (chemin === 'brouillon' || chemin === 'expedier') {
+      if (!uuid(corps.reservation) || !uuid(corps.ref) || !['estime', 'contrat'].includes(corps.genre)) return json({ erreur: 'Courriel inconnu.' }, 400)
+      return json(chemin === 'brouillon' ? await brouillonCourriel(env, corps) : await expedierFenetre(env, corps, s.nom))
     }
     if (!uuid(corps.courriel)) return json({ erreur: 'Courriel inconnu.' }, 400)
     return json(await envoyerCourriel(env, corps.courriel, s.nom))

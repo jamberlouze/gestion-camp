@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
+import { supabase } from '@/lib/supabase'
 import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
-import { CHAMPS_COURRIEL, NOMS_COURRIEL, TYPES_COURRIEL, type ModeCourriel } from './courriels'
+import { CHAMPS_COURRIEL, listeAdresses, NOMS_COURRIEL, TYPES_COURRIEL, type ModeCourriel } from './courriels'
+import { FenetreCourriel, type DepartCourriel, type ValeursCourriel } from './FenetreCourriel'
 import {
   preparerCourriels,
   useCourriels,
@@ -51,9 +53,14 @@ export function CourrielsReservation({ r }: { r: Reservation }) {
       <div className="space-y-3 text-sm">
         <AvisEnvoi envoi={envoi} />
         {erreur && <p className="text-xs text-pierre-500">Préparation des courriels : {erreur}</p>}
-        {!liste.length && <p className="text-pierre-500">Aucun courriel pour l'instant. Ils se préparent tout seuls (estimé envoyé, contrat, factures, pré-arrivée…).</p>}
+        {!liste.length && (
+          <p className="text-pierre-500">
+            Aucun courriel pour l'instant. L'estimé et le contrat partent par leur fenêtre (« Envoyer l'estimé… », « Envoyer le contrat… ») ; les autres (rappels,
+            factures, pré-arrivée…) se préparent tout seuls ici.
+          </p>
+        )}
         {prepares.map((c) => (
-          <CarteCourriel key={c.id} c={c} ouvert />
+          <CarteCourriel key={c.id} c={c} />
         ))}
         {autres.length > 0 && (
           <ul className="divide-y divide-pierre-100">
@@ -74,7 +81,10 @@ function LigneCourriel({ c, avecReservation = false }: { c: Courriel; avecReserv
     <li className="py-2">
       <button className="flex w-full flex-wrap items-baseline justify-between gap-2 text-left" onClick={() => setOuvert(!ouvert)}>
         <span>
-          {c.statut === 'envoye' ? '✉️' : '⨯'} <span className={c.statut === 'annule' ? 'text-pierre-400 line-through' : ''}>{c.sujet}</span>
+          {c.statut === 'envoye' ? '✉️' : '⨯'}{' '}
+          <span className={c.statut === 'annule' ? 'text-pierre-400 line-through' : ''}>
+            <span className="font-medium">{NOMS_COURRIEL[c.genre]}</span> · {c.sujet}
+          </span>
           {avecReservation && c.reservation && (
             <Link to={`/reservations/r/${c.reservation_id}`} className="ml-2 text-xs text-foret-700 underline" onClick={(e) => e.stopPropagation()}>
               {c.reservation.numero}
@@ -97,43 +107,20 @@ function LigneCourriel({ c, avecReservation = false }: { c: Courriel; avecReserv
   )
 }
 
-const listeCourriels = (texte: string) =>
-  texte
-    .split(/[,;\s]+/)
-    .map((x) => x.trim())
-    .filter(Boolean)
-
-/** Courriel préparé : destinataires, sujet et texte modifiables, puis Envoyer ou Annuler. */
-function CarteCourriel({ c, ouvert: ouvertDepart = false, avecReservation = false }: { c: Courriel; ouvert?: boolean; avecReservation?: boolean }) {
+/** Courriel préparé : résumé ; « Ouvrir et envoyer… » ouvre la même fenêtre que l'estimé et le contrat. */
+function CarteCourriel({ c, avecReservation = false }: { c: Courriel; avecReservation?: boolean }) {
   const { ecriture } = useDonnees()
   const modifier = useModifierCourriel()
   const envoyer = useEnvoyerCourriel()
-  const [ouvert, setOuvert] = useState(ouvertDepart)
-  const [a, setA] = useState(c.a.join(', '))
-  const [cc, setCc] = useState(c.cc.join(', '))
-  const [sujet, setSujet] = useState(c.sujet)
-  const [corps, setCorps] = useState(c.corps)
-  const [occupe, setOccupe] = useState(false)
-  const [erreur, setErreur] = useState<string | null>(null)
+  const [fenetre, setFenetre] = useState(false)
   const type = TYPES_COURRIEL.find((t) => t.genre === c.genre)
-  const change = a !== c.a.join(', ') || cc !== c.cc.join(', ') || sujet !== c.sujet || corps !== c.corps
+  const change = (v: ValeursCourriel) => v.a !== c.a.join(', ') || v.cc !== c.cc.join(', ') || v.sujet !== c.sujet || v.corps !== c.corps
+  const enregistrer = (v: ValeursCourriel) => modifier.mutateAsync({ id: c.id, champs: { a: listeAdresses(v.a), cc: listeAdresses(v.cc), sujet: v.sujet.trim(), corps: v.corps.trim() } })
 
-  const enregistrer = () =>
-    modifier.mutateAsync({ id: c.id, champs: { a: listeCourriels(a), cc: listeCourriels(cc), sujet: sujet.trim(), corps: corps.trim() } })
-
-  const envoyerCourriel = async () => {
-    setErreur(null)
-    if (!listeCourriels(a).length) return setErreur('Ajoutez au moins un destinataire.')
-    setOccupe(true)
-    try {
-      if (change) await enregistrer()
-      // La pré-arrivée est produite par le Worker au moment de l'envoi, et jointe.
-      await envoyer.mutateAsync(c.id)
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : String(e))
-    } finally {
-      setOccupe(false)
-    }
+  // Le fil de la réservation impose son sujet (le Worker le reprend à l'envoi).
+  const charger = async (): Promise<DepartCourriel> => {
+    const { data } = await supabase.schema('reservations').from('fils_courriel').select('sujet').eq('reservation_id', c.reservation_id).maybeSingle()
+    return { a: c.a, cc: c.cc, sujet: c.sujet, corps: c.corps, langue: c.langue, fil: data ? { sujet: data.sujet as string } : null }
   }
 
   const annuler = async () => {
@@ -143,55 +130,47 @@ function CarteCourriel({ c, ouvert: ouvertDepart = false, avecReservation = fals
 
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-      <button className="flex w-full flex-wrap items-baseline justify-between gap-2 text-left" onClick={() => setOuvert(!ouvert)}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-medium">
           {NOMS_COURRIEL[c.genre]} · <span className="font-normal">{c.sujet}</span>
           {avecReservation && c.reservation && (
-            <Link to={`/reservations/r/${c.reservation_id}`} className="ml-2 text-xs font-normal text-foret-700 underline" onClick={(e) => e.stopPropagation()}>
+            <Link to={`/reservations/r/${c.reservation_id}`} className="ml-2 text-xs font-normal text-foret-700 underline">
               {c.reservation.numero} {c.reservation.nom}
             </Link>
           )}
         </span>
         <span className="text-xs text-amber-800">à approuver · préparé {quand(c.prepare_le)}</span>
-      </button>
-      {(c.erreur || erreur) && <p className={`${ui.erreur} mt-2`}>{erreur ?? c.erreur}</p>}
-      {ouvert && (
-        <div className="mt-3 space-y-2">
-          <label className="block">
-            <span className={ui.etiquette}>À</span>
-            <input className={ui.champ} value={a} disabled={!ecriture} onChange={(e) => setA(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className={ui.etiquette}>Cc</span>
-            <input className={ui.champ} value={cc} disabled={!ecriture} onChange={(e) => setCc(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className={ui.etiquette}>Sujet</span>
-            <input className={ui.champ} value={sujet} disabled={!ecriture} onChange={(e) => setSujet(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className={ui.etiquette}>Texte {c.langue === 'en' && '(anglais)'}</span>
-            <textarea className={`${ui.champ} min-h-48 font-sans`} value={corps} disabled={!ecriture} onChange={(e) => setCorps(e.target.value)} />
-          </label>
-          {type?.piece && <p className="text-xs text-pierre-600">📎 {type.piece}</p>}
-          {ecriture && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button className="text-sm text-red-700 underline" onClick={annuler}>
-                Annuler le courriel
-              </button>
-              <span className="flex gap-2">
-                {change && (
-                  <button className={ui.boutonSecondaire} disabled={occupe || modifier.isPending} onClick={() => enregistrer().catch((e: Error) => setErreur(e.message))}>
-                    Enregistrer
-                  </button>
-                )}
-                <button className={ui.bouton} disabled={occupe} onClick={envoyerCourriel}>
-                  {occupe ? 'Envoi…' : 'Envoyer'}
-                </button>
-              </span>
-            </div>
-          )}
+      </div>
+      <p className="mt-1 text-xs text-pierre-600">
+        À : {c.a.join(', ') || '—'}
+        {c.cc.length > 0 && ` · Cc : ${c.cc.join(', ')}`}
+        {type?.piece && ` · 📎 ${type.piece}`}
+      </p>
+      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-pierre-500">{c.corps}</p>
+      {c.erreur && <p className={`${ui.erreur} mt-2`}>{c.erreur}</p>}
+      {ecriture && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <button className="text-sm text-red-700 underline" onClick={annuler}>
+            Annuler le courriel
+          </button>
+          <button className={ui.bouton} onClick={() => setFenetre(true)}>
+            Ouvrir et envoyer…
+          </button>
         </div>
+      )}
+      {fenetre && (
+        <FenetreCourriel
+          titre={`${NOMS_COURRIEL[c.genre]}${c.reservation ? ` · ${c.reservation.numero}` : ''}`}
+          charger={charger}
+          piece={type?.piece ? { nom: type.piece, note: 'joint au moment de l’envoi' } : null}
+          enregistrer={enregistrer}
+          envoyer={async (v) => {
+            if (change(v)) await enregistrer(v)
+            // La pré-arrivée est produite par le Worker au moment de l'envoi, et jointe.
+            await envoyer.mutateAsync(c.id)
+          }}
+          fermer={() => setFenetre(false)}
+        />
       )}
     </div>
   )
@@ -269,7 +248,11 @@ function ModelesCourriels() {
                   onClick={() => setChoisi(t.genre)}
                 >
                   {t.nom}
-                  {mode && <span className={`block text-xs ${mode === 'desactive' ? 'text-pierre-400' : mode === 'automatique' ? 'text-foret-700' : 'text-amber-700'}`}>{MODES[mode]}</span>}
+                  {t.fenetre ? (
+                    <span className="block text-xs text-sky-700">Fenêtre de la fiche</span>
+                  ) : (
+                    mode && <span className={`block text-xs ${mode === 'desactive' ? 'text-pierre-400' : mode === 'automatique' ? 'text-foret-700' : 'text-amber-700'}`}>{MODES[mode]}</span>
+                  )}
                 </button>
               </li>
             )
@@ -313,18 +296,26 @@ function EditeurModele({ m }: { m: ModeleCourriel }) {
           <span className="font-medium text-pierre-900">Quand :</span> {type.quand}
           {type.piece && <span className="block text-xs">📎 {type.piece}</span>}
         </p>
-        <label className="flex items-center gap-2">
-          <span className="text-pierre-600">Mode</span>
-          <select className={`${ui.champ} w-auto`} value={m.mode} disabled={!ecriture} onChange={(e) => changer({ mode: e.target.value as ModeCourriel })}>
-            {(Object.keys(MODES) as ModeCourriel[]).map((k) => (
-              <option key={k} value={k} disabled={k === 'automatique' && !type.automatique}>
-                {MODES[k]}
-                {k === 'automatique' && !type.automatique ? ' (pas offert pour ce courriel)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        {type.fenetre ? (
+          <span className="text-xs text-pierre-600">Envoyé par la fenêtre de la fiche, modifiable avant l'envoi</span>
+        ) : (
+          <label className="flex items-center gap-2">
+            <span className="text-pierre-600">Mode</span>
+            <select className={`${ui.champ} w-auto`} value={m.mode} disabled={!ecriture} onChange={(e) => changer({ mode: e.target.value as ModeCourriel })}>
+              {(Object.keys(MODES) as ModeCourriel[]).map((k) => (
+                <option key={k} value={k} disabled={k === 'automatique' && !type.automatique}>
+                  {MODES[k]}
+                  {k === 'automatique' && !type.automatique ? ' (pas offert pour ce courriel)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+      <p className="rounded-lg border border-pierre-200 bg-pierre-50 px-3 py-2 text-xs text-pierre-600">
+        Un seul fil Gmail par réservation : le sujet du modèle ne sert qu'au <strong>premier</strong> courriel envoyé au client ; tous les suivants gardent le sujet
+        du fil (Gmail l'exige pour les garder ensemble).
+      </p>
       <div className="grid gap-3 xl:grid-cols-2">
         {(['fr', 'en'] as const).map((l) => (
           <div key={l} className="space-y-2">

@@ -5,8 +5,10 @@ import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import { useDonnees } from './contexte'
 import { garderDocument, garderEstime, lienSignature, ouvrirDocument, ouvrirPdf, pdfDeLaPreArrivee, pdfDeLEstime, preparerContrat, produireContratSigne } from './productionPdf'
+import { cleFenetre, jourMontreal } from './courriels'
 import { conflitsAirbnbDe } from './disponibilite'
-import { preparerCourriels, useDocuments, useEstimes, useSignatures } from './donnees'
+import { brouillonCourriel, useCourriels, useDocuments, useEstimes, useExpedierCourriel, useModeEnvoi, useSignatures } from './donnees'
+import { FenetreCourriel } from './FenetreCourriel'
 import { dateCourte, dateLongue } from './format'
 import type { Reservation } from './types'
 
@@ -27,6 +29,12 @@ export function Documents({ r }: { r: Reservation }) {
   const [occupe, setOccupe] = useState<string | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [copie, setCopie] = useState(false)
+  const courriels = useCourriels(r.id)
+  const expedier = useExpedierCourriel()
+  const modeEnvoi = useModeEnvoi()
+  const refusEnvoi = modeEnvoi.error ? messageErreur(modeEnvoi.error) : (modeEnvoi.data?.refus ?? null)
+  // Fenêtre « Envoyer le contrat… » : la demande de signature visée.
+  const [envoiContrat, setEnvoiContrat] = useState<string | null>(null)
 
   const liste = estimes.data ?? []
   const accepte = [...liste].reverse().find((e) => e.statut === 'accepte')
@@ -34,6 +42,8 @@ export function Documents({ r }: { r: Reservation }) {
   const modeleContrat = modeles.find((m) => m.genre === 'contrat' && m.forfait === r.forfait)
   const modelePre = modeles.find((m) => m.genre === 'pre_arrivee' && m.forfait === r.forfait)
   const sig = signatures.data?.find((s) => s.statut !== 'annule')
+  // Courriel « Contrat à signer » de cette demande de signature, s'il est parti.
+  const contratParti = sig ? courriels.data?.find((c) => c.cle === cleFenetre('contrat', sig.id) && c.statut === 'envoye') : undefined
   const docs = documents.data ?? []
   const contratDe = (id: string) => docs.find((d) => d.id === id)
   // Estimé envoyé dont le PDF n'a pas été gardé (ex. coupure pendant l'envoi) :
@@ -83,9 +93,9 @@ export function Documents({ r }: { r: Reservation }) {
       if (!ok) return
     }
     await agir('contrat', async () => {
-      await preparerContrat(sources(r), accepte, modeleContrat)
-      // Le courriel « contrat à signer », tout de suite.
-      await preparerCourriels(r.id).catch(() => {})
+      const nouvelle = await preparerContrat(sources(r), accepte, modeleContrat)
+      // Le courriel « Contrat à signer » s'ouvre tout de suite (rien ne part sans « Envoyer »).
+      if (!refusEnvoi) setEnvoiContrat(nouvelle.id)
     })
   }
 
@@ -132,16 +142,32 @@ export function Documents({ r }: { r: Reservation }) {
             )}
           </div>
           {!accepte && !sig && <p className="mt-1 text-pierre-500">Il faut d'abord un estimé accepté par le client.</p>}
+          {sig?.statut === 'en_attente' && !contratParti && courriels.data && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <span className="text-amber-900">
+                Contrat préparé, <strong>pas encore envoyé au client</strong>. Vérifiez le calendrier, puis envoyez-le : la réservation passera « Contrat envoyé ».
+                {refusEnvoi && <span className="block text-xs">Envoi impossible : {refusEnvoi}</span>}
+              </span>
+              {ecriture && (
+                <button className={ui.bouton} disabled={!!refusEnvoi || occupe !== null} title={refusEnvoi ?? undefined} onClick={() => setEnvoiContrat(sig.id)}>
+                  Envoyer le contrat…
+                </button>
+              )}
+            </div>
+          )}
           {sig?.statut === 'en_attente' && (
             <div className="mt-2 space-y-2">
-              <p className="text-pierre-600">
-                En attente de la signature du client depuis le {dateLongue(sig.envoye_le.slice(0, 10))}
-                {sig.echeance < auj ? (
-                  <span className="text-red-700"> · délai de 7 jours dépassé ({dateCourte(sig.echeance, auj)})</span>
-                ) : (
-                  <span> · à signer d'ici le {dateCourte(sig.echeance, auj)}</span>
-                )}
-              </p>
+              {contratParti && (
+                <p className="text-pierre-600">
+                  Envoyé au client le {dateLongue(jourMontreal(sig.envoye_le))}
+                  {contratParti.envoye_par_nom && ` par ${contratParti.envoye_par_nom}`}, en attente de sa signature
+                  {sig.echeance < auj ? (
+                    <span className="text-red-700"> · délai de 7 jours dépassé ({dateCourte(sig.echeance, auj)})</span>
+                  ) : (
+                    <span> · à signer d'ici le {dateCourte(sig.echeance, auj)}</span>
+                  )}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <input readOnly className={`${ui.champ} min-w-0 flex-1 text-xs`} value={lienSignature(sig)} onFocus={(e) => e.currentTarget.select()} />
                 <button
@@ -159,7 +185,8 @@ export function Documents({ r }: { r: Reservation }) {
                 </a>
               </div>
               <p className="text-xs text-pierre-500">
-                Lien envoyé au client par le courriel « Contrat à signer » (Courriels, plus bas). Il voit le contrat, coche « J'accepte », écrit son nom et signe.
+                Le lien part dans le courriel « Contrat à signer » (« Envoyer le contrat… ») ; le rappel de signature, 5 jours après l'envoi, se prépare dans Courriels.
+                Le client voit le contrat, coche « J'accepte », écrit son nom et signe.
               </p>
             </div>
           )}
@@ -218,6 +245,21 @@ export function Documents({ r }: { r: Reservation }) {
         )}
 
         {erreur && <p className={ui.erreur}>{erreur}</p>}
+
+        {envoiContrat && (
+          <FenetreCourriel
+            titre="Envoyer le contrat à signer"
+            charger={() => brouillonCourriel({ reservation: r.id, genre: 'contrat', ref: envoiContrat })}
+            avant={
+              <>
+                Quand le courriel sera parti, la réservation passera « Contrat envoyé » et le délai de signature de 7 jours commencera. Le lien de signature est dans
+                le texte.
+              </>
+            }
+            envoyer={(v) => expedier.mutateAsync({ reservation: r.id, genre: 'contrat', ref: envoiContrat, ...v })}
+            fermer={() => setEnvoiContrat(null)}
+          />
+        )}
 
         {/* Documents gardés */}
         {docs.length > 0 && (

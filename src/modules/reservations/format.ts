@@ -11,7 +11,9 @@ const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 
 /** « 13 mai 2027 » */
 export function dateLongue(jour: string | null | undefined) {
   if (!jour) return '—'
-  const [a, m, j] = jour.slice(0, 10).split('-').map(Number)
+  // Horodatage (envoyé le, accepté le…) : le jour à Montréal, pas celui d'UTC (après 20 h, ce serait le lendemain).
+  const date = jour.length > 10 ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(jour)) : jour
+  const [a, m, j] = date.slice(0, 10).split('-').map(Number)
   return `${j === 1 ? '1er' : j} ${MOIS[m - 1]} ${a}`
 }
 

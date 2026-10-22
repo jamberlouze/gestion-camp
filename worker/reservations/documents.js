@@ -18,6 +18,19 @@ async function empreinte(octets) {
   return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/**
+ * Dépose un PDF dans le seau privé, sans l'inscrire (même nom de fichier que
+ * garderDocument) : l'estimé de la fenêtre d'envoi n'est inscrit qu'une fois
+ * le courriel parti (reservations.courriel_parti). Rend { id, chemin, empreinte }.
+ */
+export async function deposerPdf(env, { reservationId, genre, octets }) {
+  const id = crypto.randomUUID()
+  const chemin = `${reservationId}/${genre}-${new Date().toISOString().replace(/[:.]/g, '-')}-${id.slice(0, 8)}.pdf`
+  const envoi = await fetch(adresseObjet(env, chemin), { method: 'POST', headers: entetes(env, { 'Content-Type': 'application/pdf' }), body: octets })
+  if (!envoi.ok) throw new Error(`PDF non gardé (${envoi.status}) : ${await envoi.text()}`)
+  return { id, chemin, empreinte: await empreinte(octets) }
+}
+
 /** Garde un PDF dans le seau privé et l'inscrit dans reservations.documents. */
 export async function garderDocument(env, { reservationId, genre, titre, octets, estimeId = null, meta = {}, auteurNom = null, signatureId = null }) {
   const id = crypto.randomUUID()

@@ -748,6 +748,36 @@ join reservations.reservations r on r.numero = f.numero
 where not exists (select 1 from reservations.fiches x where x.reservation_id = r.id);
 
 -- ------------------------------------------------------------
+-- Réservations › Courriels par fenêtre et fil Gmail (réunion du
+-- 2026-10-21) : deux réservations d'essai sans estimé (le créer dans
+-- l'app, puis « Envoyer l'estimé… », « Accepté par le client… »,
+-- « Préparer le contrat à signer », « Envoyer le contrat… ») ; 972 est en
+-- anglais. Tout part dans Mailpit (adresses en .test).
+-- ------------------------------------------------------------
+insert into crm.organisations (id, nom, genre, ville, conseiller_id, cycle_ans) values
+  ('c0000000-0000-0000-0000-000000000081', 'Groupe Essai Courriels (DEV)', 'ecole_primaire', 'Mont-Tremblant', '00000000-0000-0000-0000-000000000001', 1)
+on conflict (id) do nothing;
+
+insert into crm.contacts (id, organisation_id, nom, fonction, courriel, telephone, principal) values
+  ('c1000000-0000-0000-0000-000000000081', 'c0000000-0000-0000-0000-000000000081', 'Leïla Essai', 'Enseignante, 5e année', 'leila.essai@camp.test', '819 555-0181', true),
+  ('c1000000-0000-0000-0000-000000000082', 'c0000000-0000-0000-0000-000000000081', 'Ruth English', 'Grade 5 teacher', 'ruth.essai@camp.test', null, false)
+on conflict (id) do nothing;
+
+insert into reservations.reservations (numero, exercice, numero_seq, nom, compagnie_id, organisation_id, contact_reservation_id, responsable_id,
+  courriel_direction, forfait, variante, date_arrivee, date_depart, heure_arrivee, heure_depart, nb_participants, nb_accompagnateurs, ratio, langue,
+  service_repas, nb_dejeuners, nb_diners, nb_soupers, description)
+select v.numero, 2027, v.seq, v.nom, e.id, 'c0000000-0000-0000-0000-000000000081', v.contact::uuid, '00000000-0000-0000-0000-000000000001',
+  'direction.courriels@camp.test', 'classe_nature', 'verte', v.arrivee::date, v.depart::date, '10:00', '14:00', v.p, v.a, '1:15', v.langue,
+  true, 2, 3, 2, 'Réservation d''essai : courriels par fenêtre et fil Gmail (2026-10-21).'
+from (values
+  ('27-G-971', 971, 'ESSAI Courriels — fenêtre', '2027-05-19', '2027-05-21', 48, 4, 'Français', 'c1000000-0000-0000-0000-000000000081'),
+  ('27-G-972', 972, 'ESSAI Courriels — English', '2027-05-26', '2027-05-28', 30, 3, 'Anglais', 'c1000000-0000-0000-0000-000000000082')
+) as v(numero, seq, nom, arrivee, depart, p, a, langue, contact)
+cross join core.entreprises e
+where e.nom = 'GBPA+'
+on conflict (numero) do nothing;
+
+-- ------------------------------------------------------------
 -- Réservations › Portail côté équipe (réunion du 2026-10-21) : 986 contrat
 -- signé, estimé v1 accepté pour 40 élèves, séjour passé à 42, et une demande
 -- de changement du client à décider ligne par ligne (48 élèves, départ +1

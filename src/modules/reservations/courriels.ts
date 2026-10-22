@@ -20,10 +20,28 @@ export type GenreCourriel =
 export type ModeCourriel = 'approuver' | 'automatique' | 'desactive'
 export type LangueCourriel = 'fr' | 'en'
 
-export const TYPES_COURRIEL: { genre: GenreCourriel; nom: string; quand: string; piece: string | null; automatique: boolean }[] = [
+/**
+ * `fenetre` : envoyé par la fenêtre de la fiche (« Envoyer l'estimé… »,
+ * « Envoyer le contrat… »), jamais préparé dans la file « À approuver ».
+ */
+export const TYPES_COURRIEL: { genre: GenreCourriel; nom: string; quand: string; piece: string | null; automatique: boolean; fenetre?: boolean }[] = [
   { genre: 'accuse', nom: 'Accusé de réception', quand: 'Demande reçue par le formulaire', piece: null, automatique: true },
-  { genre: 'estime', nom: 'Estimé', quand: 'Estimé marqué envoyé', piece: "PDF de l'estimé", automatique: true },
-  { genre: 'contrat', nom: 'Contrat à signer', quand: 'Contrat préparé (lien de signature)', piece: null, automatique: true },
+  {
+    genre: 'estime',
+    nom: 'Estimé',
+    quand: "« Envoyer l'estimé… » sur la fiche (fenêtre) : l'estimé devient « envoyé » quand le courriel part",
+    piece: "PDF de l'estimé",
+    automatique: false,
+    fenetre: true,
+  },
+  {
+    genre: 'contrat',
+    nom: 'Contrat à signer',
+    quand: '« Envoyer le contrat… » sur la fiche (fenêtre), après « Préparer le contrat à signer »',
+    piece: null,
+    automatique: false,
+    fenetre: true,
+  },
   { genre: 'rappel_signature', nom: 'Rappel de signature', quand: "Contrat non signé 5 jours après l'envoi", piece: null, automatique: true },
   { genre: 'facture', nom: 'Facture (acompte, facture séparée)', quand: 'Nouvelle facture dans QBO', piece: 'PDF de la facture (QBO)', automatique: true },
   { genre: 'facture_finale', nom: 'Facture finale', quand: 'Dernière facture du devis dans QBO', piece: 'PDF de la facture (QBO)', automatique: true },
@@ -60,6 +78,7 @@ export const CHAMPS_COURRIEL: [string, string][] = [
   ['lien_signature', 'Lien de signature du contrat'],
   ['echeance_signature', 'Date limite de signature'],
   ['lien_fiches', 'Lien des fiches participants (à transmettre aux parents)'],
+  ['fiches_participants', '« oui » pour Classe nature et Journée plein air (fiches participants), sinon vide'],
   ['fiches_recues', 'Fiches reçues'],
   ['fiches_attendues', 'Fiches attendues (élèves + adultes)'],
   ['facture_numero', 'Numéro de la facture (QBO)'],
@@ -203,14 +222,12 @@ export function aPreparer(e: EtatCourriels, auj: string, depuis: string): APrepa
 
   if (ouverte && e.demande && jourMontreal(e.demande.recue_le) >= depuis) ajouter('accuse', `accuse:${e.demande.id}`)
 
+  // L'estimé et le contrat partent par la fenêtre de la fiche (jamais par
+  // cette file) ; le rappel de signature, 5 jours après l'envoi réel du contrat.
   if (ouverte) {
-    for (const x of e.estimes) {
-      if (x.statut === 'envoye' && x.envoye_le && jourMontreal(x.envoye_le) >= depuis) ajouter('estime', `estime:${x.id}`, x.id)
-    }
     for (const s of e.signatures.filter((x) => x.statut === 'en_attente')) {
-      const envoye = jourMontreal(s.envoye_le)
-      if (envoye >= depuis) ajouter('contrat', `contrat:${s.id}`, s.id)
-      if (dansFenetre(decaler(envoye, 5), auj, depuis, 7)) ajouter('rappel_signature', `rappel_signature:${s.id}`, s.id)
+      const contratParti = e.courriels.some((c) => c.cle === cleFenetre('contrat', s.id) && c.statut === 'envoye')
+      if (contratParti && dansFenetre(decaler(jourMontreal(s.envoye_le), 5), auj, depuis, 7)) ajouter('rappel_signature', `rappel_signature:${s.id}`, s.id)
     }
   }
 
@@ -248,7 +265,8 @@ export function encoreUtile(c: { genre: GenreCourriel; ref: string | null }, e: 
     case 'rappel_paiement':
       return !!facture && Number(facture.solde) > 0.005
     case 'estime':
-      return !e.r.fermeture && e.estimes.some((x) => x.id === c.ref && x.statut === 'envoye')
+      // Fenêtre : l'estimé est encore un brouillon jusqu'à ce que le courriel parte.
+      return !e.r.fermeture && e.estimes.some((x) => x.id === c.ref && (x.statut === 'envoye' || x.statut === 'brouillon'))
     case 'contrat':
     case 'rappel_signature':
       return !e.r.fermeture && e.signatures.some((s) => s.id === c.ref && s.statut === 'en_attente')
@@ -308,6 +326,7 @@ const FORFAITS_EN: Record<Forfait, [string, string]> = {
   accueil_groupe: ['Accueil de groupe', 'Group stay'],
   location_salle: ['Location de salle', 'Hall rental'],
 }
+export const NOMS_FORFAIT = Object.fromEntries(Object.entries(FORFAITS_EN).map(([k, [fr]]) => [k, fr])) as Record<Forfait, string>
 
 /** Le premier du mois s'écrit « 1er » en français. */
 const premier = (s: string, l: LangueCourriel) => (l === 'fr' ? s.replace(/(^|\s)1 (?=\S)/g, '$11er ') : s)
@@ -364,6 +383,7 @@ export function champsCourriel(e: EtatCourriels, p: { genre: GenreCourriel; ref:
     lien_signature: signature ? lienPublic(p.racine, `/signer/${signature.jeton}`, l) : '',
     echeance_signature: signature ? dateLangue(signature.echeance, l) : '',
     lien_fiches: lienPublic(p.racine, `/fiches/${r.jeton_fiches}`, l),
+    fiches_participants: scolaire(r.forfait) ? (l === 'en' ? 'yes' : 'oui') : '',
     fiches_recues: String(e.fiches_recues),
     fiches_attendues: String(fichesAttendues(e)),
     facture_numero: facture?.numero ?? '',
@@ -422,3 +442,77 @@ export function versHtml(texte: string): string {
     .join('\n')
   return `<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2a24">\n${paragraphes}\n</div>`
 }
+
+// ------------------------------------------------------------------
+// Fenêtre d'envoi (estimé, contrat) et fil Gmail de la réservation
+// ------------------------------------------------------------------
+
+export type GenreFenetre = 'estime' | 'contrat'
+
+/** Même clé que l'ancienne file : un seul courriel par estimé ou par demande de signature. */
+export const cleFenetre = (genre: GenreFenetre, ref: string) => `${genre}:${ref}`
+
+/** Ce qui empêche d'ouvrir la fenêtre (ou d'envoyer), sinon null. */
+export function refusFenetre(e: EtatCourriels, genre: GenreFenetre, ref: string): string | null {
+  if (e.r.fermeture) return 'Réservation fermée : aucun courriel.'
+  const deja = e.courriels.find((c) => c.cle === cleFenetre(genre, ref))
+  if (deja?.statut === 'envoye') return genre === 'estime' ? 'Cet estimé est déjà envoyé.' : 'Ce contrat est déjà envoyé : « Refaire le contrat » pour en envoyer un nouveau.'
+  if (genre === 'estime') {
+    const x = e.estimes.find((y) => y.id === ref)
+    if (!x) return 'Estimé introuvable.'
+    if (x.statut !== 'brouillon') return 'Seul un brouillon peut être envoyé : faites une nouvelle version.'
+    if (!(Number(x.total) > 0)) return "L'estimé est vide."
+    return null
+  }
+  const s = e.signatures.find((y) => y.id === ref)
+  if (!s || s.statut !== 'en_attente') return 'Préparez d’abord le contrat à signer.'
+  return null
+}
+
+/**
+ * Courriel proposé dans la fenêtre, d'après le modèle (langue de la
+ * réservation). Contrat : le délai de signature compte à partir de l'envoi
+ * (aujourd'hui + 7 jours, posé par la base quand le courriel part).
+ */
+export function brouillonFenetre(
+  e: EtatCourriels,
+  p: { genre: GenreFenetre; ref: string; modele: ModeleCourriel; compagnie: CompagnieCourriel; racine: string; auj: string },
+) {
+  const etat = p.genre === 'contrat' ? { ...e, signatures: e.signatures.map((s) => (s.id === p.ref ? { ...s, echeance: decaler(p.auj, 7) } : s)) } : e
+  const langue = langueCourriel(etat, p.genre)
+  const { a, cc } = destinataires(etat, p.genre)
+  const { sujet, corps } = rendreCourriel(p.modele, langue, champsCourriel(etat, { genre: p.genre, ref: p.ref, langue, compagnie: p.compagnie, racine: p.racine }))
+  return { genre: p.genre, cle: cleFenetre(p.genre, p.ref), ref: p.ref, langue, a, cc, sujet, corps }
+}
+
+/** Fil de la réservation (reservations.fils_courriel). */
+export interface FilCourriel {
+  transport: 'gmail' | 'mailpit'
+  thread_id: string | null
+  sujet: string
+  premier_message_id: string | null
+  dernier_message_id: string | null
+}
+
+/**
+ * En-têtes d'un courriel qui suit le fil (RFC 2822) : In-Reply-To = le
+ * dernier courriel, References = le premier puis le dernier. Rien tant
+ * qu'aucun Message-ID n'est connu.
+ */
+export function enTetesFil(fil: Pick<FilCourriel, 'premier_message_id' | 'dernier_message_id'> | null): Record<string, string> | null {
+  const premier = fil?.premier_message_id || fil?.dernier_message_id
+  if (!premier) return null
+  const dernier = fil?.dernier_message_id || premier
+  return { 'In-Reply-To': dernier, References: premier === dernier ? premier : `${premier} ${dernier}` }
+}
+
+/** Adresses d'un champ « À » ou « Cc » (virgules, points-virgules, espaces), sans doublon. */
+export const listeAdresses = (texte: string | string[]) => unique((Array.isArray(texte) ? texte : texte.split(/[,;\s]+/)).map((x) => x.trim()))
+
+/** Adresse invalide d'une liste, s'il y en a une. */
+export const adresseInvalide = (texte: string) =>
+  texte
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .find((x) => !courrielValide(x)) ?? null

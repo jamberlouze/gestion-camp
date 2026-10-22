@@ -118,6 +118,10 @@ export interface Estime {
   accepte_ip: string | null
   /** Prix provisoires utilisés (code → exercice du prix pris), figés avec l'estimé. */
   prix_provisoires: Record<string, number>
+  /** Accepté par l'équipe : preuve écrite (date et texte du courriel du client) et qui l'a saisie. */
+  preuve_courriel_le: string | null
+  preuve_texte: string | null
+  preuve_saisie_par_nom: string | null
   /** Séjour quand il a quitté le brouillon (null : figé avant le 2026-10-21) ; voir ecartEstime.ts. */
   sejour: SejourEstime | null
   created_at: string
