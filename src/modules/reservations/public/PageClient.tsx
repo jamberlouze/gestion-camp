@@ -263,14 +263,14 @@ function Estime({ infos, jeton, langue, relire }: { infos: Infos; jeton: string;
                 <td colSpan={3} className="pt-1.5 text-right">
                   {n}
                 </td>
-                <td className="whitespace-nowrap pt-1.5 text-right tabular-nums">{dollars(m, langue)}</td>
+                <td className="whitespace-nowrap pl-2 pt-1.5 text-right tabular-nums">{dollars(m, langue)}</td>
               </tr>
             ))}
             <tr className="font-semibold text-pierre-900">
               <td colSpan={3} className="pt-1.5 text-right">
                 {t.total}
               </td>
-              <td className="whitespace-nowrap pt-1.5 text-right tabular-nums">{dollars(e.total, langue)}</td>
+              <td className="whitespace-nowrap pl-2 pt-1.5 text-right tabular-nums">{dollars(e.total, langue)}</td>
             </tr>
           </tfoot>
         </table>
@@ -447,10 +447,15 @@ function FichesClient({ fiches, langue }: { fiches: NonNullable<Infos['fiches']>
       )}
       <p className="text-sm font-medium text-pierre-800">
         {remplacer(t.fiches_recues, { r: String(fiches.recues), a: String(fiches.attendues) })}
-        {' · '}
-        <span className={manquantes > 0 ? 'text-amber-800' : 'text-foret-700'}>
-          {manquantes > 0 ? remplacer(t.fiches_manquantes, { n: String(manquantes) }) : t.fiches_completes}
-        </span>
+        {/* Les manquantes servent à relancer les parents : seulement tant qu'on peut remplir une fiche. */}
+        {lien && (
+          <>
+            {' · '}
+            <span className={manquantes > 0 ? 'text-amber-800' : 'text-foret-700'}>
+              {manquantes > 0 ? remplacer(t.fiches_manquantes, { n: String(manquantes) }) : t.fiches_completes}
+            </span>
+          </>
+        )}
       </p>
 
       {fiches.liste.length === 0 ? (
