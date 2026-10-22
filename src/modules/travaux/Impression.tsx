@@ -1,25 +1,27 @@
-// Liste de tâches imprimée : ce qui est affiché dans l'onglet Tâches
-// (filtres, regroupement, tri), sur papier, une case à cocher à la main
-// par tâche. « Une page par groupe » = une feuille par personne, par
-// étiquette… à remettre à chacun.
-import { useState } from 'react'
+// Liste de tâches imprimée. La fenêtre « Imprimer » part des tâches
+// affichées dans l'onglet Tâches (filtres, tri) ; on y choisit le
+// regroupement et les groupes à imprimer (personnes, étiquettes, lieux…).
+// Sur papier : une case à cocher à la main par tâche ; « Une page par
+// groupe » = une feuille par personne, par étiquette… à remettre à chacun.
+import { useMemo, useState } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { ui } from '@/lib/ui'
+import { Pastille } from './commun'
 import type { Donnees } from './donnees'
-import { dateCourte, enRetard, TRIS, type Filtres, type Tri } from './outils'
+import { champ, dateCourte, enRetard, regrouper, REGROUPEMENTS, TRIS, type Filtres, type Groupe, type Regroupement, type Tri } from './outils'
 import { PRIORITES, type Tache } from './types'
-
-export interface Groupe {
-  cle: string
-  nom: string
-  couleur?: string
-  taches: Tache[]
-}
 
 export interface OptionsImpression {
   /** Chaque groupe sur sa propre feuille. */
   pageParGroupe: boolean
   descriptions: boolean
+}
+
+/** Ce que la fenêtre fait imprimer. */
+export interface ChoixImpression extends OptionsImpression {
+  regroupement: Regroupement
+  /** Groupes cochés (clés de `regrouper`). */
+  cles: string[]
 }
 
 /** Colonnes imprimées (celle du regroupement est inutile : c'est le titre du groupe). */
@@ -29,6 +31,16 @@ export interface Colonnes {
   personne: boolean
   priorite: boolean
 }
+
+export const colonnesPour = (r: Regroupement): Colonnes => ({
+  lieu: r !== 'lieu',
+  categorie: r !== 'categorie',
+  personne: r !== 'personne',
+  priorite: r !== 'priorite',
+})
+
+/** Une feuille par groupe d'office pour ce qu'on remet à quelqu'un. */
+export const pageParGroupeParDefaut = (r: Regroupement) => r === 'personne' || r === 'etiquette'
 
 /** Filtres actifs en mots (« Léa · Woofing »), pour le titre de la feuille. */
 export function decrireFiltres(f: Filtres, d: Donnees) {
@@ -48,60 +60,151 @@ export function decrireFiltres(f: Filtres, d: Donnees) {
 
 const pluriel = (n: number) => `${n} tâche${n > 1 ? 's' : ''}`
 const dateLongue = () => new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })
+const nombreTaches = (groupes: Groupe[]) => new Set(groupes.flatMap((g) => g.taches.map((t) => t.id))).size
 
-/** Fenêtre « Imprimer » : rappelle ce qui sera imprimé et offre les deux options. */
+// Gardé sur l'appareil : les groupes décochés (par regroupement ; une nouvelle
+// personne arrive cochée) et « Avec les descriptions ».
+const CLE = 'travaux-impression'
+interface Memoire {
+  decoches: Partial<Record<Regroupement, string[]>>
+  descriptions: boolean
+}
+
+function lireMemoire(): Memoire {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLE) ?? '{}')
+    return { decoches: m.decoches && typeof m.decoches === 'object' ? m.decoches : {}, descriptions: m.descriptions !== false }
+  } catch {
+    return { decoches: {}, descriptions: true }
+  }
+}
+
+function garderMemoire(m: Memoire) {
+  try {
+    localStorage.setItem(CLE, JSON.stringify(m))
+  } catch {
+    // Stockage indisponible : le choix vaut pour cette fois.
+  }
+}
+
+/** Fenêtre « Imprimer » : regroupement, groupes à imprimer et options. */
 export function FenetreImpression({
-  nombre,
+  taches,
+  d,
+  regroupementEcran,
+  etiquettesFiltrees,
   portee,
   tri,
-  groupe,
-  defauts,
   imprimer,
   fermer,
 }: {
-  nombre: number
+  /** Tâches à faire affichées (filtrées et triées). */
+  taches: Tache[]
+  d: Donnees
+  regroupementEcran: Regroupement
+  etiquettesFiltrees: string[]
   portee: string
   tri: Tri
-  /** Nom d'un groupe (« personne », « étiquette »…), null sans regroupement. */
-  groupe: string | null
-  defauts: OptionsImpression
-  imprimer: (o: OptionsImpression) => void
+  imprimer: (c: ChoixImpression) => void
   fermer: () => void
 }) {
-  const [options, setOptions] = useState(defauts)
-  const caseACocher = (cle: keyof OptionsImpression, texte: string) => (
+  const [memoire] = useState(lireMemoire)
+  const [regroupement, setRegroupement] = useState(regroupementEcran)
+  const [decoches, setDecoches] = useState(memoire.decoches)
+  const [pageParGroupe, setPageParGroupe] = useState(pageParGroupeParDefaut(regroupementEcran))
+  const [descriptions, setDescriptions] = useState(memoire.descriptions)
+
+  const groupes = useMemo(() => regrouper(taches, regroupement, d, etiquettesFiltrees), [taches, regroupement, d, etiquettesFiltrees])
+  const regroupe = regroupement !== 'aucun'
+  const exclus = regroupe ? (decoches[regroupement] ?? []) : []
+  const choisis = groupes.filter((g) => !exclus.includes(g.cle))
+  const nombre = nombreTaches(choisis)
+  const nomGroupe = REGROUPEMENTS.find(([r]) => r === regroupement)?.[2]
+
+  const changerRegroupement = (r: Regroupement) => {
+    setRegroupement(r)
+    setPageParGroupe(pageParGroupeParDefaut(r))
+  }
+  const decocher = (cles: string[]) => setDecoches({ ...decoches, [regroupement]: cles })
+  const basculer = (cle: string) => decocher(exclus.includes(cle) ? exclus.filter((c) => c !== cle) : [...exclus, cle])
+  const lancer = () => {
+    garderMemoire({ decoches, descriptions })
+    imprimer({ regroupement, cles: choisis.map((g) => g.cle), pageParGroupe: regroupe && pageParGroupe, descriptions })
+  }
+
+  const caseACocher = (coche: boolean, changer: (v: boolean) => void, texte: string) => (
     <label className="flex items-center gap-2 text-sm text-pierre-800">
-      <input type="checkbox" className="size-4 accent-foret-700" checked={options[cle]} onChange={(e) => setOptions({ ...options, [cle]: e.target.checked })} />
+      <input type="checkbox" className="size-4 accent-foret-700" checked={coche} onChange={(e) => changer(e.target.checked)} />
       {texte}
     </label>
   )
+
   return (
     <Dialogue
       titre="Imprimer la liste"
       fermer={fermer}
       pied={
-        <div className="flex justify-end gap-2">
-          <button className={ui.boutonSecondaire} onClick={fermer}>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-pierre-500">{pluriel(nombre)}</span>
+          <button className={`${ui.boutonSecondaire} ml-auto`} onClick={fermer}>
             Annuler
           </button>
-          <button className={ui.bouton} onClick={() => imprimer(options)}>
+          <button className={ui.bouton} onClick={lancer} disabled={!nombre}>
             Imprimer
           </button>
         </div>
       }
     >
       <p className="text-sm text-pierre-600">
-        Ce qui est affiché s'imprime : <b className="font-medium text-pierre-900">{pluriel(nombre)} à faire</b>
-        {portee ? ` (${portee})` : ''}
-        {groupe ? `, regroupées par ${groupe}` : ''}, triées par {TRIS[tri].toLowerCase()}.
+        Tâches à faire, triées par {TRIS[tri].toLowerCase()}
+        {portee && (
+          <>
+            , selon les filtres de l'écran : <b className="font-medium text-pierre-900">{portee}</b>
+          </>
+        )}
+        .
       </p>
-      <p className="mt-2 text-sm text-pierre-500">
-        Pour la liste d'une seule personne ou d'une étiquette, choisissez-la d'abord dans les filtres
-        {groupe === 'personne' ? '.' : ' ; pour une feuille par personne, regroupez par personne.'}
-      </p>
+
+      {/* Un menu : les six boutons de l'onglet ne tiennent pas dans la fenêtre. */}
+      <label className="mt-4 flex items-center gap-2 text-sm text-pierre-700">
+        Regrouper par
+        <select className={champ.replace('w-full', 'w-auto')} value={regroupement} onChange={(e) => changerRegroupement(e.target.value as Regroupement)}>
+          {REGROUPEMENTS.filter(([r]) => r !== 'etiquette' || d.etiquettes.length > 0).map(([r, nom]) => (
+            <option key={r} value={r}>
+              {nom}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {regroupe && (
+        <>
+          <div className="mt-4 flex items-baseline gap-3">
+            <p className={ui.etiquette}>À imprimer</p>
+            <button type="button" className="ml-auto text-xs text-pierre-500 underline hover:text-pierre-800" onClick={() => decocher([])}>
+              Tout cocher
+            </button>
+            <button type="button" className="text-xs text-pierre-500 underline hover:text-pierre-800" onClick={() => decocher(groupes.map((g) => g.cle))}>
+              Tout décocher
+            </button>
+          </div>
+          <div className="max-h-64 divide-y divide-pierre-100 overflow-y-auto rounded-lg border border-pierre-200">
+            {groupes.map((g) => (
+              <label key={g.cle} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-pierre-50">
+                <input type="checkbox" className="size-4 shrink-0 accent-foret-700" checked={!exclus.includes(g.cle)} onChange={() => basculer(g.cle)} />
+                {g.couleur && <Pastille couleur={g.couleur} />}
+                <span className="min-w-0 flex-1 truncate text-pierre-800">{g.nom}</span>
+                <span className="text-xs tabular-nums text-pierre-500">{g.taches.length}</span>
+              </label>
+            ))}
+            {groupes.length === 0 && <p className="px-3 py-4 text-center text-sm text-pierre-500">Aucune tâche à faire.</p>}
+          </div>
+        </>
+      )}
+
       <div className="mt-4 space-y-2.5">
-        {groupe && caseACocher('pageParGroupe', `Une page par ${groupe}`)}
-        {caseACocher('descriptions', 'Avec les descriptions')}
+        {regroupe && caseACocher(pageParGroupe, setPageParGroupe, `Une page par ${nomGroupe}`)}
+        {caseACocher(descriptions, setDescriptions, 'Avec les descriptions')}
       </div>
     </Dialogue>
   )
@@ -128,7 +231,6 @@ export function ListeImprimee({
 }) {
   const date = dateLongue()
   const triees = `triées par ${TRIS[tri].toLowerCase()}`
-  const total = new Set(groupes.flatMap((g) => g.taches.map((t) => t.id))).size
 
   if (regroupe && options.pageParGroupe) {
     return (
@@ -144,7 +246,7 @@ export function ListeImprimee({
   }
   return (
     <div className="hidden text-[10pt] leading-snug text-black print:block">
-      <EntetePapier titre={`Travaux à faire${portee ? ` — ${portee}` : ''}`} sous={`${pluriel(total)} · ${triees}`} date={date} />
+      <EntetePapier titre={`Travaux à faire${portee ? ` — ${portee}` : ''}`} sous={`${pluriel(nombreTaches(groupes))} · ${triees}`} date={date} />
       {regroupe ? (
         groupes.map((g) => (
           <section key={g.cle} className="mt-4">

@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
-import type { Tache } from './types'
+import type { Donnees } from './donnees'
+import { COULEURS_PRIORITE, PRIORITES, type Priorite, type Tache } from './types'
 
 // ------------------------------------------------------------- dates ---
 
@@ -57,6 +58,55 @@ const COMPARER: Record<Tri, (a: Tache, b: Tache) => number> = {
 }
 
 export const trier = (taches: Tache[], tri: Tri) => [...taches].sort(COMPARER[tri] ?? comparer)
+
+export type Regroupement = 'priorite' | 'lieu' | 'categorie' | 'personne' | 'etiquette' | 'aucun'
+
+/** Bouton du regroupement, et nom d'un groupe dans « Une page par … ». */
+export const REGROUPEMENTS: [Regroupement, string, string | null][] = [
+  ['priorite', 'Urgence', "niveau d'urgence"],
+  ['lieu', 'Lieu', 'lieu'],
+  ['categorie', 'Catégorie', 'catégorie'],
+  ['personne', 'Personne', 'personne'],
+  ['etiquette', 'Étiquette', 'étiquette'],
+  ['aucun', 'Aucun', null],
+]
+
+export interface Groupe {
+  cle: string
+  nom: string
+  couleur?: string
+  taches: Tache[]
+}
+
+/** Groupes de l'onglet Tâches et de la liste imprimée (vides retirés, ordre des listes du module). */
+export function regrouper(taches: Tache[], r: Regroupement, d: Donnees, etiquettesFiltrees: string[]) {
+  const groupes: Groupe[] = []
+  const ajouter = (cle: string, nom: string, liste: Tache[], couleur?: string) => {
+    if (liste.length) groupes.push({ cle, nom, couleur, taches: liste })
+  }
+  if (r === 'priorite') {
+    for (const n of [1, 2, 3] as Priorite[]) ajouter(String(n), PRIORITES[n], taches.filter((t) => t.priorite === n), COULEURS_PRIORITE[n])
+  } else if (r === 'lieu') {
+    for (const l of d.lieux) ajouter(l.id, l.nom, taches.filter((t) => t.lieu_id === l.id))
+    ajouter('aucun', 'Sans lieu', taches.filter((t) => !t.lieu_id || !d.lieu.has(t.lieu_id)))
+  } else if (r === 'categorie') {
+    for (const c of d.categories) ajouter(c.id, c.nom, taches.filter((t) => t.categorie_id === c.id))
+    ajouter('aucune', 'Sans catégorie', taches.filter((t) => !t.categorie_id || !d.categorie.has(t.categorie_id)))
+  } else if (r === 'personne') {
+    for (const p of d.personnes) ajouter(p.id, p.nom, taches.filter((t) => t.assigne_a === p.id))
+    ajouter('libre', 'À assigner', taches.filter((t) => !t.assigne_a || !d.personne.has(t.assigne_a)))
+  } else if (r === 'etiquette') {
+    // Une tâche à deux étiquettes paraît dans les deux groupes ; avec le filtre, seulement ceux des étiquettes choisies.
+    for (const e of d.etiquettes) {
+      if (etiquettesFiltrees.length && !etiquettesFiltrees.includes(e.id)) continue
+      ajouter(e.id, e.nom, taches.filter((t) => t.etiquette_ids.includes(e.id)), e.couleur ?? undefined)
+    }
+    ajouter('aucune', 'Sans étiquette', taches.filter((t) => !d.etiquettes.some((e) => t.etiquette_ids.includes(e.id))))
+  } else {
+    ajouter('toutes', 'Tâches à faire', taches)
+  }
+  return groupes
+}
 
 export interface Filtres {
   lieu: string

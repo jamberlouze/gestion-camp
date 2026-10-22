@@ -5,7 +5,7 @@ import { CompteurPieces } from '@/lib/PiecesJointes'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useMajTache, type Donnees } from './donnees'
-import { dateCourte, enRetard, useDroits, useOuvrir } from './outils'
+import { dateCourte, enRetard, REGROUPEMENTS, useDroits, useOuvrir, type Regroupement } from './outils'
 import { PRIORITES, type Tache } from './types'
 
 export function Pastille({ couleur }: { couleur: string | null }) {
@@ -304,6 +304,25 @@ export function ChoixAssigne({ tache: t, d }: { tache: Tache; d: Donnees }) {
           </option>
         ))}
     </select>
+  )
+}
+
+/** Boutons « Regrouper par » de l'onglet Tâches ; défile de côté sur téléphone. */
+export function ChoixRegroupement({ valeur, changer, d }: { valeur: Regroupement; changer: (r: Regroupement) => void; d: Donnees }) {
+  return (
+    <div className="sans-barre inline-flex max-w-full overflow-x-auto rounded-lg border border-pierre-300 bg-white p-0.5 text-sm" role="group" aria-label="Regrouper par">
+      {REGROUPEMENTS.filter(([r]) => r !== 'etiquette' || d.etiquettes.length > 0).map(([r, nom]) => (
+        <button
+          key={r}
+          type="button"
+          aria-pressed={valeur === r}
+          className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 ${valeur === r ? 'bg-foret-100 font-medium text-foret-800' : 'text-pierre-600 hover:text-pierre-900'}`}
+          onClick={() => changer(r)}
+        >
+          {nom}
+        </button>
+      ))}
+    </div>
   )
 }
 
