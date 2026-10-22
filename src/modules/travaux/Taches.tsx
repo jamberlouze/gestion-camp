@@ -53,7 +53,7 @@ export function Taches({ d }: { d: Donnees }) {
 
   // Une étiquette retirée de la liste de Mastertimeline ne filtre plus rien.
   const etiquettes = useMemo(() => filtres.etiquettes.filter((id) => d.etiquettes.some((e) => e.id === id)), [filtres.etiquettes, d.etiquettes])
-  // Terrain ne voit que ses tâches et ses signalements : pas de filtre par personne (un choix gardé d'avant tombe).
+  // Terrain ne voit que ses tâches et ses signalements pas encore assignés : pas de filtre par personne (un choix gardé d'avant tombe).
   const personne = droits.terrain ? '' : filtres.personne
   const filtrees = useMemo(() => filtrer(d.taches, { ...filtres, personne, etiquettes }), [d.taches, filtres, personne, etiquettes])
   const ouvertes = useMemo(() => trier(filtrees.filter((t) => t.statut === 'a_faire'), tri), [filtrees, tri])

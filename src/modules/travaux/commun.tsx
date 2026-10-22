@@ -61,7 +61,7 @@ export function CaseTache({ tache: t }: { tache: Tache }) {
           : t.annualisee_vers
             ? 'Envoyée dans Mastertimeline'
             : !permis && droits.terrain
-              ? 'Seule la personne assignée la coche'
+              ? 'Pas encore assignée par la direction'
               : undefined
       }
       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold disabled:cursor-default ${style}`}

@@ -114,8 +114,13 @@ const useEtiquettes = () =>
     },
   })
 
-/** Recharge le module quand quelqu'un d'autre modifie quelque chose. */
-export function useTempsReel() {
+/**
+ * Recharge le module quand quelqu'un d'autre modifie quelque chose.
+ * `chaqueMinute` (Terrain) : une tâche qui quitte sa vue (signalement
+ * assigné, tâche réassignée) n'arrive pas par le temps réel, filtré par la
+ * RLS : le module se relit aussi chaque minute, écran affiché.
+ */
+export function useTempsReel(chaqueMinute = false) {
   const client = useQueryClient()
   useEffect(() => {
     const recharger = () => {
@@ -128,10 +133,12 @@ export function useTempsReel() {
       canal = canal.on('postgres_changes', { event: '*', schema: 'travaux', table }, recharger)
     }
     canal.subscribe()
+    const minuterie = chaqueMinute ? setInterval(() => document.visibilityState === 'visible' && recharger(), 60_000) : undefined
     return () => {
       supabase.removeChannel(canal)
+      clearInterval(minuterie)
     }
-  }, [client])
+  }, [client, chaqueMinute])
 }
 
 const parId = <T extends { id: string }>(l: T[] | undefined) => new Map((l ?? []).map((x) => [x.id, x]))

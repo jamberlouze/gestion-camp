@@ -21,9 +21,9 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
   }`
 
 export default function ModuleTravaux() {
-  useTempsReel()
-  const d = useDonnees()
   const droits = useDroits()
+  useTempsReel(droits.terrain)
+  const d = useDonnees()
   const [fenetre, setFenetre] = useState<Fenetre | null>(null)
   const aTrier = d.taches.filter((t) => t.statut === 'a_trier').length
   const signaler = () => setFenetre({ type: 'signaler' })

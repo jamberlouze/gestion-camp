@@ -157,7 +157,7 @@ export function useDroits() {
   return {
     moi,
     ecriture,
-    /** Terrain : ne voit que ses tâches assignées et ses signalements. */
+    /** Terrain : ne voit que ses tâches assignées et ses signalements pas encore assignés. */
     terrain: estTerrain,
     /** Direction : trie, assigne, modifie tout, gère les listes. */
     trieur,
@@ -165,7 +165,7 @@ export function useDroits() {
     annualiser: trieur && peutEcrire('mastertimeline'),
     /** Champs de base (titre, description, lieu, catégorie). */
     modifierBase: (t: Tache) => trieur || (ecriture && t.statut === 'a_trier' && t.signale_par === moi),
-    /** Cocher / décocher. Terrain : seulement une tâche qui lui est assignée (pas son signalement trié pour un autre). */
+    /** Cocher / décocher. Terrain : seulement une tâche qui lui est assignée (pas son signalement à assigner). */
     cocher: (t: Tache) => ecriture && t.statut !== 'a_trier' && !t.annualisee_vers && (!estTerrain || (!!moi && t.assigne_a === moi)),
     /** Retirer : rejet par la direction, ou son propre signalement pas encore trié. */
     supprimer: (t: Tache) => trieur || (ecriture && t.statut === 'a_trier' && t.signale_par === moi),
