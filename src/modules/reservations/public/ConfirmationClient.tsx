@@ -7,6 +7,7 @@ import {
   estUnJour,
   evaluer,
   libelle,
+  LANGUES_GROUPE,
   resumeChangement,
   texteRaison,
   valeur,
@@ -246,6 +247,7 @@ function Changement({
     champ(c, <input type="time" step={300} className={ui.champ} value={edition[c] ?? ''} onChange={(e) => maj({ [c]: e.target.value || null } as Partial<InfosSejour>)} />)
 
   const ratios = [...RATIOS_OFFERTS, ...(infos.ratio && !RATIOS_OFFERTS.includes(infos.ratio) ? [infos.ratio] : [])]
+  const langues = [...LANGUES_GROUPE, ...(infos.langue && !LANGUES_GROUPE.includes(infos.langue) ? [infos.langue] : [])]
 
   return (
     <div className="space-y-4 rounded-lg border border-pierre-200 p-3">
@@ -292,7 +294,17 @@ function Changement({
             </div>
           </>
         )}
-        {champ('langue', <input className={ui.champ} value={edition.langue ?? ''} onChange={(e) => maj({ langue: e.target.value || null })} />)}
+        {champ(
+          'langue',
+          <select className={ui.champ} value={edition.langue ?? ''} onChange={(e) => maj({ langue: e.target.value || null })}>
+            {!edition.langue && <option value="">—</option>}
+            {langues.map((l) => (
+              <option key={l} value={l}>
+                {valeur('langue', l, langue)}
+              </option>
+            ))}
+          </select>,
+        )}
         {forfait !== 'classe_nature' &&
           champ(
             'service_repas',

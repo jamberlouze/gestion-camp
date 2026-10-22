@@ -292,7 +292,18 @@ export function valeur(champ: ChampSejour, v: InfosSejour[ChampSejour], langue: 
   if (champ === 'heure_arrivee' || champ === 'heure_depart') return heureTexte(String(v), langue)
   if (champ === 'service_repas') return v ? (langue === 'en' ? 'Yes' : 'Oui') : langue === 'en' ? 'No' : 'Non'
   if (champ === 'ratio') return v === 'aucun' ? (langue === 'en' ? 'No activities' : 'Sans animation') : String(v)
+  if (champ === 'langue' && langue === 'en') return LANGUES_EN[String(v)] ?? String(v)
   return String(v)
+}
+
+/** Langues du groupe telles que gardées en base (en français, comme le formulaire de demande les écrit). */
+export const LANGUES_GROUPE = ['Français', 'Anglais', 'Français et anglais', 'Autre']
+
+const LANGUES_EN: Record<string, string> = {
+  Français: 'French',
+  Anglais: 'English',
+  'Français et anglais': 'English and French',
+  Autre: 'Other',
 }
 
 const pct = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 100)} %`

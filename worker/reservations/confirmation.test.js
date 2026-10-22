@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { champsDe, confirmationOuverte, differences, evaluer, joursAvantArrivee, resumeChangement, texteRaison } from '../../src/modules/reservations/confirmation.ts'
+import { champsDe, confirmationOuverte, differences, evaluer, joursAvantArrivee, resumeChangement, texteRaison, valeur } from '../../src/modules/reservations/confirmation.ts'
 import { jetonLien, preRemplissage } from '../../src/modules/reservations/demande.ts'
 import { routeReservations } from './api.js'
 
@@ -73,6 +73,12 @@ test('champs et différences selon le forfait', () => {
   const d = differences(cn, { ...cn, nb_participants: 42, date_depart: '2027-03-13' }, 'classe_nature')
   assert.equal(resumeChangement(d, 'classe_nature'), 'Départ : 12 mars 2027 → 13 mars 2027 ; Élèves : 40 → 42')
   assert.equal(resumeChangement(d, 'classe_nature', 'en'), 'Departure : March 12, 2027 → March 13, 2027 ; Students : 40 → 42')
+  // Langue du groupe gardée en français, montrée dans la langue de la page.
+  const l = differences(cn, { ...cn, langue: 'Anglais' }, 'classe_nature')
+  assert.equal(resumeChangement(l, 'classe_nature'), 'Langue du groupe : Français → Anglais')
+  assert.equal(resumeChangement(l, 'classe_nature', 'en'), 'Group language : French → English')
+  assert.equal(valeur('langue', 'Français et anglais', 'en'), 'English and French')
+  assert.equal(valeur('langue', 'Espagnol', 'en'), 'Espagnol')
 })
 
 test('fenêtre de confirmation : contrat signé, pas fermée, jusqu’au départ', () => {
