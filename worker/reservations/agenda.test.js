@@ -32,7 +32,8 @@ test('calendrier selon l’étape ; Confirmée VF dès qu’une section ou salle
   assert.equal(calendrierDe(resa()), 'confirmee_pp')
   assert.equal(calendrierDe(resa({ etape: 'soldee', etages: ['VFH'] })), 'confirmee_vf')
   assert.equal(calendrierDe(resa({ salles: ['CVF'] })), 'confirmee_vf')
-  assert.equal(calendrierDe(resa({ fermeture: 'en_attente' })), null)
+  assert.equal(calendrierDe(resa({ fermeture: 'closed_lost', raison_perte: 'prix' })), null)
+  assert.equal(calendrierDe(resa({ fermeture: 'annulee' })), null)
   assert.equal(calendrierDe(resa({ origine: 'airbnb', etages: ['VFB'] })), null)
 })
 

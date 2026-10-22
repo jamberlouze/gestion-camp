@@ -43,12 +43,6 @@ test('phase selon l’étape, comme le calendrier Google', () => {
   assert.equal(phase('confirmee', { origine: 'airbnb', etages: ['VFB'] }), 'airbnb')
 })
 
-test('en attente : gardée dans la phase de son étape (seules les perdues et annulées sont exclues, par la base)', () => {
-  const s = sejourDe(ligne({ etape: 'estime_envoye', fermeture: 'en_attente' }))
-  assert.equal(s.phase, 'estime')
-  assert.equal(s.etat, 'Estimé envoyé · En attente')
-})
-
 test('bâtiment : Vieille-France dès une section ou une salle de la VF, sinon Pavillon principal', () => {
   assert.equal(sejourDe(ligne()).batiment, 'PP')
   assert.equal(sejourDe(ligne({ etages: ['CH', 'CB'] })).batiment, 'PP')

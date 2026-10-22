@@ -189,9 +189,6 @@ function Parcours({ r, changer }: { r: Reservation; changer: Changer }) {
               <button className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50" onClick={() => setPerte(true)}>
                 Closed lost…
               </button>
-              <button className="rounded-md border border-amber-200 px-2 py-1 text-xs text-amber-800 hover:bg-amber-50" onClick={() => changer({ fermeture: 'en_attente' })}>
-                En attente
-              </button>
               {ETAPES.findIndex((e) => e.valeur === 'confirmee') <= rangActuel && (
                 <button className="rounded-md border border-pierre-300 px-2 py-1 text-xs text-pierre-700 hover:bg-pierre-50" onClick={() => changer({ fermeture: 'annulee' })}>
                   Annulée après signature

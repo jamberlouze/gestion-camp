@@ -19,7 +19,7 @@ export type Etape =
   | 'terminee'
   | 'facture_finale'
   | 'soldee'
-export type Fermeture = 'closed_lost' | 'annulee' | 'en_attente'
+export type Fermeture = 'closed_lost' | 'annulee'
 export type RaisonPerte =
   | 'prix'
   | 'dates'
@@ -301,7 +301,6 @@ export const ETAPES: { valeur: Etape; libelle: string }[] = [
 export const FERMETURES: Record<Fermeture, string> = {
   closed_lost: 'Closed lost',
   annulee: 'Annulée après signature',
-  en_attente: 'En attente',
 }
 
 export const RAISONS_PERTE: Record<RaisonPerte, string> = {

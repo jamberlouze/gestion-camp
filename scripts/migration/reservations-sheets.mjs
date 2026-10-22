@@ -236,7 +236,7 @@ for (const fichier of fichiers) {
     if (non(v('Facture finale envoyé')) || /clos?ed? lost|\bCL\b/i.test(notes ?? '')) {
       fermeture = signe ? 'annulee' : 'closed_lost'
       raison = signe ? null : raisonPerte(notes)
-    } else if (/stand ?by|report[ée]/i.test(notes ?? '')) fermeture = 'en_attente'
+    }
 
     const genre = genreOrganisation(typeGroupe, nom, v('Âges et niveaux scolaires des élèves'))
     const ville = texte(jv('Adresse de facturation - Ville'))

@@ -158,7 +158,7 @@ Accompagnateur payant = le repas seulement. Gratuités comme en Classe nature.
 **Hors parcours :**
 - **Closed lost**, avec raison obligatoire : prix ou budget, dates indisponibles, a réservé ailleurs, installations inadaptées, projet annulé ou non approuvé (conseil d'établissement, centre de services), aucune réponse (ghost), simple demande d'information, trop loin, redirigé vers Airbnb, transféré à Opikawa, autre.
 - **Annulée après signature** : frais d'annulation calculés selon la grille (§5).
-- **En attente** : stand by, reportée.
+- ~~**En attente** : stand by, reportée.~~ Retiré le 2026-10-22 (décision de Maxime : pas demandé ; une demande en suspens reste à son étape, avec une note ou une relance du CRM).
 
 **Automatismes :**
 - « Ajouté au calendrier » se fait tout seul (§10).
@@ -372,7 +372,7 @@ Inchangé par rapport à la version 1, avec les ajouts de Maxime.
 - **Disponibilité** : à la saisie, l'app signale tout chevauchement de sections ou de salles avec une autre réservation confirmée.
 
 **Bâti en DEV le 2026-10-10 (phase 6), sans réponses de Maxime (« produis tout de suite ») : décisions prises seul, confirmées par Maxime le 2026-10-11.**
-- Calendrier selon l'étape : Demande (nouvelle, contact établi), Estimé (envoyé, accepté), Contrat (envoyé), puis Confirmée VF si la réservation occupe une section ou une salle de la VF (VFB, VFH, SVF, CVF), sinon Confirmée PP. Perdue, annulée ou en attente : retirée. Un seul calendrier à la fois (l'événement change de calendrier avec l'étape).
+- Calendrier selon l'étape : Demande (nouvelle, contact établi), Estimé (envoyé, accepté), Contrat (envoyé), puis Confirmée VF si la réservation occupe une section ou une salle de la VF (VFB, VFH, SVF, CVF), sinon Confirmée PP. Perdue ou annulée : retirée. Un seul calendrier à la fois (l'événement change de calendrier avec l'étape).
 - Événements d'une journée entière, nuits [arrivée, départ) comme Airbnb : le jour du départ reste libre pour l'arrivée suivante ; une journée sans nuit occupe son jour. Titre « 27-G-055 · Collège Citoyen (266) » ; description : forfait, personnes, heures, sections, salles, lien vers la fiche. Aucun nom de contact ni courriel.
 - **Écriture désactivée jusqu'à la bascule** (réglage « Écrire dans Google Agenda ») : les calendriers ont encore les événements d'Airtable. En DEV, jamais Google : simulé. Au plus 25 appels à Google par passage ; Confirmée VF d'abord. « Tout de suite » = à l'ouverture de la fiche (et aux 15 minutes) : une signature du client arrive au passage suivant.
 - Airbnb : seuls les « Reserved » de l'iCal (les « Not available » sont des blocages, dont les nôtres). Une réservation Airbnb est un Accueil de groupe confirmé, numéroté **AA-A-nnn** (pas dans la suite des groupes), au nom « Airbnb — Vieille-France complète » (VFB, VFH, SVF, CVF) ou « … étage du bas » (VFB), compagnie GBPA+, avec le lien Airbnb (colonne `lien_externe`, tenue par chaque lecture : avant le 2026-10-11, il était dans la description et se perdait quand l'équipe la réécrivait). Ses dates suivent Airbnb ; disparue du calendrier (à venir) : annulée ; de retour : rouverte. Le reste se complète à la main et n'est jamais écrasé.

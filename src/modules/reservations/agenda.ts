@@ -46,8 +46,8 @@ type R = Pick<
 /**
  * Calendrier d'une réservation selon son étape : Demande (nouvelle, contact
  * établi), Estimé (envoyé, accepté), Contrat (envoyé), puis Confirmée VF si
- * elle occupe la Vieille-France, sinon Confirmée PP. Aucun : fermée (perdue,
- * annulée, en attente) ou réservation Airbnb (jamais réécrite dans Google).
+ * elle occupe la Vieille-France, sinon Confirmée PP. Aucun : fermée (perdue
+ * ou annulée) ou réservation Airbnb (jamais réécrite dans Google).
  */
 export function calendrierDe(r: Pick<R, 'etape' | 'fermeture' | 'origine' | 'etages' | 'salles'>): CleCalendrier | null {
   if (r.fermeture || r.origine === 'airbnb') return null

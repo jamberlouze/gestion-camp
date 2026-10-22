@@ -21,11 +21,7 @@ export function PuceEtape({ r }: { r: Pick<Reservation, 'etape' | 'fermeture'> }
   const [texte, style] = r.fermeture
     ? [
         FERMETURES[r.fermeture],
-        r.fermeture === 'closed_lost'
-          ? 'border-red-200 bg-red-50 text-red-700'
-          : r.fermeture === 'annulee'
-            ? 'border-pierre-300 bg-pierre-100 text-pierre-600'
-            : 'border-amber-300 bg-amber-50 text-amber-800',
+        r.fermeture === 'closed_lost' ? 'border-red-200 bg-red-50 text-red-700' : 'border-pierre-300 bg-pierre-100 text-pierre-600',
       ]
     : [nomEtape(r.etape), STYLE_ETAPE[r.etape]]
   return <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${style}`}>{texte}</span>

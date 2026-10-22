@@ -5,7 +5,7 @@
 // Airbnb ; l'équipe affiche ou masque chaque phase. Fichier pur.
 
 import { calendrierDe, NOMS_CALENDRIER, RESSOURCES_VF, type CleCalendrier } from '../reservations/agenda.ts'
-import { ETAPES, FERMETURES, FORFAITS, type Etape, type Fermeture, type Forfait, type Reservation } from '../reservations/types.ts'
+import { ETAPES, FORFAITS, type Etape, type Fermeture, type Forfait, type Reservation } from '../reservations/types.ts'
 
 /** Ligne de calendrier.reservations(). */
 export interface LigneReservation {
@@ -44,7 +44,7 @@ export interface Sejour {
   nom_groupe: string
   /** Forfait : Classe nature, Accueil de groupe… */
   type_sejour: string
-  /** Étape lisible : « Estimé envoyé », « Confirmée · En attente », « Airbnb ». */
+  /** Étape lisible : « Estimé envoyé », « Confirmée », « Airbnb ». */
   etat: string
   phase: Phase
   date_arrivee: string
@@ -62,9 +62,9 @@ export interface Sejour {
 
 const LIBELLES_ETAPES = Object.fromEntries(ETAPES.map((e) => [e.valeur, e.libelle])) as Record<Etape, string>
 
-/** Phase d'une réservation : celle de son étape, même en attente (Maxime : tout sauf perdues et annulées). */
-export const phaseDe = (r: Pick<LigneReservation, 'etape' | 'origine' | 'etages' | 'salles'>): Phase =>
-  r.origine === 'airbnb' ? 'airbnb' : (calendrierDe({ ...r, fermeture: null }) ?? 'demande')
+/** Phase d'une réservation : celle de son calendrier Google, ou Airbnb. */
+export const phaseDe = (r: Pick<LigneReservation, 'etape' | 'fermeture' | 'origine' | 'etages' | 'salles'>): Phase =>
+  r.origine === 'airbnb' ? 'airbnb' : (calendrierDe(r) ?? 'demande')
 
 export function sejourDe(r: LigneReservation): Sejour {
   const phase = phaseDe(r)
@@ -75,7 +75,7 @@ export function sejourDe(r: LigneReservation): Sejour {
     numero: r.numero,
     nom_groupe: r.nom,
     type_sejour: FORFAITS[r.forfait],
-    etat: phase === 'airbnb' ? 'Airbnb' : `${LIBELLES_ETAPES[r.etape]}${r.fermeture ? ` · ${FERMETURES[r.fermeture]}` : ''}`,
+    etat: phase === 'airbnb' ? 'Airbnb' : LIBELLES_ETAPES[r.etape],
     phase,
     date_arrivee: r.date_arrivee,
     date_depart: r.date_depart,

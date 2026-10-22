@@ -46,15 +46,14 @@ test('venu = contrat signé ou plus loin, jamais fermée', () => {
   for (const etape of ['nouvelle', 'contact', 'estime_envoye', 'estime_accepte', 'contrat_envoye']) {
     assert.equal(calc([resa({ etape })]).statut, 'cible', etape)
   }
-  assert.equal(calc([resa({ fermeture: 'en_attente' })]).statut, 'cible')
 })
 
-test('demande en cours = prospect, en attente comprise', () => {
+test('demande en cours = prospect', () => {
   const futur = { date_arrivee: '2027-03-15', date_depart: '2027-03-17' }
   assert.equal(calc([resa({ etape: 'estime_envoye', ...futur })]).statut, 'prospect')
-  const c = calc([resa({ etape: 'contrat_envoye', fermeture: 'en_attente', ...futur })])
+  const c = calc([resa({ etape: 'contrat_envoye', ...futur })])
   assert.equal(c.statut, 'prospect')
-  assert.equal(c.demandes[0].etat, 'En attente')
+  assert.equal(c.demandes[0].etat, 'Contrat envoyé')
 })
 
 test('perdues et annulées : hors calculs, gardées pour la fiche', () => {
