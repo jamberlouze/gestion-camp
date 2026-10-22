@@ -316,7 +316,7 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
   return (
     <Dialogue titre="Retenir cette subvention" fermer={fermer}>
       <p className="mb-4 text-sm text-pierre-600">
-        « {g.program_name} » passe <b>en cours</b>, avec une ligne de suivi par compagnie cochée (demandé, accordé, reçu, reddition de
+        « {g.program_name} » passe <b>à faire</b>, avec une ligne de suivi par compagnie cochée (demandé, accordé, reçu, reddition de
         compte). Ses dates d’ouverture et de fermeture vont dans l’agenda « Subventions », et cette décision aide Claude à mieux cibler
         les prochaines recherches.
       </p>

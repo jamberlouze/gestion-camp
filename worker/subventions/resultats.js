@@ -142,13 +142,14 @@ export const CHAMPS_MISE_A_JOUR = [
 /**
  * Un élément de la réponse d'une mise à jour ciblée → { ok, valeur } ou
  * { ok: false, raison }. `parRef` : « S1 » → la subvention envoyée. Une
- * subvention obtenue ne change jamais : seule sa nouvelle édition compte.
+ * subvention acceptée (ou complétée) ne change jamais : seule sa nouvelle
+ * édition compte.
  */
 export function validerMiseAJour(brut, parRef) {
   if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return { ok: false, raison: 'élément qui n’est pas un objet' }
   const g = parRef.get(String(brut.ref ?? '').trim().toUpperCase())
   if (!g) return { ok: false, raison: `référence inconnue (${String(brut.ref ?? '').slice(0, 20) || 'aucune'})` }
-  const enCours = g.status === 'en_cours'
+  const enCours = g.status === 'a_faire' || g.status === 'depose'
   const champs = {
     source_url: adresseWeb(brut.source_url),
     open_date: dateIso(brut.open_date),
@@ -164,7 +165,7 @@ export function validerMiseAJour(brut, parRef) {
     new_edition: null,
   }
   const ed = brut.new_edition
-  if (g.status === 'obtenu' && ed && typeof ed === 'object' && !Array.isArray(ed)) {
+  if ((g.status === 'obtenu' || g.status === 'complete') && ed && typeof ed === 'object' && !Array.isArray(ed)) {
     const dates = { open_date: dateIso(ed.open_date), deadline_date: dateIso(ed.deadline_date) }
     // Une « nouvelle édition » sans aucune date ni adresse n'apprend rien : ignorée.
     if (dates.open_date || dates.deadline_date || adresseWeb(ed.source_url)) {

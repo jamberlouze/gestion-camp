@@ -24,6 +24,7 @@ import {
   argentCents,
   calculLigne,
   dateCourte,
+  estSansSuite,
   libelleAnneeFiscale,
   lireNombre,
   nomEmploye,
@@ -63,9 +64,9 @@ export function AttributionSalariale() {
     const carte = new Map((subventions.data ?? []).map((g) => [g.id, g]))
     return (suivis.data ?? []).map((l) => ({ l, g: carte.get(l.grant_id) })).filter((x): x is Demande => !!x.g)
   }, [subventions.data, suivis.data])
-  // Demandes où l'on peut ajouter un employé : en cours ou obtenues, ou qui en ont déjà.
+  // Demandes où l'on peut ajouter un employé : ni refusées ni désistées, ou qui en ont déjà.
   const annees = useMemo(() => {
-    const ouvertes = demandes.filter((d) => d.l.status !== 'refuse' || avecLignes.has(d.l.id))
+    const ouvertes = demandes.filter((d) => !estSansSuite(d.l.status) || avecLignes.has(d.l.id))
     const s = new Set([anneeFiscaleCourante(), ...ouvertes.map((d) => d.g.fiscal_year)])
     return [...s].sort((a, b) => b - a)
   }, [demandes, avecLignes])
@@ -92,7 +93,7 @@ export function AttributionSalariale() {
       groupes,
       total: totauxSalaires(groupes.flatMap((x) => x.lignes.map((y) => y.calcul))),
       nbLignes: groupes.reduce((s, x) => s + x.lignes.length, 0),
-      offertes: deLAnnee.filter((d) => d.l.status !== 'refuse' || avecLignes.has(d.l.id)).sort(trier),
+      offertes: deLAnnee.filter((d) => !estSansSuite(d.l.status) || avecLignes.has(d.l.id)).sort(trier),
     }
   }, [demandes, lignes.data, employes.data, avecLignes, annee, entreprise, de])
 

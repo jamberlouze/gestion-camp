@@ -1,6 +1,16 @@
 // Types du schéma subventions (noms de colonnes de la feuille de route).
 
-export type Statut = 'nouveau' | 'a_valider' | 'rejete' | 'en_cours' | 'obtenu' | 'refuse' | 'expire'
+export type Statut =
+  | 'nouveau'
+  | 'a_valider'
+  | 'rejete'
+  | 'a_faire'
+  | 'depose'
+  | 'obtenu'
+  | 'complete'
+  | 'refuse'
+  | 'desiste'
+  | 'expire'
 export type TypeSubvention = 'salarial' | 'immobilisation' | 'formation' | 'rd' | 'exportation' | 'marketing' | 'autre'
 export type CategorieRejet =
   | 'montant_trop_faible'
@@ -66,13 +76,15 @@ export interface Subvention {
   updated_at: string
 }
 
-export type StatutSuivi = 'en_cours' | 'obtenu' | 'refuse'
+/** Statut d'une demande : à faire, déposée, acceptée (obtenu), refusée, désistée, complétée (argent reçu). */
+export type StatutSuivi = 'a_faire' | 'depose' | 'obtenu' | 'refuse' | 'desiste' | 'complete'
 
 /**
  * Ligne de suivi (subventions.grant_applications) : une compagnie qui dépose
  * une demande pour une subvention retenue. Le statut de la carte en est tiré
- * par la base (en cours s'il en reste une en cours, sinon obtenue, sinon
- * refusée).
+ * par la base (subventions.statut_des_suivis : la moins avancée qui reste
+ * ouverte — à faire, déposée, acceptée, complétée —, sinon refusée, sinon
+ * désistée).
  */
 export interface Suivi {
   id: string

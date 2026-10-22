@@ -113,11 +113,11 @@ function Embarcations() {
   return <Ligne to="/embarcations" icone="🛶" module="Embarcations" pastille="douce" titre={`${pluriel(aTraiter, 'note')} à traiter`} />
 }
 
-/** Dates limites des subventions en attente ou en cours, d'ici 30 jours. */
+/** Dates limites des subventions en attente ou à faire (pas encore déposées), d'ici 30 jours. */
 function Subventions() {
   const { data } = useSubventions()
   const proches = (data ?? [])
-    .filter((g) => (g.status === 'a_valider' || g.status === 'en_cours') && g.deadline_date)
+    .filter((g) => (g.status === 'a_valider' || g.status === 'a_faire') && g.deadline_date)
     .map((g) => ({ g, jours: joursAvant(g.deadline_date!) }))
     .filter(({ jours }) => jours >= 0 && jours <= SEUIL_JOURS)
     .sort((a, b) => a.jours - b.jours)

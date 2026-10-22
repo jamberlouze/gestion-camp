@@ -5,14 +5,17 @@ import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { ui } from '@/lib/ui'
 import { ChoixResponsable, menu, PastilleStatut, PastilleType } from './commun'
 import { useCompagnies, useEntreprises, useHeures, useSubventions, useSuivis } from './donnees'
-import { anneeFiscaleCourante, argent, dateCourte, heures as formatHeures, libelleAnneeFiscale, STATUTS_SUIVI } from './outils'
+import { anneeFiscaleCourante, argent, dateCourte, estAcceptee, heures as formatHeures, libelleAnneeFiscale, STATUTS_SUIVI } from './outils'
 import type { StatutSuivi, Subvention, Suivi } from './types'
 
 const FILTRES: { id: string; libelle: string; statuts: StatutSuivi[] }[] = [
   { id: 'demandes', libelle: 'Toutes les demandes', statuts: STATUTS_SUIVI },
-  { id: 'en_cours', libelle: 'En cours seulement', statuts: ['en_cours'] },
-  { id: 'obtenues', libelle: 'Obtenues seulement', statuts: ['obtenu'] },
+  { id: 'a_faire', libelle: 'À faire seulement', statuts: ['a_faire'] },
+  { id: 'deposees', libelle: 'Déposées seulement', statuts: ['depose'] },
+  { id: 'acceptees', libelle: 'Acceptées seulement', statuts: ['obtenu'] },
   { id: 'refusees', libelle: "Refusées par l'organisme", statuts: ['refuse'] },
+  { id: 'desistees', libelle: 'Désistées seulement', statuts: ['desiste'] },
+  { id: 'completees', libelle: 'Complétées seulement', statuts: ['complete'] },
 ]
 
 /**
@@ -44,7 +47,7 @@ export function TableauDeBord() {
     const deLAnnee = (suivis.data ?? [])
       .map((l) => ({ l, g: carte.get(l.grant_id) }))
       .filter((x): x is { l: Suivi; g: Subvention } => !!x.g && x.g.fiscal_year === annee && (!entreprise || x.l.company_id === entreprise))
-    const obtenues = deLAnnee.filter((x) => x.l.status === 'obtenu')
+    const obtenues = deLAnnee.filter((x) => estAcceptee(x.l.status))
     const somme = (l: typeof deLAnnee, f: (l: Suivi) => number | null) => l.reduce((s, x) => s + Number(f(x.l) ?? 0), 0)
     // Heures investies : notées pour la subvention (toutes compagnies), comptées une fois.
     const ids = new Set(deLAnnee.map((x) => x.g.id))
@@ -104,7 +107,7 @@ export function TableauDeBord() {
           <p className="mt-1 text-4xl font-semibold tabular-nums text-foret-800">{argent(donnees.obtenu)}</p>
         </div>
         <div className={`${ui.carte} p-5`}>
-          <p className="text-sm text-pierre-500">Demandes obtenues</p>
+          <p className="text-sm text-pierre-500">Demandes acceptées</p>
           <p className="mt-1 text-4xl font-semibold tabular-nums text-foret-800">{donnees.nbObtenues}</p>
         </div>
       </div>

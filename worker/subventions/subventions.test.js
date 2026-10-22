@@ -152,7 +152,7 @@ describe('édition passée', () => {
 
 describe('mise à jour ciblée : lecture de la réponse', () => {
   const parRef = new Map([
-    ['S1', { id: 'g-cours', status: 'en_cours' }],
+    ['S1', { id: 'g-cours', status: 'a_faire' }],
     ['S2', { id: 'g-obtenue', status: 'obtenu' }],
   ])
   it('nettoie les champs d’une subvention en cours ; référence inconnue ou en double écartée', () => {
@@ -203,6 +203,23 @@ describe('mise à jour ciblée : lecture de la réponse', () => {
     })
     const vide = validerMisesAJour([{ ref: 'S2', new_edition: { program_name: 'Rien' } }], parRef)
     assert.equal(vide.valides[0].new_edition, null)
+  })
+
+  it('déposée comme à faire ; complétée comme obtenue', () => {
+    const autres = new Map([
+      ['S1', { id: 'g-deposee', status: 'depose' }],
+      ['S2', { id: 'g-complete', status: 'complete' }],
+    ])
+    const { valides } = validerMisesAJour(
+      [
+        { ref: 'S1', deadline_date: '2027-01-15', new_edition: { open_date: '2027-11-15' } },
+        { ref: 'S2', deadline_date: '2030-01-01', new_edition: { open_date: '2027-11-15' } },
+      ],
+      autres,
+    )
+    assert.deepEqual([valides[0].deadline_date, valides[0].new_edition], ['2027-01-15', null])
+    assert.equal(valides[1].deadline_date, null)
+    assert.equal(valides[1].new_edition.open_date, '2027-11-15')
   })
 })
 
@@ -294,7 +311,7 @@ describe('prompts', () => {
     const p = invitationMiseAJour({
       entreprise: { name: 'GBPA+', legal_status: 'OBNL' },
       subventions: [
-        { ref: 'S1', status: 'en_cours', program_name: 'JCTDLO', organisme: 'Patrimoine canadien', source_url: 'https://x.ca', open_date: null, deadline_date: '2027-02-01', potential_amount_max: 12000, eligibility_criteria: 'Jeunes de 16 à 30 ans', fiscal_year: 2027 },
+        { ref: 'S1', status: 'a_faire', program_name: 'JCTDLO', organisme: 'Patrimoine canadien', source_url: 'https://x.ca', open_date: null, deadline_date: '2027-02-01', potential_amount_max: 12000, eligibility_criteria: 'Jeunes de 16 à 30 ans', fiscal_year: 2027 },
         { ref: 'S2', status: 'obtenu', program_name: 'EÉC 2026', organisme: 'EDSC', fiscal_year: 2026 },
       ],
       aujourdhui: 'vendredi 1er janvier 2027',
@@ -650,7 +667,7 @@ describe('pipeline (réseau simulé)', () => {
 
   it('mise à jour ciblée : retenues envoyées avec une référence, réponse appliquée, journal', async () => {
     const retenues = [
-      { id: 'g-cours', status: 'en_cours', program_name: 'JCTDLO', organisme: 'PCH', source_url: 'https://x.ca', deadline_date: '2027-02-01', fiscal_year: 2027 },
+      { id: 'g-cours', status: 'a_faire', program_name: 'JCTDLO', organisme: 'PCH', source_url: 'https://x.ca', deadline_date: '2027-02-01', fiscal_year: 2027 },
       { id: 'g-obtenue', status: 'obtenu', program_name: 'EÉC 2026', organisme: 'EDSC', fiscal_year: 2026 },
     ]
     const reponse = [
@@ -714,7 +731,7 @@ describe('pipeline (réseau simulé)', () => {
 
     appels = fauxReseau({
       tache: { kind: 'ciblee', company_id: ENTREPRISE.id },
-      retenues: [{ id: 'g', status: 'en_cours', program_name: 'X', fiscal_year: 2027 }],
+      retenues: [{ id: 'g', status: 'a_faire', program_name: 'X', fiscal_year: 2027 }],
       claude: [{ content: [...outil, { type: 'text', text: '[]' }], stop_reason: 'end_turn', usage: usage(10, 10, 1) }],
     })
     await tourTrimestriel(ENV)
@@ -762,7 +779,7 @@ describe('agenda Google « Subventions »', () => {
   const g = (modif = {}) => ({
     id: 'g1',
     program_name: 'JCTDLO',
-    status: 'en_cours',
+    status: 'a_faire',
     open_date: '2026-11-01',
     deadline_date: '2027-02-01',
     source_url: 'https://x.ca',
@@ -770,7 +787,7 @@ describe('agenda Google « Subventions »', () => {
     potential_amount_max: 12000,
     ...modif,
   })
-  const suivi = (modif = {}) => ({ id: 'a1', grant_id: 'g1', company_id: 'c1', status: 'en_cours', amount_granted: null, ...modif })
+  const suivi = (modif = {}) => ({ id: 'a1', grant_id: 'g1', company_id: 'c1', status: 'a_faire', amount_granted: null, ...modif })
   const options = { entreprise: (id) => ({ c1: 'GBPA+', c2: 'Opikawa' })[id], lien: (id) => `https://app.test/subventions/fiche/${id}`, depuis: '2026-10-01' }
 
   it('retenue : ouverture et date limite, journée entière, sans bloquer le temps ; rien d’avant la mise en service', () => {
@@ -780,9 +797,15 @@ describe('agenda Google « Subventions »', () => {
     assert.deepEqual([v[1].evenement.start.date, v[1].evenement.end.date, v[1].evenement.transparency], ['2027-02-01', '2027-02-02', 'transparent'])
     assert.match(v[1].evenement.description, /jusqu'à 12\s000 \$\nPage officielle : https:\/\/x.ca\nFiche : https:\/\/app.test\/subventions\/fiche\/g1/)
     assert.deepEqual(evenementsVoulus([g({ open_date: '2026-09-15' })], [suivi()], [], options).map((e) => e.genre), ['fermeture'])
-    // Plusieurs compagnies déposent : toutes dans le titre, sauf celle refusée par l'organisme.
-    const plusieurs = [suivi(), suivi({ id: 'a2', company_id: 'c2' }), suivi({ id: 'a3', company_id: 'c3', status: 'refuse' })]
+    // Plusieurs compagnies déposent : toutes dans le titre, sauf celles refusées par l'organisme ou désistées.
+    const plusieurs = [
+      suivi(),
+      suivi({ id: 'a2', company_id: 'c2', status: 'depose' }),
+      suivi({ id: 'a3', company_id: 'c3', status: 'refuse' }),
+      suivi({ id: 'a4', company_id: 'c4', status: 'desiste' }),
+    ]
     assert.equal(evenementsVoulus([g()], plusieurs, [], options)[1].evenement.summary, 'Date limite · JCTDLO (GBPA+, Opikawa)')
+    assert.equal(evenementsVoulus([g({ status: 'depose' })], [suivi({ status: 'depose' })], [], options).length, 2)
   })
 
   it('obtenue : aussi les échéances de reddition pas encore faites ; autres statuts : rien', () => {
@@ -799,7 +822,11 @@ describe('agenda Google « Subventions »', () => {
     assert.equal(v[2].evenement.summary, 'Reddition · Rapport final — JCTDLO (Opikawa)')
     assert.match(v[2].evenement.description, /Accordé : 9\s000 \$/)
     assert.deepEqual(evenementsVoulus([g()], [suivi()], etapes, options).map((e) => e.genre), ['ouverture', 'fermeture'])
-    for (const status of ['nouveau', 'a_valider', 'rejete', 'refuse', 'expire']) assert.equal(evenementsVoulus([g({ status })], suivis, etapes, options).length, 0)
+    // Complétée (argent reçu) : la reddition reste due.
+    const completee = [suivi(), suivi({ id: 'a2', company_id: 'c2', status: 'complete', amount_granted: 9000 })]
+    assert.deepEqual(evenementsVoulus([g({ status: 'complete' })], completee, etapes, options).map((e) => e.cle), ['ouverture:g1', 'fermeture:g1', 'reddition:e1'])
+    for (const status of ['nouveau', 'a_valider', 'rejete', 'refuse', 'desiste', 'expire'])
+      assert.equal(evenementsVoulus([g({ status })], suivis, etapes, options).length, 0)
   })
 
   it('actions : créer, modifier si le contenu change, déplacer d’agenda, retirer ce qui n’est plus voulu', () => {
@@ -920,7 +947,7 @@ describe('routes /api/subventions (réseau simulé)', () => {
 
   it('mise à jour ciblée manuelle en flux', async () => {
     const appels = fauxReseau({
-      retenues: [{ id: 'g', status: 'en_cours', program_name: 'X', fiscal_year: 2027 }],
+      retenues: [{ id: 'g', status: 'a_faire', program_name: 'X', fiscal_year: 2027 }],
       claude: [{ content: [...outil, { type: 'text', text: '[{"ref":"S1","deadline_date":"2027-03-01"}]' }], stop_reason: 'end_turn', usage: usage(1, 1, 1) }],
     })
     const r = await routeSubventions(

@@ -49,6 +49,7 @@ import {
   champ,
   CATEGORIES,
   dateCourte,
+  estAcceptee,
   estRetenue,
   heures as formatHeures,
   LIBELLES_CHAMPS,
@@ -652,9 +653,25 @@ function SuiviParCompagnie({
 }
 
 const CLASSES_SUIVI: Record<StatutSuivi, string> = {
-  en_cours: 'border-violet-300 bg-violet-50 text-violet-800',
+  a_faire: 'border-violet-300 bg-violet-50 text-violet-800',
+  depose: 'border-indigo-300 bg-indigo-50 text-indigo-800',
   obtenu: 'border-foret-600 bg-foret-50 text-foret-800',
   refuse: 'border-red-300 bg-red-50 text-red-800',
+  desiste: 'border-pierre-300 bg-pierre-50 text-pierre-600',
+  complete: 'border-foret-700 bg-foret-700 text-white',
+}
+
+/**
+ * Champs posés avec un nouveau statut : sa date (dépôt, octroi, réception)
+ * à aujourd'hui si elle est vide. L'octroi rattache la subvention à l'année
+ * fiscale.
+ */
+function avecDates(l: Suivi, status: StatutSuivi): Partial<Suivi> {
+  const jour = aujourdhui()
+  if (status === 'depose' && !l.requested_at) return { status, requested_at: jour }
+  if (status === 'obtenu' && !l.granted_at) return { status, granted_at: jour }
+  if (status === 'complete') return { status, ...(!l.granted_at && { granted_at: jour }), ...(!l.received_at && { received_at: jour }) }
+  return { status }
 }
 
 function LigneSuivi({
@@ -674,7 +691,7 @@ function LigneSuivi({
   const enregistrer = useEnregistrer<Suivi>('grant_applications')
   const supprimer = useSupprimer('grant_applications')
   const etapes = (useEtapes().data ?? []).filter((e) => e.application_id === l.id)
-  const [reddition, setReddition] = useState(l.status === 'obtenu' || etapes.length > 0)
+  const [reddition, setReddition] = useState(estAcceptee(l.status) || etapes.length > 0)
   const majLigne = (champs: Partial<Suivi>) => enregistrer.mutate({ id: l.id, ...champs })
   const compagnie = de(l.company_id)
   const faites = etapes.filter((e) => e.status === 'complete').length
@@ -693,11 +710,7 @@ function LigneSuivi({
           aria-label={`Statut de la demande de ${compagnie.nom}`}
           className={`fleche-serree rounded-lg border px-2 py-1 text-xs font-medium ${CLASSES_SUIVI[l.status]}`}
           value={l.status}
-          onChange={(e) => {
-            const status = e.target.value as StatutSuivi
-            // Obtenue sans date d'octroi : aujourd'hui (rattache la subvention à l'année fiscale).
-            majLigne(status === 'obtenu' && !l.granted_at ? { status, granted_at: aujourdhui() } : { status })
-          }}
+          onChange={(e) => majLigne(avecDates(l, e.target.value as StatutSuivi))}
         >
           {STATUTS_SUIVI.map((s) => (
             <option key={s} value={s}>

@@ -1,6 +1,6 @@
 // Agenda Google « Subventions » : les dates des subventions retenues
 // (ouverture, date limite) et les échéances de reddition des lignes de suivi
-// obtenues (règles dans src/modules/subventions/agenda.ts). À chaque passage du cron
+// acceptées (règles dans src/modules/subventions/agenda.ts). À chaque passage du cron
 // (15 min) et tout de suite depuis la fiche (POST /api/subventions/agenda).
 // Ce qui a été écrit est gardé dans subventions.grant_calendar_events.
 //
@@ -11,7 +11,7 @@
 //   Réservations, GOOGLE_AGENDA_REFRESH_TOKEN), autorisé par un compte qui
 //   peut modifier l'agenda « Subventions » (README, section 8).
 
-import { actionsAgenda, evenementsVoulus, REGLAGE_AGENDA_DEFAUT } from '../../src/modules/subventions/agenda.ts'
+import { actionsAgenda, evenementsVoulus, REGLAGE_AGENDA_DEFAUT, STATUTS_AGENDA } from '../../src/modules/subventions/agenda.ts'
 import { clientAgenda, modeAgenda as modeGoogle } from '../commun/agendaGoogle.js'
 import { base } from './base.js'
 
@@ -38,7 +38,7 @@ export async function synchroniserAgenda(env, { grantId = null, max = 25 } = {})
   }
 
   const [subventions, suivis, etapes, entreprises, lignes] = await Promise.all([
-    db.lire(`grants?select=${CHAMPS}&${grantId ? `id=eq.${grantId}` : 'status=in.(en_cours,obtenu)'}`),
+    db.lire(`grants?select=${CHAMPS}&${grantId ? `id=eq.${grantId}` : `status=in.(${STATUTS_AGENDA.join(',')})`}`),
     db.lire(`grant_applications?select=id,grant_id,company_id,status,amount_granted&order=created_at${grantId ? `&grant_id=eq.${grantId}` : ''}`),
     db.lire(`grant_reporting_steps?select=id,application_id,description,due_date,status${grantId ? `&grant_id=eq.${grantId}` : ''}`),
     db.lire('grant_companies?select=id,name'),

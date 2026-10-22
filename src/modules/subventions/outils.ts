@@ -6,15 +6,22 @@ import type { CategorieRejet, ChampPropose, LigneSalaire, Statut, StatutEtape, S
 export const STATUTS: Record<Statut, { libelle: string; classe: string }> = {
   nouveau: { libelle: 'Nouvelle', classe: 'bg-sky-100 text-sky-800' },
   a_valider: { libelle: 'En attente', classe: 'bg-amber-100 text-amber-800' },
-  en_cours: { libelle: 'En cours', classe: 'bg-violet-100 text-violet-800' },
-  obtenu: { libelle: 'Obtenue', classe: 'bg-foret-100 text-foret-800' },
+  a_faire: { libelle: 'À faire', classe: 'bg-violet-100 text-violet-800' },
+  depose: { libelle: 'Déposée', classe: 'bg-indigo-100 text-indigo-800' },
+  obtenu: { libelle: 'Acceptée', classe: 'bg-foret-100 text-foret-800' },
   refuse: { libelle: "Refusée par l'organisme", classe: 'bg-red-100 text-red-800' },
+  desiste: { libelle: 'Désistée', classe: 'bg-pierre-100 text-pierre-600' },
+  complete: { libelle: 'Complétée', classe: 'bg-foret-700 text-white' },
   rejete: { libelle: 'Rejetée', classe: 'bg-pierre-200 text-pierre-700' },
   expire: { libelle: 'Expirée', classe: 'bg-pierre-100 text-pierre-500' },
 }
-export const ORDRE_STATUTS: Statut[] = ['nouveau', 'a_valider', 'en_cours', 'obtenu', 'refuse', 'rejete', 'expire']
-/** Statuts d'une ligne de suivi (une compagnie qui dépose). */
-export const STATUTS_SUIVI: StatutSuivi[] = ['en_cours', 'obtenu', 'refuse']
+export const ORDRE_STATUTS: Statut[] = ['nouveau', 'a_valider', 'a_faire', 'depose', 'obtenu', 'refuse', 'desiste', 'complete', 'rejete', 'expire']
+/**
+ * Statuts d'une ligne de suivi (une compagnie qui dépose), dans l'ordre de la
+ * demande : à faire, déposée, acceptée / refusée / désistée, complétée
+ * (argent reçu).
+ */
+export const STATUTS_SUIVI: StatutSuivi[] = ['a_faire', 'depose', 'obtenu', 'refuse', 'desiste', 'complete']
 
 export const TYPES: Record<TypeSubvention, string> = {
   salarial: 'Salariale',
@@ -71,8 +78,15 @@ export function anneeFiscaleProposee(
   return { annee: g.discovered_fy, selon: "l'année de la découverte" }
 }
 
-/** Retenue (en cours) ou obtenue : dans l'agenda, à mettre à jour, à l'attribution salariale. */
-export const estRetenue = (g: Pick<Subvention, 'status'>) => g.status === 'en_cours' || g.status === 'obtenu'
+/** Acceptée par l'organisme, argent reçu (complétée) ou pas. */
+export const estAcceptee = (s: Statut) => s === 'obtenu' || s === 'complete'
+
+/** Demande finie sans subvention : refusée par l'organisme ou désistée. */
+export const estSansSuite = (s: Statut) => s === 'refuse' || s === 'desiste'
+
+/** Retenue (à faire, déposée) ou acceptée : dans l'agenda, à mettre à jour, à l'attribution salariale. */
+export const estRetenue = (g: Pick<Subvention, 'status'>) =>
+  g.status === 'a_faire' || g.status === 'depose' || estAcceptee(g.status)
 
 /** Pas encore décidée : nouvelle ou en attente (onglet À valider). */
 export const aDecider = (g: Pick<Subvention, 'status'>) => g.status === 'nouveau' || g.status === 'a_valider'

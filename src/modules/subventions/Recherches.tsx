@@ -199,8 +199,8 @@ function LancerRecherche({ entreprises, pret }: { entreprises: Entreprise[]; pre
         <label className="flex items-start gap-2">
           <input type="radio" name="genre" className="mt-0.5 accent-foret-700" checked={genre === 'ciblee'} disabled={enCours} onChange={() => setGenre('ciblee')} />
           <span>
-            <b className="font-medium">Mise à jour des retenues</b> : dates, montants, critères et lien de ses subventions en cours ; nouvelle
-            édition de ses obtenues (10 à la fois)
+            <b className="font-medium">Mise à jour des retenues</b> : dates, montants, critères et lien de ses subventions à faire ou déposées ;
+            nouvelle édition de ses acceptées (10 à la fois)
           </span>
         </label>
       </fieldset>

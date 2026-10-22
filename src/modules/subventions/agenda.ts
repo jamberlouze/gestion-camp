@@ -3,18 +3,19 @@
 // créer, changer, déplacer ou retirer. Fichier pur : le Worker s'en sert
 // (worker/subventions/agenda.js) et la fiche pour afficher l'état.
 //
-// - Retenue (en cours) ou obtenue : sa date d'ouverture et sa date limite,
-//   avec les compagnies qui déposent (lignes de suivi pas refusées).
-// - Ligne de suivi obtenue : aussi ses échéances de reddition de compte pas
-//   encore faites.
-// - Autre statut (rejetée, refusée, expirée, remise à valider…) : rien,
+// - Retenue (à faire, déposée) ou acceptée (complétée comprise) : sa date
+//   d'ouverture et sa date limite, avec les compagnies qui déposent (lignes
+//   de suivi ni refusées ni désistées).
+// - Ligne de suivi acceptée ou complétée : aussi ses échéances de reddition
+//   de compte pas encore faites.
+// - Autre statut (rejetée, refusée, désistée, expirée, remise à valider…) : rien,
 //   ses événements sont retirés.
 // Journée entière, sans bloquer le temps ; rien avant `depuis` (mise en
 // service), pour ne pas remplir l'agenda de dates passées.
 
 import type { Etape, Statut, Subvention, Suivi } from './types'
 
-export const STATUTS_AGENDA: Statut[] = ['en_cours', 'obtenu']
+export const STATUTS_AGENDA: Statut[] = ['a_faire', 'depose', 'obtenu', 'complete']
 
 export interface ReglageAgenda {
   actif: boolean
@@ -103,7 +104,7 @@ export function evenementsVoulus(
   const voulus: EvenementVoulu[] = []
   for (const g of subventions) {
     if (!STATUTS_AGENDA.includes(g.status)) continue
-    const lignes = suivis.filter((l) => l.grant_id === g.id && l.status !== 'refuse')
+    const lignes = suivis.filter((l) => l.grant_id === g.id && l.status !== 'refuse' && l.status !== 'desiste')
     const noms = lignes.map((l) => entreprise(l.company_id)).filter(Boolean)
     const suffixe = noms.length ? ` (${noms.join(', ')})` : ''
     const pied = (avec: L[]) => [montants(g, avec), g.source_url ? `Page officielle : ${g.source_url}` : null, `Fiche : ${lien(g.id)}`]
@@ -116,7 +117,7 @@ export function evenementsVoulus(
       ...pied(lignes),
     ])
     for (const l of lignes) {
-      if (l.status !== 'obtenu') continue
+      if (l.status !== 'obtenu' && l.status !== 'complete') continue
       const nom = entreprise(l.company_id)
       for (const e of etapes) {
         if (e.application_id !== l.id || e.status === 'complete') continue

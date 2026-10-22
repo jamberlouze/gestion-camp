@@ -6,9 +6,13 @@ const STATUTS = {
   nouveau: 'nouvelle',
   a_valider: 'en attente',
   rejete: 'rejetée',
-  en_cours: 'en cours',
+  a_faire: 'à faire',
+  depose: 'déposée',
+  // Acceptée, argent reçu ou pas : pour Claude, obtenue.
   obtenu: 'obtenue',
+  complete: 'obtenue',
   refuse: 'refusée',
+  desiste: 'désistée',
   expire: 'expirée',
 }
 
@@ -88,7 +92,7 @@ export function invitationMiseAJour({ entreprise, subventions, aujourdhui }) {
     .map((g) =>
       [
         g.ref,
-        g.status === 'obtenu' ? `obtenue (${libelleAnneeFiscale(g.fiscal_year)})` : 'en cours',
+        g.status === 'obtenu' || g.status === 'complete' ? `obtenue (${libelleAnneeFiscale(g.fiscal_year)})` : 'en cours',
         g.program_name,
         g.organisme ?? '—',
         ...Object.entries(LIBELLES_CHAMPS).map(([c, libelle]) => `${libelle} ${valeur(g, c)}`),
@@ -298,7 +302,7 @@ const blocRegles = (regles) =>
   `Règles apprises des validations et rejets précédents :
 ${regles?.trim() || 'Aucune règle apprise pour l’instant : la direction n’a encore validé ou rejeté aucune proposition.'}`
 
-const EXCEPTION_RECURRENT = `Seule exception : un programme récurrent « obtenue », « refusée » ou « expirée » une année fiscale
+const EXCEPTION_RECURRENT = `Seule exception : un programme récurrent « obtenue », « refusée », « désistée » ou « expirée » une année fiscale
 précédente peut être reproposé si une nouvelle édition (nouvel appel, nouvelle année) est ouverte ou
 annoncée ; garde alors le même program_key.`
 
