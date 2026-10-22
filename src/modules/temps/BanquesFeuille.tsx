@@ -13,7 +13,8 @@ import { aujourdhui, dateCourte, finPeriode, formatHeures } from './periodes'
  * employé qui remplit la sienne) : solde au début et à la fin de la
  * période, mouvements de la période et historique. Pas de banque de
  * vacances ni de maladie : elles sont dans Employeur D (les heures de la
- * feuille y partent avec leur code d'utilisation).
+ * feuille y partent avec leur code d'utilisation) et ne valent que pour la
+ * direction, pas pour un employé.
  * `heuresPeriode` = les heures de la feuille affichée (à jour pendant la
  * saisie) ; pour un employé, celles de la compagnie `entrepriseId`.
  * `peutRegler` : ajustements (admins pour la direction, direction pour un
@@ -42,7 +43,8 @@ export function BanquesFeuille({
   if (!donnees.data) return <p className="py-4 text-center text-sm text-pierre-500 print:hidden">Chargement de la banque d’heures…</p>
 
   const { mouvements, etat, r } = banqueDeLaFeuille(donnees.data, debut, heuresPeriode, entrepriseId)
-  const solde = (n: number) => <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>{formatHeures(n)} h</span>
+  const direction = !!titulaire.userId
+  const solde =(n: number) => <span className={`tabular-nums ${n < 0 ? 'text-red-700' : ''}`}>{formatHeures(n)} h</span>
 
   return (
     <section className="space-y-2 break-inside-avoid">
@@ -61,7 +63,7 @@ export function BanquesFeuille({
         </div>
         <p className="text-xs text-pierre-500">
           {etat.active
-            ? `Calculée seule sur la période de paie complète : heures attendues = ${SEUIL_SEMAINE} h par semaine, ${HEURES_FERIE} h de moins par férié ; régulières au-delà ajoutées, manque d'une période finie tiré (vacances et maladie comptées) · mise en banque ${libelleEtatHeures(etat)}`
+            ? `Calculée seule sur la période de paie complète : heures attendues = ${SEUIL_SEMAINE} h par semaine, ${HEURES_FERIE} h de moins par férié ; régulières au-delà ajoutées, manque d'une période finie tiré${direction ? ' (vacances et maladie comptées)' : ''} · mise en banque ${libelleEtatHeures(etat)}`
             : `Mise en banque des heures ${libelleEtatHeures(etat)} : rien ne s'ajoute ni ne se retire, le solde reste`}
         </p>
         {estAdmin && alerteBanque(mouvements, etat.active) && (
@@ -97,7 +99,7 @@ export function BanquesFeuille({
           </div>
         )}
       </div>
-      <p className="text-xs text-pierre-500">Vacances et maladie : les soldes sont dans Employeur D.</p>
+      {direction && <p className="text-xs text-pierre-500">Vacances et maladie : les soldes sont dans Employeur D.</p>}
       {ajuster && <FenetreAjustement titulaire={titulaire} fermer={() => setAjuster(false)} />}
     </section>
   )

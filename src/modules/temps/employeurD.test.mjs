@@ -44,7 +44,7 @@ test('une ligne par employé et compagnie, régulières additionnées au code G1
   assert.equal(r.pret, true)
 })
 
-test('woofing jamais exporté ; type sans code signalé, pas dans le fichier', () => {
+test('woofing jamais exporté, ni la maladie d’un employé (direction seulement) ; type sans code signalé, pas dans le fichier', () => {
   const r = preparerExport({
     employes: [pinson],
     compagnies: [GBPA],
@@ -54,14 +54,11 @@ test('woofing jamais exporté ; type sans code signalé, pas dans le fichier', (
   assert.deepEqual(r.lignes[0].quantites, { 1: 8 })
   assert.deepEqual(
     r.sansCode.map((s) => [s.type, s.heures, s.personnes]),
-    [
-      ['maladie', 8, 1],
-      ['banque', 2.5, 1],
-    ],
+    [['banque', 2.5, 1]],
   )
 })
 
-test('codes réglés : une colonne par code, deux types au même code s’additionnent', () => {
+test('codes réglés : une colonne par code, deux types au même code s’additionnent ; maladie d’un employé jamais exportée', () => {
   const reglages = { code_regulieres: 1, code_vacances: null, code_maladie: 101, code_banque: 1, periode: 'date_paie' }
   assert.deepEqual(colonnesCodes(reglages), [1, 101])
   const r = preparerExport({
@@ -70,7 +67,7 @@ test('codes réglés : une colonne par code, deux types au même code s’additi
     heures: [h('e1', 'c1', 'regulieres', 30), h('e1', 'c1', 'banque', 4), h('e1', 'c1', 'maladie', 8)],
     reglages,
   })
-  assert.deepEqual(r.lignes[0].quantites, { 1: 34, 101: 8 })
+  assert.deepEqual(r.lignes[0].quantites, { 1: 34 })
   assert.deepEqual(r.sansCode, [])
   // Aucun code : rien à exporter.
   const vide = preparerExport({ employes: [pinson], compagnies: [GBPA], heures: [h('e1', 'c1', 'regulieres', 8)], reglages: { ...REGLAGES, code_regulieres: null } })
@@ -145,8 +142,8 @@ test('fichier .xls relu par SheetJS : en-têtes, types et formats du gabarit', (
   const r = preparerExport({
     employes: [pinson, castor],
     compagnies: [GBPA, OPI],
-    heures: [h('e1', 'c1', 'regulieres', 15.5), h('e1', 'c1', 'maladie', 8), h('e2', 'c2', 'regulieres', 6)],
-    reglages: { code_regulieres: 1, code_vacances: null, code_maladie: 101, code_banque: null, periode: 'date_paie' },
+    heures: [h('e1', 'c1', 'regulieres', 15.5), h('e1', 'c1', 'banque', 8), h('e2', 'c2', 'regulieres', 6)],
+    reglages: { code_regulieres: 1, code_vacances: null, code_maladie: null, code_banque: 720, periode: 'date_paie' },
   })
   const cellules = cellulesEmployeurD(r, '2026-10-22')
   // Même assemblage que l'écran (ExportEmployeurD.tsx).
@@ -162,7 +159,7 @@ test('fichier .xls relu par SheetJS : en-têtes, types et formats du gabarit', (
   assert.deepEqual(relu.SheetNames, [NOM_FEUILLE])
   const f = relu.Sheets[NOM_FEUILLE]
   const rangees = XLSX.utils.sheet_to_json(f, { header: 1, raw: true, defval: null })
-  assert.deepEqual(rangees[0], ['Compagnie', 'Matricule', 'Nom, prénom', 'No relevé', 'Période', 'G1(Quantité)', 'G101(Quantité)'])
+  assert.deepEqual(rangees[0], ['Compagnie', 'Matricule', 'Nom, prénom', 'No relevé', 'Période', 'G1(Quantité)', 'G720(Quantité)'])
   const sansDate = (rang) => rang.filter((_, i) => i !== 4)
   assert.deepEqual(sansDate(rangees[1]), ['0001234', 1001, 'Morin, Léa', null, 15.5, 8])
   assert.deepEqual(sansDate(rangees[2]), ['OPI42', 1002, 'Castor', null, 6, null])

@@ -26,11 +26,11 @@ type Reglage = 'code_regulieres' | 'code_vacances' | 'code_maladie' | 'code_banq
 /** Code de gain (heures payées) ou code d'utilisation (heures prises dans une banque d'Employeur D). */
 export type GenreCode = 'gain' | 'utilisation'
 
-/** Types d'heures exportés, dans l'ordre des colonnes (vacances : la direction seulement). */
+/** Types d'heures exportés, dans l'ordre des colonnes (vacances et maladie : la direction seulement). */
 export const TYPES_EXPORTES: { type: TypeExporte; libelle: string; reglage: Reglage; genre: GenreCode; detail: string }[] = [
   { type: 'regulieres', libelle: 'Heures régulières', reglage: 'code_regulieres', genre: 'gain', detail: 'Employés et direction' },
   { type: 'vacances', libelle: 'Vacances', reglage: 'code_vacances', genre: 'utilisation', detail: 'Direction seulement' },
-  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'utilisation', detail: 'Heures de maladie des feuilles' },
+  { type: 'maladie', libelle: 'Maladie', reglage: 'code_maladie', genre: 'utilisation', detail: 'Direction seulement' },
   { type: 'banque', libelle: 'Tirées de la banque', reglage: 'code_banque', genre: 'gain', detail: 'Manque d’une période tiré de la banque d’heures de l’app (calculé)' },
 ]
 
@@ -234,7 +234,8 @@ export function preparerExport(p: {
   }
 
   for (const h of p.heures) {
-    if (!estExporte(h.type) || h.type === 'vacances' || !h.heures) continue
+    // Vacances et maladie : la direction seulement (la base les refuse pour un employé).
+    if (!estExporte(h.type) || h.type === 'vacances' || h.type === 'maladie' || !h.heures) continue
     if (p.compagnie && h.entreprise_id !== p.compagnie) continue
     const employe = parEmploye.get(h.employe_id)
     const compagnie = parCompagnie.get(h.entreprise_id)

@@ -296,8 +296,9 @@ update core.profils
 -- Feuilles de temps, période PP21 (4 au 17 oct. 2026), pour essayer les
 -- banques, l'onglet À approuver et les dossiers à fermer :
 --   Léa (Pinson) : GBPA+ 45 h la semaine 1 (+ 3 h Aquabounga → 8 h
---     accumulées), woofing, maladie et heures prises en banque ; sa feuille
---     GBPA+ est soumise, celle d'Aquabounga reste ouverte ;
+--     accumulées), woofing et heures prises en banque (pas de maladie :
+--     la direction seulement) ; sa feuille GBPA+ est soumise, celle
+--     d'Aquabounga reste ouverte ;
 --   Julie (direction) : 42,5 h la semaine 1 (2,5 h accumulées), vacances,
 --     maladie, solde de départ de 6 h ; feuille soumise (pour les admins) ;
 --   Olivier (direction) : quelques heures, feuille ouverte (Julie ne la voit pas) ;
@@ -308,7 +309,7 @@ select e.id, c.id, v.jour::date, v.type, v.heures
     ('Pinson', 'GBPA+', '2026-10-05', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-06', 'regulieres', 9),
     ('Pinson', 'GBPA+', '2026-10-07', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-08', 'regulieres', 9),
     ('Pinson', 'GBPA+', '2026-10-09', 'regulieres', 9), ('Pinson', 'GBPA+', '2026-10-10', 'woofing', 4),
-    ('Pinson', 'GBPA+', '2026-10-12', 'maladie', 8), ('Pinson', 'GBPA+', '2026-10-13', 'regulieres', 8),
+    ('Pinson', 'GBPA+', '2026-10-13', 'regulieres', 8),
     ('Pinson', 'GBPA+', '2026-10-14', 'regulieres', 6), ('Pinson', 'GBPA+', '2026-10-14', 'banque', 2),
     ('Pinson', 'Aquabounga', '2026-10-10', 'regulieres', 3),
     ('Marteau', 'GBPA+', '2026-10-05', 'regulieres', 7.5), ('Marteau', 'GBPA+', '2026-10-06', 'regulieres', 7.5)

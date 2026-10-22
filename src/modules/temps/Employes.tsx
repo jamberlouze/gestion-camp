@@ -73,8 +73,6 @@ interface Ligne {
   sem1: number
   sem2: number
   total: number
-  /** Heures de maladie (employé qui remplit sa feuille), payées à part. */
-  maladie: number
   /**
    * Heures tirées de sa banque dans la période (calculées seules : banques.ts),
    * payées à part ; sur la ligne de la compagnie où il a fait le plus d'heures.
@@ -118,8 +116,7 @@ const LIBELLES_ETAT: Record<Statut, string> = { ouverte: 'En cours', soumise: 'S
  * Un employé qui remplit sa feuille (compte relié à sa fiche dans la page
  * Utilisateurs) : sa ligne reprend ses heures régulières, avec l'état de sa
  * feuille ; elle ne se modifie pas ici, on ouvre sa feuille (clic sur son nom).
- * Ses heures de maladie paraissent sous son nom et dans l'export. Heures
- * tirées de sa banque (banque activée, semaine sous les heures attendues :
+ * Maladie et vacances : la direction seulement. Heures tirées de sa banque (banque activée, semaine sous les heures attendues :
  * calculées seules, rien à saisir) : sous son nom et dans l'export.
  * Dossier à fermer : un employé sans heures depuis 2 périodes disparaît de
  * la saisie (« Afficher les dossiers masqués ») et la direction voit
@@ -194,14 +191,12 @@ export function FeuilleEmployes() {
     const parCompagnie = new Map(entreprises.data.map((x) => [x.id, x]))
     const aFermer = new Set(masques.data.map((d) => d.employe_id))
     const parLigne = new Map<string, Map<string, number>>()
-    const autres = new Map<string, { maladie: number; banque: number }>()
+    const prises = new Map<string, number>()
     for (const h of heures.data) {
       const cle = `${h.employe_id}|${h.entreprise_id}`
-      if (h.type === 'maladie' || h.type === 'banque') {
-        // banque : anciennes heures prises à la main, avant le calcul automatique.
-        const a = autres.get(cle) ?? { maladie: 0, banque: 0 }
-        a[h.type] += h.heures
-        autres.set(cle, a)
+      if (h.type === 'banque') {
+        // Anciennes heures prises à la main, avant le calcul automatique.
+        prises.set(cle, (prises.get(cle) ?? 0) + h.heures)
         continue
       }
       if (!parLigne.has(cle)) parLigne.set(cle, new Map())
@@ -227,7 +222,6 @@ export function FeuilleEmployes() {
             sem1: 0,
             sem2: 0,
             total: 0,
-            maladie: 0,
             banque: 0,
             note: '',
             statut: null,
@@ -247,7 +241,6 @@ export function FeuilleEmployes() {
           else sem2 += h
         }
         const statut = statutDe.get(cle) ?? (propres.data.has(e.id) ? 'ouverte' : null)
-        const a = autres.get(cle) ?? { maladie: 0, banque: 0 }
         resultat.push({
           cle,
           employe: e,
@@ -256,8 +249,7 @@ export function FeuilleEmployes() {
           sem1,
           sem2,
           total: sem1 + sem2,
-          maladie: a.maladie,
-          banque: a.banque,
+          banque: prises.get(cle) ?? 0,
           note: noteDe.get(cle) ?? '',
           statut,
           aFermer: aFermer.has(e.id),
@@ -315,14 +307,14 @@ export function FeuilleEmployes() {
   const aSansCompagnie = toutes.some((l) => !l.entreprise) || direction.some((d) => !d.compagnie)
   const mots = recherche.trim().toLocaleLowerCase('fr')
   // Dossier à fermer sans rien dans la période : retiré de la saisie, sauf si on demande à le voir.
-  const masquee = (l: Ligne) => l.aFermer && !l.total && !l.maladie && !l.banque && !l.note
+  const masquee = (l: Ligne) => l.aFermer && !l.total && !l.banque && !l.note
   const nbMasques = new Set(toutes.filter(masquee).map((l) => l.employe.id)).size
   const lignes = toutes.filter((l) => {
     const e = l.employe
     if (!afficherMasques && masquee(l)) return false
     if (secteur === SANS ? e.secteur : secteur && e.secteur !== secteur) return false
     if (compagnie === SANS ? l.entreprise : compagnie && l.entreprise?.id !== compagnie) return false
-    if (avecHeures && !l.total && !l.maladie && !l.banque && !l.note) return false
+    if (avecHeures && !l.total && !l.banque && !l.note) return false
     if (mots && ![e.surnom, e.nom_complet, e.poste].some((t) => t?.toLocaleLowerCase('fr').includes(mots))) return false
     return true
   })
@@ -569,12 +561,8 @@ export function FeuilleEmployes() {
                             )}
                             {details}
                           </span>
-                          {(l.maladie > 0 || l.banque > 0) && (
-                            <span className="block text-xs font-medium text-amber-800">
-                              {[l.maladie ? `Maladie ${formatHeures(l.maladie)} h` : null, l.banque ? `Tirées de la banque ${formatHeures(l.banque)} h` : null]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </span>
+                          {l.banque > 0 && (
+                            <span className="block text-xs font-medium text-amber-800">Tirées de la banque {formatHeures(l.banque)} h</span>
                           )}
                         </th>
                         {jours.map((j, i) => (
@@ -647,7 +635,7 @@ export function FeuilleEmployes() {
         Feuille partagée : toute la direction voit et modifie ces heures. Saisie au quart d’heure (7,5 ou 7h30) ; Entrée
         passe à la ligne suivante, Tab au jour suivant. Un employé qui travaille pour deux compagnies a une ligne pour chacune.
         Un employé avec un état (En cours, Soumise, Approuvée) remplit sa propre feuille : ses heures régulières
-        s’affichent ici (maladie sous son nom), et on les corrige dans sa feuille (clic sur son nom). Banque d’heures
+        s’affichent ici, et on les corrige dans sa feuille (clic sur son nom). Maladie et vacances : la direction seulement. Banque d’heures
         activée (onglet Banques) : une période finie sous les heures attendues (40 h par semaine, 8 h de moins par férié), le manque est
         tiré de sa banque tout seul et paraît sous son nom (« Tirées de la banque »). Un employé sans heures depuis 2
         périodes est retiré de la saisie (dossier à fermer).
@@ -734,7 +722,7 @@ function exporter(debut: string, jours: string[], rangees: Rangee[]) {
         nombre(l.sem2) || '0',
         nombre(l.total) || '0',
         '',
-        nombre(l.maladie),
+        '',
         nombre(l.banque),
         champ(l.note),
         l.statut ? LIBELLES_ETAT[l.statut] : '',

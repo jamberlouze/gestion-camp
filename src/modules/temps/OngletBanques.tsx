@@ -55,7 +55,7 @@ export function OngletBanques({ estAdmin }: { estAdmin: boolean }) {
           Soldes au <b>{dateCourte(au)}</b>. La banque se calcule seule quand la mise en banque est activée : les heures
           régulières d’une période de paie au-delà de ses heures attendues ({SEUIL_SEMAINE} h par semaine, {HEURES_FERIE} h de moins par férié)
           s’y ajoutent, heure pour heure ; une période finie sous les heures attendues (régulières, vacances et maladie
-          comptées), le manque en est tiré et payé. Vacances et maladie : les soldes sont dans Employeur D.
+          comptées), le manque en est tiré et payé. Vacances et maladie : la direction seulement, soldes dans Employeur D.
         </p>
         <p className="text-pierre-600">
           Mise en banque : désactivée par défaut pour tout le monde, quel que soit le rôle ; un admin l’active.

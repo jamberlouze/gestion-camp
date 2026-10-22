@@ -24,15 +24,15 @@ import { BarreStatut, Journal } from './Statut'
 
 const REGULIERES = { id: 'regulieres', libelle: 'Heures' }
 const WOOFING = { id: 'woofing', libelle: 'Woofing' }
-const MALADIE = { id: 'maladie', libelle: 'Maladie' }
 
 /**
  * Feuille d'un employé qui remplit la sienne, pour une compagnie et une
  * période. Il saisit puis soumet à la direction ; la direction corrige,
  * approuve ou renvoie ; un admin peut annuler une approbation. Ses heures
  * régulières sont celles de sa ligne dans l'onglet Employés (mêmes lignes en
- * base) ; le woofing (non payé) reste ici ; la maladie et les heures
- * tirées de sa banque paraissent à part dans l'onglet Employés. En bas : sa
+ * base) ; le woofing (non payé) reste ici ; pas de maladie ni de vacances
+ * (la direction seulement) ; les heures tirées de sa banque paraissent à
+ * part dans l'onglet Employés. En bas : sa
  * banque d'heures (toutes compagnies confondues, ajouts et retraits calculés
  * seuls), réglée par la direction, seulement s'il en a une (banqueAffichee :
  * activée, un solde ou des heures tirées dans la période).
@@ -73,11 +73,7 @@ export function FeuilleEmploye({
   // Banque illisible : on montre tout (l'encadré affiche l'erreur).
   const banque = banques.data && banqueDeLaFeuille(banques.data, debut, heures, entreprise.id)
   const avecBanque = !banque || banqueAffichee(banque.mouvements, banque.etat.active, debut, finPeriode(debut))
-  const types = [
-    REGULIERES,
-    ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : []),
-    MALADIE,
-  ]
+  const types = [REGULIERES, ...(woofing || heures.some((h) => h.type === 'woofing') ? [WOOFING] : [])]
   const valeur = (jour: string, type: string) => heures.find((h) => h.jour === jour && h.type === type)?.heures ?? null
   const total = (type: TypeHeuresEmploye) => heures.filter((h) => h.type === type).reduce((s, h) => s + h.heures, 0)
   const jours = joursPeriode(debut)
@@ -136,9 +132,6 @@ export function FeuilleEmploye({
             Woofing (non payé) : <b className="tabular-nums">{formatHeures(total('woofing'))} h</b>
           </span>
         )}
-        <span>
-          Maladie : <b className="tabular-nums">{formatHeures(total('maladie'))} h</b>
-        </span>
       </div>
 
       <Note

@@ -47,10 +47,11 @@ export interface Entreprise {
 
 /**
  * Régulières : payées, dans la grille ; woofing : non payées, seulement sur
- * la feuille de l'employé ; maladie et banque (prises en banque) : payées,
- * sur la feuille de l'employé qui remplit la sienne (banques.ts).
+ * la feuille de l'employé ; banque : anciennes heures prises en banque
+ * saisies à la main, payées (banques.ts). Ni maladie ni vacances : la
+ * direction seulement (la base les refuse).
  */
-export type TypeHeuresEmploye = 'regulieres' | 'woofing' | 'maladie' | 'banque'
+export type TypeHeuresEmploye = 'regulieres' | 'woofing' | 'banque'
 
 export interface HeureEmploye {
   id: string
@@ -126,7 +127,7 @@ const cleFeuilles = (debut: string) => [S, 'employes-feuilles', debut]
 
 /**
  * Heures payées des employés pour la période : régulières (la grille) et,
- * pour ceux qui remplissent leur feuille, maladie et prises en banque
+ * pour ceux qui remplissent leur feuille, anciennes prises en banque
  * (affichées à part et exportées). Le woofing (non payé) n'y est pas.
  */
 export function useHeuresEmployes(debut: string) {
@@ -139,7 +140,7 @@ export function useHeuresEmployes(debut: string) {
           db()
             .from('heures_employes')
             .select('id, employe_id, entreprise_id, jour, type, heures')
-            .in('type', ['regulieres', 'maladie', 'banque'])
+            .in('type', ['regulieres', 'banque'])
             .gte('jour', debut)
             .lte('jour', finPeriode(debut))
             .order('jour')
