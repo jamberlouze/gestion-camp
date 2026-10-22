@@ -6,9 +6,11 @@ import {
   JOURS_SEMAINE,
   TAGS,
   type Activite,
+  type Categorie,
   type CodeConge,
   type EtatSemaine,
   type GroupeHoraire,
+  type Invites,
   type Reglages,
   type Tag,
 } from './types'
@@ -17,20 +19,42 @@ import {
 // Valeurs par défaut
 // ------------------------------------------------------------------
 
+// Catégories : celles de l'ancien créateur sont du camp d'été ; les classes
+// nature viennent du Sheets « Horaire école classes nature 2025-26 » (mêmes
+// valeurs que la migration 20261022152917_horaire_categories_jpa).
+const ETE: Categorie[] = ['ete']
+const ECOLES_ETE: Categorie[] = ['verte', 'ete', 'rouge']
+const PARTOUT: Categorie[] = ['verte', 'ete', 'rouge', 'blanche']
+
 export const ACTIVITES_DEFAUT: Activite[] = [
-  { name: 'Baignade', tags: ['sauveteur'] }, { name: 'Kayak', tags: ['sauveteur'] }, { name: 'Canot', tags: ['sauveteur'] },
-  { name: 'Paddle', tags: ['sauveteur'] }, { name: 'Pedalo', tags: ['sauveteur'] }, { name: 'Rabaska', tags: ['sauveteur'] },
-  { name: 'Aquabounga', tags: [] },
-  { name: 'Kayak de rivière', tags: ['transport'] }, { name: 'Canot-camping', tags: ['transport'] },
-  { name: 'Rando-camping', tags: ['transport'] }, { name: 'Rando explo', tags: ['transport'] }, { name: 'Rando - Rabaska', tags: ['transport'] },
-  { name: 'Escalade', tags: ['escalade', 'transport'] },
-  { name: 'Accrobranche / Jeux COOP', tags: [] }, { name: 'Accrobranche', tags: [] },
-  { name: "Tir à l'arc", tags: [] }, { name: "Tag à l'arc", tags: [] }, { name: 'Orientation', tags: [] },
-  { name: 'Disque golf', tags: [] }, { name: 'Brico-nat', tags: [] }, { name: 'Abris/Survie', tags: [] },
-  { name: 'Trou de bouette', tags: [] }, { name: 'Prep spectacle', tags: [] }, { name: 'Prep Camping', tags: [] },
-  { name: 'Retour Camping', tags: [] }, { name: 'Jeux coop', tags: [] }, { name: 'Sports collectif', tags: [] },
-  { name: 'Cirque', tags: [] }, { name: 'Ultimate', tags: [] }, { name: 'Soccer', tags: [] }, { name: 'Bootcamp', tags: [] },
-  { name: 'Parc aquatique / Journée commune', tags: [] }, { name: 'SPECTACLE !', tags: [] }, { name: 'Congé', tags: [] },
+  { name: 'Baignade', tags: ['sauveteur'], categories: ['verte', 'ete'] }, { name: 'Kayak', tags: ['sauveteur'], categories: ECOLES_ETE },
+  { name: 'Canot', tags: ['sauveteur'], categories: ECOLES_ETE }, { name: 'Paddle', tags: ['sauveteur'], categories: ECOLES_ETE },
+  { name: 'Pedalo', tags: ['sauveteur'], categories: ['verte', 'ete'] }, { name: 'Rabaska', tags: ['sauveteur'], categories: ECOLES_ETE },
+  { name: 'Aquabounga', tags: [], categories: ['verte', 'ete'] },
+  { name: 'Kayak de rivière', tags: ['transport'], categories: ECOLES_ETE }, { name: 'Canot-camping', tags: ['transport'], categories: ETE },
+  { name: 'Rando-camping', tags: ['transport'], categories: ETE }, { name: 'Rando explo', tags: ['transport'], categories: ETE },
+  { name: 'Rando - Rabaska', tags: ['transport'], categories: ETE },
+  { name: 'Escalade', tags: ['escalade', 'transport'], categories: ECOLES_ETE },
+  { name: 'Accrobranche / Jeux COOP', tags: [], categories: ETE }, { name: 'Accrobranche', tags: [], categories: ECOLES_ETE },
+  { name: "Tir à l'arc", tags: [], categories: ECOLES_ETE }, { name: "Tag à l'arc", tags: [], categories: PARTOUT },
+  { name: 'Orientation', tags: [], categories: ['ete', 'blanche'] },
+  { name: 'Disque golf', tags: [], categories: ECOLES_ETE }, { name: 'Brico-nat', tags: [], categories: ECOLES_ETE },
+  { name: 'Abris/Survie', tags: [], categories: ETE },
+  { name: 'Trou de bouette', tags: [], categories: ECOLES_ETE }, { name: 'Prep spectacle', tags: [], categories: ['ete', 'blanche'] },
+  { name: 'Prep Camping', tags: [], categories: ETE },
+  { name: 'Retour Camping', tags: [], categories: ETE }, { name: 'Jeux coop', tags: [], categories: PARTOUT },
+  { name: 'Sports collectif', tags: [], categories: PARTOUT },
+  { name: 'Cirque', tags: [], categories: ETE }, { name: 'Ultimate', tags: [], categories: ETE }, { name: 'Soccer', tags: [], categories: ETE },
+  { name: 'Bootcamp', tags: [], categories: ETE },
+  { name: 'Parc aquatique / Journée commune', tags: [], categories: ETE }, { name: 'SPECTACLE !', tags: [], categories: ECOLES_ETE },
+  { name: 'Congé', tags: [], categories: ETE },
+  { name: 'Survie en forêt', tags: [], categories: ['verte', 'rouge', 'blanche'] },
+  { name: 'Chasse au trésor', tags: [], categories: ['verte', 'rouge', 'blanche'] },
+  { name: 'Rallye photo', tags: [], categories: ['verte', 'rouge'] }, { name: 'Kermesse (Foire)', tags: [], categories: ['verte', 'rouge'] },
+  { name: 'Glissade forêt/lac', tags: [], categories: ['blanche'] }, { name: 'Ballon-balais', tags: [], categories: ['blanche'] },
+  { name: 'Raquette en forêt', tags: [], categories: ['blanche'] }, { name: 'Ultimate frisbee glacé', tags: [], categories: ['blanche'] },
+  { name: 'Construction de Quinzee', tags: [], categories: ['blanche'] }, { name: 'Atelier feu', tags: [], categories: ['blanche'] },
+  { name: 'Course à obstacles dans la neige', tags: [], categories: ['blanche'] },
 ]
 
 /** Liste d'animateurs de l'ancien créateur (importée d'Airtable à l'époque). */
@@ -95,6 +119,56 @@ export function resumeJours(jours: string[]): string {
   const n = `${jours.length} jour${jours.length > 1 ? 's' : ''}`
   if (jours.length < 2) return jours.length ? `${n} · ${jours[0]}` : 'aucun jour'
   return lireJours(jours) ? `${n} · ${jours[0]} → ${jours[jours.length - 1]}` : `${n} · ${jours.join(', ')}`
+}
+
+/** Date (AAAA-MM-JJ) d'un jour d'un horaire daté : la première à partir du premier jour qui porte ce nom. */
+export function dateDuJour(debut: string, jour: string): string | null {
+  const i = indiceSemaine(jour)
+  const d = new Date(`${debut}T12:00:00`)
+  if (i < 0 || isNaN(d.getTime())) return null
+  d.setDate(d.getDate() + ((i - d.getDay() + 7) % 7))
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// ------------------------------------------------------------------
+// Catégories (saisons) et activités proposées
+// ------------------------------------------------------------------
+
+/** Activité proposée dans cette catégorie ? Sans catégorie (horaire ou activité) : oui. */
+export const estDeCategorie = (a: Activite, c: Categorie | undefined) => !c || !a.categories?.length || a.categories.includes(c)
+
+/** Activités de la catégorie de l'horaire, retirées comprises, dans l'ordre des Réglages. */
+export const activitesDeCategorie = (r: Reglages, e: Pick<EtatSemaine, 'categorie'>) => r.activites.filter((a) => estDeCategorie(a, e.categorie))
+
+/** Activités des menus de l'horaire : celles de sa catégorie, moins celles retirées à la main. */
+export function activitesProposees(r: Reglages, e: Pick<EtatSemaine, 'categorie' | 'activitesRetirees'>) {
+  const retirees = new Set(e.activitesRetirees ?? [])
+  return activitesDeCategorie(r, e).filter((a) => !retirees.has(a.name))
+}
+
+/**
+ * Catégorie proposée pour un horaire qui commence ce jour-là : comme les
+ * variantes de classe des Réservations (décembre à mars blanche, septembre à
+ * novembre rouge, le printemps verte), sauf juillet et août : camp d'été.
+ */
+export function categorieSelonDate(date: string | null | undefined): Categorie | null {
+  const mois = Number(date?.slice(5, 7))
+  if (!mois) return null
+  if (mois === 12 || mois <= 3) return 'blanche'
+  if (mois <= 6) return 'verte'
+  return mois <= 8 ? 'ete' : 'rouge'
+}
+
+// ------------------------------------------------------------------
+// Horaire des invités (animation pré-repas, jeu de soirée)
+// ------------------------------------------------------------------
+
+/** Lignes d'un horaire des invités neuf (gabarit du Sheets des classes nature). */
+export const LIGNES_INVITES = ['Déjeuner', 'Dîner', 'Souper', 'Lieu du jeu (18h30)', 'Jeu de soirée']
+
+/** Horaire des invités d'un horaire : le sien, sinon les lignes de départ. */
+export function invitesDe(e: Pick<EtatSemaine, 'invites'>): Invites {
+  return e.invites ?? { lignes: LIGNES_INVITES.map((libelle, i) => ({ id: i + 1, libelle })), cases: {} }
 }
 
 /** Nuits avec soirées d'un horaire : les siennes, sinon celles des réglages communs. */
@@ -233,6 +307,8 @@ export function restructurer(e: EtatSemaine, s: Structure, nuitsCommunes: string
   }
   if (s.nuits) sortie.nuits = [...s.nuits]
   else delete sortie.nuits
+  // Horaire des invités : les cases (« ligne|jour ») des jours retirés sont effacées.
+  if (e.invites) sortie.invites = { ...e.invites, cases: Object.fromEntries(Object.entries(e.invites.cases).filter(([k]) => jours.has(nuitDeCle(k)))) }
   return sortie
 }
 
@@ -267,7 +343,10 @@ export function pertesStructure(e: EtatSemaine, s: Structure, nuitsCommunes: str
   const nuits = nuitsDe(e, nuitsCommunes).filter(
     (n) => !apres.includes(n) && [e.jeux, e.surv, e.chouettes].some((c) => Object.entries(c).some(([k, l]) => nuitDeCle(k) === n && l.length)),
   )
-  return { jours, periodes, transport, nuits }
+  const invites = e.jours.filter(
+    (j) => !s.jours.includes(j) && Object.entries(e.invites?.cases ?? {}).some(([k, v]) => nuitDeCle(k) === j && v.trim()),
+  )
+  return { jours, periodes, transport, nuits, invites }
 }
 
 /**
@@ -305,6 +384,8 @@ export function decalerJours(e: EtatSemaine, d: number, nuitsCommunes: string[])
     jeux: renommer(copie.jeux, nuitDecalee),
     surv: renommer(copie.surv, nuitDecalee),
   }
+  // Cases des invités : « ligne|jour », le jour en dernier comme les soirées.
+  if (copie.invites) sortie.invites = { ...copie.invites, cases: renommer(copie.invites.cases, nuitDecalee) }
   const nuits = nuitsDe(copie, nuitsCommunes).map(tourner)
   if (memesNuits(nuits, nuitsCommunes)) delete sortie.nuits
   else sortie.nuits = nuits

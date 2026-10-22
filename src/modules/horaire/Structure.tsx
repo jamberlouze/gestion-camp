@@ -72,6 +72,7 @@ export function JoursEtPeriodes({ fermer }: { fermer: () => void }) {
       pertes.periodes.length ? `les activités de la période ${liste(pertes.periodes.map((p) => `« ${p} »`))}` : '',
       pertes.transport.length ? `les infos de transport de la période ${liste(pertes.transport.map((p) => `« ${p} »`))}` : '',
       pertes.nuits.length ? `les tâches de soirée du ${liste(pertes.nuits)}` : '',
+      pertes.invites.length ? `l'horaire des invités du ${liste(pertes.invites)}` : '',
     ].filter(Boolean)
     if (
       effaces.length &&
@@ -209,7 +210,7 @@ export function JoursEtPeriodes({ fermer }: { fermer: () => void }) {
         </section>
 
         {(probleme || message) && <p className={ui.erreur}>{probleme ?? message}</p>}
-        {pertes && (pertes.jours.length > 0 || pertes.periodes.length > 0 || pertes.transport.length > 0 || pertes.nuits.length > 0) && (
+        {pertes && (pertes.jours.length > 0 || pertes.periodes.length > 0 || pertes.transport.length > 0 || pertes.nuits.length > 0 || pertes.invites.length > 0) && (
           <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
             Seront effacées :{' '}
             {[
@@ -217,6 +218,7 @@ export function JoursEtPeriodes({ fermer }: { fermer: () => void }) {
               pertes.periodes.length ? `activités de ${liste(pertes.periodes.map((p) => `« ${p} »`))}` : '',
               pertes.transport.length ? `infos de transport de ${liste(pertes.transport.map((p) => `« ${p} »`))}` : '',
               pertes.nuits.length ? `tâches de soirée du ${liste(pertes.nuits)}` : '',
+              pertes.invites.length ? `horaire des invités du ${liste(pertes.invites)}` : '',
             ]
               .filter(Boolean)
               .join(' ; ')}

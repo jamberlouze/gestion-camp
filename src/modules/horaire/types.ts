@@ -7,6 +7,21 @@ export const META_TAG: Record<Tag, { libelle: string; icone: string; couleur: st
   sauveteur: { libelle: 'Sauveteur', icone: '🛟', couleur: '#0369a1', clair: '#d7ecfb' },
 }
 
+/**
+ * Catégories (saisons) : une activité est proposée dans un horaire de sa
+ * catégorie (ex. seulement les activités d'hiver en classe blanche). Dans
+ * l'ordre de l'année, printemps, été, automne, hiver (demande de Maxime).
+ */
+export const CATEGORIES = ['verte', 'ete', 'rouge', 'blanche'] as const
+export type Categorie = (typeof CATEGORIES)[number]
+
+export const META_CATEGORIE: Record<Categorie, { libelle: string; icone: string; couleur: string; clair: string }> = {
+  verte: { libelle: 'Classes vertes', icone: '🌱', couleur: '#15803d', clair: '#dcfce7' },
+  ete: { libelle: "Camp d'été", icone: '☀️', couleur: '#a16207', clair: '#fef3c7' },
+  rouge: { libelle: 'Classes rouges', icone: '🍁', couleur: '#b91c1c', clair: '#fee2e2' },
+  blanche: { libelle: 'Classes blanches', icone: '❄️', couleur: '#0369a1', clair: '#e0f2fe' },
+}
+
 export const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
 /** Paires de jours de congé de l'animateur. */
@@ -32,6 +47,20 @@ export const COLONNES_TRANSPORT = ['Heure départ', 'Lieu', 'Chauffeur', 'Autobu
 export interface Activite {
   name: string
   tags: Tag[]
+  /** Catégories où l'activité est proposée ; absente ou vide : toutes. */
+  categories?: Categorie[]
+}
+
+/** Ligne de l'horaire des invités (Déjeuner, Dîner, Jeu de soirée…). */
+export interface LigneInvites {
+  id: number
+  libelle: string
+}
+
+/** Horaire des invités spéciaux : une case par ligne et par jour (« id|jour »). */
+export interface Invites {
+  lignes: LigneInvites[]
+  cases: Record<string, string>
 }
 
 export interface GroupeHoraire {
@@ -64,6 +93,12 @@ export interface EtatSemaine {
   transport: Record<string, string>
   /** Nuits avec soirées propres à cet horaire (séjour court) ; absent : celles des réglages communs. */
   nuits?: string[]
+  /** Catégorie (saison) : seules ses activités sont proposées ; absente : toutes. */
+  categorie?: Categorie
+  /** Activités retirées à la main pour cet horaire (grisées, plus proposées). */
+  activitesRetirees?: string[]
+  /** Horaire des invités ; absent : lignes de départ, cases vides. */
+  invites?: Invites
 }
 
 /** Réglages communs à toutes les semaines (horaire.parametres, clé « reglages »). */

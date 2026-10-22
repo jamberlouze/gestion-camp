@@ -6,7 +6,8 @@ import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
 import { useSemaine } from './contexte'
 import { useAjouterAnimateurs } from './donnees'
-import { activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe, resumeJours } from './logique'
+import { ActivitesProposees } from './ActivitesProposees'
+import { activitesProposees, activitesTag, cartesFusion, cle, conflitsGrille, joursConge, nouveauGroupe, norm, prochainIdGroupe, resumeJours } from './logique'
 import { JoursEtPeriodes } from './Structure'
 import { CONGES, META_TAG, type CodeConge, type GroupeHoraire, type Tag } from './types'
 
@@ -36,6 +37,9 @@ export function Construire() {
   const glisse = useRef<{ depart: InfoCase; actif: boolean } | null>(null)
 
   const { marques } = useMemo(() => conflitsGrille(etat, reglages), [etat, reglages])
+  const cleProposees = JSON.stringify([etat.categorie, etat.activitesRetirees])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const proposees = useMemo(() => activitesProposees(reglages, etat), [reglages, cleProposees])
   const tags = useMemo(
     () => ({ escalade: activitesTag(reglages, 'escalade'), transport: activitesTag(reglages, 'transport'), sauveteur: activitesTag(reglages, 'sauveteur') }),
     [reglages],
@@ -243,6 +247,7 @@ export function Construire() {
           Imprimer
         </button>
       </div>
+      <ActivitesProposees />
       <Legende />
       {structure && <JoursEtPeriodes fermer={() => setStructure(false)} />}
       {remplissage && (
@@ -269,8 +274,9 @@ export function Construire() {
         </Dialogue>
       )}
 
+      {/* Suggestions des cases : la catégorie de l'horaire, moins les activités retirées. */}
       <datalist id="liste-activites">
-        {reglages.activites.map((a) => (
+        {proposees.map((a) => (
           <option key={a.name} value={a.name} />
         ))}
       </datalist>
@@ -597,6 +603,7 @@ const Case = memo(function Case({
       <input
         list="liste-activites"
         aria-label={etiquette}
+        title={valeur || undefined}
         readOnly={!ecriture}
         className="h-full min-h-9 w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:bg-white/70 focus:ring-2 focus:ring-inset focus:ring-foret-600"
         value={valeur}

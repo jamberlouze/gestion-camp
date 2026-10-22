@@ -6,6 +6,7 @@ import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeDossier, IconeModele, IconePlus, IconeRenommer } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
 import { ui } from '@/lib/ui'
+import { PuceCategorie } from './ActivitesProposees'
 import { useEnregistrerDossier, useModifierHoraire, useSupprimerDossier, useSupprimerHoraire, type ResumeHoraire } from './donnees'
 import { resumeJours } from './logique'
 import { dossierDe, grouper, nomsDans, type DemandeNouvel } from './emplacements'
@@ -274,6 +275,7 @@ export function PageDossiers({
                     <button className="text-left font-medium text-pierre-900 hover:text-foret-700 hover:underline" onClick={() => ouvrir(h.id)}>
                       {h.nom}
                     </button>
+                    {h.categorie && <PuceCategorie categorie={h.categorie} />}
                     {h.id === active && <span className="ml-2 rounded-full bg-foret-100 px-2 py-0.5 text-xs text-foret-800">ouverte</span>}
                   </td>
                   <td className="whitespace-nowrap py-2 pr-3 text-pierre-600">{h.jours ? resumeJours(h.jours) : ''}</td>

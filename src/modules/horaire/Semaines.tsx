@@ -7,9 +7,9 @@ import { ui } from '@/lib/ui'
 import type { Semaine } from './contexte'
 import { useAjouterAnimateurs, useChargerEtat, useCreerHoraire, useEnregistrerDossier, useModifierHoraire, useReglages, type ResumeHoraire } from './donnees'
 import { exporterClasseur, importerClasseur } from './excel'
-import { decalagePour, decalerJours, horaireVide, joursConsecutifs, lireJours, resumeJours } from './logique'
+import { categorieSelonDate, decalagePour, decalerJours, horaireVide, joursConsecutifs, lireJours, resumeJours } from './logique'
 import { dossierDe, grouper, nomLibre, nomSemaineLibre, nomsDans, type DemandeNouvel } from './emplacements'
-import { JOURS_SEMAINE, type Dossier, type EtatSemaine } from './types'
+import { CATEGORIES, JOURS_SEMAINE, META_CATEGORIE, type Categorie, type Dossier, type EtatSemaine } from './types'
 
 /** Jour de la semaine d'une date AAAA-MM-JJ (« Lundi »), ou null. */
 const jourDe = (date: string | null | undefined) => {
@@ -209,7 +209,7 @@ export function BarreSemaine({
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950">
           <span className="min-w-60 flex-1">
             <b>Modèle</b> ({resumeJours(semaine.etat.jours)}). Une semaine créée à partir de ce modèle en reprend les jours, les
-            périodes, les groupes, les activités et les soirées.
+            périodes, les groupes, les activités, les soirées, la catégorie et l'horaire des invités.
           </span>
           {ecriture && (
             <button className={ui.bouton} onClick={() => nouveau({ modele: false, depart: semaine.horaire.id, dossier: null })}>
@@ -354,6 +354,12 @@ export function NouvelHoraire({
   const [premier, setPremier] = useState(joursSource?.[0] ?? 'Lundi')
   const [debut, setDebut] = useState('')
   const [nombre, setNombre] = useState(6)
+  // Catégorie : celle du point de départ, sinon d'après la date, tant
+  // qu'on ne l'a pas choisie soi-même.
+  const categorieDe = (h: ResumeHoraire | undefined) =>
+    h ? (h.id === semaine?.horaire.id ? (semaine.etat.categorie ?? null) : h.categorie) : null
+  const [categorie, setCategorie] = useState<Categorie | ''>(() => categorieDe(source) ?? '')
+  const [categorieTouchee, setCategorieTouchee] = useState(false)
   const jours = !joursSource ? joursConsecutifs(premier, nombre) : suite ? joursConsecutifs(premier, suite.nombre) : joursSource
 
   // Date du premier jour : fixe le jour de départ (sauf jours non consécutifs).
@@ -363,6 +369,7 @@ export function NouvelHoraire({
     setDebut(d)
     const j = jourDe(d)
     if (j && (!joursSource || suite)) setPremier(j)
+    if (!categorieTouchee && !categorieDe(source)) setCategorie(categorieSelonDate(d) ?? '')
   }
 
   const propre = nom.trim()
@@ -382,6 +389,7 @@ export function NouvelHoraire({
     const jd = jourDe(debut)
     if (jd && (!j || lireJours(j))) setPremier(jd)
     else if (j?.[0]) setPremier(j[0])
+    if (!categorieTouchee) setCategorie(categorieDe(h) ?? categorieSelonDate(debut) ?? '')
   }
 
   function changerDossier(cible: string) {
@@ -419,6 +427,8 @@ export function NouvelHoraire({
         }
         etat = decalerJours(base, suite ? decalagePour(base.jours, premier) : 0, reglages.nuits)
       }
+      if (categorie) etat.categorie = categorie
+      else delete etat.categorie
       ouvrir(await creer.mutateAsync({ nom: propre, etat, modele, dossier_id: dossierCible, debut: !modele && jourDebut ? debut : null }))
       fermer()
     } catch (e) {
@@ -535,6 +545,26 @@ export function NouvelHoraire({
             </span>
           </label>
         )}
+
+        <label className="block">
+          <span className={ui.etiquette}>Catégorie</span>
+          <select
+            className={ui.champ}
+            value={categorie}
+            onChange={(e) => {
+              setCategorie(e.target.value as Categorie | '')
+              setCategorieTouchee(true)
+            }}
+          >
+            <option value="">Toutes les activités</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {META_CATEGORIE[c].icone} {META_CATEGORIE[c].libelle}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-pierre-500">Seules les activités de cette catégorie seront proposées dans les cases.</span>
+        </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">

@@ -12,6 +12,7 @@ import { Construire } from './Construire'
 import { ContexteSemaine, useSemaine, type Semaine } from './contexte'
 import { PageDossiers } from './Dossiers'
 import { useAjouterAnimateurs, useAnimateurs, useDossiers, useEditeurSemaine, useHoraires, useReferentielVide, useReglages } from './donnees'
+import { Invites } from './Invites'
 import { analyseConges, analyseSoirees, ANIMATEURS_ORIGINE, conflitsGrille } from './logique'
 import { PageReglages } from './Reglages'
 import type { DemandeNouvel } from './emplacements'
@@ -157,6 +158,7 @@ export default function ModuleHoraire() {
                     ))}
                     <Route path="conges" element={<Conges />} />
                     <Route path="soirees" element={<Soirees />} />
+                    <Route path="invites" element={<Invites />} />
                     <Route path="*" element={<Navigate to="/horaire" replace />} />
                   </Routes>
                 </ContexteSemaine.Provider>
@@ -273,6 +275,7 @@ function Onglets() {
     { chemin: '/horaire/conflits', libelle: '⚠️ Conflits', badge: badges.grille },
     { chemin: '/horaire/conges', libelle: '🏖️ Congés & remplacements', badge: badges.conges },
     { chemin: '/horaire/soirees', libelle: '🌙 Soirées', badge: badges.soirees },
+    { chemin: '/horaire/invites', libelle: '🎭 Invités' },
   ]
   return (
     <nav className="sans-barre mb-4 flex items-end gap-5 overflow-x-auto border-b border-pierre-200 print:hidden">

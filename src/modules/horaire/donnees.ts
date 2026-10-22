@@ -4,7 +4,7 @@ import { useListe } from '@/lib/donnees'
 import { supabase } from '@/lib/supabase'
 import { COLONNES_EMPLOYE, type Employe } from '@/lib/types'
 import { completer, REGLAGES_DEFAUT } from './logique'
-import type { Dossier, EtatSemaine, Horaire, Reglages } from './types'
+import type { Categorie, Dossier, EtatSemaine, Horaire, Reglages } from './types'
 
 // Chaque semaine est un document (horaire.horaires.etat). L'éditeur garde
 // une copie locale, modifiée tout de suite, et l'enregistre peu après la
@@ -25,18 +25,20 @@ async function verifier<T>(requete: PromiseLike<{ data: T; error: unknown }>): P
   return data
 }
 
-/** Semaine ou modèle, sans la grille (seulement ses jours, pour les résumés). */
+/** Semaine ou modèle, sans la grille (seulement ses jours et sa catégorie, pour les résumés). */
 export type ResumeHoraire = Pick<Horaire, 'id' | 'nom' | 'semaine_id' | 'dossier_id' | 'modele' | 'debut' | 'updated_at' | 'created_at'> & {
   jours: string[] | null
+  categorie: Categorie | null
 }
 
 export const trierNoms = (a: string, b: string) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' })
 
-/** Garde à jour les jours d'un horaire dans la liste (résumés, aperçu d'un modèle). */
-function majJoursListe(client: QueryClient, id: string, jours: string[], modifie = false) {
+/** Garde à jour les jours et la catégorie d'un horaire dans la liste (résumés, aperçu d'un modèle). */
+function majResumeListe(client: QueryClient, id: string, etat: EtatSemaine, modifie = false) {
   const maintenant = new Date().toISOString()
+  const resume = { jours: etat.jours, categorie: etat.categorie ?? null }
   client.setQueryData<ResumeHoraire[]>(CLES.liste, (l) =>
-    l?.map((h) => (h.id === id ? { ...h, jours, ...(modifie ? { updated_at: maintenant } : {}) } : h)),
+    l?.map((h) => (h.id === id ? { ...h, ...resume, ...(modifie ? { updated_at: maintenant } : {}) } : h)),
   )
 }
 
@@ -45,7 +47,9 @@ export function useHoraires() {
     queryKey: CLES.liste,
     queryFn: async () =>
       (await verifier(
-        db().from('horaires').select('id, nom, semaine_id, dossier_id, modele, debut, updated_at, created_at, jours:etat->jours'),
+        db()
+          .from('horaires')
+          .select('id, nom, semaine_id, dossier_id, modele, debut, updated_at, created_at, jours:etat->jours, categorie:etat->>categorie'),
       )) as ResumeHoraire[],
     select: (l) => [...l].sort((a, b) => trierNoms(a.nom, b.nom)),
   })
@@ -200,7 +204,7 @@ export function useChargerEtat() {
           })
         ).etat,
       )
-      majJoursListe(client, id, etat.jours)
+      majResumeListe(client, id, etat)
       return etat
     },
     [client],
@@ -237,7 +241,7 @@ export function useEditeurSemaine(id: string | null) {
     async (cible: string, aEnvoyer: EtatSemaine) => {
       await verifier(db().from('horaires').update({ etat: aEnvoyer }).eq('id', cible))
       client.setQueryData<Horaire>(CLES.document(cible), (d) => (d ? { ...d, etat: aEnvoyer } : d))
-      majJoursListe(client, cible, aEnvoyer.jours, true)
+      majResumeListe(client, cible, aEnvoyer, true)
     },
     [client],
   )

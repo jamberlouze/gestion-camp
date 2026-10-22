@@ -5,8 +5,8 @@ import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { useAjouterAnimateurs, useAnimateurs, useEnregistrerReglages, useEtatReglages } from './donnees'
-import { ANIMATEURS_ORIGINE } from './logique'
-import { META_TAG, TAGS, type Activite, type Reglages, type Tag } from './types'
+import { ANIMATEURS_ORIGINE, estDeCategorie } from './logique'
+import { CATEGORIES, META_CATEGORIE, META_TAG, TAGS, type Activite, type Categorie, type Reglages, type Tag } from './types'
 
 /** Page des réglages communs à toutes les semaines (accessible même sans semaine). */
 export function PageReglages({ surModif }: { surModif: (modifie: boolean) => void }) {
@@ -36,6 +36,7 @@ function FormulaireReglages({ reglages, surModif }: { reglages: Reglages; surMod
   const [activites, setActivites] = useState<Activite[]>(() => copieActivites(reglages))
   const [sections, setSections] = useState(reglages.sections.join('\n'))
   const [nuits, setNuits] = useState(reglages.nuits.join('\n'))
+  const [filtre, setFiltre] = useState<Categorie | ''>('')
   const [modifie, setModifie] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistre, setEnregistre] = useState(false)
@@ -89,7 +90,7 @@ function FormulaireReglages({ reglages, surModif }: { reglages: Reglages; surMod
   function sauver() {
     const vus = new Set<string>()
     const propres = activites
-      .map((a) => ({ name: a.name.trim(), tags: a.tags }))
+      .map((a) => ({ name: a.name.trim(), tags: a.tags, categories: CATEGORIES.filter((c) => a.categories?.includes(c)) }))
       .filter((a) => a.name && !vus.has(a.name) && vus.add(a.name))
     const valeur: Reglages = {
       capacites: {
@@ -150,16 +151,39 @@ function FormulaireReglages({ reglages, surModif }: { reglages: Reglages; surMod
         <h3 className={titre}>Liste officielle des activités</h3>
         <p className="text-sm text-pierre-500">
           Elle alimente les suggestions des cases. L'étiquette indique si l'activité est de l'escalade, du transport ou du
-          sauveteur : la détection des conflits et les horaires des spécialistes en découlent.
+          sauveteur : la détection des conflits et les horaires des spécialistes en découlent. Les catégories (🌱 ☀️ 🍁 ❄️)
+          disent dans quels horaires l'activité est proposée ; aucune cochée : partout.
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Afficher les activités de">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wide text-pierre-500">Afficher</span>
+          {(['', ...CATEGORIES] as const).map((c) => (
+            <button
+              key={c || 'toutes'}
+              aria-pressed={filtre === c}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                filtre === c ? 'border-pierre-800 bg-pierre-800 text-white' : 'border-pierre-200 bg-white text-pierre-600 hover:border-pierre-300'
+              }`}
+              onClick={() => setFiltre(c)}
+            >
+              {c ? `${META_CATEGORIE[c].icone} ${META_CATEGORIE[c].libelle}` : `Toutes (${activites.length})`}
+            </button>
+          ))}
+        </div>
         <ul className="mt-3 grid gap-x-6 gap-y-1.5 lg:grid-cols-2">
-          {activites.map((a, i) => (
+          {/* Liste filtrée : chaque ligne garde son indice dans la liste complète. */}
+          {activites.map((a, i) =>
+            !estDeCategorie(a, filtre || undefined) ? null : (
             <li key={i} className="flex flex-wrap items-center gap-2">
               <input
                 aria-label="Nom de l'activité"
                 className="min-w-40 flex-1 rounded-md border border-pierre-300 px-2 py-1 text-sm"
                 value={a.name}
                 onChange={(e) => majActivite({ i, champs: { name: e.target.value } })}
+              />
+              <ChoixCategories
+                valeur={a.categories ?? []}
+                nom={a.name}
+                changer={(categories) => majActivite({ i, champs: { categories } })}
               />
               {a.tags.map((t) => (
                 <span
@@ -199,9 +223,13 @@ function FormulaireReglages({ reglages, surModif }: { reglages: Reglages; surMod
                 ✕
               </button>
             </li>
-          ))}
+            ),
+          )}
         </ul>
-        <button className={`${ui.boutonSecondaire} mt-3`} onClick={() => changer(setActivites)([...activites, { name: '', tags: [] }])}>
+        <button
+          className={`${ui.boutonSecondaire} mt-3`}
+          onClick={() => changer(setActivites)([...activites, { name: '', tags: [], categories: filtre ? [filtre] : [] }])}
+        >
           <IconePlus /> Activité
         </button>
       </section>
@@ -267,4 +295,30 @@ function FormulaireReglages({ reglages, surModif }: { reglages: Reglages; surMod
   )
 }
 
-const copieActivites = (r: Reglages) => r.activites.map((a) => ({ ...a, tags: [...a.tags] }))
+/** Catégories d'une activité : une pastille par saison, allumée ou non. */
+function ChoixCategories({ valeur, nom, changer }: { valeur: Categorie[]; nom: string; changer: (c: Categorie[]) => void }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" role="group" aria-label={`Catégories de ${nom || "l'activité"}`}>
+      {CATEGORIES.map((c) => {
+        const actif = valeur.includes(c)
+        const m = META_CATEGORIE[c]
+        return (
+          <button
+            key={c}
+            title={m.libelle}
+            aria-label={m.libelle}
+            aria-pressed={actif}
+            className={`rounded-full px-1 py-0.5 text-sm leading-none ${actif ? '' : 'opacity-30 grayscale hover:opacity-60'}`}
+            style={actif ? { background: m.clair, boxShadow: `inset 0 0 0 1px ${m.couleur}` } : undefined}
+            onClick={() => changer(actif ? valeur.filter((x) => x !== c) : CATEGORIES.filter((x) => x === c || valeur.includes(x)))}
+          >
+            {m.icone}
+          </button>
+        )
+      })}
+      {!valeur.length && <span className="ml-1 text-xs text-pierre-500">partout</span>}
+    </span>
+  )
+}
+
+const copieActivites = (r: Reglages) => r.activites.map((a) => ({ ...a, tags: [...a.tags], categories: [...(a.categories ?? [])] }))
