@@ -5,8 +5,9 @@
 // factures de la page client : reservations/api.js), celles du module RH
 // (candidature, intention de retour, dossier d'embauche, contrat signé en ligne,
 // courriels de chaque compagnie : rh/api.js), QuickBooks Online
-// (connexion, devis, factures, synchro aux 15 minutes : qbo/) et la copie des
-// documents vers les Drive partagés (drive/copie.js).
+// (connexion, devis, factures, synchro aux 15 minutes : qbo/), la copie des
+// documents vers les Drive partagés (drive/copie.js) et l'ajout d'un compte
+// depuis la page Utilisateurs (admins et direction : utilisateurs/api.js).
 //
 // L'offre gratuite de Supabase met un projet en pause après une semaine
 // « sans activité suffisante » : il faut quelques requêtes à la base chaque
@@ -31,6 +32,7 @@ import { qboConfigure } from "./qbo/oauth.js";
 import { synchroniserTout as synchroQbo } from "./qbo/operations.js";
 import { routeSubventions } from "./subventions/api.js";
 import { passageSubventions } from "./subventions/pipeline.js";
+import { routeUtilisateurs } from "./utilisateurs/api.js";
 
 async function pingSupabase(env) {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/ping`, {
@@ -87,6 +89,8 @@ export default {
     if (rh) return routeRh(request, env, rh[1], ctx);
     const qbo = url.pathname.match(/^\/api\/qbo\/([a-z]+)$/);
     if (qbo) return routeQbo(request, env, qbo[1]);
+    const utilisateurs = url.pathname.match(/^\/api\/utilisateurs\/([a-z]+)$/);
+    if (utilisateurs) return routeUtilisateurs(request, env, utilisateurs[1]);
     // Adresse de vérification manuelle : https://<worker>.workers.dev/_ping
     if (url.pathname === "/_ping") {
       try {

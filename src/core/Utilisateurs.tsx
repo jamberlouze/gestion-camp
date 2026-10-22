@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fragment, useState } from 'react'
+import { Fragment, useState, type FormEvent } from 'react'
+import { rolesCreables } from '@/core/comptes'
 import { BoutonModifier } from '@/lib/BoutonsAction'
+import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
-import { IconeInterdit, IconeOeil, IconeRenommer } from '@/lib/icones'
+import { IconeFermer, IconeInterdit, IconeOeil, IconePlus, IconeRenommer } from '@/lib/icones'
 import { supabase } from '@/lib/supabase'
 import type { AccesModule, AccesRole, ModuleId, Niveau, Profil, Role } from '@/lib/types'
 import { ui } from '@/lib/ui'
@@ -86,9 +88,15 @@ function ChoixNiveau({
   )
 }
 
-/** Gestion des rôles et des accès. Réservé aux administrateurs. */
+/**
+ * Comptes, rôles et accès. Un admin y change tout et crée n'importe quel
+ * compte ; la direction voit tout sans rien changer et crée seulement des
+ * comptes Terrain ou Coordonnateur (`rolesCreables`, revérifié par le Worker).
+ */
 export function Utilisateurs() {
-  const { profil: moi } = useAuth()
+  const { profil: moi, estAdmin } = useAuth()
+  const lecture = !estAdmin
+  const permis = rolesCreables(moi?.role)
   const client = useQueryClient()
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -160,6 +168,8 @@ export function Utilisateurs() {
   })
 
   const [ouvert, setOuvert] = useState<string | null>(null)
+  const [ajout, setAjout] = useState(false)
+  const [ajoute, setAjoute] = useState<CompteAjoute | null>(null)
   const roles = data?.roles ?? []
   const persoDe = (userId: string) => data?.acces.filter((a) => a.user_id === userId) ?? []
   const niveauRole = (role: AccesRole['role'], m: ModuleId) =>
@@ -167,18 +177,57 @@ export function Utilisateurs() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+        <button
+          className={ui.bouton}
+          onClick={() => {
+            setAjoute(null)
+            setAjout(true)
+          }}
+        >
+          <IconePlus /> Ajouter un utilisateur
+        </button>
+      </div>
       <div className="mt-3 rounded-lg bg-pierre-100 px-3 py-2 text-sm text-pierre-700">
-        <strong>Inviter quelqu'un :</strong> Supabase → Authentication → Users → <em>Invite user</em>. La
-        personne apparaît ici dès l'invitation, avec le rôle <strong>Terrain</strong> (elle ne voit que
-        Travaux) : pour un membre de la direction ou un coordonnateur, change son rôle ci-dessous. Elle se
-        connecte ensuite sur le site avec son adresse (code par courriel), même si le lien d'invitation a expiré.
+        <strong>Ajouter quelqu'un :</strong> bouton « Ajouter un utilisateur »
+        {lecture && (
+          <>
+            {' '}
+            (compte <strong>Terrain</strong> ou <strong>Coordonnateur</strong>)
+          </>
+        )}
+        . La personne reçoit un courriel de bienvenue avec l'adresse de l'app, puis s'y connecte avec son courriel
+        (code par courriel), même si le lien du courriel a expiré. Le rôle <strong>Terrain</strong> (par défaut) ne
+        voit que les modules de sa colonne dans « Accès par rôle », plus bas.
         <br />
-        <strong>Feuille de temps :</strong> pour qu'un employé remplisse lui-même sa feuille, choisissez sa fiche
-        du référentiel sur sa ligne (ses heures arrivent sur sa ligne de l'onglet Employés) ; cochez Woofing s'il
-        fait aussi des heures de woofing, non payées. La direction a déjà sa propre feuille.
+        {lecture ? (
+          <>
+            Seul un administrateur change le nom, le rôle, les accès ou la feuille de temps d'un compte, ou le
+            désactive.
+          </>
+        ) : (
+          <>
+            <strong>Feuille de temps :</strong> pour qu'un employé remplisse lui-même sa feuille, choisissez sa fiche
+            du référentiel sur sa ligne (ses heures arrivent sur sa ligne de l'onglet Employés) ; cochez Woofing s'il
+            fait aussi des heures de woofing, non payées. La direction a déjà sa propre feuille.
+          </>
+        )}
       </div>
       {erreur && <p className={`${ui.erreur} mt-3`}>{erreur}</p>}
+      {ajoute && <AvisAjout compte={ajoute} fermer={() => setAjoute(null)} />}
+      {ajout && (
+        <FenetreAjout
+          roles={ROLES.filter((r) => permis.includes(r.id))}
+          fermer={() => setAjout(false)}
+          actualiser={rafraichir}
+          ajoute={(compte) => {
+            setAjout(false)
+            setAjoute(compte)
+            rafraichir()
+          }}
+        />
+      )}
 
       <div className={`${ui.carte} mt-5 overflow-x-auto`}>
         <table className="w-full text-sm">
@@ -199,40 +248,48 @@ export function Utilisateurs() {
               const soiMeme = p.id === moi?.id
               return (
                 <Fragment key={p.id}>
-                  <tr>
+                  <tr className={p.id === ajoute?.id ? 'bg-foret-50' : undefined}>
                     <td className="px-3 py-2">{p.courriel}</td>
                     <td className="px-3 py-2">
                       {/* Le nom affiché partout (« Prénom Nom ») est refait par la base. */}
-                      <div className="flex gap-2">
-                        {(['prenom', 'nom_famille'] as const).map((champ) => (
-                          <input
-                            key={champ}
-                            aria-label={`${champ === 'prenom' ? 'Prénom' : 'Nom de famille'} de ${p.courriel}`}
-                            placeholder={champ === 'prenom' ? 'Prénom' : 'Nom de famille'}
-                            className={`${ui.champ} min-w-32 ${champ === 'nom_famille' && !p.nom_famille && p.role === 'direction' ? 'border-amber-300 bg-amber-50' : ''}`}
-                            defaultValue={p[champ] ?? ''}
-                            onBlur={(e) => {
-                              const valeur = e.target.value.trim() || null
-                              if (valeur !== p[champ]) majProfil.mutate({ id: p.id, [champ]: valeur })
-                            }}
-                          />
-                        ))}
-                      </div>
+                      {lecture ? (
+                        <span className={p.nom ? 'whitespace-nowrap' : 'text-pierre-400'}>{p.nom || '—'}</span>
+                      ) : (
+                        <div className="flex gap-2">
+                          {(['prenom', 'nom_famille'] as const).map((champ) => (
+                            <input
+                              key={champ}
+                              aria-label={`${champ === 'prenom' ? 'Prénom' : 'Nom de famille'} de ${p.courriel}`}
+                              placeholder={champ === 'prenom' ? 'Prénom' : 'Nom de famille'}
+                              className={`${ui.champ} min-w-32 ${champ === 'nom_famille' && !p.nom_famille && p.role === 'direction' ? 'border-amber-300 bg-amber-50' : ''}`}
+                              defaultValue={p[champ] ?? ''}
+                              onBlur={(e) => {
+                                const valeur = e.target.value.trim() || null
+                                if (valeur !== p[champ]) majProfil.mutate({ id: p.id, [champ]: valeur })
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        className={`${ui.champ} min-w-36`}
-                        value={p.role}
-                        disabled={soiMeme}
-                        title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
-                        onChange={(e) => majProfil.mutate({ id: p.id, role: e.target.value as Role })}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.libelle}
-                          </option>
-                        ))}
-                      </select>
+                      {lecture ? (
+                        <span className="whitespace-nowrap">{LIBELLE_ROLE[p.role]}</span>
+                      ) : (
+                        <select
+                          className={`${ui.champ} min-w-36`}
+                          value={p.role}
+                          disabled={soiMeme}
+                          title={soiMeme ? 'Vous ne pouvez pas changer votre propre rôle.' : undefined}
+                          onChange={(e) => majProfil.mutate({ id: p.id, role: e.target.value as Role })}
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.libelle}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {p.role === 'admin' ? (
@@ -248,18 +305,27 @@ export function Utilisateurs() {
                                 </span>
                               ))}
                           </span>
-                          <BoutonModifier
-                            className={ouvert === p.id ? 'bg-foret-100!' : ''}
-                            title="Ajouter un module à cette personne"
-                            aria-expanded={ouvert === p.id}
-                            onClick={() => setOuvert(ouvert === p.id ? null : p.id)}
-                          />
+                          {!lecture && (
+                            <BoutonModifier
+                              className={ouvert === p.id ? 'bg-foret-100!' : ''}
+                              title="Ajouter un module à cette personne"
+                              aria-expanded={ouvert === p.id}
+                              onClick={() => setOuvert(ouvert === p.id ? null : p.id)}
+                            />
+                          )}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {p.role === 'admin' || p.role === 'direction' ? (
                         <span className="whitespace-nowrap text-pierre-500">Sa feuille de direction</span>
+                      ) : lecture ? (
+                        <span className="text-pierre-500">
+                          {(() => {
+                            const fiche = data.employes.find((e) => e.id === p.employe_id)
+                            return fiche ? `${nomFiche(fiche)}${p.woofing ? ' · woofing' : ''}` : 'Ne remplit pas sa feuille'
+                          })()}
+                        </span>
                       ) : (
                         <ChoixFiche
                           profil={p}
@@ -274,12 +340,12 @@ export function Utilisateurs() {
                         type="checkbox"
                         className="h-4 w-4 accent-foret-700"
                         checked={p.actif}
-                        disabled={soiMeme}
+                        disabled={soiMeme || lecture}
                         onChange={(e) => majProfil.mutate({ id: p.id, actif: e.target.checked })}
                       />
                     </td>
                   </tr>
-                  {ouvert === p.id && p.role !== 'admin' && (
+                  {ouvert === p.id && p.role !== 'admin' && !lecture && (
                     <tr className="bg-pierre-50">
                       <td colSpan={6} className="px-3 py-3">
                         <p className="text-xs text-pierre-500">
@@ -316,8 +382,9 @@ export function Utilisateurs() {
 
       <h2 className="mt-8 text-lg font-semibold">Accès par rôle</h2>
       <p className="mt-1 text-sm text-pierre-500">
-        Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : « Modifier »
-        sur sa ligne, ci-dessus. Le niveau le plus élevé l'emporte.
+        {lecture
+          ? 'Les administrateurs ont accès à tout et règlent cette grille. Le niveau le plus élevé l’emporte.'
+          : 'Les administrateurs ont accès à tout. Pour donner un module de plus à une seule personne : « Modifier » sur sa ligne, ci-dessus. Le niveau le plus élevé l’emporte.'}
       </p>
       <div className={`${ui.carte} mt-3 max-w-4xl overflow-x-auto`}>
         <table className="w-full table-fixed text-sm">
@@ -352,7 +419,7 @@ export function Utilisateurs() {
                       <ChoixNiveau
                         valeur={niveauRole(role, m.id)}
                         sansLecture={m.sansLecture}
-                        disabled={!data}
+                        disabled={!data || lecture}
                         changer={(niveau) => majRole.mutate({ role, module: m.id, niveau })}
                       />
                     </td>
@@ -363,6 +430,168 @@ export function Utilisateurs() {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+/** Réponse du Worker (`worker/utilisateurs/api.js`) une fois le compte créé. */
+interface CompteAjoute {
+  id: string
+  courriel: string
+  role: Role
+  courriel_envoye: boolean
+}
+
+/** Crée le compte par le Worker (seul à avoir la clé secrète ; il vérifie que je suis admin). */
+async function ajouterCompte(corps: { courriel: string; prenom: string; nom_famille: string; role: Role }) {
+  const { data } = await supabase.auth.getSession()
+  const jeton = data.session?.access_token
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.')
+  let res: Response
+  try {
+    res = await fetch('/api/utilisateurs/ajouter', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+    })
+  } catch {
+    throw new Error('Le serveur de l’app ne répond pas (Worker).')
+  }
+  const reponse = await res.json().catch(() => null)
+  if (!res.ok)
+    throw new Error(
+      reponse?.erreur && reponse.erreur !== 'introuvable'
+        ? String(reponse.erreur)
+        : res.status === 404
+          ? 'Le Worker ne répond pas à cette adresse (l’app est-elle à jour ?).'
+          : `Le serveur de l’app ne répond pas (erreur ${res.status}).`,
+    )
+  return reponse as CompteAjoute
+}
+
+/** Nouveau compte : courriel, prénom, nom de famille et rôle parmi `roles` (Terrain par défaut). */
+function FenetreAjout({
+  roles,
+  fermer,
+  actualiser,
+  ajoute,
+}: {
+  roles: { id: Role; libelle: string }[]
+  fermer: () => void
+  actualiser: () => void
+  ajoute: (compte: CompteAjoute) => void
+}) {
+  const [courriel, setCourriel] = useState('')
+  const [prenom, setPrenom] = useState('')
+  const [nomFamille, setNomFamille] = useState('')
+  const [role, setRole] = useState<Role>('terrain')
+  const [occupe, setOccupe] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  async function valider(e: FormEvent) {
+    e.preventDefault()
+    setOccupe(true)
+    setErreur(null)
+    try {
+      ajoute(await ajouterCompte({ courriel, prenom, nom_famille: nomFamille, role }))
+    } catch (err) {
+      setErreur(messageErreur(err))
+      // Un compte peut être créé sans que son profil soit complété : la liste le montre.
+      actualiser()
+    } finally {
+      setOccupe(false)
+    }
+  }
+
+  return (
+    <Dialogue titre="Ajouter un utilisateur" fermer={fermer}>
+      <form className="space-y-3" onSubmit={valider}>
+        <div>
+          <label className={ui.etiquette} htmlFor="ajout-courriel">
+            Courriel
+          </label>
+          <input
+            id="ajout-courriel"
+            type="email"
+            required
+            autoFocus
+            autoComplete="off"
+            className={ui.champ}
+            value={courriel}
+            onChange={(e) => setCourriel(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={ui.etiquette} htmlFor="ajout-prenom">
+              Prénom
+            </label>
+            <input id="ajout-prenom" className={ui.champ} value={prenom} onChange={(e) => setPrenom(e.target.value)} />
+          </div>
+          <div>
+            <label className={ui.etiquette} htmlFor="ajout-nom-famille">
+              Nom de famille
+            </label>
+            <input
+              id="ajout-nom-famille"
+              className={ui.champ}
+              value={nomFamille}
+              onChange={(e) => setNomFamille(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={ui.etiquette} htmlFor="ajout-role">
+            Rôle
+          </label>
+          <select id="ajout-role" className={ui.champ} value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.libelle}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-sm text-pierre-500">
+          Un courriel de bienvenue lui donne l'adresse de l'app ; elle s'y connecte ensuite avec son courriel (code par
+          courriel).
+        </p>
+        {erreur && <p className={ui.erreur}>{erreur}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className={ui.boutonSecondaire} onClick={fermer}>
+            Annuler
+          </button>
+          <button className={ui.bouton} disabled={occupe}>
+            {occupe ? 'Ajout…' : 'Ajouter'}
+          </button>
+        </div>
+      </form>
+    </Dialogue>
+  )
+}
+
+/** Compte créé : quoi dire à la personne. */
+function AvisAjout({ compte, fermer }: { compte: CompteAjoute; fermer: () => void }) {
+  const adresse = window.location.host
+  return (
+    <div className="mt-3 flex items-start gap-3 rounded-lg border border-foret-200 bg-foret-50 px-3 py-2 text-sm text-foret-800">
+      <p className="flex-1">
+        <strong>Compte créé</strong> pour {compte.courriel} ({LIBELLE_ROLE[compte.role]}).{' '}
+        {compte.courriel_envoye ? (
+          <>
+            Un courriel de bienvenue lui a été envoyé. Pour se connecter : {adresse}, son adresse courriel, puis le code
+            reçu par courriel.
+          </>
+        ) : (
+          <>
+            Le courriel de bienvenue n'a pas pu partir : dites-lui d'aller sur <strong>{adresse}</strong> et d'entrer son
+            adresse courriel ; un code lui sera envoyé.
+          </>
+        )}
+      </p>
+      <button type="button" className="text-foret-700 hover:text-foret-900" onClick={fermer} aria-label="Fermer">
+        <IconeFermer className="size-4" />
+      </button>
     </div>
   )
 }

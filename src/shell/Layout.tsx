@@ -15,7 +15,7 @@ import { CoinPoke, FournisseurPoke } from './Poke'
 const CLE_REPLIE = 'menu-replie'
 
 export function Layout() {
-  const { profil, estAdmin, estDirection, peutOuvrir, reserveAuxAdmins, deconnexion } = useAuth()
+  const { profil, estDirection, peutOuvrir, reserveAuxAdmins, deconnexion } = useAuth()
   const enAttente = useMutationState({ filters: { status: 'pending' } }).length
   const { pathname } = useLocation()
   const [ouvert, setOuvert] = useState(false)
@@ -94,7 +94,8 @@ export function Layout() {
       admins: reserveAuxAdmins(m.id),
     })),
     ...(estDirection ? [{ chemin: '/referentiel', nom: 'Référentiel', icone: '🗂️', famille: 'bas' as const }] : []),
-    ...(estAdmin ? [{ chemin: '/utilisateurs', nom: 'Utilisateurs', icone: '🔑', famille: 'bas' as const }] : []),
+    // La direction y voit les comptes et en ajoute (Terrain, Coordonnateur) ; seul un admin y change quelque chose.
+    ...(estDirection ? [{ chemin: '/utilisateurs', nom: 'Utilisateurs', icone: '🔑', famille: 'bas' as const }] : []),
   ]
   const courant = entrees.find((e) => estCourante(e, pathname))
 

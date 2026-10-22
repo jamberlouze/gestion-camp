@@ -6,7 +6,7 @@ import { estPagePublique } from '@/lib/pagesPubliques'
 import { configManquante } from '@/lib/supabase'
 import { Accueil } from '@/shell/accueil/Accueil'
 import { useAuth } from '@/shell/auth'
-import { Chargement, GardeAdmin, GardeDirection, GardeModule } from '@/shell/Gardes'
+import { Chargement, GardeDirection, GardeModule } from '@/shell/Gardes'
 import { Layout } from '@/shell/Layout'
 import { estEntree, MODULES } from '@/shell/modules'
 import { PageConnexion } from '@/shell/PageConnexion'
@@ -95,7 +95,7 @@ export default function App() {
             <Route path="compagnies" element={<Compagnies />} />
             <Route path="semaines" element={<Semaines />} />
           </Route>
-          <Route path="utilisateurs" element={<GardeAdmin><Utilisateurs /></GardeAdmin>} />
+          <Route path="utilisateurs" element={<GardeDirection><Utilisateurs /></GardeDirection>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
