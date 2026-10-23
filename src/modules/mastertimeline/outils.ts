@@ -185,6 +185,8 @@ export interface Montrer {
   /** Mois du passage (listes qui mélangent plusieurs mois). */
   mois?: boolean
   frequence?: boolean
+  /** La ligne quitte sa liste une fois cochée (« En retard ») : elle sort d'abord. */
+  sortie?: boolean
 }
 
 /** Ordre dans une liste : à faire d'abord (par mois, puis titre), puis faites. */

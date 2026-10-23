@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { ajouterJours, ajouterMois } from './calculs'
 import { BoutonFaite, ChoixConseiller, Echeance, PuceStatut } from './commun'
@@ -87,7 +88,7 @@ export function LigneRelance({ relance: r, montrerQui, sansOrganisation }: { rel
       onChange={(e) => {
         const v = e.target.value
         const base = r.echeance < auj ? auj : r.echeance
-        if (v === 'annuler') modifier.mutate({ id: r.id, champs: { statut: 'annulee' } })
+        if (v === 'annuler') sortirCarte(e.currentTarget.closest('li'), () => modifier.mutate({ id: r.id, champs: { statut: 'annulee' } }))
         else if (v === '7') modifier.mutate({ id: r.id, champs: { echeance: ajouterJours(base, 7) } })
         else if (v) modifier.mutate({ id: r.id, champs: { echeance: ajouterMois(base, Number(v)) } })
       }}

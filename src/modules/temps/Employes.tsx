@@ -5,6 +5,7 @@ import { messageErreur } from '@/lib/donnees'
 import { ferie } from '@/lib/feries'
 import { IconeTableur } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useTitreImpression } from '@/lib/useTitreImpression'
 import { useAuth } from '@/shell/auth'
@@ -768,7 +769,8 @@ function AlertesReleve() {
   const [erreur, setErreur] = useState<string | null>(null)
   if (!alertes.data?.length) return null
 
-  const confirmerFermeture = async (d: DossierAFermer) => {
+  // Confirmé, le dossier quitte la liste : sa ligne sort d'abord.
+  const confirmerFermeture = async (ligne: HTMLElement | null, d: DossierAFermer) => {
     const nom = d.nom_complet || d.surnom
     if (
       !(await confirmer({
@@ -781,7 +783,7 @@ function AlertesReleve() {
     )
       return
     setErreur(null)
-    fermer.mutate(d.employe_id, { onError: (e) => setErreur(messageErreur(e)) })
+    sortirCarte(ligne, () => fermer.mutate(d.employe_id, { onError: (e) => setErreur(messageErreur(e)) }))
   }
 
   return (
@@ -798,7 +800,7 @@ function AlertesReleve() {
               <b className="text-pierre-900">{d.nom_complet || d.surnom}</b>
               <span className="text-pierre-600"> · dernières heures : {libellePeriode(d.derniere_periode)}</span>
             </span>
-            <button className={ui.boutonSecondaire} disabled={fermer.isPending} onClick={() => confirmerFermeture(d)}>
+            <button className={ui.boutonSecondaire} disabled={fermer.isPending} onClick={(e) => confirmerFermeture(e.currentTarget.closest('li'), d)}>
               Relevé produit : désactiver la fiche
             </button>
           </li>

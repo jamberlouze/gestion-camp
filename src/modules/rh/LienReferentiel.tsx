@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useRh } from './contexte'
 import { useDelierEmploye, useEmployesReferentiel, usePeutRelier, usePersonnesARelier, useRelierEmploye } from './donneesConformite'
@@ -172,7 +173,11 @@ function LigneARelier({
       <td className="px-3 py-2">
         <span className="flex flex-wrap justify-end gap-1.5">
           {proposee && !autre && (
-            <button className={petit} disabled={relier.isPending || occupe} onClick={() => relier.mutate({ personne: p.id, employe: proposee.employe.id })}>
+            <button
+              className={petit}
+              disabled={relier.isPending || occupe}
+              onClick={(e) => sortirCarte(e.currentTarget.closest('tr'), () => relier.mutate({ personne: p.id, employe: proposee.employe.id }))}
+            >
               Relier
             </button>
           )}
@@ -184,9 +189,10 @@ function LigneARelier({
           <button
             className={petit}
             disabled={relier.isPending || occupe}
-            onClick={async () => {
+            onClick={async (e) => {
+              const rangee = e.currentTarget.closest('tr')
               if (proposee && !(await confirmer({ titre: 'Créer une nouvelle fiche ?', message: `${nomFiche(proposee.employe)} semble être la même personne.`, libelleOk: 'Créer la fiche' }))) return
-              relier.mutate({ personne: p.id, employe: null })
+              sortirCarte(rangee, () => relier.mutate({ personne: p.id, employe: null }))
             }}
           >
             Créer la fiche

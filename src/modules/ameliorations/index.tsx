@@ -4,6 +4,7 @@ import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { demandePourClaude, jour, useAjouterIdee, useIdees, useModifierIdee, useSupprimerIdee } from './donnees'
 import { CIBLES, cible, genre, GENRES, STATUTS, type Genre, type Idee } from './types'
@@ -171,19 +172,26 @@ function Ajout() {
 /** `sansModule` : la rangée est déjà sous le titre de son module. */
 function Rangee({ idee: i, ouvrir, sansModule }: { idee: Idee; ouvrir: () => void; sansModule?: boolean }) {
   const modifier = useModifierIdee()
+  const { ref, sortir } = useSortieCarte<HTMLDivElement>()
   const changer = (champs: Partial<Idee>) => modifier.mutate({ id: i.id, champs })
   const g = genre(i.genre)
   const fermee = i.statut !== 'a_faire'
+  // Faite ou remise à faire, la rangée change de liste (à faire ↔ Complété) : elle sort d'abord. Écartée → faite reste dans Complété.
+  const cocher = () => {
+    const action = () => changer({ statut: i.statut === 'fait' ? 'a_faire' : 'fait' })
+    if (i.statut === 'ecarte') action()
+    else sortir(action)
+  }
 
   return (
-    <div className="flex items-start gap-2 px-2 py-2 hover:bg-pierre-50">
+    <div ref={ref} className="flex items-start gap-2 px-2 py-2 hover:bg-pierre-50">
       <button
         aria-label={i.statut === 'fait' ? `Remettre « ${i.titre} » à faire` : `Marquer « ${i.titre} » comme fait`}
         title={i.statut === 'fait' ? 'Remettre à faire' : 'Marquer comme fait'}
         className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-xs ${
           i.statut === 'fait' ? 'border-foret-600 bg-foret-600 text-white' : 'border-pierre-300 text-transparent hover:border-foret-600 hover:text-foret-600'
         }`}
-        onClick={() => changer({ statut: i.statut === 'fait' ? 'a_faire' : 'fait' })}
+        onClick={cocher}
       >
         ✓
       </button>

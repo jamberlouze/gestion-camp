@@ -111,7 +111,7 @@ export function Mois() {
               {enRetard.length} passage{enRetard.length > 1 ? 's' : ''} pas encore fait{enRetard.length > 1 ? 's' : ''} depuis octobre
             </span>
           </div>
-          <Liste passages={enRetard} refs={refs} large={large} colonnes={{ mois: true, entreprise: true, projet: true }} />
+          <Liste passages={enRetard} refs={refs} large={large} colonnes={{ mois: true, entreprise: true, projet: true, sortie: true }} />
         </section>
       )}
 
@@ -183,7 +183,7 @@ function Liste({ passages, colonnes, refs, large }: { passages: Passage[]; colon
           key={`${p.tache.id}|${p.periode}`}
           {...p}
           refs={refs}
-          montrer={{ mois: colonnes.mois, entreprise: colonnes.entreprise, projet: colonnes.projet, responsableModifiable: true }}
+          montrer={{ mois: colonnes.mois, entreprise: colonnes.entreprise, projet: colonnes.projet, responsableModifiable: true, sortie: colonnes.sortie }}
         />
       ))}
     </ul>

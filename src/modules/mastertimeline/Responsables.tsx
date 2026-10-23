@@ -133,7 +133,7 @@ function Bloc({ titre, passages, refs, rouge }: { titre: string; passages: Passa
       </h3>
       <ul className="divide-y divide-pierre-100">
         {passages.map((p) => (
-          <LigneTache key={`${p.tache.id}|${p.periode}`} {...p} refs={refs} montrer={{ entreprise: true, projet: true, responsable: false, mois: rouge }} />
+          <LigneTache key={`${p.tache.id}|${p.periode}`} {...p} refs={refs} montrer={{ entreprise: true, projet: true, responsable: false, mois: rouge, sortie: rouge }} />
         ))}
       </ul>
     </section>

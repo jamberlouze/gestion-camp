@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
 import { Bulle, SaisieNom } from '@/lib/SaisieNom'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { Chargement, Saisons } from './commun'
 import { argent, estComparable, estLeader, indexer, menu } from './outils'
@@ -152,7 +153,13 @@ export function Activites() {
                     aria-label="Offerte à la BPA"
                     checked={a.offert_bpa}
                     disabled={!ecriture}
-                    onChange={(e) => modifier.mutate({ id: a.id, offert_bpa: e.target.checked })}
+                    onChange={(e) => {
+                      const offert = e.target.checked
+                      const cocher = () => modifier.mutate({ id: a.id, offert_bpa: offert })
+                      // « Manquantes » : offerte, l'activité quitte la liste ; sa rangée sort d'abord.
+                      if (manquantes) sortirCarte(e.currentTarget.closest('tr'), cocher)
+                      else cocher()
+                    }}
                   />
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{leaders ? <b className="text-amber-900">{leaders}</b> : <span className="text-pierre-400">0</span>}</td>

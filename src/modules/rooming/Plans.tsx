@@ -5,6 +5,7 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeCorbeille, IconeDupliquer, IconePlus } from '@/lib/icones'
 import { SaisieNom } from '@/lib/SaisieNom'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { copierPlan, creerPlan, mettreEnVigueur, modifierPlan, supprimerPlan, useRelire, type Donnees } from './donnees'
@@ -94,8 +95,17 @@ export function Plans({ d }: { d: Donnees }) {
                 >
                   <IconeDupliquer className="size-4" />
                 </button>
+                {/* Archivé ou désarchivé, le plan change de liste : sa ligne sort d'abord (l'erreur est affichée par `faire`). */}
                 {!p.en_vigueur && (
-                  <button className="rounded px-2 py-1 text-sm text-pierre-600 hover:bg-pierre-100" onClick={() => faire(() => modifierPlan(p.id, { archive: !p.archive }))}>
+                  <button
+                    className="rounded px-2 py-1 text-sm text-pierre-600 hover:bg-pierre-100"
+                    onClick={(e) =>
+                      sortirCarte(e.currentTarget.closest('li'), async () => {
+                        const m = await faire(() => modifierPlan(p.id, { archive: !p.archive }))
+                        if (m) throw new Error(m)
+                      }).catch(() => null)
+                    }
+                  >
                     {p.archive ? 'Désarchiver' : 'Archiver'}
                   </button>
                 )}

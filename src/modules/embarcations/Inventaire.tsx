@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useAuth } from '@/shell/auth'
@@ -96,9 +97,9 @@ export function Inventaire() {
           Aucune embarcation ne correspond à ces filtres.
         </p>
       ) : grandEcran ? (
-        <TableauInventaire lignes={lignes} tri={tri} setTri={setTri} ecriture={ecriture} />
+        <TableauInventaire lignes={lignes} tri={tri} setTri={setTri} ecriture={ecriture} sortie={!!filtres.etat} />
       ) : (
-        <CartesInventaire lignes={lignes} ecriture={ecriture} />
+        <CartesInventaire lignes={lignes} ecriture={ecriture} sortie={!!filtres.etat} />
       )}
 
       {creation && <DialogueNouvelle modeles={modeles.data} fermer={() => setCreation(false)} />}
@@ -183,11 +184,14 @@ function TableauInventaire({
   tri,
   setTri,
   ecriture,
+  sortie,
 }: {
   lignes: Ligne[]
   tri: Tri
   setTri: (t: Tri) => void
   ecriture: boolean
+  /** Filtre par état : une embarcation dont l'état change quitte la liste (voir `BoutonEtat`). */
+  sortie: boolean
 }) {
   const entete = (champ: ChampTri, libelle: string) => (
     <th className="px-3 py-2 font-medium" aria-sort={tri.champ === champ ? (tri.sens === 'asc' ? 'ascending' : 'descending') : 'none'}>
@@ -226,7 +230,7 @@ function TableauInventaire({
               <td className="px-3 py-1.5">{l.modele.type}</td>
               <td className="px-3 py-1.5 text-pierre-500">{l.modele.bouchon ?? '—'}</td>
               <td className="px-3 py-1.5">
-                <BoutonEtat ligne={l} ecriture={ecriture} />
+                <BoutonEtat ligne={l} ecriture={ecriture} sortie={sortie} />
               </td>
               <td className="px-3 py-1.5">
                 <ChoixEntreprise ligne={l} ecriture={ecriture} />
@@ -251,7 +255,7 @@ function TableauInventaire({
 // Téléphone : cartes (une touche pour changer l'état, une pour les détails)
 // ------------------------------------------------------------------
 
-function CartesInventaire({ lignes, ecriture }: { lignes: Ligne[]; ecriture: boolean }) {
+function CartesInventaire({ lignes, ecriture, sortie }: { lignes: Ligne[]; ecriture: boolean; sortie: boolean }) {
   const [ouverte, setOuverte] = useState<string | null>(null)
   return (
     <ul className="space-y-2">
@@ -273,7 +277,7 @@ function CartesInventaire({ lignes, ecriture }: { lignes: Ligne[]; ecriture: boo
                 </p>
                 {l.notes && !deplie && <p className="mt-0.5 truncate text-sm text-pierre-700">{l.notes}</p>}
               </button>
-              <BoutonEtat ligne={l} ecriture={ecriture} grand />
+              <BoutonEtat ligne={l} ecriture={ecriture} grand sortie={sortie} />
             </div>
             {deplie && (
               <div className="space-y-3 border-t border-pierre-100 bg-pierre-50 p-3">
@@ -318,17 +322,21 @@ function Numero({ ligne, grand }: { ligne: Ligne; grand?: boolean }) {
   return <span className={`font-semibold tabular-nums ${grand ? 'text-lg' : ''}`}>{ligne.numero_identification}</span>
 }
 
-/** Fonctionnelle / défaillante : couleur de statut + icône + libellé (jamais la couleur seule). */
-function BoutonEtat({ ligne, ecriture, grand }: { ligne: Ligne; ecriture: boolean; grand?: boolean }) {
+/**
+ * Fonctionnelle / défaillante : couleur de statut + icône + libellé (jamais la couleur seule).
+ * `sortie` : la liste est filtrée par état, l'embarcation la quitte ; sa ligne sort d'abord.
+ */
+function BoutonEtat({ ligne, ecriture, grand, sortie }: { ligne: Ligne; ecriture: boolean; grand?: boolean; sortie?: boolean }) {
   const maj = useMajEmbarcation()
   const ok = ligne.fonctionnel
+  const changer = () => maj.mutate({ id: ligne.id, champs: { fonctionnel: !ok } })
   const style = ok
     ? 'border-[#0ca30c]/40 bg-[#0ca30c]/10 text-pierre-900'
     : 'border-[#d03b3b]/50 bg-[#d03b3b]/10 text-pierre-900'
   return (
     <button
       disabled={!ecriture}
-      onClick={() => maj.mutate({ id: ligne.id, champs: { fonctionnel: !ok } })}
+      onClick={(e) => (sortie ? sortirCarte(e.currentTarget.closest('tr, li'), changer) : changer())}
       aria-label={`${ok ? 'Fonctionnelle' : 'Défaillante'}${ecriture ? ' — changer l’état' : ''}`}
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border font-medium disabled:cursor-default ${style} ${
         grand ? 'px-3.5 py-2 text-sm' : 'px-2.5 py-1 text-xs'

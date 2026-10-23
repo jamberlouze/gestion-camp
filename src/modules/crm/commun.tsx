@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useDonnees } from './contexte'
 import { useAjouterOrganisation, useModifierRelance } from './donnees'
@@ -52,18 +53,22 @@ export function ChoixConseiller({
   )
 }
 
-/** Bouton « ✓ Faite » d'une relance. */
+/**
+ * Bouton « ✓ Faite » d'une relance. Faite ou remise à faire, la ligne (`li`)
+ * change de liste : elle sort d'abord (une annulée qui devient faite reste parmi les autres).
+ */
 export function BoutonFaite({ relance }: { relance: Relance }) {
   const { ecriture } = useDonnees()
   const modifier = useModifierRelance()
   const faite = relance.statut === 'faite'
+  const basculer = () => modifier.mutate({ id: relance.id, champs: { statut: faite ? 'a_faire' : 'faite' } })
   return (
     <button
       disabled={!ecriture}
       className={`shrink-0 rounded-lg border px-2.5 py-1 text-sm font-medium disabled:opacity-50 ${
         faite ? 'border-foret-300 bg-foret-50 text-foret-800' : 'border-pierre-300 bg-white text-pierre-700 hover:border-foret-400 hover:text-foret-800'
       }`}
-      onClick={() => modifier.mutate({ id: relance.id, champs: { statut: faite ? 'a_faire' : 'faite' } })}
+      onClick={(e) => (relance.statut === 'annulee' ? basculer() : sortirCarte(e.currentTarget.closest('li'), basculer))}
     >
       ✓ {faite ? 'Faite' : 'Fait'}
     </button>

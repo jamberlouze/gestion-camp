@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
 import { IconePlus } from '@/lib/icones'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { ChoixCompagnies, FilNotes, LienOfficiel, menu, NotesLues, Pastille, PastilleStatut, PastilleType, PucesCompagnies } from './commun'
 import { useDecider, useEnregistrer, useEntreprises, useFeedback, useNotes, useProfils, useSubventions } from './donnees'
@@ -20,7 +21,11 @@ import {
   trierAValider,
   TYPES,
 } from './outils'
-import type { CategorieRejet, Entreprise, Feedback, Note, Subvention, TypeSubvention } from './types'
+import type { CategorieRejet, Entreprise, Feedback, Note, Statut, Subvention, TypeSubvention } from './types'
+
+/** Lance l'action d'une fenêtre ; sur une carte de la liste qui va la quitter, la carte sort d'abord. */
+type Sortie = (action: () => Promise<unknown>) => Promise<unknown>
+const sansSortie: Sortie = (action) => action()
 
 type FiltreStatut = 'tous' | 'nouveau' | 'a_valider' | 'rejete'
 
@@ -58,6 +63,7 @@ export function Validation() {
     return m
   }, [feedback.data])
   const rejetees = statut === 'rejete'
+  const affichee = (s: Statut) => (statut === 'tous' ? aDecider({ status: s }) : s === statut)
   const rejeteeLe = (g: Subvention) => rejets.get(g.id)?.decided_at ?? g.updated_at
   const liste = filtrees
     .filter((g) => (statut === 'tous' ? aDecider(g) : g.status === statut))
@@ -134,7 +140,14 @@ export function Validation() {
 
       <div className="space-y-3">
         {liste.map((g) => (
-          <CarteValidation key={g.id} g={g} entreprises={entreprises.data} notes={notesDe(g.id)} rejet={rejets.get(g.id)} />
+          <CarteValidation
+            key={g.id}
+            g={g}
+            entreprises={entreprises.data}
+            notes={notesDe(g.id)}
+            rejet={rejets.get(g.id)}
+            affichee={affichee}
+          />
         ))}
       </div>
 
@@ -174,16 +187,32 @@ export function Validation() {
   )
 }
 
-function CarteValidation({ g, entreprises, notes, rejet }: { g: Subvention; entreprises: Entreprise[]; notes: Note[]; rejet?: Feedback }) {
+function CarteValidation({
+  g,
+  entreprises,
+  notes,
+  rejet,
+  affichee,
+}: {
+  g: Subvention
+  entreprises: Entreprise[]
+  notes: Note[]
+  rejet?: Feedback
+  /** Le filtre montre-t-il encore une carte à ce statut ? */
+  affichee: (statut: Statut) => boolean
+}) {
   const enregistrer = useEnregistrer<Subvention>('grants')
   const profils = useProfils().data
   const [notesOuvertes, setNotesOuvertes] = useState(false)
   const [dialogue, setDialogue] = useState<'valider' | 'attente' | 'rejeter' | null>(null)
+  const { ref, sortir } = useSortieCarte<HTMLElement>()
+  // La carte ne sort que si son nouveau statut quitte le filtre (« en attente » reste dans « Nouvelles et en attente »).
+  const sortieVers = (statut: Statut): Sortie => (affichee(statut) ? sansSortie : sortir)
   const montant = montantsPotentiels(g)
   const jours = g.deadline_date ? joursAvant(g.deadline_date) : null
 
   return (
-    <article className={`${ui.carte} p-4`}>
+    <article ref={ref} className={`${ui.carte} p-4`}>
       <div className="flex flex-wrap items-center gap-1.5">
         <PastilleType type={g.grant_type} />
         <PucesCompagnies ids={g.company_ids} />
@@ -260,7 +289,7 @@ function CarteValidation({ g, entreprises, notes, rejet }: { g: Subvention; entr
             Mettre en attente…
           </button>
         ) : (
-          <button className={ui.boutonSecondaire} onClick={() => enregistrer.mutate({ id: g.id, status: 'nouveau' })}>
+          <button className={ui.boutonSecondaire} onClick={() => sortieVers('nouveau')(async () => enregistrer.mutate({ id: g.id, status: 'nouveau' }))}>
             {g.status === 'rejete' ? 'Remettre à valider' : 'Remettre en nouvelle'}
           </button>
         )}
@@ -285,14 +314,26 @@ function CarteValidation({ g, entreprises, notes, rejet }: { g: Subvention; entr
         </div>
       )}
 
-      {dialogue === 'valider' && <DialogueValider g={g} entreprises={entreprises} fermer={() => setDialogue(null)} />}
-      {dialogue === 'attente' && <DialogueAttente g={g} fermer={() => setDialogue(null)} />}
-      {dialogue === 'rejeter' && <DialogueRejeter g={g} fermer={() => setDialogue(null)} />}
+      {dialogue === 'valider' && (
+        <DialogueValider g={g} entreprises={entreprises} fermer={() => setDialogue(null)} sortir={sortieVers('a_faire')} />
+      )}
+      {dialogue === 'attente' && <DialogueAttente g={g} fermer={() => setDialogue(null)} sortir={sortieVers('a_valider')} />}
+      {dialogue === 'rejeter' && <DialogueRejeter g={g} fermer={() => setDialogue(null)} sortir={sortieVers('rejete')} />}
     </article>
   )
 }
 
-export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; entreprises: Entreprise[]; fermer: () => void }) {
+export function DialogueValider({
+  g,
+  entreprises,
+  fermer,
+  sortir = sansSortie,
+}: {
+  g: Subvention
+  entreprises: Entreprise[]
+  fermer: () => void
+  sortir?: Sortie
+}) {
   const decider = useDecider()
   // Compagnies de la carte d'abord ; une seule : déjà cochée.
   const ids = [
@@ -306,7 +347,7 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
   const valider = async () => {
     setErreur(null)
     try {
-      await decider.mutateAsync({ grant: g.id, decision: 'valide', compagnies, commentaire })
+      await sortir(() => decider.mutateAsync({ grant: g.id, decision: 'valide', compagnies, commentaire }))
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))
@@ -354,7 +395,7 @@ export function DialogueValider({ g, entreprises, fermer }: { g: Subvention; ent
  * tard. La note va dans les notes internes de la subvention et y reste après
  * la décision.
  */
-export function DialogueAttente({ g, fermer }: { g: Subvention; fermer: () => void }) {
+export function DialogueAttente({ g, fermer, sortir = sansSortie }: { g: Subvention; fermer: () => void; sortir?: Sortie }) {
   const statut = useEnregistrer<Subvention>('grants', { erreurSurPlace: true })
   const ajouterNote = useEnregistrer<Note>('grant_notes', { erreurSurPlace: true })
   const notes = (useNotes().data ?? []).filter((n) => n.grant_id === g.id)
@@ -366,12 +407,14 @@ export function DialogueAttente({ g, fermer }: { g: Subvention; fermer: () => vo
   const mettreEnAttente = async () => {
     setErreur(null)
     try {
-      const body = texte.trim()
-      if (body) {
-        await ajouterNote.mutateAsync({ grant_id: g.id, body })
-        setTexte('')
-      }
-      await statut.mutateAsync({ id: g.id, status: 'a_valider' })
+      await sortir(async () => {
+        const body = texte.trim()
+        if (body) {
+          await ajouterNote.mutateAsync({ grant_id: g.id, body })
+          setTexte('')
+        }
+        await statut.mutateAsync({ id: g.id, status: 'a_valider' })
+      })
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))
@@ -418,7 +461,7 @@ export function DialogueAttente({ g, fermer }: { g: Subvention; fermer: () => vo
   )
 }
 
-export function DialogueRejeter({ g, fermer }: { g: Subvention; fermer: () => void }) {
+export function DialogueRejeter({ g, fermer, sortir = sansSortie }: { g: Subvention; fermer: () => void; sortir?: Sortie }) {
   const decider = useDecider()
   const [categorie, setCategorie] = useState<CategorieRejet | ''>('')
   const [commentaire, setCommentaire] = useState('')
@@ -428,7 +471,7 @@ export function DialogueRejeter({ g, fermer }: { g: Subvention; fermer: () => vo
     if (!categorie) return
     setErreur(null)
     try {
-      await decider.mutateAsync({ grant: g.id, decision: 'rejete', categorie, commentaire })
+      await sortir(() => decider.mutateAsync({ grant: g.id, decision: 'rejete', categorie, commentaire }))
       fermer()
     } catch (e) {
       setErreur(messageErreur(e))

@@ -7,6 +7,7 @@ import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeChevron, IconeCorbeille, IconePlus } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { etatEvenement, evenementsVoulus, REGLAGE_AGENDA_DEFAUT, type ReglageAgenda } from './agenda'
@@ -501,11 +502,12 @@ function Propositions({ g }: { g: Subvention }) {
   const remplies = toutes.filter((p) => p.status === 'appliquee').sort((a, b) => b.created_at.localeCompare(a.created_at))
   if (!ouvertes.length && !remplies.length) return null
 
-  const choisir = async (p: Proposition, accepter: boolean) => {
+  // Acceptée ou refusée, la proposition quitte la liste : sa ligne sort d'abord (revient si la base refuse).
+  const choisir = async (ligne: HTMLElement | null, p: Proposition, accepter: boolean) => {
     setErreur(null)
     setEnCours(p.id)
     try {
-      await decider.mutateAsync({ id: p.id, accepter })
+      await sortirCarte(ligne, () => decider.mutateAsync({ id: p.id, accepter }))
     } catch (e) {
       setErreur(messageErreur(e))
     } finally {
@@ -553,10 +555,14 @@ function Propositions({ g }: { g: Subvention }) {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button className={ui.bouton} disabled={enCours === p.id} onClick={() => choisir(p, true)}>
+                  <button className={ui.bouton} disabled={enCours === p.id} onClick={(e) => choisir(e.currentTarget.closest('li'), p, true)}>
                     Accepter
                   </button>
-                  <button className={ui.boutonSecondaire} disabled={enCours === p.id} onClick={() => choisir(p, false)}>
+                  <button
+                    className={ui.boutonSecondaire}
+                    disabled={enCours === p.id}
+                    onClick={(e) => choisir(e.currentTarget.closest('li'), p, false)}
+                  >
                     Refuser
                   </button>
                 </div>

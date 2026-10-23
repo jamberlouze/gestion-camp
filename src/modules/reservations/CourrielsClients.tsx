@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { supabase } from '@/lib/supabase'
 import { ui } from '@/lib/ui'
 import { Section } from './commun'
@@ -113,6 +114,8 @@ function CarteCourriel({ c, avecReservation = false }: { c: Courriel; avecReserv
   const modifier = useModifierCourriel()
   const envoyer = useEnvoyerCourriel()
   const [fenetre, setFenetre] = useState(false)
+  // Envoyé ou annulé, le courriel quitte la file : la carte sort d'abord (revient si l'envoi est refusé).
+  const { ref, sortir } = useSortieCarte<HTMLDivElement>()
   const type = TYPES_COURRIEL.find((t) => t.genre === c.genre)
   const change = (v: ValeursCourriel) => v.a !== c.a.join(', ') || v.cc !== c.cc.join(', ') || v.sujet !== c.sujet || v.corps !== c.corps
   const enregistrer = (v: ValeursCourriel) => modifier.mutateAsync({ id: c.id, champs: { a: listeAdresses(v.a), cc: listeAdresses(v.cc), sujet: v.sujet.trim(), corps: v.corps.trim() } })
@@ -125,11 +128,11 @@ function CarteCourriel({ c, avecReservation = false }: { c: Courriel; avecReserv
 
   const annuler = async () => {
     const ok = await confirmer({ titre: 'Annuler ce courriel ?', message: 'Il ne sera pas envoyé et ne sera plus préparé pour cet événement.', libelleOk: 'Annuler le courriel' })
-    if (ok) modifier.mutate({ id: c.id, champs: { statut: 'annule', raison: 'Annulé à la main' } })
+    if (ok) sortir(() => modifier.mutate({ id: c.id, champs: { statut: 'annule', raison: 'Annulé à la main' } }))
   }
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+    <div ref={ref} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-medium">
           {NOMS_COURRIEL[c.genre]} · <span className="font-normal">{c.sujet}</span>
@@ -167,7 +170,7 @@ function CarteCourriel({ c, avecReservation = false }: { c: Courriel; avecReserv
           envoyer={async (v) => {
             if (change(v)) await enregistrer(v)
             // La pré-arrivée est produite par le Worker au moment de l'envoi, et jointe.
-            await envoyer.mutateAsync(c.id)
+            await sortir(() => envoyer.mutateAsync(c.id))
           }}
           fermer={() => setFenetre(false)}
         />

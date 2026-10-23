@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
 import { IconeAttention } from '@/lib/icones'
+import { sortirCarte, useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { ChoixCategorie, Chargement, LienExterne, PastilleCategorie, PastilleTypeSejour } from './commun'
 import { dateCourte, rangCategorie } from './outils'
@@ -180,13 +181,15 @@ function Section({ titre, action, children }: { titre: string; action?: ReactNod
   )
 }
 
+/** Valider / Rejeter d'une ligne : la ligne (`li`) sort de la liste avant la décision. */
 function Boutons({ decider }: { decider: (accepter: boolean) => void }) {
+  const choisir = (e: MouseEvent<HTMLButtonElement>, accepter: boolean) => sortirCarte(e.currentTarget.closest('li'), () => decider(accepter))
   return (
     <div className="flex shrink-0 gap-2">
-      <button className={`${ui.bouton} py-1.5`} onClick={() => decider(true)}>
+      <button className={`${ui.bouton} py-1.5`} onClick={(e) => choisir(e, true)}>
         Valider
       </button>
-      <button className={`${ui.boutonSecondaire} py-1.5`} onClick={() => decider(false)}>
+      <button className={`${ui.boutonSecondaire} py-1.5`} onClick={(e) => choisir(e, false)}>
         Rejeter
       </button>
     </div>
@@ -196,11 +199,11 @@ function Boutons({ decider }: { decider: (accepter: boolean) => void }) {
 function CampPropose({ camp, ecriture }: { camp: Camp; ecriture: boolean }) {
   const modifier = useModifier<Camp>('camps')
   const [categorie, setCategorie] = useState<Categorie>(camp.categorie)
-  const decider = (statut: 'inclus' | 'exclu') => {
-    modifier.mutate({ id: camp.id, statut_inclusion: statut, categorie }, { onSuccess: () => statut === 'inclus' && reveiller() })
-  }
+  const { ref, sortir } = useSortieCarte<HTMLElement>()
+  const decider = (statut: 'inclus' | 'exclu') =>
+    sortir(() => modifier.mutate({ id: camp.id, statut_inclusion: statut, categorie }, { onSuccess: () => statut === 'inclus' && reveiller() }))
   return (
-    <article className={`${ui.carte} flex flex-col gap-2 p-4`}>
+    <article ref={ref} className={`${ui.carte} flex flex-col gap-2 p-4`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <Link to={`/vigie/camps/${camp.id}`} className="font-medium hover:underline">

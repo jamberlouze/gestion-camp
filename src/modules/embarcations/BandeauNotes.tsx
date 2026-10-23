@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { BoutonModifier, BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useCreerNote, useMajNote, useNotes, useSupprimerNote } from './donnees'
 import type { Ligne } from './outils'
@@ -100,18 +101,19 @@ function NouvelleNote({ flotte, fermer }: { flotte: Ligne[]; fermer: () => void 
 function LigneNote({ note, flotte, ecriture }: { note: Note; flotte: Ligne[]; ecriture: boolean }) {
   const supprimer = useSupprimerNote()
   const [mode, setMode] = useState<'lecture' | 'modifier' | 'traiter'>('lecture')
+  const { ref, sortir } = useSortieCarte<HTMLLIElement>()
   const embarcation = flotte.find((l) => l.id === note.embarcation_id)
 
   if (mode !== 'lecture') {
     return (
-      <li className="rounded-lg bg-white p-3 shadow-sm">
-        <FormulaireNote note={note} flotte={flotte} traiter={mode === 'traiter'} fermer={() => setMode('lecture')} />
+      <li ref={ref} className="rounded-lg bg-white p-3 shadow-sm">
+        <FormulaireNote note={note} flotte={flotte} traiter={mode === 'traiter'} fermer={() => setMode('lecture')} sortir={sortir} />
       </li>
     )
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+    <li ref={ref} className="flex flex-col gap-2 rounded-lg bg-white p-3 shadow-sm sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <p className="whitespace-pre-wrap text-sm text-pierre-900">{note.texte}</p>
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-pierre-500">
@@ -136,7 +138,7 @@ function LigneNote({ note, flotte, ecriture }: { note: Note; flotte: Ligne[]; ec
             aria-label="Supprimer la note"
             onClick={async () => {
               if (await confirmer({ titre: 'Supprimer cette note ?', message: note.texte, libelleOk: 'Supprimer', danger: true })) {
-                supprimer.mutate(note.id)
+                sortir(() => supprimer.mutate(note.id))
               }
             }}
           />
@@ -155,11 +157,14 @@ function FormulaireNote({
   flotte,
   traiter,
   fermer,
+  sortir,
 }: {
   note: Note
   flotte: Ligne[]
   traiter: boolean
   fermer: () => void
+  /** Fait sortir la note du bandeau avant l'action. */
+  sortir: (action: () => void) => void
 }) {
   const maj = useMajNote()
   const [texte, setTexte] = useState(note.texte)
@@ -169,15 +174,21 @@ function FormulaireNote({
   function soumettre(e: FormEvent) {
     e.preventDefault()
     if (!texte.trim()) return
-    maj.mutate({
-      id: note.id,
-      champs: {
-        texte: texte.trim(),
-        embarcation_id: embarcationId || null,
-        ...(traiter ? { statut: 'traitee' as const, suivi: suivi.trim() || null } : {}),
-      },
-    })
-    fermer()
+    const envoyer = () =>
+      maj.mutate({
+        id: note.id,
+        champs: {
+          texte: texte.trim(),
+          embarcation_id: embarcationId || null,
+          ...(traiter ? { statut: 'traitee' as const, suivi: suivi.trim() || null } : {}),
+        },
+      })
+    // Traitée, la note quitte le bandeau : elle sort d'abord, le formulaire encore ouvert.
+    if (traiter) sortir(envoyer)
+    else {
+      envoyer()
+      fermer()
+    }
   }
 
   return (

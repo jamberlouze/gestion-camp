@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
 import { aEnvoyer, affichageStatut, nomReunion, nouveauPoint, ordreEnFin, reunionsAVenir, useDonnees } from './contexte'
@@ -106,6 +107,7 @@ export function CartePoint({
   lecture,
   afficherJour,
   masquerPourLe,
+  sortie,
 }: {
   point: Point
   reports?: number
@@ -117,24 +119,30 @@ export function CartePoint({
   afficherJour?: boolean
   /** Le jour prévu est déjà donné par la vue (Semaine). */
   masquerPourLe?: boolean
+  /** Traité, rouvert ou envoyé ailleurs, le point quitte sa liste (ordre du jour) : il sort d'abord. */
+  sortie?: boolean
 }) {
   const { ecriture, moi, reunions } = useDonnees()
   const modifier = useModifierPoint()
   const supprimer = useSupprimerPoint()
   const [fiche, setFiche] = useState(false)
+  const { ref, sortir } = useSortieCarte<HTMLLIElement>()
+  const partir = (action: () => void) => (sortie ? sortir(action) : action())
   const ouvert = point.statut === 'ouvert'
   const actif = ecriture && !lecture
   const auj = aujourdhui()
 
-  const changerStatut = (statut: StatutPoint) => modifier.mutate({ id: point.id, champs: { statut }, affiche: affichageStatut(statut, moi) })
-  const envoyerVers = (reunion: string | null) => modifier.mutate({ id: point.id, champs: { reunion_id: reunion, pour_le: null, ordre: ordreEnFin() } })
+  const changerStatut = (statut: StatutPoint) =>
+    partir(() => modifier.mutate({ id: point.id, champs: { statut }, affiche: affichageStatut(statut, moi) }))
+  const envoyerVers = (reunion: string | null) =>
+    partir(() => modifier.mutate({ id: point.id, champs: { reunion_id: reunion, pour_le: null, ordre: ordreEnFin() } }))
   const autres = reunionsAVenir(reunions).filter((r) => r.id !== point.reunion_id)
 
   const mentions =
     (reports > 0 && ouvert) || (ouvert && point.pour_le && point.pour_le > auj && !masquerPourLe) || (afficherJour && point.traite_jour)
 
   return (
-    <li className={`rounded-xl border border-pierre-200 px-3 py-2 ${ouvert ? 'bg-white' : 'bg-pierre-50/60'}`}>
+    <li ref={ref} className={`rounded-xl border border-pierre-200 px-3 py-2 ${ouvert ? 'bg-white' : 'bg-pierre-50/60'}`}>
       {/* Une seule ligne alignée : pastille, nom du point, Traité, ⋯ */}
       <div className="flex items-center gap-2.5">
         {point.recurrent_id ? (

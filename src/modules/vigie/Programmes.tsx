@@ -154,7 +154,7 @@ export function ListeProgrammes() {
                     )}
                   </td>
                   <td className="px-3 py-1.5">
-                    <ChoixTypeSejour programme={p} ecriture={ecriture} />
+                    <ChoixTypeSejour programme={p} ecriture={ecriture} sortie={verifier} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-pierre-700">
                     {[p.duree_jours ? `${p.duree_jours} j` : null, p.duree_nuits != null ? `${p.duree_nuits} n` : null].filter(Boolean).join(' / ') || '—'}

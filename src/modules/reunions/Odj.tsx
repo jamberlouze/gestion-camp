@@ -52,7 +52,7 @@ export function Odj() {
           ) : (
             <ul className="space-y-1.5">
               {ouverts.map((p) => (
-                <CartePoint key={p.id} point={p} reports={reports(p, jours, auj)} />
+                <CartePoint key={p.id} point={p} reports={reports(p, jours, auj)} sortie />
               ))}
             </ul>
           )}
@@ -82,7 +82,7 @@ export function Odj() {
             {plusTardOuvert && (
               <ul className="space-y-1.5">
                 {plusTard.map((p) => (
-                  <CartePoint key={p.id} point={p} />
+                  <CartePoint key={p.id} point={p} sortie />
                 ))}
               </ul>
             )}
@@ -94,7 +94,7 @@ export function Odj() {
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Traités aujourd'hui ({traites.length})</h3>
             <ul className="space-y-1.5">
               {traites.map((p) => (
-                <CartePoint key={p.id} point={p} />
+                <CartePoint key={p.id} point={p} sortie />
               ))}
             </ul>
           </section>

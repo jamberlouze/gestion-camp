@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { PucesEtiquettes } from '@/lib/Etiquettes'
 import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useMajTache, type Donnees } from './donnees'
@@ -30,8 +31,11 @@ export function Puce({ children, couleur, ton }: { children: ReactNode; couleur?
   )
 }
 
-/** Case à cocher d'une tâche : cochée = terminée. */
-export function CaseTache({ tache: t }: { tache: Tache }) {
+/**
+ * Case à cocher d'une tâche : cochée = terminée. `sortie` : la ligne quitte sa
+ * liste une fois cochée ou décochée (à faire ↔ terminées) ; elle sort d'abord.
+ */
+export function CaseTache({ tache: t, sortie }: { tache: Tache; sortie?: boolean }) {
   const droits = useDroits()
   const maj = useMajTache()
   const faite = t.statut === 'terminee'
@@ -65,7 +69,7 @@ export function CaseTache({ tache: t }: { tache: Tache }) {
               : undefined
       }
       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold disabled:cursor-default ${style}`}
-      onClick={basculer}
+      onClick={(e) => (sortie ? sortirCarte(e.currentTarget.closest('li, tr'), basculer) : basculer())}
       disabled={!permis}
     >
       {faite ? '✓' : ''}
@@ -81,7 +85,18 @@ export interface Montrer {
 }
 
 /** Une tâche dans une liste : case, titre et étiquettes ; toute la ligne ouvre la fiche. */
-export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true, personne: true } }: { tache: Tache; d: Donnees; montrer?: Montrer }) {
+export function LigneTache({
+  tache: t,
+  d,
+  montrer = { lieu: true, chantier: true, personne: true },
+  sortie,
+}: {
+  tache: Tache
+  d: Donnees
+  montrer?: Montrer
+  /** La ligne quitte sa liste une fois cochée (voir `CaseTache`). */
+  sortie?: boolean
+}) {
   const ouvrir = useOuvrir()
   const faite = t.statut === 'terminee'
   const retard = enRetard(t)
@@ -96,7 +111,7 @@ export function LigneTache({ tache: t, d, montrer = { lieu: true, chantier: true
   // Toute la ligne ouvre la fiche, sauf la case ; au clavier, le titre (un bouton).
   return (
     <li className={`flex items-start gap-3 px-3 py-2.5 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
-      <CaseTache tache={t} />
+      <CaseTache tache={t} sortie={sortie} />
       <div className="min-w-0 flex-1">
         <button
           type="button"
@@ -185,7 +200,7 @@ export function ListeTaches({ taches, d, montrer = { lieu: true, chantier: true,
     return (
       <ul className="divide-y divide-pierre-100">
         {taches.map((t) => (
-          <LigneTache key={t.id} tache={t} d={d} montrer={montrer} />
+          <LigneTache key={t.id} tache={t} d={d} montrer={montrer} sortie />
         ))}
       </ul>
     )
@@ -239,7 +254,7 @@ function RangeeTache({ tache: t, d, montrer }: { tache: Tache; d: Donnees; montr
   return (
     <tr className={`align-top ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
       <td className="px-3 py-1.5">
-        <CaseTache tache={t} />
+        <CaseTache tache={t} sortie />
       </td>
       <td className="px-2 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

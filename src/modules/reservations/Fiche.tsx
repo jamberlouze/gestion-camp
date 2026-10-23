@@ -6,6 +6,7 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useAjouterContact, useAjouterEchange, useAjouterRelance, useEchanges, useModifierRelance, useRelances } from '@/modules/crm/donnees'
 import { CIVILITES, GENRES_ECHANGE, nomContact, type Civilite, type GenreEchange } from '@/modules/crm/types'
@@ -904,7 +905,10 @@ function Suivi({ r }: { r: Reservation }) {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-pierre-500">Prochaine action</p>
             {actions.map((a) => (
               <div key={a.id} className="mb-1 flex items-center gap-2 text-sm">
-                <button className="rounded border border-pierre-300 px-1.5 text-xs hover:border-foret-400" onClick={() => modifierRelance.mutate({ id: a.id, champs: { statut: 'faite' } })}>
+                <button
+                  className="rounded border border-pierre-300 px-1.5 text-xs hover:border-foret-400"
+                  onClick={(e) => sortirCarte(e.currentTarget.parentElement, () => modifierRelance.mutate({ id: a.id, champs: { statut: 'faite' } }))}
+                >
                   ✓
                 </button>
                 <span className="flex-1">{a.titre}</span>

@@ -3,6 +3,7 @@ import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Et
 import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { useAuth } from '@/shell/auth'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
@@ -145,8 +146,11 @@ export function PucesEtiquettes({ tache, refs }: { tache: Tache; refs: Reference
   return <PucesEtiquettesLib ids={tache.etiquette_ids} liste={refs.etiquettes} />
 }
 
-/** Case de coche : faite ✓, « pas cette année » –, en retard (bord rouge). */
-export function CaseCoche({ etat, basculer, desactivee }: { etat: Etat; basculer: () => void; desactivee?: boolean }) {
+/**
+ * Case de coche : faite ✓, « pas cette année » –, en retard (bord rouge).
+ * `sortie` : la ligne (`li` ou `tr`) quitte sa liste une fois cochée ; elle sort d'abord.
+ */
+export function CaseCoche({ etat, basculer, desactivee, sortie }: { etat: Etat; basculer: () => void; desactivee?: boolean; sortie?: boolean }) {
   const style =
     etat === 'faite'
       ? 'border-foret-700 bg-foret-700 text-white'
@@ -162,7 +166,7 @@ export function CaseCoche({ etat, basculer, desactivee }: { etat: Etat; basculer
       aria-label={libelle}
       title={etat === 'sautee' ? 'Pas cette année' : libelle}
       className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold disabled:cursor-default ${style}`}
-      onClick={basculer}
+      onClick={(e) => (sortie ? sortirCarte(e.currentTarget.closest('li, tr'), basculer) : basculer())}
       disabled={desactivee}
     >
       {etat === 'faite' ? '✓' : etat === 'sautee' ? '–' : ''}
@@ -202,7 +206,7 @@ export function LigneTache({
   // au clavier, le titre (un bouton).
   return (
     <li className={`flex items-start gap-3 px-3 py-2.5 ${classeLigneCliquable}`} onClick={clicLigne(ouvrirFiche)}>
-      <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!peutCocher(t)} />
+      <CaseCoche etat={etat} basculer={() => basculer(t, periode, coche, 'faite')} desactivee={!peutCocher(t)} sortie={montrer.sortie} />
       <div className="min-w-0 flex-1">
         <button
           type="button"

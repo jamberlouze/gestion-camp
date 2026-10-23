@@ -319,7 +319,7 @@ function Contenu({
               key={`${p.tache.id}|${p.periode}`}
               {...p}
               refs={refs}
-              montrer={{ mois: moisVisible, entreprise: true, responsableModifiable: true }}
+              montrer={{ mois: moisVisible, entreprise: true, responsableModifiable: true, sortie: moisVisible }}
             />
           ))}
         </Groupe>
@@ -327,7 +327,7 @@ function Contenu({
       {d && travaux.length > 0 && (
         <Groupe titre="🛠️ Travaux">
           {travaux.map((t) => (
-            <LigneTravaux key={t.id} tache={t} d={d} montrer={{ lieu: true, personne: true }} />
+            <LigneTravaux key={t.id} tache={t} d={d} montrer={{ lieu: true, personne: true }} sortie={moisVisible} />
           ))}
         </Groupe>
       )}

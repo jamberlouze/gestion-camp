@@ -3,6 +3,7 @@ import { Link, Navigate, NavLink, Route, Routes, useParams, useSearchParams } fr
 import { BandeauErreurs } from '@/lib/BandeauErreurs'
 import { messageErreur } from '@/lib/donnees'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { ChoixPeriode } from './commun'
@@ -356,15 +357,19 @@ function LigneFeuille({ ligne }: { ligne: LigneAApprouver }) {
   const [renvoi, setRenvoi] = useState<string | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState(false)
+  const { ref, sortir } = useSortieCarte<HTMLLIElement>()
   const f = ligne.feuille
 
+  // Approuvée ou renvoyée, la feuille quitte la liste : elle sort d'abord (revient si la base refuse).
   const agir = async (action: Action, texte?: string) => {
     setErreur(null)
     setEnCours(true)
     try {
-      if (f.genre === 'employe')
-        await changerEmploye.mutateAsync({ employeId: f.employe_id!, entrepriseId: f.entreprise_id!, debut: f.debut, action, texte })
-      else await changer.mutateAsync({ userId: f.user_id!, debut: f.debut, action, texte })
+      await sortir(() =>
+        f.genre === 'employe'
+          ? changerEmploye.mutateAsync({ employeId: f.employe_id!, entrepriseId: f.entreprise_id!, debut: f.debut, action, texte })
+          : changer.mutateAsync({ userId: f.user_id!, debut: f.debut, action, texte }),
+      )
       setRenvoi(null)
     } catch (e) {
       setErreur(messageErreur(e))
@@ -374,7 +379,7 @@ function LigneFeuille({ ligne }: { ligne: LigneAApprouver }) {
   }
 
   return (
-    <li className="space-y-2 px-4 py-3">
+    <li ref={ref} className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 xl:flex-nowrap">
         <div className="min-w-40 flex-1">
           <Link to={ligne.lien} className="font-medium text-pierre-900 underline decoration-pierre-300 hover:text-foret-700">

@@ -3,6 +3,7 @@ import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
 import { IconePlus, IconeRenommer } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Compter } from './Compter'
@@ -672,8 +673,10 @@ function Retires({ d, articles, ecriture, ouvrir }: { d: Donnees; articles: Arti
           {ecriture && (
             <button
               className={ui.boutonSecondaire}
-              onClick={async () => {
-                if (await confirmer({ titre: `Remettre « ${a.nom} » dans l'inventaire ?`, libelleOk: 'Remettre' })) maj.mutate({ id: a.id, champs: { actif: true } })
+              onClick={async (e) => {
+                const ligne = e.currentTarget.closest('li')
+                if (await confirmer({ titre: `Remettre « ${a.nom} » dans l'inventaire ?`, libelleOk: 'Remettre' }))
+                  sortirCarte(ligne, () => maj.mutate({ id: a.id, champs: { actif: true } }))
               }}
             >
               Remettre

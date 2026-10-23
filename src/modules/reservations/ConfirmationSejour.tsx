@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { Section } from './commun'
 import {
@@ -97,6 +98,7 @@ function ChangementATraiter({ r, c, ecriture }: { r: Reservation; c: Confirmatio
   const [message, setMessage] = useState('')
   const [appel, setAppel] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
+  const { ref, sortir } = useSortieCarte<HTMLElement>()
   const propose = c.propose!
   const jour = jourDe(c.recue_le)
   const diffs = differences(c.actuel, propose, r.forfait)
@@ -109,17 +111,17 @@ function ChangementATraiter({ r, c, ecriture }: { r: Reservation; c: Confirmatio
   const choisir = (champ: ChampSejour, oui: boolean) => setDecisions((d) => ({ ...d, [champ]: oui }))
   const tous = (oui: boolean) => setDecisions(Object.fromEntries(diffs.map((d) => [d.champ, oui])))
 
+  // Décidée, la demande quitte la fiche : l'encadré sort d'abord (revient si la base refuse).
   const appliquer = (clientAppele: boolean | null) => {
     setErreur(null)
-    decider.mutate(
-      { id: c.id, decisions, reponse, clientAppele },
-      { onError: (e) => setErreur(messageErreur(e)), onSuccess: () => setAppel(false) },
+    sortir(() => decider.mutateAsync({ id: c.id, decisions, reponse, clientAppele }).then(() => setAppel(false))).catch((e) =>
+      setErreur(messageErreur(e)),
     )
   }
   const bloque = !toutDecide ? 'Acceptez ou refusez chaque changement.' : refuses.length && !message.trim() ? 'Écrivez au client pourquoi (obligatoire dès qu’un changement est refusé).' : null
 
   return (
-    <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4">
+    <section ref={ref} className="space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="font-semibold text-amber-900">Le client propose un changement au séjour — à décider ligne par ligne</h2>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { codePeriodePaie, libellePeriodePaie } from '@/lib/periodesPaie'
 import { cleAujourdhui, cleCoche, exerciceDeCle, libelleMois } from '@/modules/mastertimeline/calendrier'
 import { CaseCoche } from '@/modules/mastertimeline/commun'
@@ -68,8 +69,8 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
   const releves = dossiers.data ?? []
   if (!soumises.length && !aSoumettre && !releves.length) return null
 
-  // Même geste que l'onglet Employés : confirmer, puis la fiche est désactivée.
-  const releveProduit = async (d: DossierAFermer) => {
+  // Même geste que l'onglet Employés : confirmer, puis la fiche est désactivée (la ligne sort d'abord).
+  const releveProduit = async (ligne: HTMLElement | null, d: DossierAFermer) => {
     const nom = d.nom_complet || d.surnom
     if (
       !(await confirmer({
@@ -81,7 +82,7 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
     )
       return
     setErreur(null)
-    fermer.mutate(d.employe_id, { onError: (e) => setErreur(e instanceof Error ? e.message : String(e)) })
+    sortirCarte(ligne, () => fermer.mutate(d.employe_id, { onError: (e) => setErreur(e instanceof Error ? e.message : String(e)) }))
   }
 
   return (
@@ -111,7 +112,7 @@ function FeuillesDeTemps({ userId, estAdmin }: { userId: string; estAdmin: boole
             <button
               type="button"
               disabled={fermer.isPending}
-              onClick={() => releveProduit(d)}
+              onClick={(e) => releveProduit(e.currentTarget.closest('li'), d)}
               title="Relevé produit : désactiver la fiche"
               className="rounded-md border border-pierre-300 bg-white px-2 py-1 text-xs font-medium whitespace-nowrap text-pierre-700 hover:bg-pierre-50 disabled:opacity-50"
             >

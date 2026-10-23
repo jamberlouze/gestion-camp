@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { clicLigne } from '@/lib/ligneCliquable'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { Puce } from './commun'
 import { useAdressePhoto, useMajTache, useSupprimerTache, type Donnees } from './donnees'
@@ -40,6 +41,7 @@ function CarteTri({ tache: t, d, trieur }: { tache: Tache; d: Donnees; trieur: b
   const ouvrir = useOuvrir()
   const maj = useMajTache()
   const supprimer = useSupprimerTache()
+  const { ref, sortir } = useSortieCarte<HTMLLIElement>()
   const [priorite, setPriorite] = useState<Priorite>(t.priorite)
   const [assigne, setAssigne] = useState('')
   const [chantier, setChantier] = useState(t.chantier_id ?? '')
@@ -50,18 +52,20 @@ function CarteTri({ tache: t, d, trieur }: { tache: Tache; d: Donnees; trieur: b
   const photos = d.photos.get(t.id) ?? []
 
   const accepter = () =>
-    maj.mutate({ id: t.id, champs: { statut: 'a_faire', priorite, assigne_a: assigne || null, chantier_id: chantier || null, echeance: echeance || null } })
+    sortir(() =>
+      maj.mutate({ id: t.id, champs: { statut: 'a_faire', priorite, assigne_a: assigne || null, chantier_id: chantier || null, echeance: echeance || null } }),
+    )
 
   async function rejeter() {
     if (!(await confirmer({ titre: `Rejeter « ${t.titre} » ?`, message: 'Le signalement, ses photos et ses commentaires seront effacés.', libelleOk: 'Rejeter' }))) return
-    supprimer.mutate({ id: t.id, chemins: photos.map((p) => p.chemin) })
+    sortir(() => supprimer.mutate({ id: t.id, chemins: photos.map((p) => p.chemin) }))
   }
 
   const ouvrirFiche = () => ouvrir({ type: 'fiche', id: t.id })
 
   // Toute la carte ouvre la fiche, sauf les photos et les menus du tri.
   return (
-    <li className="cursor-pointer rounded-lg bg-white p-3 shadow-sm hover:ring-1 hover:ring-amber-300" onClick={clicLigne(ouvrirFiche)}>
+    <li ref={ref} className="cursor-pointer rounded-lg bg-white p-3 shadow-sm hover:ring-1 hover:ring-amber-300" onClick={clicLigne(ouvrirFiche)}>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

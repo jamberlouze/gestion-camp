@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { confirmer } from '@/lib/Confirmation'
 import { messageErreur } from '@/lib/donnees'
+import { useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useAuth } from '@/shell/auth'
 import { Section } from './commun'
@@ -161,6 +162,8 @@ export function CarteCourriel({
   const [corps, setCorps] = useState(c.corps)
   const [occupe, setOccupe] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
+  // Envoyé ou annulé, le courriel quitte la liste : la carte sort d'abord (revient si l'envoi est refusé).
+  const { ref, sortir } = useSortieCarte<HTMLDivElement>()
   const change = a !== c.a.join(', ') || sujet !== c.sujet || corps !== c.corps
   const manquants = champsManquants(`${sujet}\n${corps}`)
   const p = c.personne_id ? personneParId.get(c.personne_id) : undefined
@@ -174,8 +177,10 @@ export function CarteCourriel({
     setOccupe(true)
     try {
       if (change) await enregistrer()
-      const { resultats } = await envoyer.mutateAsync([c.id])
-      if (!resultats[0]?.ok) setErreur(resultats[0]?.erreur ?? 'Envoi refusé.')
+      await sortir(async () => {
+        const { resultats } = await envoyer.mutateAsync([c.id])
+        if (!resultats[0]?.ok) throw new Error(resultats[0]?.erreur ?? 'Envoi refusé.')
+      })
     } catch (e) {
       setErreur(messageErreur(e))
     } finally {
@@ -185,11 +190,11 @@ export function CarteCourriel({
 
   const annuler = async () => {
     const ok = await confirmer({ titre: 'Annuler ce courriel ?', message: 'Il ne sera pas envoyé.', libelleOk: 'Annuler le courriel' })
-    if (ok) modifier.mutate({ id: c.id, champs: { statut: 'annule', raison: 'Annulé à la main' } })
+    if (ok) sortir(() => modifier.mutate({ id: c.id, champs: { statut: 'annule', raison: 'Annulé à la main' } }))
   }
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-sm">
+    <div ref={ref} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-sm">
       <div className="flex items-start gap-2">
         {coche && ecriture && (
           <input type="checkbox" className="mt-1 size-4 accent-foret-700" aria-label="Choisir pour l’envoi" checked={coche.valeur} onChange={(e) => coche.changer(e.target.checked)} />

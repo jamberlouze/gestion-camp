@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useModifier } from './donnees'
 import { menu } from './outils'
@@ -181,7 +182,8 @@ export function PastilleTypeSejour({ type, aVerifier }: { type: TypeSejour | nul
  * Type de séjour d'un programme : menu pour le changer et, s'il vient de Claude
  * (à vérifier), ✓ pour le confirmer tel quel. Changer ou confirmer = vérifié.
  */
-export function ChoixTypeSejour({ programme: p, ecriture }: { programme: Programme; ecriture: boolean }) {
+/** `sortie` : liste « à vérifier » que le programme quitte une fois confirmé ; sa rangée sort d'abord. */
+export function ChoixTypeSejour({ programme: p, ecriture, sortie }: { programme: Programme; ecriture: boolean; sortie?: boolean }) {
   const modifier = useModifier<Programme>('programmes')
   if (!ecriture) return <PastilleTypeSejour type={p.type_sejour} aVerifier={p.type_a_verifier} />
   return (
@@ -210,7 +212,11 @@ export function ChoixTypeSejour({ programme: p, ecriture }: { programme: Program
           className="rounded-md px-1.5 py-0.5 text-sm font-medium text-foret-700 ring-1 ring-foret-200 hover:bg-foret-50"
           title={p.type_sejour ? `Confirmer « ${nomTypeSejour(p.type_sejour)} »` : 'Confirmer : aucun de ces types'}
           aria-label={`Confirmer le type de ${p.nom}`}
-          onClick={() => modifier.mutate({ id: p.id, type_a_verifier: false })}
+          onClick={(e) => {
+            const confirmer = () => modifier.mutate({ id: p.id, type_a_verifier: false })
+            if (sortie) sortirCarte(e.currentTarget.closest('tr, li'), confirmer)
+            else confirmer()
+          }}
         >
           ✓
         </button>

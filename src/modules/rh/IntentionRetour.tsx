@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
+import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useOutilsCourriels } from './CartesCourriels'
 import { BoutonCopier, MenuSaison, PuceAncien } from './commun'
@@ -245,7 +246,7 @@ export function FenetreRetour({ saisonSource, fermer }: { saisonSource: string |
                     <span className="flex-1" />
                     <BoutonCopier url={lienRetour(i)} className="rounded-md border border-pierre-300 px-2 py-1 text-xs font-medium text-pierre-700 hover:bg-pierre-50" />
                     {ecriture && !i.reponse && (
-                      <button className="text-xs text-pierre-400 hover:text-red-700" title="Retirer l'invitation (le lien ne fonctionnera plus)" onClick={() => retirer.mutate(i.id)}>
+                      <button className="text-xs text-pierre-400 hover:text-red-700" title="Retirer l'invitation (le lien ne fonctionnera plus)" onClick={(e) => sortirCarte(e.currentTarget.closest('li'), () => retirer.mutate(i.id))}>
                         Retirer
                       </button>
                     )}
