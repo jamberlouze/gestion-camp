@@ -3,7 +3,7 @@ import { ChoixEtiquettes, PucesEtiquettes as PucesEtiquettesLib } from '@/lib/Et
 import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
-import { sortirCarte } from '@/lib/sortieCarte'
+import { animerDeplacements, sortirCarte } from '@/lib/sortieCarte'
 import { useAuth } from '@/shell/auth'
 import { dateCourte, estAnnuelle, libelleFrequence, moisCourt, type Etat } from './calendrier'
 import { useModifierTache, type References } from './donnees'
@@ -149,6 +149,7 @@ export function PucesEtiquettes({ tache, refs }: { tache: Tache; refs: Reference
 /**
  * Case de coche : faite ✓, « pas cette année » –, en retard (bord rouge).
  * `sortie` : la ligne (`li` ou `tr`) quitte sa liste une fois cochée ; elle sort d'abord.
+ * Sinon, cochée, elle descend en bas de sa liste : les lignes glissent jusqu'à leur nouvelle place.
  */
 export function CaseCoche({ etat, basculer, desactivee, sortie }: { etat: Etat; basculer: () => void; desactivee?: boolean; sortie?: boolean }) {
   const style =
@@ -166,7 +167,11 @@ export function CaseCoche({ etat, basculer, desactivee, sortie }: { etat: Etat; 
       aria-label={libelle}
       title={etat === 'sautee' ? 'Pas cette année' : libelle}
       className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold disabled:cursor-default ${style}`}
-      onClick={(e) => (sortie ? sortirCarte(e.currentTarget.closest('li, tr'), basculer) : basculer())}
+      onClick={(e) => {
+        const ligne = e.currentTarget.closest<HTMLElement>('li, tr')
+        if (sortie) sortirCarte(ligne, basculer)
+        else animerDeplacements(ligne?.parentElement, basculer)
+      }}
       disabled={desactivee}
     >
       {etat === 'faite' ? '✓' : etat === 'sautee' ? '–' : ''}

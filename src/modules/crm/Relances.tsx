@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { sortirCarte } from '@/lib/sortieCarte'
+import { animerDeplacements, sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { ajouterJours, ajouterMois } from './calculs'
 import { BoutonFaite, ChoixConseiller, Echeance, PuceStatut } from './commun'
@@ -89,8 +89,11 @@ export function LigneRelance({ relance: r, montrerQui, sansOrganisation }: { rel
         const v = e.target.value
         const base = r.echeance < auj ? auj : r.echeance
         if (v === 'annuler') sortirCarte(e.currentTarget.closest('li'), () => modifier.mutate({ id: r.id, champs: { statut: 'annulee' } }))
-        else if (v === '7') modifier.mutate({ id: r.id, champs: { echeance: ajouterJours(base, 7) } })
-        else if (v) modifier.mutate({ id: r.id, champs: { echeance: ajouterMois(base, Number(v)) } })
+        // Reportée, la relance change de place (ou de groupe) : les lignes glissent.
+        else if (v) {
+          const echeance = v === '7' ? ajouterJours(base, 7) : ajouterMois(base, Number(v))
+          animerDeplacements(e.currentTarget.closest('li')?.parentElement, () => modifier.mutate({ id: r.id, champs: { echeance } }))
+        }
       }}
     >
       <option value="">⋯</option>

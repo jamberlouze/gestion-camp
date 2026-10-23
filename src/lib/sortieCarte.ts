@@ -111,3 +111,56 @@ export function useSortieCarte<T extends HTMLElement = HTMLElement>() {
   const sortir = useCallback((action: () => unknown) => sortirCarte(ref.current, action), [])
   return { ref, sortir }
 }
+
+// ------------------------------------------------------------------
+// Ligne qui change de place dans sa propre liste (demande de Maxime du
+// 2026-10-23) : cochée, elle descend en bas (Mastertimeline, « À faire pour
+// moi ») ou remonte (Réunions › Semaine). Les lignes glissent de leur ancienne
+// place à la nouvelle au lieu de sauter, et la liste ignore les clics le temps
+// du glissement : la ligne qui arrive sous le curseur ne prend pas un deuxième clic.
+
+const DUREE_DEPLACEMENT = 300
+
+/** Haut de chaque ligne, par rapport au haut de la liste (le défilement de la page ne compte pas). */
+function positions(liste: HTMLElement) {
+  const haut = liste.getBoundingClientRect().top
+  return new Map([...liste.children].map((el) => [el, el.getBoundingClientRect().top - haut]))
+}
+
+function glisser(liste: HTMLElement, avant: Map<Element, number>) {
+  const reduit = mouvementReduit()
+  let bouge = false
+  for (const [el, haut] of positions(liste)) {
+    const ancien = avant.get(el)
+    // Ligne qui entre dans la liste (la 6e d'une liste coupée à 5) : fondu.
+    if (ancien === undefined) {
+      bouge = true
+      if (!reduit) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DUREE_DEPLACEMENT, easing: 'ease-out' })
+      continue
+    }
+    const ecart = ancien - haut
+    if (Math.abs(ecart) < 1) continue
+    bouge = true
+    if (!reduit)
+      el.animate([{ transform: `translateY(${ecart}px)` }, { transform: 'none' }], { duration: DUREE_DEPLACEMENT, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
+  }
+  if (bouge) setTimeout(garderListe(liste), (reduit ? 0 : DUREE_DEPLACEMENT) + GARDE)
+}
+
+/**
+ * Lance l'action (une mutation qui change l'ordre de la liste), puis fait
+ * glisser les lignes de `liste` vers leur nouvelle place au premier
+ * changement de la liste. Rien ne bouge : rien n'est animé.
+ */
+export function animerDeplacements(liste: HTMLElement | null | undefined, action: () => unknown) {
+  if (!liste) return action()
+  const avant = positions(liste)
+  const observateur = new MutationObserver(() => {
+    observateur.disconnect()
+    clearTimeout(abandon)
+    glisser(liste, avant)
+  })
+  observateur.observe(liste, { childList: true })
+  const abandon = setTimeout(() => observateur.disconnect(), DELAI_RETOUR)
+  return action()
+}

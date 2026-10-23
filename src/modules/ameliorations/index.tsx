@@ -4,7 +4,7 @@ import { BoutonSupprimer } from '@/lib/BoutonsAction'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
 import { messageErreur } from '@/lib/donnees'
-import { useSortieCarte } from '@/lib/sortieCarte'
+import { animerDeplacements, useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { demandePourClaude, jour, useAjouterIdee, useIdees, useModifierIdee, useSupprimerIdee } from './donnees'
 import { CIBLES, cible, genre, GENRES, STATUTS, type Genre, type Idee } from './types'
@@ -176,11 +176,12 @@ function Rangee({ idee: i, ouvrir, sansModule }: { idee: Idee; ouvrir: () => voi
   const changer = (champs: Partial<Idee>) => modifier.mutate({ id: i.id, champs })
   const g = genre(i.genre)
   const fermee = i.statut !== 'a_faire'
-  // Faite ou remise à faire, la rangée change de liste (à faire ↔ Complété) : elle sort d'abord. Écartée → faite reste dans Complété.
+  // Faite ou remise à faire, la rangée change de liste (à faire ↔ Complété) : elle sort d'abord.
+  // Écartée → faite, ou ★ (les importantes en haut) : elle change de place dans sa liste, les rangées glissent.
+  const deplacer = (champs: Partial<Idee>) => animerDeplacements(ref.current?.parentElement, () => changer(champs))
   const cocher = () => {
-    const action = () => changer({ statut: i.statut === 'fait' ? 'a_faire' : 'fait' })
-    if (i.statut === 'ecarte') action()
-    else sortir(action)
+    if (i.statut === 'ecarte') deplacer({ statut: 'fait' })
+    else sortir(() => changer({ statut: i.statut === 'fait' ? 'a_faire' : 'fait' }))
   }
 
   return (
@@ -199,7 +200,7 @@ function Rangee({ idee: i, ouvrir, sansModule }: { idee: Idee; ouvrir: () => voi
         aria-label={i.important ? `Retirer l'étoile de « ${i.titre} »` : `Marquer « ${i.titre} » comme importante`}
         title={i.important ? "Retirer l'étoile" : 'Importante'}
         className={`mt-px shrink-0 text-base leading-none ${i.important ? 'text-amber-500' : 'text-pierre-300 hover:text-amber-500'}`}
-        onClick={() => changer({ important: !i.important })}
+        onClick={() => deplacer({ important: !i.important })}
       >
         {i.important ? '★' : '☆'}
       </button>

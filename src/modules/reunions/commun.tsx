@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { confirmer } from '@/lib/Confirmation'
 import { Dialogue } from '@/lib/Dialogue'
-import { useSortieCarte } from '@/lib/sortieCarte'
+import { animerDeplacements, useSortieCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { aujourdhui } from '@/shell/pokes'
 import { aEnvoyer, affichageStatut, nomReunion, nouveauPoint, ordreEnFin, reunionsAVenir, useDonnees } from './contexte'
@@ -119,7 +119,10 @@ export function CartePoint({
   afficherJour?: boolean
   /** Le jour prévu est déjà donné par la vue (Semaine). */
   masquerPourLe?: boolean
-  /** Traité, rouvert ou envoyé ailleurs, le point quitte sa liste (ordre du jour) : il sort d'abord. */
+  /**
+   * Traité, rouvert ou envoyé ailleurs, le point quitte sa liste (ordre du jour) : il sort d'abord.
+   * Sinon (Semaine : un point traité remonte avec les traités), les points glissent jusqu'à leur nouvelle place.
+   */
   sortie?: boolean
 }) {
   const { ecriture, moi, reunions } = useDonnees()
@@ -127,7 +130,7 @@ export function CartePoint({
   const supprimer = useSupprimerPoint()
   const [fiche, setFiche] = useState(false)
   const { ref, sortir } = useSortieCarte<HTMLLIElement>()
-  const partir = (action: () => void) => (sortie ? sortir(action) : action())
+  const partir = (action: () => void) => (sortie ? sortir(action) : animerDeplacements(ref.current?.parentElement, action))
   const ouvert = point.statut === 'ouvert'
   const actif = ecriture && !lecture
   const auj = aujourdhui()

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { PucesEtiquettes } from '@/lib/Etiquettes'
 import { classeLigneCliquable, clicLigne } from '@/lib/ligneCliquable'
 import { CompteurPieces } from '@/lib/PiecesJointes'
-import { sortirCarte } from '@/lib/sortieCarte'
+import { animerDeplacements, sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useMajTache, type Donnees } from './donnees'
@@ -34,6 +34,8 @@ export function Puce({ children, couleur, ton }: { children: ReactNode; couleur?
 /**
  * Case à cocher d'une tâche : cochée = terminée. `sortie` : la ligne quitte sa
  * liste une fois cochée ou décochée (à faire ↔ terminées) ; elle sort d'abord.
+ * Sinon (« À faire pour moi », mois d'une étiquette), elle change de place dans
+ * sa liste : les lignes glissent jusqu'à leur nouvelle place.
  */
 export function CaseTache({ tache: t, sortie }: { tache: Tache; sortie?: boolean }) {
   const droits = useDroits()
@@ -69,7 +71,11 @@ export function CaseTache({ tache: t, sortie }: { tache: Tache; sortie?: boolean
               : undefined
       }
       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold disabled:cursor-default ${style}`}
-      onClick={(e) => (sortie ? sortirCarte(e.currentTarget.closest('li, tr'), basculer) : basculer())}
+      onClick={(e) => {
+        const ligne = e.currentTarget.closest<HTMLElement>('li, tr')
+        if (sortie) sortirCarte(ligne, basculer)
+        else animerDeplacements(ligne?.parentElement, basculer)
+      }}
       disabled={!permis}
     >
       {faite ? '✓' : ''}
