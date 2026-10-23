@@ -7,7 +7,7 @@ import { IconePlus } from '@/lib/icones'
 import { ui } from '@/lib/ui'
 import { Chantiers } from './Chantiers'
 import { Chargement } from './commun'
-import { useDonnees, useModificationsEnAttente, useTempsReel } from './donnees'
+import { useDonnees, useModificationsEnAttente, useTempsReel, useTitresOuverts } from './donnees'
 import { Fiche } from './Fiche'
 import { BoutonImporter } from './Importer'
 import { ContexteFenetre, useDroits, type Fenetre } from './outils'
@@ -23,6 +23,8 @@ const onglet = ({ isActive }: { isActive: boolean }) =>
 export default function ModuleTravaux() {
   const droits = useDroits()
   useTempsReel(droits.terrain)
+  // Terrain : titres des autres tâches pour « Déjà dans la liste ? » (Signaler), tenus à jour même hors ligne.
+  useTitresOuverts(droits.terrain)
   const d = useDonnees()
   const [fenetre, setFenetre] = useState<Fenetre | null>(null)
   const aTrier = d.taches.filter((t) => t.statut === 'a_trier').length

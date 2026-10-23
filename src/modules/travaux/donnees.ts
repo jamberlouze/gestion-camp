@@ -35,6 +35,7 @@ export const CLES = {
   personnes: [RACINE, 'personnes'],
   fournisseurs: [RACINE, 'fournisseurs'],
   etiquettes: [RACINE, 'etiquettes'],
+  titresOuverts: [RACINE, 'titres-ouverts'],
   creerTache: [RACINE, 'creer-tache'],
   majTache: [RACINE, 'maj-tache'],
   supprimerTache: [RACINE, 'supprimer-tache'],
@@ -113,6 +114,31 @@ const useEtiquettes = () =>
       return data as Etiquette[]
     },
   })
+
+/** Titre, lieu et statut d'une tâche pas terminée, sans rien d'autre (travaux.titres_ouverts). */
+export type TitreOuvert = Pick<Tache, 'id' | 'titre' | 'lieu_id' | 'statut'>
+
+/**
+ * Titres de toutes les tâches pas terminées : ce à quoi Terrain compare son
+ * signalement (« Déjà dans la liste ? ») sans voir les tâches des autres.
+ * Lu dès l'ouverture du module, pour servir aussi hors ligne.
+ */
+export const useTitresOuverts = (actif: boolean) =>
+  useQuery({
+    queryKey: CLES.titresOuverts,
+    queryFn: async () => {
+      const { data, error } = await db().rpc('titres_ouverts')
+      if (error) throw error
+      return data as TitreOuvert[]
+    },
+    enabled: actif,
+  })
+
+/** Tâches auxquelles comparer un nouveau signalement : celles qu'on voit, ou les titres seulement pour Terrain. */
+export function useTachesAComparer(d: Donnees, terrain: boolean): TitreOuvert[] {
+  const titres = useTitresOuverts(terrain).data
+  return useMemo(() => (terrain ? (titres ?? []) : d.taches.filter((t) => t.statut !== 'terminee')), [terrain, titres, d.taches])
+}
 
 /**
  * Recharge le module quand quelqu'un d'autre modifie quelque chose.
@@ -476,6 +502,11 @@ export async function annualiser(v: { tache: string; mois: number[]; entreprise:
   })
   if (error) throw error
   return data as string
+}
+
+/** Réunit un signalement à trier avec la tâche qu'il répète (direction, en ligne) : photos, commentaires et détails passent à la tâche. */
+export async function fusionner(signalement: string, tache: string) {
+  await executer(db().rpc('fusionner', { p_signalement: signalement, p_tache: tache }))
 }
 
 /** Après une modification en ligne : relit le module. */

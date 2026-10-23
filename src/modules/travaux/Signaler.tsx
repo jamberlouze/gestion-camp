@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Dialogue } from '@/lib/Dialogue'
 import { ChoixEtiquettes } from '@/lib/Etiquettes'
 import { BoutonAjouterPiece } from '@/lib/PiecesJointes'
 import { preparerFichier, type FichierJoint } from '@/lib/photos'
 import { ui } from '@/lib/ui'
 import { BarreActions } from './commun'
-import { useAjouterPhoto, useCreerTache, type Donnees, type NouvelleTache } from './donnees'
+import { useAjouterPhoto, useCreerTache, useTachesAComparer, type Donnees, type NouvelleTache, type TitreOuvert } from './donnees'
 import { champ, useDroits } from './outils'
+import { comparateur } from './semblables'
 import { PRIORITES, type Priorite, type Tache } from './types'
 
 /**
@@ -34,6 +35,12 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
   const [photos, setPhotos] = useState<{ cle: string; joint: FichierJoint; url: string }[]>([])
   const [lecture, setLecture] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
+
+  // Déjà dans la liste ? Comparé une fois la frappe arrêtée (sinon la liste saute à chaque lettre).
+  const comparables = useTachesAComparer(d, droits.terrain)
+  const chercher = useMemo(() => comparateur(comparables), [comparables])
+  const titreCalme = useCalme(titre, 400)
+  const semblables = useMemo(() => chercher(titreCalme, lieu || null), [chercher, titreCalme, lieu])
 
   // Les aperçus sont libérés à la fermeture.
   const apercus = useRef<string[]>([])
@@ -127,6 +134,7 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
             </select>
           </label>
         </div>
+        {semblables.length > 0 && <DejaDansLaListe semblables={semblables.map((x) => x.tache)} d={d} trieur={droits.trieur} pareil={fermer} />}
         <label className="block">
           <span className={ui.etiquette}>Détails (optionnel)</span>
           <textarea className={champ} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -245,5 +253,51 @@ export function Signaler({ d, defauts, fermer }: { d: Donnees; defauts?: Partial
         </BarreActions>
       </form>
     </Dialogue>
+  )
+}
+
+/** Valeur qui ne suit la saisie qu'une fois la frappe arrêtée `ms` millisecondes. */
+function useCalme<T>(valeur: T, ms: number) {
+  const [calme, setCalme] = useState(valeur)
+  useEffect(() => {
+    const minuterie = setTimeout(() => setCalme(valeur), ms)
+    return () => clearTimeout(minuterie)
+  }, [valeur, ms])
+  return calme
+}
+
+/**
+ * Tâches pas terminées qui ressemblent à ce qu'on écrit (semblables.ts).
+ * Titre et lieu seulement : Terrain ne voit pas les tâches des autres
+ * (choix de Maxime du 2026-10-23 : le titre, jamais qui s'en occupe ni les
+ * détails). « C'est la même chose » ferme sans rien envoyer.
+ */
+function DejaDansLaListe({ semblables, d, trieur, pareil }: { semblables: TitreOuvert[]; d: Donnees; trieur: boolean; pareil: () => void }) {
+  return (
+    <section className="rounded-xl border border-amber-300 bg-amber-50 p-3" aria-live="polite" aria-labelledby="titre-deja-la">
+      <h3 id="titre-deja-la" className="text-sm font-semibold text-amber-950">
+        Déjà dans la liste ?
+      </h3>
+      <ul className="mt-1.5 space-y-1.5">
+        {semblables.map((t) => {
+          const lieu = t.lieu_id ? d.lieu.get(t.lieu_id)?.nom : null
+          return (
+            <li key={t.id} className="text-sm leading-snug text-pierre-900">
+              {t.titre}
+              <span className="block text-xs text-pierre-600">
+                {lieu ? `📍 ${lieu}` : 'Sans lieu'}
+                {t.statut === 'a_trier' && ' · signalé, pas encore trié'}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button type="button" className={ui.boutonSecondaire} onClick={pareil}>
+          C'est la même chose
+        </button>
+        <span className="text-xs text-amber-900">{trieur ? 'Sinon, ajoute-la quand même.' : 'Sinon, envoie quand même.'}</span>
+      </div>
+    </section>
   )
 }
