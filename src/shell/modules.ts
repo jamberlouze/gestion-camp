@@ -267,6 +267,30 @@ export const MODULES: DefinitionModule[] = [
     parent: 'rh',
   },
   {
+    // Rapports d'accident des employés (demande de Maxime du 2026-10-23 ;
+    // un module à part pour l'instant, à intégrer plus tard dans un plus
+    // large). Direction : tous les rapports.
+    id: 'accidents',
+    nom: 'Accidents',
+    description: 'Rapports d’accident et de premiers soins des employés',
+    icone: '🩹',
+    chemin: '/accidents',
+    famille: 'equipe',
+    ouvertAussiPar: ['accidents_declarer'],
+  },
+  {
+    // Remplir un rapport et ne revoir que les siens, modifiables tant que
+    // la direction ne les a pas réglés (coordonnateurs au départ).
+    id: 'accidents_declarer',
+    nom: 'Accidents › Déclarer',
+    description: 'Remplir un rapport d’accident et revoir les siens',
+    icone: '✍️',
+    chemin: '/accidents',
+    famille: 'equipe',
+    parent: 'accidents',
+    sansLecture: true,
+  },
+  {
     // Chacun ne voit que sa feuille ; les admins voient tout (vérifié par la
     // base : temps.role_autorise, temps.mon_employe et les politiques du
     // schéma temps). Un employé coché « Remplit sa feuille » dans le
