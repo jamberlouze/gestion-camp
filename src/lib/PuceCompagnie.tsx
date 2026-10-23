@@ -7,7 +7,8 @@ export function teinte(couleur: string | null | undefined) {
 /**
  * Étiquette d'une compagnie (core.entreprises), teintée de sa couleur, la
  * même dans tous les modules. `court` : l'abréviation si elle existe (nom
- * complet au survol).
+ * complet au survol). Avec `max-w-full`, un nom trop long se coupe (…) au
+ * lieu de déborder de sa colonne.
  */
 export function PuceCompagnie({
   compagnie,
@@ -21,11 +22,11 @@ export function PuceCompagnie({
   const texte = court && compagnie.abreviation ? compagnie.abreviation : compagnie.nom
   return (
     <span
-      title={texte !== compagnie.nom ? compagnie.nom : undefined}
+      title={compagnie.nom}
       className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${className}`}
       style={teinte(compagnie.couleur)}
     >
-      {texte}
+      <span className="truncate">{texte}</span>
     </span>
   )
 }

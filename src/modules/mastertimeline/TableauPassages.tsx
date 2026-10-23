@@ -32,8 +32,8 @@ export function TableauPassages({ passages, refs, colonnes }: { passages: Passag
         {colonnes.mois && <col className="w-20" />}
         {colonnes.entreprise && <col className="w-36" />}
         {colonnes.projet && <col className="w-44" />}
-        <col className="w-36" />
         <col className="w-44" />
+        <col className="w-36" />
       </colgroup>
       <thead className="border-b border-pierre-100">
         <tr>
@@ -106,7 +106,7 @@ function Rangee({ passage: { tache: t, periode, etat, coche }, refs, colonnes }:
       )}
       {colonnes.entreprise && (
         <td className={`px-2 py-2 ${secondaire}`}>
-          {entreprise && <PuceCompagnie compagnie={entreprise} className="font-normal" />}
+          {entreprise && <PuceCompagnie compagnie={entreprise} court className="max-w-full font-normal" />}
         </td>
       )}
       {colonnes.projet && (
