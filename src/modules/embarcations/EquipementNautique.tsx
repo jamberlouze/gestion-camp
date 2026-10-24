@@ -24,7 +24,7 @@ export function EquipementNautique() {
       ) : !d.pret ? (
         <p className="py-8 text-center text-sm text-pierre-500">Chargement de l'équipement…</p>
       ) : (
-        <Equipement d={d} ecriture={ecriture} sectionObligatoire />
+        <Equipement d={d} ecriture={ecriture} sectionObligatoire nom="Équipement nautique" />
       )}
     </div>
   )

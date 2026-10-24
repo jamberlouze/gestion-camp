@@ -1,14 +1,16 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { ChampTexte } from '@/lib/ChampTexte'
 import { confirmer } from '@/lib/Confirmation'
-import { IconePlus, IconeRenommer } from '@/lib/icones'
+import { IconeImprimer, IconePlus, IconeRenommer } from '@/lib/icones'
 import { PuceCompagnie } from '@/lib/PuceCompagnie'
 import { sortirCarte } from '@/lib/sortieCarte'
 import { ui } from '@/lib/ui'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { useTitreImpression } from '@/lib/useTitreImpression'
 import { Compter } from './Compter'
 import { useCompter, useMajArticle, type Donnees } from './donnees'
 import { Fiche } from './Fiche'
+import { decrireFiltres, FenetreImpression, groupesPour, ListeImprimee, type ChoixImpression } from './Impression'
 import {
   AUCUN,
   FILTRES_VIDES,
@@ -40,16 +42,21 @@ const CHAMPS = [
  * Onglet Équipement : chaque article avec son dernier compte (et sa date).
  * On compte quand on veut, une section à la fois : le mode comptage date
  * les nombres entrés du jour choisi (aujourd'hui par défaut).
+ * « Imprimer » met sur papier les articles affichés : feuille pour compter
+ * à la main ou dernier compte, sections (ou lieux) au choix.
  */
 export function Equipement({
   d,
   ecriture,
   sectionObligatoire,
+  nom = 'Inventaire',
 }: {
   d: Donnees
   ecriture: boolean
   /** Un nouvel article doit être dans une des sections (Embarcations : les droits en dépendent). */
   sectionObligatoire?: boolean
+  /** Titre de la feuille imprimée et du PDF. */
+  nom?: string
 }) {
   const grandEcran = useMediaQuery('(min-width: 768px)')
   const [filtres, setFiltres] = useState<Filtres>(FILTRES_VIDES)
@@ -58,6 +65,8 @@ export function Equipement({
   const [comptage, setComptage] = useState<string | null>(null)
   const [fenetre, setFenetre] = useState<Fenetre | null>(null)
   const [voirRetires, setVoirRetires] = useState(false)
+  const [fenetreImpression, setFenetreImpression] = useState(false)
+  const [aImprimer, setAImprimer] = useState<ChoixImpression | null>(null)
 
   const jour = comptage ?? aujourdhui()
   const historiqueDe = (a: Article) => d.historique(a.id)
@@ -67,6 +76,21 @@ export function Equipement({
   const ordre = groupes.flatMap((g) => g.articles)
   const retires = d.articles.filter((a) => !a.actif)
   const filtresActifs = JSON.stringify(effectifs) !== JSON.stringify(FILTRES_VIDES)
+
+  // Impression : les groupes cochés dans la fenêtre ; ⌘P sans la fenêtre = ce qui est affiché, dernier compte.
+  const groupesImprimes = aImprimer ? groupesPour(visibles, d, { par: aImprimer.par, ids: aImprimer.ids }) : groupes
+  const portee = decrireFiltres(effectifs, d, !!comptage)
+  // Nom du PDF : la section (ou le lieu) s'il n'y en a qu'une (« Inventaire - Camping - 2026-10-23 »).
+  const sujet = groupesImprimes.length === 1 ? groupesImprimes[0].titre : portee
+  useTitreImpression([nom, sujet, aujourdhui()].filter(Boolean).join(' - '))
+  useEffect(() => {
+    if (!aImprimer) return
+    const minuterie = setTimeout(() => {
+      window.print()
+      setAImprimer(null)
+    }, 50)
+    return () => clearTimeout(minuterie)
+  }, [aImprimer])
 
   /** Commence à compter (tout, ou une section / un lieu) ; sur téléphone, ouvre le premier article. */
   const compter = (groupe?: Groupe) => {
@@ -83,95 +107,120 @@ export function Equipement({
   const ouvrir = (a: Article) => setFenetre(comptage && ecriture && !grandEcran ? { type: 'compter', id: a.id } : { type: 'fiche', id: a.id })
 
   return (
-    <div>
-      {comptage ? (
-        <EnteteComptage d={d} jour={comptage} setJour={setComptage} articles={visibles} fermer={fermerComptage} />
-      ) : (
-        <EnteteConsultation d={d} ecriture={ecriture} compter={() => compter()} />
-      )}
-
-      <BarreFiltres
-        d={d}
-        filtres={filtres}
-        setFiltres={setFiltres}
-        par={par}
-        setPar={setPar}
-        enComptage={!!comptage}
-        ajouter={ecriture ? () => setFenetre({ type: 'fiche', id: null }) : undefined}
-      />
-
-      <p className="mb-2 mt-3 text-sm text-pierre-500">
-        {visibles.length} article{visibles.length > 1 ? 's' : ''}
-        {filtresActifs && (
-          <button className="ml-2 text-foret-700 underline" onClick={() => setFiltres(FILTRES_VIDES)}>
-            Effacer les filtres
-          </button>
+    <>
+      <div className="print:hidden">
+        {comptage ? (
+          <EnteteComptage d={d} jour={comptage} setJour={setComptage} articles={visibles} fermer={fermerComptage} />
+        ) : (
+          <EnteteConsultation d={d} ecriture={ecriture} compter={() => compter()} />
         )}
-      </p>
 
-      {visibles.length === 0 ? (
-        <p className={`${ui.carte} p-8 text-center text-sm text-pierre-500`}>
-          {d.articles.length ? 'Aucun article ne correspond à ces filtres.' : 'Aucun article pour l’instant.'}
-        </p>
-      ) : grandEcran ? (
-        <Tableau
+        <BarreFiltres
           d={d}
-          groupes={groupes}
+          filtres={filtres}
+          setFiltres={setFiltres}
           par={par}
-          jour={comptage}
-          ecriture={ecriture}
-          compterGroupe={ecriture && !comptage ? compter : undefined}
-          ouvrir={(a) => setFenetre({ type: 'fiche', id: a.id })}
+          setPar={setPar}
+          enComptage={!!comptage}
+          ajouter={ecriture ? () => setFenetre({ type: 'fiche', id: null }) : undefined}
+          imprimer={visibles.length ? () => setFenetreImpression(true) : undefined}
         />
-      ) : (
-        <Cartes d={d} groupes={groupes} par={par} jour={comptage} compterGroupe={ecriture && !comptage ? compter : undefined} ouvrir={ouvrir} />
-      )}
 
-      {retires.length > 0 && (
-        <div className="mt-6">
-          <button className="text-sm text-pierre-500 underline" onClick={() => setVoirRetires(!voirRetires)} aria-expanded={voirRetires}>
-            {retires.length} article{retires.length > 1 ? 's' : ''} retiré{retires.length > 1 ? 's' : ''} de l'inventaire
-          </button>
-          {voirRetires && <Retires d={d} articles={retires} ecriture={ecriture} ouvrir={(a) => setFenetre({ type: 'fiche', id: a.id })} />}
-        </div>
-      )}
+        <p className="mb-2 mt-3 text-sm text-pierre-500">
+          {visibles.length} article{visibles.length > 1 ? 's' : ''}
+          {filtresActifs && (
+            <button className="ml-2 text-foret-700 underline" onClick={() => setFiltres(FILTRES_VIDES)}>
+              Effacer les filtres
+            </button>
+          )}
+        </p>
 
-      {fenetre?.type === 'fiche' && (
-        <Fiche
-          key={fenetre.id ?? 'nouveau'}
+        {visibles.length === 0 ? (
+          <p className={`${ui.carte} p-8 text-center text-sm text-pierre-500`}>
+            {d.articles.length ? 'Aucun article ne correspond à ces filtres.' : 'Aucun article pour l’instant.'}
+          </p>
+        ) : grandEcran ? (
+          <Tableau
+            d={d}
+            groupes={groupes}
+            par={par}
+            jour={comptage}
+            ecriture={ecriture}
+            compterGroupe={ecriture && !comptage ? compter : undefined}
+            ouvrir={(a) => setFenetre({ type: 'fiche', id: a.id })}
+          />
+        ) : (
+          <Cartes d={d} groupes={groupes} par={par} jour={comptage} compterGroupe={ecriture && !comptage ? compter : undefined} ouvrir={ouvrir} />
+        )}
+
+        {retires.length > 0 && (
+          <div className="mt-6">
+            <button className="text-sm text-pierre-500 underline" onClick={() => setVoirRetires(!voirRetires)} aria-expanded={voirRetires}>
+              {retires.length} article{retires.length > 1 ? 's' : ''} retiré{retires.length > 1 ? 's' : ''} de l'inventaire
+            </button>
+            {voirRetires && <Retires d={d} articles={retires} ecriture={ecriture} ouvrir={(a) => setFenetre({ type: 'fiche', id: a.id })} />}
+          </div>
+        )}
+
+        {fenetre?.type === 'fiche' && (
+          <Fiche
+            key={fenetre.id ?? 'nouveau'}
+            d={d}
+            id={fenetre.id}
+            ecriture={ecriture}
+            sectionObligatoire={sectionObligatoire}
+            defauts={{
+              section_id: filtres.section && filtres.section !== AUCUN ? filtres.section : null,
+              lieu_id: filtres.lieu && filtres.lieu !== AUCUN ? filtres.lieu : null,
+              entreprise_id: filtres.compagnie && filtres.compagnie !== AUCUN ? filtres.compagnie : null,
+            }}
+            fermer={() => setFenetre(null)}
+            compter={
+              ecriture
+                ? (id) => {
+                    setComptage(jour)
+                    setFenetre({ type: 'compter', id })
+                  }
+                : undefined
+            }
+          />
+        )}
+        {fenetre?.type === 'compter' && (
+          <Compter
+            key={fenetre.id}
+            d={d}
+            jour={jour}
+            ordre={ordre}
+            id={fenetre.id}
+            aller={(id) => setFenetre({ type: 'compter', id })}
+            fiche={(id) => setFenetre({ type: 'fiche', id })}
+            fermer={() => setFenetre(null)}
+          />
+        )}
+      </div>
+
+      <ListeImprimee
+        groupes={groupesImprimes}
+        par={aImprimer?.par ?? par}
+        d={d}
+        choix={aImprimer ?? { feuille: 'liste', pageParGroupe: false }}
+        nom={nom}
+        portee={portee}
+      />
+      {fenetreImpression && (
+        <FenetreImpression
+          articles={visibles}
           d={d}
-          id={fenetre.id}
-          ecriture={ecriture}
-          sectionObligatoire={sectionObligatoire}
-          defauts={{
-            section_id: filtres.section && filtres.section !== AUCUN ? filtres.section : null,
-            lieu_id: filtres.lieu && filtres.lieu !== AUCUN ? filtres.lieu : null,
-            entreprise_id: filtres.compagnie && filtres.compagnie !== AUCUN ? filtres.compagnie : null,
+          parEcran={par}
+          portee={portee}
+          fermer={() => setFenetreImpression(false)}
+          imprimer={(c) => {
+            setFenetreImpression(false)
+            setAImprimer(c)
           }}
-          fermer={() => setFenetre(null)}
-          compter={
-            ecriture
-              ? (id) => {
-                  setComptage(jour)
-                  setFenetre({ type: 'compter', id })
-                }
-              : undefined
-          }
         />
       )}
-      {fenetre?.type === 'compter' && (
-        <Compter
-          key={fenetre.id}
-          d={d}
-          jour={jour}
-          ordre={ordre}
-          id={fenetre.id}
-          aller={(id) => setFenetre({ type: 'compter', id })}
-          fiche={(id) => setFenetre({ type: 'fiche', id })}
-          fermer={() => setFenetre(null)}
-        />
-      )}
-    </div>
+    </>
   )
 }
 
@@ -266,6 +315,7 @@ function BarreFiltres({
   setPar,
   enComptage,
   ajouter,
+  imprimer,
 }: {
   d: Donnees
   filtres: Filtres
@@ -274,6 +324,7 @@ function BarreFiltres({
   setPar: (p: Regroupement) => void
   enComptage: boolean
   ajouter?: () => void
+  imprimer?: () => void
 }) {
   const maj = (champs: Partial<Filtres>) => setFiltres({ ...filtres, ...champs })
   const choix = 'rounded-lg border border-pierre-300 bg-white px-2.5 py-2 text-sm'
@@ -293,11 +344,19 @@ function BarreFiltres({
           value={filtres.recherche}
           onChange={(e) => maj({ recherche: e.target.value })}
         />
-        {ajouter && (
+        {(ajouter || imprimer) && (
           <div className="flex shrink-0 gap-2 md:order-last md:ml-auto">
-            <button className={ui.boutonSecondaire} onClick={ajouter}>
-              <IconePlus /> Article
-            </button>
+            {/* Sur ordinateur et tablette seulement. */}
+            {imprimer && (
+              <button className={`${ui.boutonSecondaire} max-sm:hidden`} onClick={imprimer}>
+                <IconeImprimer /> Imprimer
+              </button>
+            )}
+            {ajouter && (
+              <button className={ui.boutonSecondaire} onClick={ajouter}>
+                <IconePlus /> Article
+              </button>
+            )}
           </div>
         )}
       </div>

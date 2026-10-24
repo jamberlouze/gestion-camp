@@ -21,12 +21,12 @@ export default function ModuleInventaire() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <h1 className="text-2xl font-semibold">Inventaire</h1>
         <EtatSynchro />
       </div>
       {/* Adresses absolues : voir Embarcations. */}
-      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200">
+      <nav className="sans-barre mb-4 mt-3 flex gap-6 overflow-x-auto border-b border-pierre-200 print:hidden">
         <NavLink to="/inventaire" end className={onglet}>
           Équipement
         </NavLink>
